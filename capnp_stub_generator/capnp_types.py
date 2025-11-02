@@ -1,9 +1,8 @@
 """Types definitions that are common in capnproto schemas."""
+
 from __future__ import annotations
 
 from types import ModuleType
-from typing import Dict
-from typing import Tuple
 
 CAPNP_TYPE_TO_PYTHON = {
     "void": "None",
@@ -42,4 +41,4 @@ class CapnpElementType:
     ANY_POINTER = "anyPointer"
 
 
-ModuleRegistryType = Dict[int, Tuple[str, ModuleType]]
+ModuleRegistryType = dict[int, tuple[str, ModuleType]]

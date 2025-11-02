@@ -1,4 +1,5 @@
 """Generate a new reference file."""
+
 from __future__ import annotations
 
 import os
@@ -21,7 +22,10 @@ def main():
         ]
     )
 
-    os.rename(os.path.join(here, "dummy_capnp.pyi"), os.path.join(here, "ref_dummy_capnp.pyi_nocheck"))
+    os.rename(
+        os.path.join(here, "dummy_capnp.pyi"),
+        os.path.join(here, "ref_dummy_capnp.pyi_nocheck"),
+    )
 
 
 if __name__ == "__main__":

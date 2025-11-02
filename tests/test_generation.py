@@ -1,4 +1,5 @@
 """Tests the capnproto stub generator."""
+
 from __future__ import annotations
 
 import os

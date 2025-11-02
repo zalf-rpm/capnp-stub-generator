@@ -1,4 +1,5 @@
 """Top-level module for stub generation."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,6 +11,7 @@ from types import ModuleType
 import black
 import capnp  # type: ignore
 import isort
+
 from capnp_stub_generator.capnp_types import ModuleRegistryType
 from capnp_stub_generator.helper import replace_capnp_suffix
 from capnp_stub_generator.writer import Writer
@@ -35,7 +37,9 @@ def format_outputs(raw_input: str, is_pyi: bool, line_length: int = LINE_LENGTH)
         str: The formatted outputs.
     """
     # FIXME: Extract config from dev_policies
-    sorted_imports = isort.code(raw_input, config=isort.Config(profile="black", line_length=line_length))
+    sorted_imports = isort.code(
+        raw_input, config=isort.Config(profile="black", line_length=line_length)
+    )
     return black.format_str(sorted_imports, mode=black.Mode(is_pyi=is_pyi, line_length=line_length))
 
 
@@ -50,7 +54,9 @@ def generate_stubs(module: ModuleType, module_registry: ModuleRegistryType, outp
     writer = Writer(module, module_registry)
     writer.generate_all_nested()
 
-    for outputs, suffix, is_pyi in zip((writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), (True, False)):
+    for outputs, suffix, is_pyi in zip(
+        (writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), (True, False)
+    ):
         formatted_output = format_outputs(outputs, is_pyi)
 
         with open(output_file_path + suffix, "w", encoding="utf8") as output_file:
@@ -83,7 +89,9 @@ def run(args: argparse.Namespace, root_directory: str):
     excluded_paths: set[str] = set()
     for exclude in excludes:
         exclude_directory = os.path.join(root_directory, exclude)
-        excluded_paths = excluded_paths.union(glob.glob(exclude_directory, recursive=args.recursive))
+        excluded_paths = excluded_paths.union(
+            glob.glob(exclude_directory, recursive=args.recursive)
+        )
 
     search_paths: set[str] = set()
     for path in paths:

@@ -1,10 +1,10 @@
 """This module defines the scope, a unit of indented text."""
+
 from __future__ import annotations
 
 import dataclasses
 import logging
-from typing import Any
-from typing import Literal
+from typing import Any, Literal
 
 from .helper import TypeHintedVariable
 
@@ -110,7 +110,9 @@ class Scope:
         Args:
             delimiter (Literal[".", "_"]): The delimiter to join the scope names with.
         """
-        return delimiter.join(scope.name for scope in self.trace if (not scope.is_root) and (scope.name))
+        return delimiter.join(
+            scope.name for scope in self.trace if (not scope.is_root) and (scope.name)
+        )
 
     def __repr__(self) -> str:
         """A string representation of this scope.

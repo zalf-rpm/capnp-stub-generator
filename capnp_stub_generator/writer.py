@@ -4,34 +4,33 @@ Note: This generator requires pycapnp >= 1.0.0.
 
 Note: capnp interfaces (RPC) are not yet supported.
 """
+
 from __future__ import annotations
 
 import logging
 import os.path
 import pathlib
 from types import ModuleType
-from typing import Any
-from typing import Literal
-from typing import Tuple
+from typing import Any, Literal
 
 import capnp  # type: ignore
-from capnp_stub_generator import capnp_types
-from capnp_stub_generator import helper
-from capnp_stub_generator.scope import CapnpType
-from capnp_stub_generator.scope import NoParentError
-from capnp_stub_generator.scope import Scope
+
+from capnp_stub_generator import capnp_types, helper
+from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
 
 capnp.remove_import_hook()
 
 logger = logging.getLogger(__name__)
 
-InitChoice = Tuple[str, str]
+InitChoice = tuple[str, str]
 
 
 class Writer:
     """A class that handles writing the stub file, based on a provided module definition."""
 
-    VALID_TYPING_IMPORTS = Literal["Iterator", "Generic", "TypeVar", "Sequence", "Literal", "Union", "overload"]
+    VALID_TYPING_IMPORTS = Literal[
+        "Iterator", "Generic", "TypeVar", "Sequence", "Literal", "Union", "overload"
+    ]
 
     def __init__(self, module: ModuleType, module_registry: capnp_types.ModuleRegistryType):
         """Initialize the stub writer with a module definition.
@@ -60,7 +59,9 @@ class Writer:
         self.type_vars: set[str] = set()
         self.type_map: dict[int, CapnpType] = {}
 
-        self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
+        self.docstring = (
+            f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
+        )
 
     def _add_typing_import(self, module_name: Writer.VALID_TYPING_IMPORTS):
         """Add an import for a module from the 'typing' package.
@@ -162,7 +163,9 @@ class Writer:
         return hinted_variable
 
     def gen_list_slot(
-        self, field: capnp.lib.capnp._DynamicStructReader, schema: capnp.lib.capnp._ListSchema
+        self,
+        field: capnp.lib.capnp._DynamicStructReader,
+        schema: capnp.lib.capnp._ListSchema,
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `list`.
 
@@ -174,7 +177,9 @@ class Writer:
             helper.TypeHintedVariable: The extracted hinted variable object.
         """
 
-        def schema_elements(schema: capnp.lib.capnp._ListSchema) -> capnp.lib.capnp._ListSchema:
+        def schema_elements(
+            schema: capnp.lib.capnp._ListSchema,
+        ) -> capnp.lib.capnp._ListSchema:
             """An iterator over the schema elements of nested lists.
 
             Args:
@@ -195,7 +200,9 @@ class Writer:
                 else:
                     yield next_schema_element
 
-        def list_elements(list_: capnp.lib.capnp._DynamicStructReader) -> capnp.lib.capnp._DynamicStructReader:
+        def list_elements(
+            list_: capnp.lib.capnp._DynamicStructReader,
+        ) -> capnp.lib.capnp._DynamicStructReader:
             """An iterator over the list elements of nested lists.
 
             Args:
@@ -251,7 +258,9 @@ class Writer:
         self._add_typing_import("Sequence")
 
         hinted_variable = helper.TypeHintedVariable(
-            field.name, [helper.TypeHint(type_name, primary=True)], nesting_depth=list_depth
+            field.name,
+            [helper.TypeHint(type_name, primary=True)],
+            nesting_depth=list_depth,
         )
 
         if create_extended_types:
@@ -273,9 +282,13 @@ class Writer:
             helper.HintedVariable: The extracted hinted variable object.
         """
         python_type_name: str = capnp_types.CAPNP_TYPE_TO_PYTHON[field_type]
-        return helper.TypeHintedVariable(field.name, [helper.TypeHint(python_type_name, primary=True)])
+        return helper.TypeHintedVariable(
+            field.name, [helper.TypeHint(python_type_name, primary=True)]
+        )
 
-    def gen_enum_slot(self, field: capnp.lib.capnp._DynamicStructReader, schema) -> helper.TypeHintedVariable:
+    def gen_enum_slot(
+        self, field: capnp.lib.capnp._DynamicStructReader, schema
+    ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `enum`.
 
         Args:
@@ -351,7 +364,9 @@ class Writer:
 
         if const_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
             python_type = capnp_types.CAPNP_TYPE_TO_PYTHON[schema.node.const.type.which()]
-            self.scope.add(helper.TypeHintedVariable(name, [helper.TypeHint(python_type, primary=True)]))
+            self.scope.add(
+                helper.TypeHintedVariable(name, [helper.TypeHint(python_type, primary=True)])
+            )
 
         elif const_type == "struct":
             pass
@@ -375,7 +390,10 @@ class Writer:
         self.register_type(schema.node.id, schema, name=name, scope=self.scope)
 
         self._add_typing_import("Literal")
-        enum_type = helper.new_group("Literal", [f'"{enumerant.name}"' for enumerant in schema.node.enum.enumerants])
+        enum_type = helper.new_group(
+            "Literal",
+            [f'"{enumerant.name}"' for enumerant in schema.node.enum.enumerants],
+        )
         self.scope.add(helper.new_type_alias(name, enum_type))
 
         return None
@@ -396,14 +414,19 @@ class Writer:
         referenced_params: list[str] = []
 
         for field, _ in zip(schema.node.struct.fields, schema.as_struct().fields_list):
-            if field.slot.type.which() == "anyPointer" and field.slot.type.anyPointer.which() == "parameter":
+            if (
+                field.slot.type.which() == "anyPointer"
+                and field.slot.type.anyPointer.which() == "parameter"
+            ):
                 param = field.slot.type.anyPointer.parameter
 
                 t = self.get_type_by_id(param.scopeId)
 
                 if t is not None:
                     param_source = t.schema
-                    source_params: list[str] = [param.name for param in param_source.node.parameters]
+                    source_params: list[str] = [
+                        param.name for param in param_source.node.parameters
+                    ]
                     referenced_params.append(source_params[param.parameterIndex])
 
         return [self.register_type_var(param) for param in generic_params + referenced_params]
@@ -472,7 +495,9 @@ class Writer:
                 raw_schema = raw_field.schema
                 group_name = self.gen_struct(raw_schema, type_name=group_name).name
 
-                hinted_variable = helper.TypeHintedVariable(field.name, [helper.TypeHint(group_name, primary=True)])
+                hinted_variable = helper.TypeHintedVariable(
+                    field.name, [helper.TypeHint(group_name, primary=True)]
+                )
                 hinted_variable.add_builder_from_primary_type()
                 hinted_variable.add_reader_from_primary_type()
 
@@ -482,7 +507,7 @@ class Writer:
                 init_choices.append((field.name, group_name))
 
             else:
-                raise AssertionError(f"{schema.node.displayName}: {field.name}: " f"{field.which()}")
+                raise AssertionError(f"{schema.node.displayName}: {field.name}: {field.which()}")
 
         # Finally, add the class declaration after the expansion of all nested schemas.
         parent_scope.add(class_declaration)
@@ -495,10 +520,16 @@ class Writer:
         # Add the `which` function, if there is a top-level union in the schema.
         if schema.node.struct.discriminantCount:
             self._add_typing_import("Literal")
-            field_names = [f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != 65535]
+            field_names = [
+                f'"{field.name}"'
+                for field in schema.node.struct.fields
+                if field.discriminantValue != 65535
+            ]
             return_type = helper.new_type_group("Literal", field_names)
 
-            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
+            self.scope.add(
+                helper.new_function("which", parameters=["self"], return_type=return_type)
+            )
 
         # Add an overloaded `init` function for each nested struct.
         if init_choices:
@@ -513,7 +544,9 @@ class Writer:
 
                 self.scope.add(
                     helper.new_function(
-                        "init", parameters=["self", f'name: Literal["{field_name}"]'], return_type=field_type
+                        "init",
+                        parameters=["self", f'name: Literal["{field_name}"]'],
+                        return_type=field_type,
                     )
                 )
 
@@ -534,7 +567,9 @@ class Writer:
                         default="...",
                     ),
                     helper.TypeHintedVariable(
-                        "nesting_limit", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="..."
+                        "nesting_limit",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
                     ),
                 ],
                 return_type=helper.new_type_group("Iterator", [scoped_new_reader_type_name]),
@@ -553,7 +588,9 @@ class Writer:
                         default="...",
                     ),
                     helper.TypeHintedVariable(
-                        "nesting_limit", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="..."
+                        "nesting_limit",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
                     ),
                 ],
                 return_type=scoped_new_reader_type_name,
@@ -576,9 +613,17 @@ class Writer:
             if slot_field.has_type_hint_with_reader_affix:
                 self.scope.add(slot_field.get_typed_variable_with_affixes([helper.READER_NAME]))
 
-        reader_class_declaration = helper.new_class_declaration(new_reader_type_name, parameters=[new_type.scoped_name])
+        reader_class_declaration = helper.new_class_declaration(
+            new_reader_type_name, parameters=[new_type.scoped_name]
+        )
         parent_scope.add(reader_class_declaration)
-        self.scope.add(helper.new_function("as_builder", parameters=["self"], return_type=scoped_new_builder_type_name))
+        self.scope.add(
+            helper.new_function(
+                "as_builder",
+                parameters=["self"],
+                return_type=scoped_new_builder_type_name,
+            )
+        )
 
         self.return_from_scope()
 
@@ -596,17 +641,27 @@ class Writer:
         self.scope.add(
             helper.new_function(
                 "from_dict",
-                parameters=[helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict", primary=True)])],
+                parameters=[
+                    helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict", primary=True)])
+                ],
                 return_type=scoped_new_builder_type_name,
             )
         )
 
-        self.scope.add(helper.new_function("copy", parameters=["self"], return_type=scoped_new_builder_type_name))
-        self.scope.add(helper.new_function("to_bytes", parameters=["self"], return_type="bytes"))
-        self.scope.add(helper.new_function("to_bytes_packed", parameters=["self"], return_type="bytes"))
         self.scope.add(
             helper.new_function(
-                "to_segments", parameters=["self"], return_type=helper.new_type_group("list", ["bytes"])
+                "copy", parameters=["self"], return_type=scoped_new_builder_type_name
+            )
+        )
+        self.scope.add(helper.new_function("to_bytes", parameters=["self"], return_type="bytes"))
+        self.scope.add(
+            helper.new_function("to_bytes_packed", parameters=["self"], return_type="bytes")
+        )
+        self.scope.add(
+            helper.new_function(
+                "to_segments",
+                parameters=["self"],
+                return_type=helper.new_type_group("list", ["bytes"]),
             )
         )
 
@@ -615,13 +670,23 @@ class Writer:
         )
         parent_scope.add(builder_class_declaration)
 
-        self.scope.add(helper.new_function("as_reader", parameters=["self"], return_type=scoped_new_reader_type_name))
+        self.scope.add(
+            helper.new_function(
+                "as_reader",
+                parameters=["self"],
+                return_type=scoped_new_reader_type_name,
+            )
+        )
 
         self.scope.add(helper.new_decorator("staticmethod"))
         self.scope.add(
             helper.new_function(
                 "write",
-                parameters=[helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])],
+                parameters=[
+                    helper.TypeHintedVariable(
+                        "file", [helper.TypeHint("BufferedWriter", primary=True)]
+                    )
+                ],
             )
         )
 
@@ -629,7 +694,11 @@ class Writer:
         self.scope.add(
             helper.new_function(
                 "write_packed",
-                parameters=[helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])],
+                parameters=[
+                    helper.TypeHintedVariable(
+                        "file", [helper.TypeHint("BufferedWriter", primary=True)]
+                    )
+                ],
             )
         )
 
@@ -703,7 +772,9 @@ class Writer:
                     break
 
         # Since this is an import, there must be a parent module.
-        assert matching_path is not None, f"The module named {module_name} was not provided to the stub generator."
+        assert matching_path is not None, (
+            f"The module named {module_name} was not provided to the stub generator."
+        )
 
         # Find the relative path to go from the parent module, to this imported module.
         common_path = os.path.commonpath([self._module_path, matching_path])
@@ -722,7 +793,9 @@ class Writer:
             f"{definition_name}, {helper.new_builder(definition_name)}, {helper.new_reader(definition_name)}"
         )
 
-        return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
+        return self.register_type(
+            schema.node.id, schema, name=definition_name, scope=self.scope.root
+        )
 
     def register_type_var(self, name: str) -> str:
         """Find and register the full name of a type variable, which includes its scopes.
@@ -739,7 +812,11 @@ class Writer:
         return full_name
 
     def register_type(
-        self, type_id: int, schema: capnp.lib.capnp._StructSchema, name: str = "", scope: Scope | None = None
+        self,
+        type_id: int,
+        schema: capnp.lib.capnp._StructSchema,
+        name: str = "",
+        scope: Scope | None = None,
     ) -> CapnpType:
         """Register a new type in the writer's registry of types.
 
@@ -793,7 +870,9 @@ class Writer:
         else:
             raise KeyError(f"The type ID '{type_id} was not found in the type registry.'")
 
-    def new_scope(self, name: str, node: Any, scope_heading: str = "", register: bool = True) -> Scope:
+    def new_scope(
+        self, name: str, node: Any, scope_heading: str = "", register: bool = True
+    ) -> Scope:
         """Creates a new scope below the scope of the provided node.
 
         Args:
@@ -828,9 +907,13 @@ class Writer:
     def return_from_scope(self):
         """Return from the current scope."""
         assert self.scope is not None, "The current scope is not valid."
-        assert not self.scope.is_root, "The current scope is the root scope and cannot be returned from."
+        assert not self.scope.is_root, (
+            "The current scope is the root scope and cannot be returned from."
+        )
         assert self.scope.parent is not None, "The current scope has no parent."
-        assert self.scope.return_scope is not None, "The current scope does not define a scope to return to."
+        assert self.scope.return_scope is not None, (
+            "The current scope does not define a scope to return to."
+        )
 
         self.scope.parent.lines += self.scope.lines
         self.scope = self.scope.return_scope

@@ -4,6 +4,7 @@ Notes:
     - The outputs of this generator are only compatible with pycapnp version >= 1.1.1.
     - Capnp interfaces (RPC) are not yet supported.
 """
+
 from __future__ import annotations
 
 import argparse
