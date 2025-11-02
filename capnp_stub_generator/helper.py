@@ -133,10 +133,9 @@ class TypeHintedVariable:
         typed_variable = f"{self.name}: {nested_type_name}"
 
         if self.default:
-            return f"{typed_variable} = {self.default}"
+            typed_variable = f"{typed_variable} = {self.default}"
 
-        else:
-            return typed_variable
+        return typed_variable
 
     def _get_type_hints_for_affixes(self, affixes: list[str]) -> list[TypeHint]:
         return [self.get_type_hint_for_affix(affix) for affix in affixes]

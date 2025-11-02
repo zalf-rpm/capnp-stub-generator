@@ -9,7 +9,7 @@ import os.path
 from types import ModuleType
 
 import black
-import capnp  # type: ignore
+import capnp
 import isort
 
 from capnp_stub_generator.capnp_types import ModuleRegistryType

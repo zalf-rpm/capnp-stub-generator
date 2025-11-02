@@ -32,8 +32,10 @@ def test_primitives_and_lists_imports_and_types():
         l.startswith("from collections.abc import") and "Iterator" in l and "Sequence" in l
         for l in lines
     )
-    # Literal should not appear (no enums defined) but overload should not appear either (no init overloads)
-    assert not any(l.startswith("from typing import") and "Literal" in l for l in lines)
+    # Literal now appears for list init overloads, overload appears for typed init methods
+    assert any(
+        l.startswith("from typing import") and "Literal" in l and "overload" in l for l in lines
+    )
     # Basic field annotations present
     assert any("aBool:" in l and "bool" in l for l in lines)
     assert any("ints:" in l and "Sequence[int]" in l for l in lines)
@@ -48,17 +50,17 @@ def test_nested_enum_and_literal_and_overload():
     assert any(l.startswith("from enum import") and "Enum" in l for l in lines)
     # Sequence import still expected for list fields
     assert any(l.startswith("from collections.abc import") and "Sequence" in l for l in lines)
-    # No overload expected (only one init overload)
-    assert not any("overload" in l for l in lines if l.startswith("from typing import"))
+    # Now overload is expected (for list init overloads)
+    assert any("overload" in l for l in lines if l.startswith("from typing import"))
 
 
 def test_unions_literal_and_overload_and_which():
     out = _generate("unions.capnp")
     lines = _read(out)
-    # Expect Literal import (union which methods) and overload import (multiple init overloads)
+    # Expect Literal import (union which methods) and overload import (for init overloads including lists)
     assert any(l.startswith("from typing import") and "Literal" in l for l in lines)
-    # Only a single init choice => no overload import expected
-    assert not any(l.startswith("from typing import") and "overload" in l for l in lines)
+    # Overload is now expected for list init methods
+    assert any(l.startswith("from typing import") and "overload" in l for l in lines)
     # 'which' function should appear for discriminantCount > 0
     assert any(re.match(r"^\s*def which\(self\) -> Literal\[", l) for l in lines)
 
