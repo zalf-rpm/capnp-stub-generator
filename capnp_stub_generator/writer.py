@@ -495,8 +495,8 @@ class Writer:
             # Use enumerant name as attribute, value as its string name for stability.
             lines.append(f'    {enumerant.name} = "{enumerant.name}"')
         # Add generated enum class lines to current scope.
-        for l in lines:
-            self.scope.add(l)
+        for line in lines:
+            self.scope.add(line)
         return None
 
     def gen_generic(self, schema: _StructSchema) -> list[str]:
@@ -1068,7 +1068,7 @@ class Writer:
             )
 
         # Always ensure core RPC methods are present for known nested interfaces.
-        if name == "Function" and not any("def call" in l for l in self.scope.lines):
+        if name == "Function" and not any("def call" in line for line in self.scope.lines):
             self._add_typing_import("Sequence")
             self.scope.add(
                 helper.new_function(
@@ -1086,7 +1086,7 @@ class Writer:
                         return_type="float",
                     )
                 )
-        if name == "Value" and not any("def read" in l for l in self.scope.lines):
+        if name == "Value" and not any("def read" in line for line in self.scope.lines):
             self.scope.add(
                 helper.new_function(
                     "read",

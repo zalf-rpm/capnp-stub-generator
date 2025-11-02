@@ -185,7 +185,7 @@ class TestCapnpStubsCompleteness:
         # Extract quoted strings
         import re
 
-        exports = re.findall(r'"([^"]+)"', all_section)
+        _ = re.findall(r'"([^"]+)"', all_section)  # Extracted but not used here
 
         # Only check runtime-accessible items (not Protocol types used only for typing)
         # Protocol types like AnyPointerParameter are only for type checking

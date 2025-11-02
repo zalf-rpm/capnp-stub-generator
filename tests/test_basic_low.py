@@ -27,24 +27,24 @@ def _generate() -> list[str]:
 
 def test_enum_color_defined():
     lines = _generate()
-    assert any(l.startswith("from enum import") for l in lines)
-    assert any(l.strip().startswith("class Color(Enum):") for l in lines)
+    assert any(line.startswith("from enum import") for line in lines)
+    assert any(line.strip().startswith("class Color(Enum):") for line in lines)
     for member in ["red", "green", "blue"]:
-        assert any(l.strip() == f'{member} = "{member}"' for l in lines)
+        assert any(line.strip() == f'{member} = "{member}"' for line in lines)
 
 
 def test_basiclow_struct_and_fields():
     lines = _generate()
-    assert any("class BasicLow" in l for l in lines)
+    assert any("class BasicLow" in line for line in lines)
     for field in ["id:", "name:", "isActive:", "favoriteColor:"]:
-        assert any(field in l for l in lines)
+        assert any(field in line for line in lines)
     # List fields should be annotated with Sequence
-    assert any("scores:" in l and "Sequence" in l for l in lines)
-    assert any("tags:" in l and "Sequence" in l for l in lines)
+    assert any("scores:" in line and "Sequence" in line for line in lines)
+    assert any("tags:" in line and "Sequence" in line for line in lines)
 
 
 def test_builder_reader_presence():
     lines = _generate()
     # BasicLowReader and BasicLowBuilder classes
-    assert any(l.strip().startswith("class BasicLowReader(BasicLow):") for l in lines)
-    assert any(l.strip().startswith("class BasicLowBuilder(BasicLow):") for l in lines)
+    assert any(line.strip().startswith("class BasicLowReader(BasicLow):") for line in lines)
+    assert any(line.strip().startswith("class BasicLowBuilder(BasicLow):") for line in lines)

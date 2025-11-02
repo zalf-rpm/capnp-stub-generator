@@ -30,4 +30,4 @@ def _generate() -> list[str]:
 def test_complex_group_presence_and_nested_union_symbols():
     lines = _generate()
     for token in ["complexGroup", "head:", "tail:", "g1", "deep", "deeper", "deepest"]:
-        assert any(token in l for l in lines)
+        assert any(token in line for line in lines)
