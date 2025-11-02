@@ -1,8 +1,6 @@
 """Generate type hints for *.capnp schemas.
 
 Note: This generator requires pycapnp >= 1.0.0.
-
-Note: capnp interfaces (RPC) are not yet supported.
 """
 
 from __future__ import annotations
@@ -29,7 +27,15 @@ class Writer:
     """A class that handles writing the stub file, based on a provided module definition."""
 
     VALID_TYPING_IMPORTS = Literal[
-        "Iterator", "Generic", "TypeVar", "Sequence", "Literal", "Union", "overload"
+        "Iterator",
+        "Generic",
+        "TypeVar",
+        "Sequence",
+        "Literal",
+        "Union",
+        "overload",
+        "Protocol",
+        "Any",
     ]
 
     def __init__(self, module: ModuleType, module_registry: capnp_types.ModuleRegistryType):
@@ -51,7 +57,7 @@ class Writer:
         else:
             raise ValueError("The module has no file path attached to it.")
 
-        self._imports: set[str] = set()
+        self._imports: list[str] = []
         self._add_import("from __future__ import annotations")
 
         self._typing_imports: set[Writer.VALID_TYPING_IMPORTS] = set()
@@ -85,7 +91,9 @@ class Writer:
         Args:
             import_line (str): The import line to add.
         """
-        self._imports.add(import_line)
+        # Preserve insertion order while avoiding duplicates
+        if import_line not in self._imports:
+            self._imports.append(import_line)
 
     def _add_enum_import(self):
         """Adds an import for the `Enum` class."""
@@ -114,7 +122,34 @@ class Writer:
             import_lines.append(imp)
 
         if self._typing_imports:
-            import_lines.append("from typing import " + ", ".join(sorted(self._typing_imports)))
+            # Consolidate typing imports deterministically.
+            # Iterator and Sequence should be imported from collections.abc.
+            order = [
+                "Iterator",
+                "Literal",
+                "Sequence",
+                "overload",
+                "Generic",
+                "TypeVar",
+                "Union",
+                "Protocol",
+                "Any",
+            ]
+            names = [n for n in order if n in self._typing_imports]
+            extra = sorted(self._typing_imports.difference(set(names)))
+            names.extend(extra)
+
+            # Split names into collections.abc vs typing
+            collections_abc_names = [n for n in names if n in ("Iterator", "Sequence")]
+            typing_names = [n for n in names if n not in ("Iterator", "Sequence")]
+
+            if collections_abc_names:
+                import_lines.append(
+                    "from collections.abc import " + ", ".join(collections_abc_names)
+                )
+
+            if typing_names:
+                import_lines.append("from typing import " + ", ".join(typing_names))
 
         return import_lines
 
@@ -156,6 +191,22 @@ class Writer:
 
         elif field_slot_type == capnp_types.CapnpElementType.ANY_POINTER:
             hinted_variable = self.gen_any_pointer_slot(field, new_type)
+
+        elif field_slot_type == capnp_types.CapnpElementType.INTERFACE:
+            # Interfaces are represented as Protocols; expose attribute with Protocol type
+            # Ensure the interface type has been generated
+            try:
+                self.generate_nested(raw_field.schema)
+            except Exception:  # pragma: no cover - continue gracefully
+                pass
+            try:
+                type_name = self.get_type_name(field.slot.type)
+            except Exception:
+                type_name = "Any"
+                self._add_typing_import("Union")
+            hinted_variable = helper.TypeHintedVariable(
+                field.name, [helper.TypeHint(type_name, primary=True)]
+            )
 
         else:
             raise TypeError(f"Unknown field slot type {field_slot_type}.")
@@ -262,6 +313,15 @@ class Writer:
             [helper.TypeHint(type_name, primary=True)],
             nesting_depth=list_depth,
         )
+
+        # Do not create extended types for enum lists; enums are concrete
+        # and lack builder/reader variants.
+        try:
+            base_list_element = field.slot.type.list.elementType.which()
+        except Exception:
+            base_list_element = None
+        if base_list_element == capnp_types.CapnpElementType.ENUM:
+            create_extended_types = False
 
         if create_extended_types:
             hinted_variable.add_builder_from_primary_type()
@@ -374,7 +434,7 @@ class Writer:
     def gen_enum(self, schema: capnp.lib.capnp._StructSchema) -> CapnpType | None:
         """Generate an `enum` object.
 
-        An enum object is translated into a list of literals.
+        An enum object is translated into an ``Enum`` subclass instead of a ``Literal`` alias.
 
         Args:
             schema (capnp.lib.capnp._StructSchema): The schema to generate the `enum` object out of.
@@ -389,13 +449,15 @@ class Writer:
         name = helper.get_display_name(schema)
         self.register_type(schema.node.id, schema, name=name, scope=self.scope)
 
-        self._add_typing_import("Literal")
-        enum_type = helper.new_group(
-            "Literal",
-            [f'"{enumerant.name}"' for enumerant in schema.node.enum.enumerants],
-        )
-        self.scope.add(helper.new_type_alias(name, enum_type))
-
+        # Import Enum (only once) and emit a class with one attribute per enumerant.
+        self._add_enum_import()
+        lines = [helper.new_class_declaration(name, ["Enum"])]
+        for enumerant in schema.node.enum.enumerants:
+            # Use enumerant name as attribute, value as its string name for stability.
+            lines.append(f'    {enumerant.name} = "{enumerant.name}"')
+        # Add generated enum class lines to current scope.
+        for l in lines:
+            self.scope.add(l)
         return None
 
     def gen_generic(self, schema: capnp.lib.capnp._StructSchema) -> list[str]:
@@ -706,6 +768,96 @@ class Writer:
 
         return new_type
 
+    def gen_interface(self, schema: capnp.lib.capnp._StructSchema) -> CapnpType | None:
+        """Generate an `interface` definition.
+
+        The interface is represented as a Protocol with one method per RPC.
+        Each method exposes parameters and return types based on the implicit
+        param / result structs. For now, all parameters and return types are
+        typed as `Any` (except when singular). Future work could map these to
+        generated struct types if desired.
+        """
+        assert schema.node.which() == capnp_types.CapnpElementType.INTERFACE
+
+        imported = self.register_import(schema)
+        if imported is not None:
+            return imported
+
+        name = helper.get_display_name(schema)
+        # Register type to allow references from slots.
+        self.register_type(schema.node.id, schema, name=name, scope=self.scope)
+        self._add_typing_import("Protocol")
+        self._add_typing_import("Iterator")
+        self._add_typing_import("Any")
+
+        # Open protocol scope
+        parent_scope = self.new_scope(
+            name, schema.node, scope_heading=helper.new_class_declaration(name, ["Protocol"])
+        )
+
+        # Access runtime interface to enumerate methods (parsed schema lacks methods)
+        try:
+            iface_runtime = getattr(self._module, name)
+            methods = iface_runtime.schema.methods.items()  # type: ignore[attr-defined]
+        except Exception:  # pragma: no cover
+            methods = []
+
+        method_count = 0
+        for method_name, method in methods:  # type: ignore[var-annotated]
+            method_count += 1
+            # Extract parameter and result field names to shape a return annotation.
+            try:
+                param_schema = method.param_type  # type: ignore[attr-defined]
+                result_schema = method.result_type  # type: ignore[attr-defined]
+                param_fields = [f.name for f in param_schema.node.struct.fields]
+                result_fields = [f.name for f in result_schema.node.struct.fields]
+            except Exception:
+                param_fields = []
+                result_fields = []
+
+            parameters: list[str] = ["self"]
+            # Build parameter annotations from param_fields using primitive mapping where possible.
+            for pf in param_fields:
+                # Attempt to map field type; fallback to Any
+                try:
+                    field_obj = next(f for f in param_schema.node.struct.fields if f.name == pf)
+                    f_type = field_obj.slot.type.which()
+                    if f_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
+                        parameters.append(f"{pf}: {capnp_types.CAPNP_TYPE_TO_PYTHON[f_type]}")
+                    else:
+                        parameters.append(f"{pf}: Any")
+                except Exception:
+                    parameters.append(f"{pf}: Any")
+            # Determine return type from result_fields
+            return_type = "None"
+            if result_fields:
+                annotated_returns: list[str] = []
+                for rf in result_fields:
+                    try:
+                        field_obj = next(
+                            f for f in result_schema.node.struct.fields if f.name == rf
+                        )
+                        f_type = field_obj.slot.type.which()
+                        if f_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
+                            annotated_returns.append(capnp_types.CAPNP_TYPE_TO_PYTHON[f_type])
+                        else:
+                            annotated_returns.append("Any")
+                    except Exception:
+                        annotated_returns.append("Any")
+                if len(annotated_returns) == 1:
+                    return_type = annotated_returns[0]
+                else:
+                    return_type = helper.new_type_group("tuple", annotated_returns)
+            self.scope.add(
+                helper.new_function(method_name, parameters=parameters, return_type=return_type)
+            )
+
+        if method_count == 0:
+            self.scope.add("...")
+
+        self.return_from_scope()
+        return None
+
     def generate_nested(self, schema: capnp.lib.capnp._StructSchema) -> None:
         """Generate the type for a nested schema.
 
@@ -730,7 +882,7 @@ class Writer:
             self.gen_enum(schema)
 
         elif node_type == "interface":
-            logger.warning("Skipping interface: not implemented.")
+            self.gen_interface(schema)
 
         elif node_type == "annotation":
             logger.warning("Skipping annotation: not implemented.")
@@ -967,6 +1119,10 @@ class Writer:
 
         elif type_reader_type == capnp_types.CapnpElementType.LIST:
             type_name = type_reader.list.elementType.which()
+
+        elif type_reader_type == capnp_types.CapnpElementType.INTERFACE:
+            element_type = self.get_type_by_id(type_reader.interface.typeId)
+            type_name = element_type.name
 
             # Traverse down to the innermost nested list element.
             while type_name == capnp_types.CapnpElementType.LIST:

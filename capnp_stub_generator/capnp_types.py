@@ -39,6 +39,7 @@ class CapnpElementType:
     VOID = "void"
     LIST = "list"
     ANY_POINTER = "anyPointer"
+    INTERFACE = "interface"
 
 
 ModuleRegistryType = dict[int, tuple[str, ModuleType]]

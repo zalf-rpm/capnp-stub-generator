@@ -2,7 +2,6 @@
 
 Notes:
     - The outputs of this generator are only compatible with pycapnp version >= 1.1.1.
-    - Capnp interfaces (RPC) are not yet supported.
 """
 
 from __future__ import annotations
@@ -66,6 +65,14 @@ def setup_parser() -> argparse.ArgumentParser:
         nargs="+",
         default=[],
         help="path or glob expressions to exclude from path matches.",
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=str,
+        default="",
+        help="directory to write all generated stub outputs; defaults to alongside each schema if omitted.",
     )
 
     _add_recursive_argument(parser)
