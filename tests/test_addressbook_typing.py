@@ -9,39 +9,17 @@ This test validates that the generated stubs provide correct types for:
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 TESTS_DIR = Path(__file__).parent
-ADDRESSBOOK_DIR = TESTS_DIR / "examples" / "addressbook"
-GENERATED_DIR = TESTS_DIR / "_generated_addressbook_typing"
-
-
-@pytest.fixture(scope="module")
-def generate_addressbook_stubs():
-    """Generate stubs for addressbook example."""
-    from capnp_stub_generator.cli import main
-
-    # Clean and create output directory
-    if GENERATED_DIR.exists():
-        shutil.rmtree(GENERATED_DIR)
-    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Generate stubs
-    schema_path = str(ADDRESSBOOK_DIR / "addressbook.capnp")
-    main(["-p", schema_path, "-o", str(GENERATED_DIR)])
-
-    yield GENERATED_DIR
-
-    # Optionally clean up
-    # shutil.rmtree(GENERATED_DIR)
 
 
 def test_init_returns_typed_list(generate_addressbook_stubs):
     """Test that init() returns a properly typed list, not Any."""
+    GENERATED_DIR = generate_addressbook_stubs
     # Create a test file that uses init
     test_code = """
 import addressbook_capnp
@@ -82,6 +60,7 @@ alice.email = "alice@example.com"  # Should type check
 
 def test_list_element_access_typed(generate_addressbook_stubs):
     """Test that accessing list elements gives proper types."""
+    GENERATED_DIR = generate_addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -123,6 +102,7 @@ bob_phones[0].number = "555-4567"
 
 def test_iteration_typed(generate_addressbook_stubs):
     """Test that iterating over lists gives proper types."""
+    GENERATED_DIR = generate_addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -164,6 +144,7 @@ for person in addresses.people:
 
 def test_union_field_access(generate_addressbook_stubs):
     """Test that union fields are properly typed."""
+    GENERATED_DIR = generate_addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -201,6 +182,7 @@ bob.employment.unemployed = None
 
 def test_nested_init_typed(generate_addressbook_stubs):
     """Test that nested init() calls return proper types."""
+    GENERATED_DIR = generate_addressbook_stubs
     test_code = """
 import addressbook_capnp
 

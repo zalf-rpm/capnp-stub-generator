@@ -6,33 +6,22 @@ tracking them as we improve interface stub generation.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import run_pyright
 
 TESTS_DIR = Path(__file__).parent
 CALCULATOR_DIR = TESTS_DIR / "examples" / "calculator"
 
 
-def run_pyright_on_file(file_path: Path) -> tuple[int, str]:
-    """Run pyright on a file and return error count and output."""
-    result = subprocess.run(
-        ["pyright", str(file_path)],
-        capture_output=True,
-        text=True,
-    )
-    error_count = result.stdout.count("error:")
-    return error_count, result.stdout
-
-
 class TestCalculatorClientBaseline:
     """Baseline tests for async_calculator_client.py."""
 
-    def test_client_type_errors_baseline(self):
+    def test_client_type_errors_baseline(self, generate_calculator_stubs):
         """Track baseline type errors in calculator client."""
         file_path = CALCULATOR_DIR / "async_calculator_client.py"
-        error_count, output = run_pyright_on_file(file_path)
+        error_count, output = run_pyright(file_path)
 
         # Expect no errors after fixes.
         EXPECTED_ERRORS = 0
@@ -45,10 +34,10 @@ class TestCalculatorClientBaseline:
                 f"If errors increased, check for regressions."
             )
 
-    def test_client_has_no_runtime_attribute_errors(self):
+    def test_client_has_no_runtime_attribute_errors(self, generate_calculator_stubs):
         """Test that basic capnp attributes are now available."""
         file_path = CALCULATOR_DIR / "async_calculator_client.py"
-        _, output = run_pyright_on_file(file_path)
+        _, output = run_pyright(file_path)
 
         # These should NOT have "is not a known attribute" errors anymore
         runtime_attrs = ["TwoPartyClient", "AsyncIoStream", "run"]
@@ -64,10 +53,10 @@ class TestCalculatorClientBaseline:
 class TestCalculatorServerBaseline:
     """Baseline tests for async_calculator_server.py."""
 
-    def test_server_type_errors_baseline(self):
+    def test_server_type_errors_baseline(self, generate_calculator_stubs):
         """Track baseline type errors in calculator server."""
         file_path = CALCULATOR_DIR / "async_calculator_server.py"
-        error_count, output = run_pyright_on_file(file_path)
+        error_count, output = run_pyright(file_path)
 
         # Expect no errors after fixes.
         EXPECTED_ERRORS = 0
@@ -80,10 +69,10 @@ class TestCalculatorServerBaseline:
                 f"If errors increased, check for regressions."
             )
 
-    def test_server_has_no_runtime_attribute_errors(self):
+    def test_server_has_no_runtime_attribute_errors(self, generate_calculator_stubs):
         """Test that basic capnp attributes are now available."""
         file_path = CALCULATOR_DIR / "async_calculator_server.py"
-        _, output = run_pyright_on_file(file_path)
+        _, output = run_pyright(file_path)
 
         # These should NOT have "is not a known attribute" errors anymore
         runtime_attrs = ["TwoPartyServer", "AsyncIoStream", "run"]
@@ -99,10 +88,10 @@ class TestCalculatorServerBaseline:
 class TestCalculatorErrorCategories:
     """Categorize the types of errors in calculator code."""
 
-    def test_categorize_client_errors(self):
+    def test_categorize_client_errors(self, generate_calculator_stubs):
         """Categorize and document client errors."""
         file_path = CALCULATOR_DIR / "async_calculator_client.py"
-        _, output = run_pyright_on_file(file_path)
+        _, output = run_pyright(file_path)
 
         error_categories = {
             "nested_interface": "Calculator.Function.Server",
@@ -123,10 +112,10 @@ class TestCalculatorErrorCategories:
         # After stub updates, runtime errors should be 0
         assert runtime_attr_errors == 0, "Runtime attributes should be available after stub update"
 
-    def test_categorize_server_errors(self):
+    def test_categorize_server_errors(self, generate_calculator_stubs):
         """Categorize and document server errors."""
         file_path = CALCULATOR_DIR / "async_calculator_server.py"
-        _, output = run_pyright_on_file(file_path)
+        _, output = run_pyright(file_path)
 
         # Count error types
         nested_interface_errors = output.count("Cannot access attribute")
@@ -145,10 +134,10 @@ class TestCalculatorErrorCategories:
 class TestCalculatorImprovementTracking:
     """Track improvements in calculator type checking over time."""
 
-    def test_calculator_combined_baseline(self):
+    def test_calculator_combined_baseline(self, generate_calculator_stubs):
         """Track total errors across both files."""
-        client_errors, _ = run_pyright_on_file(CALCULATOR_DIR / "async_calculator_client.py")
-        server_errors, _ = run_pyright_on_file(CALCULATOR_DIR / "async_calculator_server.py")
+        client_errors, _ = run_pyright(CALCULATOR_DIR / "async_calculator_client.py")
+        server_errors, _ = run_pyright(CALCULATOR_DIR / "async_calculator_server.py")
 
         total_errors = client_errors + server_errors
 
@@ -168,12 +157,12 @@ class TestCalculatorImprovementTracking:
             f"Type errors increased! Was {EXPECTED_TOTAL}, now {total_errors}"
         )
 
-    def test_no_regression_in_runtime_stubs(self):
+    def test_no_regression_in_runtime_stubs(self, generate_calculator_stubs):
         """Ensure runtime stub additions don't cause regressions."""
         # Test both files
         for file_name in ["async_calculator_client.py", "async_calculator_server.py"]:
             file_path = CALCULATOR_DIR / file_name
-            _, output = run_pyright_on_file(file_path)
+            _, output = run_pyright(file_path)
 
             # These runtime attributes should all be available now
             missing_attrs = []

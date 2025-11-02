@@ -208,13 +208,15 @@ class _DynamicListBuilder(Generic[T]):
     def __setitem__(self, index: int, value: T) -> None: ...
 
 # RPC Classes
-class CastableBootstrap(Protocol):
-    def cast_as(self, interface: Any) -> Any: ...
+I_co = TypeVar("I_co", bound=InterfaceRuntime)
+
+class CastableBootstrap(Protocol, Generic[I_co]):
+    def cast_as(self, interface: type[I_co]) -> I_co: ...
 
 class TwoPartyClient:
     """Two-party RPC client for Cap'n Proto."""
     def __init__(self, connection: Any) -> None: ...
-    def bootstrap(self) -> CastableBootstrap: ...
+    def bootstrap(self) -> CastableBootstrap[InterfaceRuntime]: ...
     async def on_disconnect(self) -> None: ...
 
 class TwoPartyServer:
@@ -273,6 +275,7 @@ __all__ = [
     "_StructSchema",
     "load",
     "remove_import_hook",
+    "CastableBootstrap",
     "TwoPartyClient",
     "TwoPartyServer",
     "AsyncIoStream",

@@ -312,14 +312,13 @@ class Writer:
             # An index error indicates that the list is not nested.
             last_element = nested_list_elements[-1]
 
+            # last_element may be a TypeReader; attempt to access its struct/interface schema.
             try:
-                self.generate_nested(last_element)
-
+                self.generate_nested(last_element)  # type: ignore[arg-type]
             except AttributeError:
                 # This is a built-in type and does not require generation.
                 create_extended_types = False
                 type_name = self.get_type_name(last_element)
-
             else:
                 type_name = self.get_type_name(field.slot.type.list.elementType)
 

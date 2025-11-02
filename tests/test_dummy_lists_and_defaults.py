@@ -2,31 +2,19 @@
 
 from __future__ import annotations
 
-import os
-
-from capnp_stub_generator.cli import main
-
-here = os.path.dirname(__file__)
-_out_dir = os.path.join(here, "_generated")
+import pytest
+from conftest import read_stub_file
 
 
-def _generate() -> list[str]:
-    os.makedirs(_out_dir, exist_ok=True)
-    main(
-        [
-            "-p",
-            os.path.join(here, "schemas", "dummy.capnp"),
-            "-o",
-            _out_dir,
-        ]
-    )
-    path = os.path.join(_out_dir, "dummy_capnp.pyi")
-    with open(path, encoding="utf8") as f:
-        return f.readlines()
+@pytest.fixture(scope="module")
+def dummy_stub_lines(generate_core_stubs):
+    """Read dummy.capnp stub file lines."""
+    stub_path = generate_core_stubs / "dummy_capnp.pyi"
+    return read_stub_file(stub_path)
 
 
-def test_lists_small_struct_and_listlist_fields():
-    lines = _generate()
+def test_lists_small_struct_and_listlist_fields(dummy_stub_lines):
+    lines = dummy_stub_lines
     assert any("class TestLists" in l for l in lines)
     # Representative fields from each category
     for field in [
@@ -58,8 +46,8 @@ def test_lists_small_struct_and_listlist_fields():
         assert any(field in l for l in lines), f"Missing field {field}"
 
 
-def test_list_defaults_struct_and_scalar_lists_present():
-    lines = _generate()
+def test_list_defaults_struct_and_scalar_lists_present(dummy_stub_lines):
+    lines = dummy_stub_lines
     assert any("class TestListDefaults" in l for l in lines)
     # Default values are not included in stub files (they're runtime info, not type info)
     # Check that the fields exist with proper types instead
@@ -67,8 +55,8 @@ def test_list_defaults_struct_and_scalar_lists_present():
         assert any(field in l for l in lines), f"Missing field {field}"
 
 
-def test_field_zero_bit_and_defaults():
-    lines = _generate()
+def test_field_zero_bit_and_defaults(dummy_stub_lines):
+    lines = dummy_stub_lines
     assert any("class TestFieldZeroIsBit" in l for l in lines)
     # Check fields exist
     assert any("bit:" in l and "bool" in l for l in lines)

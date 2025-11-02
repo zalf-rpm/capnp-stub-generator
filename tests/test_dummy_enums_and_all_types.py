@@ -2,31 +2,19 @@
 
 from __future__ import annotations
 
-import os
-
-from capnp_stub_generator.cli import main
-
-here = os.path.dirname(__file__)
-_out_dir = os.path.join(here, "_generated")
+import pytest
+from conftest import read_stub_file
 
 
-def _generate() -> list[str]:
-    os.makedirs(_out_dir, exist_ok=True)
-    main(
-        [
-            "-p",
-            os.path.join(here, "schemas", "dummy.capnp"),
-            "-o",
-            _out_dir,
-        ]
-    )
-    path = os.path.join(_out_dir, "dummy_capnp.pyi")
-    with open(path, encoding="utf8") as f:
-        return f.readlines()
+@pytest.fixture(scope="module")
+def dummy_stub_lines(generate_core_stubs):
+    """Read dummy.capnp stub file lines."""
+    stub_path = generate_core_stubs / "dummy_capnp.pyi"
+    return read_stub_file(stub_path)
 
 
-def test_enum_definition_and_imports():
-    lines = _generate()
+def test_enum_definition_and_imports(dummy_stub_lines):
+    lines = dummy_stub_lines
     # Enum import present and TestEnum defined as real Enum subclass
     assert any(l.startswith("from enum import") and "Enum" in l for l in lines)
     assert any(l.strip().startswith("class TestEnum(Enum):") for l in lines)
@@ -35,8 +23,8 @@ def test_enum_definition_and_imports():
         assert any(l.strip() == f'{name} = "{name}"' for l in lines)
 
 
-def test_testalltypes_field_presence_and_collections_import():
-    lines = _generate()
+def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):
+    lines = dummy_stub_lines
     # collections.abc import for Iterator, Sequence
     assert any(
         l.startswith("from collections.abc import") and "Sequence" in l and "Iterator" in l
@@ -52,8 +40,8 @@ def test_testalltypes_field_presence_and_collections_import():
     assert any("voidList:" in l and "Sequence" in l for l in lines)
 
 
-def test_builder_reader_classes_for_all_types():
-    lines = _generate()
+def test_builder_reader_classes_for_all_types(dummy_stub_lines):
+    lines = dummy_stub_lines
     assert any(l.strip().startswith("class TestAllTypesReader(TestAllTypes):") for l in lines)
     assert any(l.strip().startswith("class TestAllTypesBuilder(TestAllTypes):") for l in lines)
     # from_bytes contextmanager present

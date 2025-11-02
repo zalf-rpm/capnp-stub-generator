@@ -14,11 +14,12 @@ from pathlib import Path
 import pytest
 
 TESTS_DIR = Path(__file__).parent
-GENERATED_DIR = TESTS_DIR / "_generated_examples/addressbook"
 
 
-def test_enum_field_accepts_valid_literal():
+def test_enum_field_accepts_valid_literal(generate_all_example_stubs):
+    GENERATED_DIR = generate_all_example_stubs.get("addressbook")
     """Test that enum fields accept valid literal string values."""
+    GENERATED_DIR = generate_all_example_stubs.get("addressbook")
     test_code = """
 import addressbook_capnp
 
@@ -51,7 +52,8 @@ phones[2].type = "work"    # Valid
         )
 
 
-def test_enum_field_rejects_invalid_literal():
+def test_enum_field_rejects_invalid_literal(generate_all_example_stubs):
+    GENERATED_DIR = generate_all_example_stubs.get("addressbook")
     """Test that enum fields reject invalid literal string values."""
     test_code = """
 import addressbook_capnp
@@ -87,7 +89,8 @@ phones[0].type = "invalid"  # Should error!
         print(f"✓ Good! Invalid enum value correctly rejected with {error_count} error(s)")
 
 
-def test_enum_field_accepts_enum_member():
+def test_enum_field_accepts_enum_member(generate_all_example_stubs):
+    GENERATED_DIR = generate_all_example_stubs.get("addressbook")
     """Test that enum fields accept the enum type itself."""
     test_code = """
 import addressbook_capnp
@@ -120,7 +123,8 @@ phones[0].type = Person.PhoneNumber.Type.mobile
         )
 
 
-def test_enum_field_type_annotation():
+def test_enum_field_type_annotation(generate_all_example_stubs):
+    GENERATED_DIR = generate_all_example_stubs.get("addressbook")
     """Test that we can correctly annotate variables with enum types."""
     test_code = """
 import addressbook_capnp

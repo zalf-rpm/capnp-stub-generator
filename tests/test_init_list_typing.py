@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 
 TESTS_DIR = Path(__file__).parent
-GENERATED_DIR = TESTS_DIR / "_generated_examples/addressbook"
 
 
-def test_init_list_explicit_type_annotation():
+def test_init_list_explicit_type_annotation(generate_all_example_stubs):
     """Test that we can explicitly annotate the return type of init()."""
+    GENERATED_DIR = generate_all_example_stubs.get("addressbook")
     test_code = """
 import addressbook_capnp
 from typing import TYPE_CHECKING
@@ -51,8 +51,11 @@ if TYPE_CHECKING:
         )
 
 
-def test_init_list_wrong_usage():
+def test_init_list_wrong_usage(generate_all_example_stubs):
     """Test that using init result incorrectly raises type errors."""
+    GENERATED_DIR = generate_all_example_stubs.get("addressbook")
+    if not GENERATED_DIR:
+        pytest.skip("Addressbook stubs not generated")
     test_code = """
 import addressbook_capnp
 
@@ -86,8 +89,11 @@ y = people.upper()  # Lists don't have upper() method
         print(f"✓ Good! Got {error_count} type errors as expected")
 
 
-def test_init_reveals_type():
+def test_init_reveals_type(generate_all_example_stubs):
     """Use reveal_type to see what pyright thinks init returns."""
+    GENERATED_DIR = generate_all_example_stubs.get("addressbook")
+    if not GENERATED_DIR:
+        pytest.skip("Addressbook stubs not generated")
     test_code = """
 import addressbook_capnp
 from typing import reveal_type

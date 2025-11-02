@@ -6,33 +6,21 @@ their Server classes are properly generated in stubs.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import run_pyright
 
 TESTS_DIR = Path(__file__).parent
 CALCULATOR_DIR = TESTS_DIR / "examples" / "calculator"
-GENERATED_DIR = TESTS_DIR / "_generated_examples" / "calculator"
-
-
-def run_pyright_on_file(file_path: Path) -> tuple[int, str]:
-    """Run pyright on a file and return error count and output."""
-    result = subprocess.run(
-        ["pyright", str(file_path)],
-        capture_output=True,
-        text=True,
-    )
-    error_count = result.stdout.count("error:")
-    return error_count, result.stdout
 
 
 class TestCalculatorNestedInterfaceGeneration:
     """Test that nested interfaces are properly generated."""
 
-    def test_nested_interfaces_exist_in_stub(self):
+    def test_nested_interfaces_exist_in_stub(self, generate_calculator_stubs):
         """Test that Calculator.Function and Calculator.Value are in the stub."""
-        stub_file = GENERATED_DIR / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         content = stub_file.read_text()
 
         # Check that the Calculator class exists
@@ -48,9 +36,9 @@ class TestCalculatorNestedInterfaceGeneration:
             "Calculator.Value should be generated (nested interface)"
         )
 
-    def test_nested_struct_exists_in_stub(self):
+    def test_nested_struct_exists_in_stub(self, generate_calculator_stubs):
         """Test that Calculator.Expression (nested struct) is in the stub."""
-        stub_file = GENERATED_DIR / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         content = stub_file.read_text()
 
         # Calculator.Expression is a nested struct, should be generated
@@ -58,37 +46,37 @@ class TestCalculatorNestedInterfaceGeneration:
             "Calculator.Expression should be generated (nested struct)"
         )
 
-    def test_nested_enum_exists_in_stub(self):
+    def test_nested_enum_exists_in_stub(self, generate_calculator_stubs):
         """Test that Calculator.Operator (nested enum) is in the stub."""
-        stub_file = GENERATED_DIR / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         content = stub_file.read_text()
 
         # Calculator.Operator is a nested enum, should be generated
         assert "class Operator" in content, "Calculator.Operator should be generated (nested enum)"
 
-    def test_server_class_exists_for_interfaces(self):
+    def test_server_class_exists_for_interfaces(self, generate_calculator_stubs):
         """Test that Server classes are generated for interfaces."""
-        stub_file = GENERATED_DIR / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         content = stub_file.read_text()
 
         # Each interface should have a .Server class
         # This is critical for implementing servers
         assert "class Server" in content, "Server class should be generated for interfaces"
 
-    def test_client_code_has_no_function_access_error(self):
+    def test_client_code_has_no_function_access_error(self, generate_calculator_stubs):
         """Test that Calculator.Function.Server can be accessed in client code."""
         file_path = CALCULATOR_DIR / "async_calculator_client.py"
-        _, output = run_pyright_on_file(file_path)
+        _, output = run_pyright(file_path)
 
         # This specific error should not exist after proper nesting implementation
         assert 'Cannot access attribute "Function"' not in output, (
             "Calculator.Function should be accessible"
         )
 
-    def test_server_code_has_no_value_access_error(self):
+    def test_server_code_has_no_value_access_error(self, generate_calculator_stubs):
         """Test that Calculator.Value.Server can be accessed in server code."""
         file_path = CALCULATOR_DIR / "async_calculator_server.py"
-        _, output = run_pyright_on_file(file_path)
+        _, output = run_pyright(file_path)
 
         # These specific errors should not exist after proper nesting implementation
         assert 'Cannot access attribute "Value"' not in output, (
@@ -99,10 +87,10 @@ class TestCalculatorNestedInterfaceGeneration:
             "Calculator.Function should be accessible"
         )
 
-    def test_server_code_has_no_calculator_server_error(self):
+    def test_server_code_has_no_calculator_server_error(self, generate_calculator_stubs):
         """Test that Calculator.Server can be accessed."""
         file_path = CALCULATOR_DIR / "async_calculator_server.py"
-        _, output = run_pyright_on_file(file_path)
+        _, output = run_pyright(file_path)
 
         # Check that Calculator.Server is accessible
         if 'Cannot access attribute "Server"' in output and "Calculator" in output:
@@ -112,9 +100,9 @@ class TestCalculatorNestedInterfaceGeneration:
 class TestCalculatorNestedInterfaceStructure:
     """Test the structure of nested interface generation."""
 
-    def test_function_interface_has_call_method(self):
+    def test_function_interface_has_call_method(self, generate_calculator_stubs):
         """Test that Calculator.Function has a call method."""
-        stub_file = GENERATED_DIR / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         content = stub_file.read_text()
 
         # The Function interface should have a call method
@@ -137,9 +125,9 @@ class TestCalculatorNestedInterfaceStructure:
 
             assert has_call_method, "Function interface should have a call method"
 
-    def test_value_interface_has_read_method(self):
+    def test_value_interface_has_read_method(self, generate_calculator_stubs):
         """Test that Calculator.Value has a read method."""
-        stub_file = GENERATED_DIR / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         content = stub_file.read_text()
 
         # The Value interface should have a read method
@@ -164,19 +152,15 @@ class TestCalculatorNestedInterfaceStructure:
 class TestCalculatorNestedTypesImprovement:
     """Track the overall improvement in nested types handling."""
 
-    def test_overall_error_reduction_goal(self):
+    def test_overall_error_reduction_goal(self, generate_calculator_stubs):
         """Track progress toward zero errors in calculator example.
 
         Goal: Reduce errors to 0 by properly generating nested interfaces.
         Current baseline: 7 errors (1 client + 6 server)
         After nested interface fix: Should be significantly reduced
         """
-        client_errors, client_output = run_pyright_on_file(
-            CALCULATOR_DIR / "async_calculator_client.py"
-        )
-        server_errors, server_output = run_pyright_on_file(
-            CALCULATOR_DIR / "async_calculator_server.py"
-        )
+        client_errors, client_output = run_pyright(CALCULATOR_DIR / "async_calculator_client.py")
+        server_errors, server_output = run_pyright(CALCULATOR_DIR / "async_calculator_server.py")
 
         total_errors = client_errors + server_errors
 
