@@ -30,19 +30,19 @@ def test_group_field_members_materialized():
     lines = _generate()
     # Ensure TestGroups appears and group members appear flattened or via nested classes
     assert any("class TestGroups" in line for line in lines)
-    # Look for group-specific field names (corge/grault/garply) multiple times
-    count_corge = sum(1 for line in lines if "corge:" in line)
+    # Look for group-specific field names (corge/grault/garply) multiple times (now as properties)
+    count_corge = sum(1 for line in lines if "def corge(self)" in line)
     assert count_corge >= 3  # across foo/bar/baz groups
 
 
 def test_interleaved_groups_union_and_nested_group_fields():
     lines = _generate()
     assert any("class TestInterleavedGroups" in line for line in lines)
-    # Expect nested group names or fields plugh/xyzzy/fred across two groups
+    # Expect nested group names or fields plugh/xyzzy/fred across two groups (now as properties)
     found = {name: False for name in ["plugh", "xyzzy", "fred", "waldo"]}
     for line in lines:
         for k in found:
-            if k + ":" in line:
+            if f"def {k}(self)" in line:
                 found[k] = True
     assert all(found.values())
 
@@ -54,13 +54,13 @@ def test_nested_types_enums_and_lists():
     assert any(re.match(r"^\s*class NestedEnum2\(Enum\):", line) for line in lines)
     # Using declarations produce aliases or reexports
     assert any("class TestUsing" in line for line in lines)
-    # Fields referencing nested enums use dotted names (not flattened)
+    # Fields referencing nested enums use dotted names (not flattened, now as properties)
     assert any(
-        "outerNestedEnum:" in line and "TestNestedTypes" in line and "NestedEnum1" in line
+        "def outerNestedEnum(self)" in line and "TestNestedTypes" in line and "NestedEnum1" in line
         for line in lines
     )
     assert any(
-        "innerNestedEnum:" in line and "TestNestedTypes" in line and "NestedEnum2" in line
+        "def innerNestedEnum(self)" in line and "TestNestedTypes" in line and "NestedEnum2" in line
         for line in lines
     )
 

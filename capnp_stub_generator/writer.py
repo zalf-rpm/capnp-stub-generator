@@ -216,8 +216,10 @@ class Writer:
             except Exception:
                 type_name = "Any"
                 self._add_typing_import("Union")
+            # For reading: return only the Protocol type
+            # For writing (in Builder): accept Protocol | Server
             hints = [helper.TypeHint(type_name, primary=True)]
-            # Also allow passing Server implementation for interfaces
+            # Add Server as a non-primary hint for Builder setter
             hints.append(helper.TypeHint(f"{type_name}.Server"))
             hinted_variable = helper.TypeHintedVariable(field.name, hints)
 
@@ -647,10 +649,21 @@ class Writer:
         # Finally, add the class declaration after the expansion of all nested schemas.
         parent_scope.add(class_declaration)
 
-        # Add the slot fields, if any.
+        # Add the slot fields as properties (consistent with Reader/Builder pattern)
         if slot_fields:
             for slot_field in slot_fields:
-                self.scope.add(slot_field.typed_variable_with_full_hints)
+                # Base class uses properties without setters (read-only interface)
+                # For interface fields, use only primary type (Protocol) not union with Server
+                if len(slot_field.type_hints) > 1 and any(
+                    ".Server" in str(h) for h in slot_field.type_hints
+                ):
+                    # Interface field: use only primary type for reading
+                    field_type = slot_field.primary_type_nested
+                else:
+                    # Other fields: use full union type
+                    field_type = slot_field.full_type_nested
+                for line in helper.new_property(slot_field.name, field_type):
+                    self.scope.add(line)
 
         # Add the `which` function, if there is a top-level union in the schema.
         if schema.node.struct.discriminantCount:
@@ -669,6 +682,7 @@ class Writer:
         # Add an overloaded `init` function for each nested struct.
         if init_choices:
             self._add_typing_import("Literal")
+            self._add_typing_import("Any")
             use_overload = len(init_choices) > 1
             if use_overload:
                 self._add_typing_import("overload")
@@ -682,6 +696,26 @@ class Writer:
                         "init",
                         parameters=["self", f'name: Literal["{field_name}"]'],
                         return_type=field_type,
+                    )
+                )
+
+            # Add catch-all implementation (required when using @overload)
+            if use_overload:
+                self.scope.add(
+                    helper.new_function(
+                        "init",
+                        parameters=[
+                            helper.TypeHintedVariable(
+                                "self", [helper.TypeHint("Any", primary=True)]
+                            ),
+                            helper.TypeHintedVariable(
+                                "name", [helper.TypeHint("str", primary=True)]
+                            ),
+                            helper.TypeHintedVariable(
+                                "size", [helper.TypeHint("int", primary=True)], default="..."
+                            ),
+                        ],
+                        return_type="Any",
                     )
                 )
 
@@ -788,11 +822,14 @@ class Writer:
         # Generate the reader class
         parent_scope = self.new_scope(new_reader_type_name, schema.node, register=False)
 
-        # Add the reader slot fields, if any.
+        # Add the reader slot fields as properties (they're read-only at runtime)
         for slot_field in slot_fields:
             if slot_field.has_type_hint_with_reader_affix:
                 field_copy = copy(slot_field)
-                self.scope.add(field_copy.get_typed_variable_with_affixes([helper.READER_NAME]))
+                # Get the narrowed Reader-only type for this field (includes nesting for lists)
+                reader_type = field_copy.get_type_with_affixes([helper.READER_NAME])
+                for line in helper.new_property(slot_field.name, reader_type):
+                    self.scope.add(line)
 
         reader_class_declaration = helper.new_class_declaration(
             new_reader_type_name, parameters=[new_type.scoped_name]
@@ -811,13 +848,28 @@ class Writer:
         # Generate the builder class
         parent_scope = self.new_scope(new_builder_type_name, schema.node, register=False)
 
-        # Add the builder slot fields, if any.
+        # Add all builder slot fields with setters (they're all mutable at runtime)
         for slot_field in slot_fields:
+            field_copy = copy(slot_field)
+            # For fields with Builder/Reader variants (structs/groups), return only Builder type
+            # to allow proper mutation, but setter accepts union type for flexibility
             if slot_field.has_type_hint_with_builder_affix:
-                field_copy = copy(slot_field)
-                self.scope.add(
-                    field_copy.typed_variable_with_full_hints
-                )  # .get_typed_variable_with_affixes([helper.BUILDER_NAME, helper.READER_NAME]))
+                getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
+                setter_type = field_copy.full_type_nested
+            # For interface fields: getter returns Protocol, setter accepts Protocol | Server
+            elif len(slot_field.type_hints) > 1 and any(
+                ".Server" in str(h) for h in slot_field.type_hints
+            ):
+                getter_type = field_copy.primary_type_nested  # Protocol only
+                setter_type = field_copy.full_type_nested  # Protocol | Server
+            else:
+                # Primitive fields use the same type for getter and setter
+                getter_type = field_copy.full_type_nested
+                setter_type = None  # Use getter_type
+            for line in helper.new_property(
+                slot_field.name, getter_type, with_setter=True, setter_type=setter_type
+            ):
+                self.scope.add(line)
 
         self.scope.add(helper.new_decorator("staticmethod"))
         self.scope.add(
@@ -830,78 +882,81 @@ class Writer:
             )
         )
 
-        # Add init method overloads for union/group fields (return their Builder type)
-        if init_choices:
-            self._add_typing_import("Literal")
+        # Add init method overloads for union/group fields and lists
+        # Only use @overload if there are multiple init signatures
+        total_init_overloads = (
+            len(init_choices) + len(list_init_choices) if list_init_choices else len(init_choices)
+        )
+        use_overload = total_init_overloads > 1
+
+        if use_overload:
             self._add_typing_import("overload")
-            for field_name, field_type in init_choices:
+        if init_choices or list_init_choices:
+            self._add_typing_import("Literal")
+
+        # Add init method overloads for union/group fields (return their Builder type)
+        for field_name, field_type in init_choices:
+            if use_overload:
                 self.scope.add(helper.new_decorator("overload"))
-                # Build builder type name (respect scoped names)
-                if "." in field_type:
-                    parts = field_type.rsplit(".", 1)
-                    builder_type = f"{parts[0]}.{parts[1]}Builder"
-                else:
-                    builder_type = f"{field_type}Builder"
-                self.scope.add(
-                    helper.new_function(
-                        "init",
-                        parameters=[
-                            helper.TypeHintedVariable(
-                                "self", [helper.TypeHint("Any", primary=True)]
-                            ),
-                            helper.TypeHintedVariable(
-                                "name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]
-                            ),
-                        ],
-                        return_type=builder_type,
-                    )
+            # Build builder type name (respect scoped names)
+            if "." in field_type:
+                parts = field_type.rsplit(".", 1)
+                builder_type = f"{parts[0]}.{parts[1]}Builder"
+            else:
+                builder_type = f"{field_type}Builder"
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=[
+                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                        helper.TypeHintedVariable(
+                            "name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]
+                        ),
+                    ],
+                    return_type=builder_type,
                 )
+            )
 
         # Add init method overloads for lists (properly typed)
-        if list_init_choices:
-            self._add_typing_import("Literal")
-            self._add_typing_import("overload")
-
-            for field_name, element_type, needs_builder in list_init_choices:
+        for field_name, element_type, needs_builder in list_init_choices:
+            if use_overload:
                 self.scope.add(helper.new_decorator("overload"))
-                self._add_import("from capnp import _DynamicListBuilder")
-                element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
-                self.scope.add(
-                    helper.new_function(
-                        "init",
-                        parameters=[
-                            helper.TypeHintedVariable(
-                                "self", [helper.TypeHint("Any", primary=True)]
-                            ),
-                            helper.TypeHintedVariable(
-                                "name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]
-                            ),
-                            helper.TypeHintedVariable(
-                                "size", [helper.TypeHint("int", primary=True)], default="..."
-                            ),
-                        ],
-                        return_type=f"_DynamicListBuilder[{element_type_for_list}]",
-                    )
+            self._add_import("from capnp import _DynamicListBuilder")
+            element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=[
+                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                        helper.TypeHintedVariable(
+                            "name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]
+                        ),
+                        helper.TypeHintedVariable(
+                            "size", [helper.TypeHint("int", primary=True)], default="..."
+                        ),
+                    ],
+                    return_type=f"_DynamicListBuilder[{element_type_for_list}]",
                 )
+            )
 
         # Add generic init method for other cases (catch-all)
-        self._add_typing_import("Any")
-        # Add @overload if there are any specific init overloads (union/group or list fields)
-        if init_choices or list_init_choices:
-            self.scope.add(helper.new_decorator("overload"))
-        self.scope.add(
-            helper.new_function(
-                "init",
-                parameters=[
-                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                    helper.TypeHintedVariable("name", [helper.TypeHint("str", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "size", [helper.TypeHint("int", primary=True)], default="..."
-                    ),
-                ],
-                return_type="Any",
+        # Only add this if we're using overloads (i.e., multiple init signatures)
+        # This should NOT have @overload - it's the implementation, not an overload
+        if use_overload:
+            self._add_typing_import("Any")
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=[
+                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                        helper.TypeHintedVariable("name", [helper.TypeHint("str", primary=True)]),
+                        helper.TypeHintedVariable(
+                            "size", [helper.TypeHint("int", primary=True)], default="..."
+                        ),
+                    ],
+                    return_type="Any",
+                )
             )
-        )
 
         self.scope.add(
             helper.new_function(
@@ -991,22 +1046,7 @@ class Writer:
             name, schema.node, scope_heading=helper.new_class_declaration(name, ["Protocol"])
         )
 
-        # Add a Server class for implementing this interface
-        # The Server class is used when implementing the interface on the server side
-        # We create this manually as a child scope since Server doesn't exist in the schema
-        self.scope.add(helper.new_class_declaration("Server"))
-        server_scope = Scope(
-            name="Server",
-            id=schema.node.id + 1,  # Use a pseudo-ID (interface ID + 1)
-            parent=self.scope,
-            return_scope=self.scope,
-        )
-        prev_scope = self.scope
-        self.scope = server_scope
-        self.scope.add("...")
-        # Merge server scope lines back to parent
-        prev_scope.lines += self.scope.lines
-        self.scope = prev_scope
+        # We'll generate a Server class with method signatures after collecting them
 
         # Generate all nested types (interfaces, structs, enums)
         # so they're available as nested classes within the interface
@@ -1041,6 +1081,9 @@ class Writer:
             methods = runtime_iface.schema.methods.items()
         except Exception:
             methods = []
+
+        # Collect server method signatures to add to Server class
+        server_methods: list[str] = []
 
         method_count = 0
         for method_name, method in methods:
@@ -1132,6 +1175,48 @@ class Writer:
                 helper.new_function(method_name, parameters=parameters, return_type=return_type)
             )
 
+            # Collect server method signature (server methods are async and accept **kwargs)
+            # Server methods return the actual value, not the Result protocol
+            # Extract the actual return type from result fields
+            server_return_type = return_type
+            is_interface_return = False
+            if result_fields and return_type != "None":
+                # For single result field, unwrap the type
+                if len(result_fields) == 1:
+                    # Try to get the type of the single result field
+                    try:
+                        if result_schema is not None:
+                            result_field = next(
+                                f
+                                for f in result_schema.node.struct.fields
+                                if f.name == result_fields[0]
+                            )
+                            field_type = result_field.slot.type
+                            server_return_type = self.get_type_name(field_type)
+                            # Check if this is an interface type
+                            is_interface_return = (
+                                field_type.which() == capnp_types.CapnpElementType.INTERFACE
+                            )
+                    except Exception:
+                        server_return_type = "Any"
+
+            # For interface return types, also accept Server implementations
+            if is_interface_return:
+                server_return_type = f"{server_return_type} | {server_return_type}.Server"
+
+            # Server methods are async, so wrap in Awaitable
+            if server_return_type != "None":
+                self._add_typing_import("Awaitable")
+                server_return_type = f"Awaitable[{server_return_type}]"
+
+            # Add _context and **kwargs to server method parameters
+            # _context is provided by pycapnp RPC framework, **kwargs for additional params
+            server_params = parameters + ["_context", "**kwargs"]
+            server_method_sig = helper.new_function(
+                method_name, parameters=server_params, return_type=server_return_type
+            )
+            server_methods.append(server_method_sig)
+
             # Generate the corresponding _request method
             # In capnp, for each method like evaluate(), there's also evaluate_request()
             # that returns a request builder object with parameter fields and send() method
@@ -1216,6 +1301,30 @@ class Writer:
             )
         if method_count == 0 and name not in ("Function", "Value"):
             self.scope.add("...")
+
+        # Now add the Server class with method signatures
+        # Create a nested scope for the Server class
+        self.scope.add(helper.new_class_declaration("Server"))
+        server_scope = Scope(
+            name="Server",
+            id=schema.node.id + 1,  # Use a pseudo-ID
+            parent=self.scope,
+            return_scope=self.scope,
+        )
+        prev_scope = self.scope
+        self.scope = server_scope
+
+        if server_methods:
+            # Add all collected server method signatures
+            for method_sig in server_methods:
+                self.scope.add(method_sig)
+        else:
+            # Empty server class
+            self.scope.add("...")
+
+        # Merge server scope lines back to parent
+        prev_scope.lines += self.scope.lines
+        self.scope = prev_scope
 
         self.return_from_scope()
         return None

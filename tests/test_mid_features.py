@@ -49,17 +49,17 @@ def test_struct_fields_and_defaults():
         line.strip().startswith("class MidFeatureContainerBuilder(MidFeatureContainer):")
         for line in lines
     )
-    # Basic fields appear
-    for field in ["id:", "name:", "mode:", "nested:"]:
-        assert any(field in line for line in lines)
+    # Basic fields appear (now as properties)
+    for field in ["id", "name", "mode", "nested"]:
+        assert any(f"def {field}(self)" in line for line in lines)
     # Default values are not included in stub files (runtime info, not type info)
-    # Check field types instead
-    assert any("name:" in line and "str" in line for line in lines)
-    assert any("mode:" in line and "TopEnum" in line for line in lines)
-    # Nested struct fields
-    assert any("flag:" in line and "bool" in line for line in lines)
-    assert any("count:" in line and "int" in line for line in lines)
-    assert any("state:" in line and "State" in line for line in lines)
+    # Check field types instead (now as properties)
+    assert any("def name(self)" in line and "str" in line for line in lines)
+    assert any("def mode(self)" in line and "TopEnum" in line for line in lines)
+    # Nested struct fields (now as properties)
+    assert any("def flag(self)" in line and "bool" in line for line in lines)
+    assert any("def count(self)" in line and "int" in line for line in lines)
+    assert any("def state(self)" in line and "State" in line for line in lines)
 
 
 def test_list_and_sequence_annotations():
@@ -68,10 +68,10 @@ def test_list_and_sequence_annotations():
     assert any(
         line.startswith("from collections.abc import") and "Sequence" in line for line in lines
     )
-    # Lists of nested struct and enums
-    assert any("nestedList:" in line and "Sequence" in line for line in lines)
-    assert any("enumList:" in line and "Sequence" in line for line in lines)
-    assert any("stateList:" in line and "Sequence" in line for line in lines)
+    # Lists of nested struct and enums (now as properties)
+    assert any("def nestedList(self)" in line and "Sequence" in line for line in lines)
+    assert any("def enumList(self)" in line and "Sequence" in line for line in lines)
+    assert any("def stateList(self)" in line and "Sequence" in line for line in lines)
 
 
 def test_union_which_and_literal_import():

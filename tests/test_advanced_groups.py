@@ -29,5 +29,9 @@ def _generate() -> list[str]:
 
 def test_complex_group_presence_and_nested_union_symbols():
     lines = _generate()
-    for token in ["complexGroup", "head:", "tail:", "g1", "deep", "deeper", "deepest"]:
+    # Check for class and field names (fields are now properties)
+    for token in ["complexGroup", "g1", "deep", "deeper", "deepest"]:
         assert any(token in line for line in lines)
+    # Check for property definitions
+    for field in ["head", "tail"]:
+        assert any(f"def {field}(self)" in line for line in lines)

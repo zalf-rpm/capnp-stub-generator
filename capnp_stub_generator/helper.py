@@ -170,6 +170,29 @@ class TypeHintedVariable:
         """The full type string of the hinted variable."""
         return self._join_type_hints(self.type_hints)
 
+    @property
+    def full_type_nested(self) -> str:
+        """The full type string with nesting applied (e.g., Sequence[...] for lists)."""
+        return self._nest(self.full_type)
+
+    @property
+    def primary_type_nested(self) -> str:
+        """The primary type string with nesting applied."""
+        return self._nest(str(self.primary_type_hint))
+
+    def get_type_with_affixes(self, affixes: list[str]) -> str:
+        """Get just the type string (no variable name) with the selected type hint affixes.
+
+        Args:
+            affixes (list[str]): The affixes to select for type hints.
+
+        Returns:
+            str: The type string with nesting applied.
+        """
+        type_hints_for_affixes = self._get_type_hints_for_affixes(affixes)
+        type_str = self._join_type_hints(type_hints_for_affixes)
+        return self._nest(type_str)
+
     def add_type_hint(self, new_type_hint: TypeHint):
         """Add a type hint to the hinted variable.
 
@@ -369,6 +392,29 @@ def new_decorator(name: str, parameters: list[TypeHintedVariable] | list[str] | 
 
     else:
         return f"@{name}"
+
+
+def new_property(
+    name: str, return_type: str, with_setter: bool = False, setter_type: str | None = None
+) -> list[str]:
+    """Create a property declaration.
+
+    Args:
+        name (str): The property name.
+        return_type (str): The property's return type.
+        with_setter (bool): Whether to include a setter.
+        setter_type (str | None): The setter's parameter type (if different from return_type).
+
+    Returns:
+        list[str]: Lines to be added (decorator + function, and optionally setter).
+    """
+    lines = ["@property", f"def {name}(self) -> {return_type}: ..."]
+
+    if with_setter:
+        param_type = setter_type if setter_type is not None else return_type
+        lines.extend([f"@{name}.setter", f"def {name}(self, value: {param_type}) -> None: ..."])
+
+    return lines
 
 
 def new_constructor(kwargs: list[str] | None = None) -> str:

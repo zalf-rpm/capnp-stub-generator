@@ -36,13 +36,13 @@ def test_union_which_methods_and_literal_import():
 
 def test_unnamed_union_fields_present():
     lines = _generate()
-    # TestUnnamedUnion field annotations should include foo/bar discriminant usage
+    # TestUnnamedUnion field annotations should include foo/bar discriminant usage (now as properties)
     assert any("class TestUnnamedUnion" in line for line in lines)
-    assert any("foo:" in line and "int" in line for line in lines) or any(
-        "foo:" in line and "Optional" in line for line in lines
+    assert any("def foo(self)" in line and "int" in line for line in lines) or any(
+        "def foo(self)" in line and "Optional" in line for line in lines
     )
-    assert any("bar:" in line and "int" in line for line in lines) or any(
-        "bar:" in line and "Optional" in line for line in lines
+    assert any("def bar(self)" in line and "int" in line for line in lines) or any(
+        "def bar(self)" in line and "Optional" in line for line in lines
     )
 
 
@@ -57,10 +57,10 @@ def test_interleaved_union_discriminants_sorted():
 
 def test_union_defaults_struct_initializers_present():
     lines = _generate()
-    # Defaults referencing unions should generate inline initializers in TestUnionDefaults
+    # Defaults referencing unions should generate inline initializers in TestUnionDefaults (now as properties)
     assert any("class TestUnionDefaults" in line for line in lines)
-    assert any("s16s8s64s8Set:" in line for line in lines)
-    assert any("s0sps1s32Set:" in line for line in lines)
+    assert any("def s16s8s64s8Set(self)" in line for line in lines)
+    assert any("def s0sps1s32Set(self)" in line for line in lines)
     # Unnamed union defaults
-    assert any("unnamed1:" in line for line in lines)
-    assert any("unnamed2:" in line for line in lines)
+    assert any("def unnamed1(self)" in line for line in lines)
+    assert any("def unnamed2(self)" in line for line in lines)

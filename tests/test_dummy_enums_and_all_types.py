@@ -30,14 +30,14 @@ def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):
         line.startswith("from collections.abc import") and "Sequence" in line and "Iterator" in line
         for line in lines
     )
-    # Basic scalar fields
+    # Basic scalar fields (now as properties)
     for field in ["voidField", "boolField", "int8Field", "float64Field", "textField", "dataField"]:
-        assert any(field + ":" in line for line in lines)
-    # Nested struct and enum field annotations
-    assert any("structField:" in line and "TestAllTypes" in line for line in lines)
-    assert any("enumField:" in line and "TestEnum" in line for line in lines)
-    # List field typing includes Sequence
-    assert any("voidList:" in line and "Sequence" in line for line in lines)
+        assert any(f"def {field}(self)" in line for line in lines)
+    # Nested struct and enum field annotations (now as properties)
+    assert any("def structField(self)" in line and "TestAllTypes" in line for line in lines)
+    assert any("def enumField(self)" in line and "TestEnum" in line for line in lines)
+    # List field typing includes Sequence (now as properties)
+    assert any("def voidList(self)" in line and "Sequence" in line for line in lines)
 
 
 def test_builder_reader_classes_for_all_types(dummy_stub_lines):

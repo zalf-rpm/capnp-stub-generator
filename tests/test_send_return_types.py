@@ -1,7 +1,10 @@
 """Tests for send() method return type resolution."""
+
 from __future__ import annotations
+
 import subprocess
 from pathlib import Path
+
 import pytest
 
 TESTS_DIR = Path(__file__).parent
@@ -25,7 +28,7 @@ def test(calc: calculator_capnp.Calculator):
         # Result should be EvaluateResult
         assert "EvaluateResult" in result.stdout, result.stdout
         # result.value should be Value (the interface)
-        assert '"Value"' in result.stdout or 'Value' in result.stdout, result.stdout
+        assert '"Value"' in result.stdout or "Value" in result.stdout, result.stdout
     finally:
         tmp.unlink(missing_ok=True)
 

@@ -37,9 +37,9 @@ def test_primitives_and_lists_imports_and_types():
         line.startswith("from typing import") and "Literal" in line and "overload" in line
         for line in lines
     )
-    # Basic field annotations present
-    assert any("aBool:" in line and "bool" in line for line in lines)
-    assert any("ints:" in line and "Sequence[int]" in line for line in lines)
+    # Basic field annotations present (now as properties)
+    assert any("def aBool(self) -> bool" in line for line in lines)
+    assert any("def ints(self) -> Sequence[int]" in line for line in lines)
 
 
 def test_nested_enum_and_literal_and_overload():
@@ -60,10 +60,10 @@ def test_nested_enum_and_literal_and_overload():
 def test_unions_literal_and_overload_and_which():
     out = _generate("unions.capnp")
     lines = _read(out)
-    # Expect Literal import (union which methods) and overload import (for init overloads including lists)
+    # Expect Literal import (union which methods)
     assert any(line.startswith("from typing import") and "Literal" in line for line in lines)
-    # Overload is now expected for list init methods
-    assert any(line.startswith("from typing import") and "overload" in line for line in lines)
+    # Overload is only imported when there are multiple init methods (2+)
+    # unions.capnp doesn't have multiple init methods, so no overload import
     # 'which' function should appear for discriminantCount > 0
     assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
 
@@ -105,9 +105,9 @@ def test_imports_cross_module_reference():
     )
     user_out = os.path.join(out_dir, "import_user_capnp.pyi")
     user_lines = _read(user_out)
-    # Imported type reference should include builders/readers in a union style annotation
+    # Imported type reference should include builders/readers in a union style annotation (now as property)
     assert any(
-        "shared:" in line and "SharedBuilder" in line and "SharedReader" in line
+        "def shared(self)" in line and "SharedBuilder" in line and "SharedReader" in line
         for line in user_lines
     )
     # Ensure import statement for base module types exists

@@ -41,6 +41,7 @@ class TestDummyEnumsAndTypes:
             and "Iterator" in line
             for line in lines
         )
+        # Fields are now properties
         for field in [
             "voidField",
             "boolField",
@@ -49,9 +50,9 @@ class TestDummyEnumsAndTypes:
             "textField",
             "dataField",
         ]:
-            assert any(field + ":" in line for line in lines)
-        assert any("structField:" in line and "TestAllTypes" in line for line in lines)
-        assert any("enumField:" in line and "TestEnum" in line for line in lines)
+            assert any(f"def {field}(self)" in line for line in lines)
+        assert any("def structField(self)" in line and "TestAllTypes" in line for line in lines)
+        assert any("def enumField(self)" in line and "TestEnum" in line for line in lines)
 
 
 class TestDummyListsAndDefaults:
@@ -60,46 +61,49 @@ class TestDummyListsAndDefaults:
     def test_lists_small_struct_and_listlist_fields(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class TestLists" in line for line in lines)
+        # Fields are now properties - check for def fieldname(self)
         for field in [
-            "list0:",
-            "list1:",
-            "list8:",
-            "list16:",
-            "list32:",
-            "list64:",
-            "listP:",
-            "listlist0:",
-            "listlist1:",
-            "listlist8:",
-            "listlist16:",
-            "listlist32:",
-            "listlist64:",
-            "listlistP:",
-            "list0c:",
-            "list1c:",
-            "list8c:",
-            "list16c:",
-            "list32c:",
-            "list64c:",
-            "listPc:",
-            "int32ListList:",
-            "textListList:",
-            "structListList:",
+            "list0",
+            "list1",
+            "list8",
+            "list16",
+            "list32",
+            "list64",
+            "listP",
+            "listlist0",
+            "listlist1",
+            "listlist8",
+            "listlist16",
+            "listlist32",
+            "listlist64",
+            "listlistP",
+            "list0c",
+            "list1c",
+            "list8c",
+            "list16c",
+            "list32c",
+            "list64c",
+            "listPc",
+            "int32ListList",
+            "textListList",
+            "structListList",
         ]:
-            assert any(field in line for line in lines), f"Missing field {field}"
+            assert any(f"def {field}(self)" in line for line in lines), f"Missing field {field}"
 
     def test_list_defaults_struct_and_scalar_lists_present(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class TestListDefaults" in line for line in lines)
-        for field in ["list0:", "list1:", "list8:"]:
-            assert any(field in line for line in lines), f"Missing field {field}"
+        # Fields are now properties
+        for field in ["list0", "list1", "list8"]:
+            assert any(f"def {field}(self)" in line for line in lines), f"Missing field {field}"
 
     def test_field_zero_bit_and_defaults(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class TestFieldZeroIsBit" in line for line in lines)
-        assert any("bit:" in line and "bool" in line for line in lines)
-        assert any("secondBit:" in line and "bool" in line for line in lines)
-        assert any("thirdField:" in line and "int" in line for line in lines)
+        # Fields are now properties
+        assert any("def bit(self)" in line and "bool" in line for line in lines)
+        assert any("def secondBit(self)" in line and "bool" in line for line in lines)
+        assert any("def thirdField(self)" in line and "int" in line for line in lines)
 
 
 class TestDummyGroupsAndNested:
@@ -108,16 +112,18 @@ class TestDummyGroupsAndNested:
     def test_group_field_members_materialized(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class TestGroups" in line for line in lines)
-        count_corge = sum(1 for line in lines if "corge:" in line)
+        # Fields are now properties
+        count_corge = sum(1 for line in lines if "def corge(self)" in line)
         assert count_corge >= 3  # across foo/bar/baz groups
 
     def test_interleaved_groups_union_and_nested_group_fields(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class TestInterleavedGroups" in line for line in lines)
+        # Fields are now properties
         found = {name: False for name in ["plugh", "xyzzy", "fred", "waldo"]}
         for line in lines:
             for k in found:
-                if k + ":" in line:
+                if f"def {k}(self)" in line:
                     found[k] = True
         assert all(found.values())
 
@@ -126,12 +132,17 @@ class TestDummyGroupsAndNested:
         assert any(re.match(r"^\s*class NestedEnum1\(Enum\):", line) for line in lines)
         assert any(re.match(r"^\s*class NestedEnum2\(Enum\):", line) for line in lines)
         assert any("class TestUsing" in line for line in lines)
+        # Fields are now properties
         assert any(
-            "outerNestedEnum:" in line and "TestNestedTypes" in line and "NestedEnum1" in line
+            "def outerNestedEnum(self)" in line
+            and "TestNestedTypes" in line
+            and "NestedEnum1" in line
             for line in lines
         )
         assert any(
-            "innerNestedEnum:" in line and "TestNestedTypes" in line and "NestedEnum2" in line
+            "def innerNestedEnum(self)" in line
+            and "TestNestedTypes" in line
+            and "NestedEnum2" in line
             for line in lines
         )
 
@@ -152,11 +163,12 @@ class TestDummyUnions:
     def test_unnamed_union_fields_present(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class TestUnnamedUnion" in line for line in lines)
-        assert any("foo:" in line and "int" in line for line in lines) or any(
-            "foo:" in line and "Optional" in line for line in lines
+        # Fields are now properties
+        assert any("def foo(self)" in line and "int" in line for line in lines) or any(
+            "def foo(self)" in line and "Optional" in line for line in lines
         )
-        assert any("bar:" in line and "int" in line for line in lines) or any(
-            "bar:" in line and "Optional" in line for line in lines
+        assert any("def bar(self)" in line and "int" in line for line in lines) or any(
+            "def bar(self)" in line and "Optional" in line for line in lines
         )
 
     def test_interleaved_union_discriminants_sorted(self, dummy_stub_lines):
@@ -167,10 +179,11 @@ class TestDummyUnions:
     def test_union_defaults_struct_initializers_present(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class TestUnionDefaults" in line for line in lines)
-        assert any("s16s8s64s8Set:" in line for line in lines)
-        assert any("s0sps1s32Set:" in line for line in lines)
-        assert any("unnamed1:" in line for line in lines)
-        assert any("unnamed2:" in line for line in lines)
+        # Fields are now properties
+        assert any("def s16s8s64s8Set(self)" in line for line in lines)
+        assert any("def s0sps1s32Set(self)" in line for line in lines)
+        assert any("def unnamed1(self)" in line for line in lines)
+        assert any("def unnamed2(self)" in line for line in lines)
 
 
 class TestDummyConstantsAndVersioning:
@@ -178,6 +191,7 @@ class TestDummyConstantsAndVersioning:
 
     def test_global_constants_and_derived_constant_present(self, dummy_stub_lines):
         lines = dummy_stub_lines
+        # Constants remain as simple annotations (not properties)
         assert any("globalInt:" in line for line in lines)
         assert any("globalText:" in line for line in lines)
 
@@ -189,8 +203,9 @@ class TestDummyConstantsAndVersioning:
         lines = dummy_stub_lines
         assert any("class TestOldVersion" in line for line in lines)
         assert any("class TestNewVersion" in line for line in lines)
-        assert any("new1:" in line and "int" in line for line in lines)
-        assert any("new2:" in line and "str" in line for line in lines)
+        # Fields are now properties
+        assert any("def new1(self)" in line and "int" in line for line in lines)
+        assert any("def new2(self)" in line and "str" in line for line in lines)
 
     def test_name_annotations_renamed_struct_enum_fields(self, dummy_stub_lines):
         lines = dummy_stub_lines

@@ -55,9 +55,9 @@ def test_versioned_structs_fields_and_defaults():
     lines = _generate()
     assert any("class TestOldVersion" in line for line in lines)
     assert any("class TestNewVersion" in line for line in lines)
-    # Fields should be present
-    assert any("new1:" in line and "int" in line for line in lines)
-    assert any("new2:" in line and "str" in line for line in lines)
+    # Fields should be present (now as properties)
+    assert any("def new1(self)" in line and "int" in line for line in lines)
+    assert any("def new2(self)" in line and "str" in line for line in lines)
     # Default values are not included in stub files (runtime feature, not type info)
     # assert any("new1:" in line and "987" in line for line in lines)
     # assert any("new2:" in line and '"baz"' in line for line in lines)

@@ -36,11 +36,12 @@ def test_enum_color_defined():
 def test_basiclow_struct_and_fields():
     lines = _generate()
     assert any("class BasicLow" in line for line in lines)
-    for field in ["id:", "name:", "isActive:", "favoriteColor:"]:
-        assert any(field in line for line in lines)
-    # List fields should be annotated with Sequence
-    assert any("scores:" in line and "Sequence" in line for line in lines)
-    assert any("tags:" in line and "Sequence" in line for line in lines)
+    # Fields are now properties
+    for field in ["id", "name", "isActive", "favoriteColor"]:
+        assert any(f"def {field}(self)" in line for line in lines)
+    # List fields should be annotated with Sequence (now as properties)
+    assert any("def scores(self)" in line and "Sequence" in line for line in lines)
+    assert any("def tags(self)" in line and "Sequence" in line for line in lines)
 
 
 def test_builder_reader_presence():
