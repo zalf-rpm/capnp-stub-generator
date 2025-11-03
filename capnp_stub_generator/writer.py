@@ -1066,6 +1066,14 @@ class Writer:
             self.scope.add(
                 helper.new_function(method_name, parameters=parameters, return_type=return_type)
             )
+            
+            # Generate the corresponding _request method
+            # In capnp, for each method like evaluate(), there's also evaluate_request()
+            # that returns a request builder object
+            request_method_name = f"{method_name}_request"
+            self.scope.add(
+                helper.new_function(request_method_name, parameters=["self"], return_type="Any")
+            )
 
         # Always ensure core RPC methods are present for known nested interfaces.
         if name == "Function" and not any("def call" in line for line in self.scope.lines):
