@@ -11,20 +11,12 @@ import pathlib
 from collections.abc import Iterator
 from copy import copy
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import capnp
 
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
-
-if TYPE_CHECKING:
-    from capnp import (
-        TypeReader,
-        _DynamicStructReader,
-        _ListSchema,
-        _StructSchema,
-    )
 
 capnp.remove_import_hook()
 
@@ -47,6 +39,7 @@ class Writer:
         "Protocol",
         "Any",
         "BinaryIO",
+        "Awaitable",
     ]
 
     def __init__(self, module: ModuleType, module_registry: capnp_types.ModuleRegistryType):
@@ -151,8 +144,8 @@ class Writer:
             names.extend(extra)
 
             # Split names into collections.abc vs typing
-            collections_abc_names = [n for n in names if n in ("Iterator", "Sequence")]
-            typing_names = [n for n in names if n not in ("Iterator", "Sequence")]
+            collections_abc_names = [n for n in names if n in ("Iterator", "Sequence", "Awaitable")]
+            typing_names = [n for n in names if n not in ("Iterator", "Sequence", "Awaitable")]
 
             if collections_abc_names:
                 import_lines.append(
@@ -223,9 +216,10 @@ class Writer:
             except Exception:
                 type_name = "Any"
                 self._add_typing_import("Union")
-            hinted_variable = helper.TypeHintedVariable(
-                field.name, [helper.TypeHint(type_name, primary=True)]
-            )
+            hints = [helper.TypeHint(type_name, primary=True)]
+            # Also allow passing Server implementation for interfaces
+            hints.append(helper.TypeHint(f"{type_name}.Server"))
+            hinted_variable = helper.TypeHintedVariable(field.name, hints)
 
         else:
             raise TypeError(f"Unknown field slot type {field_slot_type}.")
@@ -234,8 +228,8 @@ class Writer:
 
     def gen_list_slot(
         self,
-        field: _DynamicStructReader,
-        schema: _ListSchema,
+        field: capnp._DynamicStructReader,
+        schema: capnp._ListSchema,
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `list`.
 
@@ -248,7 +242,7 @@ class Writer:
         """
 
         def schema_elements(
-            schema: _ListSchema,
+            schema: capnp._ListSchema,
         ) -> Iterator[Any]:
             """An iterator over the schema elements of nested lists.
 
@@ -271,8 +265,8 @@ class Writer:
                     yield next_schema_element
 
         def list_elements(
-            list_: TypeReader,
-        ) -> Iterator[TypeReader]:
+            list_: capnp.TypeReader,
+        ) -> Iterator[capnp.TypeReader]:
             """An iterator over the list elements of nested lists.
 
             Args:
@@ -348,7 +342,7 @@ class Writer:
         return hinted_variable
 
     def gen_python_type_slot(
-        self, field: _DynamicStructReader, field_type: str
+        self, field: capnp._DynamicStructReader, field_type: str
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a regular Python type.
 
@@ -365,7 +359,7 @@ class Writer:
         )
 
     def gen_enum_slot(
-        self, field: _DynamicStructReader, schema: _StructSchema
+        self, field: capnp._DynamicStructReader, schema: capnp._StructSchema
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `enum`.
 
@@ -406,8 +400,8 @@ class Writer:
 
     def gen_struct_slot(
         self,
-        field: _DynamicStructReader,
-        schema: _StructSchema,
+        field: capnp._DynamicStructReader,
+        schema: capnp._StructSchema,
         init_choices: list[InitChoice],
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `struct`.
@@ -428,10 +422,17 @@ class Writer:
 
         type_name = self.get_type_name(field.slot.type)
         init_choices.append((field.name, type_name))
-        return helper.TypeHintedVariable(field.name, [helper.TypeHint(type_name, primary=True)])
+        hints = [helper.TypeHint(type_name, primary=True)]
+        # If this is an interface type, also allow passing its Server implementation
+        try:
+            if field.slot.type.which() == capnp_types.CapnpElementType.INTERFACE:
+                hints.append(helper.TypeHint(f"{type_name}.Server"))
+        except Exception:
+            pass
+        return helper.TypeHintedVariable(field.name, hints)
 
     def gen_any_pointer_slot(
-        self, field: _DynamicStructReader, new_type: CapnpType
+        self, field: capnp._DynamicStructReader, new_type: CapnpType
     ) -> helper.TypeHintedVariable | None:
         """Generate a slot, which contains an `any_pointer` object.
 
@@ -450,7 +451,7 @@ class Writer:
         except capnp.KjException:
             return None
 
-    def gen_const(self, schema: _StructSchema) -> None:
+    def gen_const(self, schema: capnp._StructSchema) -> None:
         """Generate a `const` object.
 
         Args:
@@ -470,7 +471,7 @@ class Writer:
         elif const_type == "struct":
             pass
 
-    def gen_enum(self, schema: _StructSchema) -> CapnpType | None:
+    def gen_enum(self, schema: capnp._StructSchema) -> CapnpType | None:
         """Generate an `enum` object.
 
         An enum object is translated into an ``Enum`` subclass instead of a ``Literal`` alias.
@@ -499,7 +500,7 @@ class Writer:
             self.scope.add(line)
         return None
 
-    def gen_generic(self, schema: _StructSchema) -> list[str]:
+    def gen_generic(self, schema: capnp._StructSchema) -> list[str]:
         """Generate a `generic` type variable.
 
         Args:
@@ -533,7 +534,7 @@ class Writer:
         return [self.register_type_var(param) for param in generic_params + referenced_params]
 
     # FIXME: refactor for reducing complexity
-    def gen_struct(self, schema: _StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
+    def gen_struct(self, schema: capnp._StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
         """Generate a `struct` object.
 
         Args:
@@ -638,7 +639,7 @@ class Writer:
                 # Don't add type_scope here since we already have the full scoped name
 
                 slot_fields.append(hinted_variable)
-                init_choices.append((field.name, group_type.name))
+                init_choices.append((field.name, group_scoped_name))
 
             else:
                 raise AssertionError(f"{schema.node.displayName}: {field.name}: {field.which()}")
@@ -829,6 +830,33 @@ class Writer:
             )
         )
 
+        # Add init method overloads for union/group fields (return their Builder type)
+        if init_choices:
+            self._add_typing_import("Literal")
+            self._add_typing_import("overload")
+            for field_name, field_type in init_choices:
+                self.scope.add(helper.new_decorator("overload"))
+                # Build builder type name (respect scoped names)
+                if "." in field_type:
+                    parts = field_type.rsplit(".", 1)
+                    builder_type = f"{parts[0]}.{parts[1]}Builder"
+                else:
+                    builder_type = f"{field_type}Builder"
+                self.scope.add(
+                    helper.new_function(
+                        "init",
+                        parameters=[
+                            helper.TypeHintedVariable(
+                                "self", [helper.TypeHint("Any", primary=True)]
+                            ),
+                            helper.TypeHintedVariable(
+                                "name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]
+                            ),
+                        ],
+                        return_type=builder_type,
+                    )
+                )
+
         # Add init method overloads for lists (properly typed)
         if list_init_choices:
             self._add_typing_import("Literal")
@@ -858,7 +886,8 @@ class Writer:
 
         # Add generic init method for other cases (catch-all)
         self._add_typing_import("Any")
-        if list_init_choices:
+        # Add @overload if there are any specific init overloads (union/group or list fields)
+        if init_choices or list_init_choices:
             self.scope.add(helper.new_decorator("overload"))
         self.scope.add(
             helper.new_function(
@@ -932,7 +961,7 @@ class Writer:
 
         return new_type
 
-    def gen_interface(self, schema: _StructSchema) -> CapnpType | None:
+    def gen_interface(self, schema: capnp._StructSchema) -> CapnpType | None:
         """Generate an `interface` definition.
 
         The interface is represented as a Protocol with one method per RPC.
@@ -1032,47 +1061,130 @@ class Writer:
                 try:
                     if param_schema is not None:
                         field_obj = next(f for f in param_schema.node.struct.fields if f.name == pf)
-                        f_type = field_obj.slot.type.which()
-                        if f_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
-                            parameters.append(f"{pf}: {capnp_types.CAPNP_TYPE_TO_PYTHON[f_type]}")
-                        else:
-                            parameters.append(f"{pf}: Any")
+                        # Use get_type_name to resolve complex types (struct, enum, interface, list)
+                        param_type = self.get_type_name(field_obj.slot.type)
+
+                        # For enum parameters, also accept string literals (like enum fields do)
+                        if field_obj.slot.type.which() == capnp_types.CapnpElementType.ENUM:
+                            try:
+                                # Get the enum schema to extract literal values
+                                enum_type_id = field_obj.slot.type.enum.typeId
+                                enum_type = self.get_type_by_id(enum_type_id)
+                                # Access the enum schema through the type map
+                                if enum_type and enum_type.schema:
+                                    enum_values = [
+                                        e.name for e in enum_type.schema.node.enum.enumerants
+                                    ]
+                                    literal_values = ", ".join(f'"{v}"' for v in enum_values)
+                                    literal_type = f"Literal[{literal_values}]"
+                                    self._add_typing_import("Literal")
+                                    param_type = f"{param_type} | {literal_type}"
+                            except Exception as e:
+                                logger.debug(f"Could not add enum literals for {pf}: {e}")
+
+                        # For struct parameters, also accept dict (pycapnp dict-to-struct conversion)
+                        elif field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
+                            param_type = f"{param_type} | dict[str, Any]"
+                            self._add_typing_import("Any")
+
+                        parameters.append(f"{pf}: {param_type}")
                     else:
                         parameters.append(f"{pf}: Any")
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Could not resolve parameter type for {pf}: {e}")
                     parameters.append(f"{pf}: Any")
+            # Generate return type - for RPC methods with result fields, create a Protocol
+            # with those fields as attributes so users can access promise.field_name
+            # The result is also awaitable, so it inherits from Awaitable
             return_type = "None"
             if result_fields:
-                annotated_returns: list[str] = []
+                # Create a result Protocol class with the result fields
+                result_class_name = f"{method_name.capitalize()}Result"
+                self._add_typing_import("Awaitable")
+                result_lines = [
+                    helper.new_class_declaration(
+                        result_class_name, [f"Awaitable[{result_class_name}]", "Protocol"]
+                    )
+                ]
+
                 for rf in result_fields:
                     try:
                         if result_schema is not None:
                             field_obj = next(
                                 f for f in result_schema.node.struct.fields if f.name == rf
                             )
-                            f_type = field_obj.slot.type.which()
-                            if f_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
-                                annotated_returns.append(capnp_types.CAPNP_TYPE_TO_PYTHON[f_type])
-                            else:
-                                annotated_returns.append("Any")
+                            # Use get_type_name to resolve complex types (struct, enum, interface, list)
+                            field_type = self.get_type_name(field_obj.slot.type)
+                            result_lines.append(f"    {rf}: {field_type}")
                         else:
-                            annotated_returns.append("Any")
-                    except Exception:
-                        annotated_returns.append("Any")
-                if len(annotated_returns) == 1:
-                    return_type = annotated_returns[0]
-                else:
-                    return_type = helper.new_type_group("tuple", annotated_returns)
+                            result_lines.append(f"    {rf}: Any")
+                    except Exception as e:
+                        logger.debug(f"Could not resolve return type for {rf}: {e}")
+                        result_lines.append(f"    {rf}: Any")
+
+                # Add the result Protocol class to the current scope
+                for line in result_lines:
+                    self.scope.add(line)
+
+                return_type = result_class_name
+
             self.scope.add(
                 helper.new_function(method_name, parameters=parameters, return_type=return_type)
             )
-            
+
             # Generate the corresponding _request method
             # In capnp, for each method like evaluate(), there's also evaluate_request()
-            # that returns a request builder object
+            # that returns a request builder object with parameter fields and send() method
             request_method_name = f"{method_name}_request"
+            request_class_name = f"{method_name.capitalize()}Request"
+
+            # Create request builder Protocol with parameter fields and send() method
+            request_lines = [helper.new_class_declaration(request_class_name, ["Protocol"])]
+
+            # Add fields for each parameter
+            # Request builder fields should be Builder types so they have init() methods
+            for pf in param_fields:
+                try:
+                    if param_schema is not None:
+                        field_obj = next(f for f in param_schema.node.struct.fields if f.name == pf)
+                        field_type = self.get_type_name(field_obj.slot.type)
+
+                        # For struct fields, use the Builder variant (e.g., ExpressionBuilder)
+                        if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
+                            # Append "Builder" to the struct type name
+                            # Handle scoped names like Calculator.Expression -> Calculator.ExpressionBuilder
+                            if "." in field_type:
+                                parts = field_type.rsplit(".", 1)
+                                field_type = f"{parts[0]}.{parts[1]}Builder"
+                            else:
+                                field_type = f"{field_type}Builder"
+
+                        request_lines.append(f"    {pf}: {field_type}")
+                    else:
+                        request_lines.append(f"    {pf}: Any")
+                except Exception:
+                    request_lines.append(f"    {pf}: Any")
+
+            # Add send() method that returns the result type
+            # Use fully qualified name for the result type to avoid forward reference issues
+            if return_type != "None":
+                # Build fully qualified result type name (e.g., Calculator.EvaluateResult or Calculator.Value.ReadResult)
+                # Get the full scope path excluding root
+                scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                send_return_type = f"{scope_path}.{return_type}" if scope_path else return_type
+            else:
+                send_return_type = "Any"
+            request_lines.append(f"    def send(self) -> {send_return_type}: ...")
+
+            # Add the request builder to scope
+            for line in request_lines:
+                self.scope.add(line)
+
+            # Now add the _request method that returns the builder
             self.scope.add(
-                helper.new_function(request_method_name, parameters=["self"], return_type="Any")
+                helper.new_function(
+                    request_method_name, parameters=["self"], return_type=request_class_name
+                )
             )
 
         # Always ensure core RPC methods are present for known nested interfaces.
@@ -1108,7 +1220,7 @@ class Writer:
         self.return_from_scope()
         return None
 
-    def generate_nested(self, schema: _StructSchema) -> None:
+    def generate_nested(self, schema: capnp._StructSchema) -> None:
         """Generate the type for a nested schema.
 
         Args:
@@ -1145,7 +1257,7 @@ class Writer:
         for node in self._module.schema.node.nestedNodes:
             self.generate_nested(self._module.schema.get_nested(node.name))
 
-    def register_import(self, schema: _StructSchema) -> CapnpType | None:
+    def register_import(self, schema: capnp._StructSchema) -> CapnpType | None:
         """Determine, whether a schema is imported from the base module.
 
         If so, the type definition that the schema contains, is added to the type registry.
@@ -1220,7 +1332,7 @@ class Writer:
     def register_type(
         self,
         type_id: int,
-        schema: _StructSchema,
+        schema: capnp._StructSchema,
         name: str = "",
         scope: Scope | None = None,
     ) -> CapnpType:
@@ -1324,7 +1436,7 @@ class Writer:
         self.scope.parent.lines += self.scope.lines
         self.scope = self.scope.return_scope
 
-    def get_type_name(self, type_reader: _DynamicStructReader | TypeReader) -> str:
+    def get_type_name(self, type_reader: capnp._DynamicStructReader | capnp.TypeReader) -> str:
         """Extract the type name from a type reader.
 
         The output type name is prepended by the scope name, if there is a parent scope.
@@ -1372,7 +1484,11 @@ class Writer:
             type_name = element_type.name
 
         elif type_reader_type == capnp_types.CapnpElementType.LIST:
-            type_name = type_reader.list.elementType.which()
+            # Recursively get the element type and wrap it in Sequence
+            element_type_name = self.get_type_name(type_reader.list.elementType)
+            self._add_typing_import("Sequence")
+            type_name = f"Sequence[{element_type_name}]"
+            element_type = None  # List itself doesn't have an element_type in our registry
 
         elif type_reader_type == capnp_types.CapnpElementType.INTERFACE:
             element_type = self.get_type_by_id(type_reader.interface.typeId)

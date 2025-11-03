@@ -77,11 +77,15 @@ def test_interfaces_protocol_and_any_and_iterator():
     assert any(
         line.startswith("from collections.abc import") and "Iterator" in line for line in lines
     )
-    # Any usage in method parameters or return types (interface methods use Any)
-    # Concrete interface param/return typing now applied
-    assert any("def greet" in line and "name: str" in line and "-> str" in line for line in lines)
+    # Interface methods now have result types
+    # greet should have GreetResult return type (not bare str)
     assert any(
-        "def streamNumbers" in line and "count: int" in line and "-> int" in line for line in lines
+        "def greet" in line and "name: str" in line and "GreetResult" in line for line in lines
+    )
+    # streamNumbers should have StreamnumbersResult return type
+    assert any(
+        "def streamNumbers" in line and "count: int" in line and "StreamnumbersResult" in line
+        for line in lines
     )
 
 

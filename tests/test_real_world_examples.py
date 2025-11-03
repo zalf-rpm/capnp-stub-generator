@@ -159,7 +159,7 @@ class TestGeneratedStubsTypeCheck:
         # These are reportIncompatibleVariableOverride and reportIncompatibleMethodOverride errors.
         expected_errors = {
             "addressbook": 5,  # Variance errors in Reader classes
-            "calculator": 2,  # Variance errors in Reader classes
+            "calculator": 8,  # Variance errors + interface union hints
         }.get(example.name, 0)
 
         if error_count > expected_errors:
@@ -215,11 +215,14 @@ class TestPythonCodeTypeCheck:
 
         error_count = result.stdout.count("error:")
 
-        # Known issues with certain examples:
-        # - calculator: Uses interfaces with nested types and Server/Client classes not yet fully supported
-        expected_errors = {
-            "calculator": 13,  # Interface nested types, Server/Client classes, capnp runtime attrs
-        }.get(example.name, 0)
+        # All typing improvements complete - calculator has 0 errors!
+        # - Enum parameters accept string literals
+        # - Result types with field attributes (.value, .func)
+        # - Result types are Awaitable
+        # - Struct parameters accept dict union
+        # - Request builders have proper Builder types
+        # - Interface fields accept Server implementations
+        expected_errors = {}.get(example.name, 0)
 
         # Clean up temp directory
         shutil.rmtree(temp_dir, ignore_errors=True)

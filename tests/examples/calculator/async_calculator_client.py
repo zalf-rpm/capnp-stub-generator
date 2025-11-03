@@ -299,9 +299,9 @@ async def main(connection):
     print("PASS")
 
 
-async def cmd_main(host):
+async def cmd_main(host: str):
     host, port = host.split(":")
-    await main(await capnp.AsyncIoStream.create_connection(host=host, port=port))
+    await main(await capnp.AsyncIoStream.create_connection(host=host, port=int(port)))
 
 
 if __name__ == "__main__":

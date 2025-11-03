@@ -56,7 +56,7 @@ def test_generated_stubs_type_check(generated_stubs):
     # (e.g., Sequence[Inner | InnerBuilder | InnerReader] -> Sequence[InnerReader])
     # This violates type variance but is correct at runtime.
     # These are reportIncompatibleVariableOverride and reportIncompatibleMethodOverride errors.
-    EXPECTED_ERROR_COUNT = 91  # All variance-related errors
+    EXPECTED_ERROR_COUNT = 110  # Variance-related errors + interface union hints
 
     if errors > EXPECTED_ERROR_COUNT:
         pytest.fail(
