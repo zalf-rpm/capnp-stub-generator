@@ -44,7 +44,7 @@ def format_outputs(raw_input: str, is_pyi: bool, line_length: int = LINE_LENGTH)
         return black.format_str(
             sorted_imports, mode=black.Mode(is_pyi=is_pyi, line_length=line_length)
         )
-    except black.parsing.InvalidInput as e:
+    except Exception as e:
         # Save unformatted output for debugging
         import tempfile
 

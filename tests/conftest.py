@@ -19,11 +19,13 @@ import pytest
 TESTS_DIR = Path(__file__).parent
 SCHEMAS_DIR = TESTS_DIR / "schemas"
 EXAMPLES_DIR = TESTS_DIR / "examples"
+ZALFMAS_DIR = TESTS_DIR / "zalfmas_capnp_schemas"
 
 # Generated output directories (centralized)
 GENERATED_DIR = TESTS_DIR / "_generated"
 GENERATED_EXAMPLES_DIR = TESTS_DIR / "_generated_examples"
 GENERATED_ADDRESSBOOK_DIR = TESTS_DIR / "_generated_addressbook_typing"
+GENERATED_ZALFMAS_DIR = TESTS_DIR / "_generated_zalfmas"
 
 
 def pytest_configure(config):
@@ -43,6 +45,7 @@ def cleanup_generated_dirs():
         GENERATED_DIR,
         GENERATED_EXAMPLES_DIR,
         GENERATED_ADDRESSBOOK_DIR,
+        GENERATED_ZALFMAS_DIR,
     ]
 
     for gen_dir in generated_dirs:
@@ -253,9 +256,17 @@ def pytest_collection_modifyitems(config, items):
         for module_idx, module_name in enumerate(modules):
             order_map[module_name] = (order_idx, module_idx)
 
+    # Add zalfmas tests at the end (but before unknown tests)
+    zalfmas_order = (len(order_groups), 0)
+
     # Sort items by order
     def get_order(item):
         module_name = item.module.__name__.replace("tests.", "").replace("test_", "test_")
+        
+        # Zalfmas tests go near the end
+        if "zalfmas" in module_name:
+            return zalfmas_order
+        
         # Extract just the test file name without test_ prefix
         for key in order_map:
             if key in module_name or module_name.endswith(key):

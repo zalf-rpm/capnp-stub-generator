@@ -296,6 +296,7 @@ class Writer:
         nested_list_elements = list(list_elements(field.slot.type))
 
         create_extended_types = True
+        new_type = None
 
         try:
             last_element = nested_schema_elements[-1]
@@ -330,14 +331,24 @@ class Writer:
             nesting_depth=list_depth,
         )
 
-        # Do not create extended types for enum lists; enums are concrete
-        # and lack builder/reader variants.
+        # Do not create extended types for enum/interface lists; enums/interfaces
+        # lack builder/reader variants.
         try:
             base_list_element = field.slot.type.list.elementType.which()
         except Exception:
             base_list_element = None
-        if base_list_element == capnp_types.CapnpElementType.ENUM:
+        if base_list_element in (
+            capnp_types.CapnpElementType.ENUM,
+            capnp_types.CapnpElementType.INTERFACE,
+        ):
             create_extended_types = False
+        
+        # Also check if the new_type (when registered) is an interface
+        try:
+            if new_type and new_type.schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+                create_extended_types = False
+        except Exception:
+            pass
 
         if create_extended_types:
             hinted_variable.add_builder_from_primary_type()
@@ -783,6 +794,7 @@ class Writer:
 
         # Generate new_message with field parameters as kwargs
         # This allows: MyStruct.new_message(field1=value1, field2=value2)
+        self._add_typing_import("Any")
         new_message_params: list[helper.TypeHintedVariable] = [
             helper.TypeHintedVariable(
                 "num_first_segment_words",
@@ -884,8 +896,13 @@ class Writer:
                 for line in helper.new_property(slot_field.name, reader_type):
                     self.scope.add(line)
 
+        # If the struct is generic, Reader should also be Generic with same type params
+        reader_params = [new_type.scoped_name]
+        if registered_params:
+            generic_param = helper.new_type_group("Generic", registered_params)
+            reader_params.append(generic_param)
         reader_class_declaration = helper.new_class_declaration(
-            new_reader_type_name, parameters=[new_type.scoped_name]
+            new_reader_type_name, parameters=reader_params
         )
         parent_scope.add(reader_class_declaration)
         self.scope.add(
@@ -1028,8 +1045,13 @@ class Writer:
             )
         )
 
+        # If the struct is generic, Builder should also be Generic with same type params
+        builder_params = [new_type.scoped_name]
+        if registered_params:
+            generic_param = helper.new_type_group("Generic", registered_params)
+            builder_params.append(generic_param)
         builder_class_declaration = helper.new_class_declaration(
-            new_builder_type_name, parameters=[new_type.scoped_name]
+            new_builder_type_name, parameters=builder_params
         )
         parent_scope.add(builder_class_declaration)
 
@@ -1250,6 +1272,7 @@ class Writer:
             # Extract the actual return type from result fields
             server_return_type = return_type
             is_interface_return = False
+            result_type_scope = None
             if result_fields and return_type != "None":
                 # For single result field, unwrap the type
                 if len(result_fields) == 1:
@@ -1262,25 +1285,53 @@ class Writer:
                                 if f.name == result_fields[0]
                             )
                             field_type = result_field.slot.type
-                            server_return_type = self.get_type_name(field_type)
+                            # Try to get the properly scoped type name from registered types
+                            try:
+                                field_type_kind = field_type.which()
+                                if field_type_kind in (capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE):
+                                    # Get type ID for struct or interface
+                                    if field_type_kind == capnp_types.CapnpElementType.STRUCT:
+                                        type_id = field_type.struct.typeId
+                                    else:
+                                        type_id = field_type.interface.typeId
+                                    
+                                    if self.is_type_id_known(type_id):
+                                        registered_type = self.get_type_by_id(type_id)
+                                        server_return_type = registered_type.scoped_name
+                                        result_type_scope = registered_type.scope
+                                    else:
+                                        server_return_type = self.get_type_name(field_type)
+                                else:
+                                    server_return_type = self.get_type_name(field_type)
+                            except Exception:
+                                server_return_type = self.get_type_name(field_type)
                             # Check if this is an interface type
                             is_interface_return = (
                                 field_type.which() == capnp_types.CapnpElementType.INTERFACE
                             )
                     except Exception:
                         server_return_type = "Any"
-
-            # If server_return_type is just the Result class name (no dots), it needs scoping
-            # Result classes are defined in the interface scope, but Server is nested within it
-            # So we need to qualify with the full scope path
-            if (
-                server_return_type != "None"
-                and server_return_type != "Any"
-                and "." not in server_return_type
-            ):
-                # Check if this looks like a Result class (ends with "Result")
-                if server_return_type.endswith("Result") or return_type == server_return_type:
-                    # Get full scope path (excluding root)
+            
+            # If we got a registered type from root scope, it's already properly scoped
+            # Otherwise, check if we need to add interface scope
+            # Don't add scope for primitive types or already scoped types
+            primitive_types = set(capnp_types.CAPNP_TYPE_TO_PYTHON.values())
+            primitive_types.update(["None", "Any", "Sequence"])
+            
+            # Get interface name (current scope)
+            interface_name = self.scope.name if not self.scope.is_root else ""
+            
+            if result_type_scope is None or not result_type_scope.is_root:
+                # Only add scope if the type doesn't already have a dot (isn't already scoped)
+                # and isn't a primitive type
+                # Also check if the return type is the interface itself (self-reference)
+                if (
+                    server_return_type not in primitive_types
+                    and "." not in server_return_type
+                    and not server_return_type.startswith("Sequence[")
+                    and server_return_type != interface_name  # Don't scope self-references
+                ):
+                    # Get interface scope path (excluding root)
                     scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
                     if scope_path:
                         server_return_type = f"{scope_path}.{server_return_type}"

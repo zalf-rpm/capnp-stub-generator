@@ -44,7 +44,9 @@ class TestServerContextParameter:
             methods = re.findall(r"def (\w+)\([^)]+\)", server_class)
             for method_name in methods:
                 # Get the full method signature
-                method_sig = re.search(rf"def {method_name}\([^)]+\)", server_class).group(0)
+                match = re.search(rf"def {method_name}\([^)]+\)", server_class)
+                assert match is not None, f"Could not find method {method_name} signature"
+                method_sig = match.group(0)
                 # Verify **kwargs is in the signature
                 assert "**kwargs" in method_sig, (
                     f"Method {method_name} should have **kwargs parameter"
