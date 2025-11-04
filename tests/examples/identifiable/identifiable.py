@@ -1,8 +1,9 @@
 import asyncio
 import uuid
-import capnp
 
+import capnp
 from _generated_zalfmas import common_capnp
+
 # import common_capnp
 
 

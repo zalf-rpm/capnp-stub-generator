@@ -1046,10 +1046,12 @@ class Writer:
 
         # Collect base classes (superclasses + Protocol)
         base_classes = []
-        
+
         # Process interface inheritance (extends)
-        if hasattr(schema.node.interface, 'superclasses'):
-            for superclass in schema.node.interface.superclasses:
+        # Note: schema.node is a union - must check which() before accessing union fields
+        if schema.node.which() == "interface":
+            interface_node = schema.node.interface
+            for superclass in interface_node.superclasses:
                 try:
                     # Get the superclass type
                     superclass_type = self.get_type_by_id(superclass.id)
@@ -1065,6 +1067,7 @@ class Writer:
                                 superclass_type = self.get_type_by_id(superclass.id)
                                 base_classes.append(superclass_type.scoped_name)
                                 break
+
                             # Check if it's a nested type in the module
                             def find_nested_schema(schema_obj, target_id):
                                 for nested_node in schema_obj.node.nestedNodes:
@@ -1078,7 +1081,7 @@ class Writer:
                                     except Exception:
                                         pass
                                 return None
-                            
+
                             found_schema = find_nested_schema(module.schema, superclass.id)
                             if found_schema:
                                 self.generate_nested(found_schema)
@@ -1087,7 +1090,7 @@ class Writer:
                                 break
                     except Exception as e:
                         logger.debug(f"Could not resolve superclass {superclass.id}: {e}")
-        
+
         # Always add Protocol as the last base class
         base_classes.append("Protocol")
 
@@ -1113,7 +1116,7 @@ class Writer:
         # Save current interface scope before generating nested types
         # Nested interface generation will change self.scope, we need to get it back
         interface_scope = self.scope
-        
+
         for nested_node in schema.node.nestedNodes:
             try:
                 if runtime_iface is not None:
@@ -1121,7 +1124,7 @@ class Writer:
                     nested_schema = nested_runtime.schema
                     self.generate_nested(nested_schema)
             except Exception as e:
-                logger.debug(f"Could not generate nested node {nested_node.name}: {e}")
+                logger.warning(f"Could not generate nested node {nested_node.name} in interface {name}: {e}")
 
         # Restore interface scope after generating nested types
         self.scope = interface_scope
@@ -1246,7 +1249,7 @@ class Writer:
             server_return_type = return_type
             is_interface_return = False
             result_type_scope = None
-            
+
             # Try to get the result type from the result_schema directly
             # The result_schema represents the actual return type (e.g., IdInformation)
             # BUT: skip internal Cap'n Proto result structs (contain $)
@@ -1274,7 +1277,7 @@ class Writer:
                     logger.debug(f"Could not resolve result schema type: {e}")
                     # Fall back to old logic
                     pass
-            
+
             # Fallback: if we couldn't get the type from result_schema, try extracting from fields
             if server_return_type == return_type and result_fields and return_type != "None":
                 # For single result field, unwrap the type
@@ -1439,31 +1442,24 @@ class Writer:
                     return_type="float",
                 )
             )
-        # Ensure interface has some content (even if methods failed to generate)
-        # Check if anything was added to the scope (excluding the return_scope setup)
-        if not self.scope.lines and name not in ("Function", "Value"):
-            self.scope.add("...")
-        
-        if method_count == 0 and name not in ("Function", "Value") and not self.scope.lines:
-            self.scope.add("...")
-
         # Now add the Server class with method signatures
         # Server class should also inherit from superclass Server classes
         server_base_classes = []
-        if hasattr(schema.node.interface, 'superclasses'):
-            for superclass in schema.node.interface.superclasses:
+        if schema.node.which() == "interface":
+            interface_node = schema.node.interface
+            for superclass in interface_node.superclasses:
                 try:
                     superclass_type = self.get_type_by_id(superclass.id)
                     server_base_classes.append(f"{superclass_type.scoped_name}.Server")
                 except KeyError:
                     logger.debug(f"Could not resolve superclass {superclass.id} for Server inheritance")
-        
+
         # Create a nested scope for the Server class
         if server_base_classes:
             self.scope.add(helper.new_class_declaration("Server", server_base_classes))
         else:
             self.scope.add(helper.new_class_declaration("Server"))
-        
+
         server_scope = Scope(
             name="Server",
             id=schema.node.id + 1,  # Use a pseudo-ID
@@ -1485,9 +1481,8 @@ class Writer:
         prev_scope.lines += self.scope.lines
         self.scope = prev_scope
 
-        # Debug: ensure the interface scope has content before returning
+        # Ensure interface has some content (even if methods failed to generate)
         if not self.scope.lines:
-            logger.warning(f"Interface {name} has no content, adding placeholder")
             self.scope.add("...")
 
         self.return_from_scope()
@@ -1731,7 +1726,45 @@ class Writer:
         assert self.scope.parent is not None, "The current scope has no parent."
         assert self.scope.return_scope is not None, "The current scope does not define a scope to return to."
 
-        self.scope.parent.lines += self.scope.lines
+        # Find where the scope heading is in the parent's lines
+        # The scope heading was added when new_scope() was called (for interfaces)
+        # or manually added (for structs/enums)
+        # We need to insert the child scope lines RIGHT AFTER the heading
+        # Use word boundary to avoid matching "class TestSturdyRef" when looking for "class TestSturdyRefHostId"
+        scope_heading_pattern = f"class {self.scope.name}"
+        heading_index = None
+        for i, line in enumerate(self.scope.parent.lines):
+            if scope_heading_pattern in line:
+                # Ensure it's an exact match by checking what follows the class name
+                # Should be either ':', '(' or whitespace
+                pattern_end_pos = line.find(scope_heading_pattern) + len(scope_heading_pattern)
+                if pattern_end_pos < len(line):
+                    next_char = line[pattern_end_pos]
+                    if next_char in (":", "(", " "):
+                        heading_index = i
+                        break
+                else:
+                    # Pattern is at the end of the line (shouldn't happen for class declarations)
+                    heading_index = i
+                    break
+
+        if heading_index is not None:
+            # Found the class heading in parent scope
+            if self.scope.lines:
+                # Insert child scope lines right after the heading
+                self.scope.parent.lines = (
+                    self.scope.parent.lines[: heading_index + 1]
+                    + self.scope.lines
+                    + self.scope.parent.lines[heading_index + 1 :]
+                )
+
+            else:
+                # Empty class body - add a pass statement to avoid syntax error
+                self.scope.parent.lines.insert(heading_index + 1, "    pass")
+        else:
+            # No class heading found - fallback: append to the end (old behavior)
+            self.scope.parent.lines += self.scope.lines
+
         self.scope = self.scope.return_scope
 
     def get_type_name(self, type_reader: capnp._DynamicStructReader | capnp.TypeReader) -> str:
@@ -1770,7 +1803,7 @@ class Writer:
                             break
                 except Exception as e:
                     logger.debug(f"Could not pre-generate struct with ID {type_id}: {e}")
-            
+
             element_type = self.get_type_by_id(type_id)
             type_name = element_type.name
             generic_params = []

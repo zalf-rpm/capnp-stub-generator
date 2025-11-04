@@ -214,61 +214,6 @@ def test_generate_all_zalfmas_stubs(generated_zalfmas_dir):
         pytest.fail(f"Stub generation failed: {e}")
 
 
-def test_generate_zalfmas_stubs_individually(generated_zalfmas_dir):
-    """Test generating stubs for zalfmas schemas one by one.
-
-    This helps identify which specific schemas might have issues.
-    Note: Some schemas may have errors due to incorrect imports in the schema files themselves.
-    """
-    schema_files = list(ZALFMAS_DIR.glob("*.capnp"))
-
-    if not schema_files:
-        pytest.skip("No schema files found")
-
-    print(f"\nTesting individual stub generation for {len(schema_files)} schemas...")
-
-    success_count = 0
-    failed_schemas = []
-
-    # Skip known problematic schemas that have errors in the schema files themselves
-    skip_schemas = {
-        "climate_data_old.capnp",  # Has invalid import
-        "vr.capnp",  # Missing import: functions.capnp
-        "x.capnp",  # Likely also has missing imports: 'import "common.capnp"' has no member named 'Common'
-    }
-
-    for schema_file in sorted(schema_files):
-        if schema_file.name in skip_schemas:
-            print(f"  ⊘ {schema_file.name} (skipped - known schema error)")
-            continue
-
-        try:
-            # Use a separate subdirectory for each schema to avoid conflicts
-            schema_output_dir = generated_zalfmas_dir / "individual" / schema_file.stem
-            schema_output_dir.mkdir(parents=True, exist_ok=True)
-
-            args = ["-p", str(schema_file), "-o", str(schema_output_dir), "-I", str(ZALFMAS_DIR)]
-            main(args)
-
-            stub_file = schema_output_dir / f"{schema_file.stem}_capnp.pyi"
-            if stub_file.exists() and stub_file.stat().st_size > 0:
-                print(f"  ✓ {schema_file.name}")
-                success_count += 1
-            else:
-                print(f"  ✗ {schema_file.name} (stub not created or empty)")
-                failed_schemas.append(schema_file.name)
-
-        except Exception as e:
-            print(f"  ✗ {schema_file.name}: {str(e)[:100]}")
-            failed_schemas.append(schema_file.name)
-
-    print(f"\nResults: {success_count}/{len(schema_files) - len(skip_schemas)} successful (excluding skipped schemas)")
-    if failed_schemas:
-        print(f"Failed schemas: {', '.join(failed_schemas)}")
-
-    assert success_count > 0, "No schemas were successfully processed"
-
-
 def test_generate_zalfmas_with_subdirectories(generated_zalfmas_dir):
     """Test generating stubs with subdirectory structure preserved.
 

@@ -94,13 +94,16 @@ def test_imports_cross_module_reference():
     user_lines = _read(user_out)
     # Base class should use only the base type (Shared), not union with Builder/Reader
     # This matches runtime behavior where the base class property returns the base type
-    assert any("def shared(self) -> Shared:" in line for line in user_lines), \
+    assert any("def shared(self) -> Shared:" in line for line in user_lines), (
         "Base class should return Shared (not union)"
+    )
     # Reader class should narrow to SharedReader
-    assert any("def shared(self) -> SharedReader:" in line for line in user_lines), \
+    assert any("def shared(self) -> SharedReader:" in line for line in user_lines), (
         "Reader class should return SharedReader"
+    )
     # Builder class should narrow to SharedBuilder
-    assert any("def shared(self) -> SharedBuilder:" in line for line in user_lines), \
+    assert any("def shared(self) -> SharedBuilder:" in line for line in user_lines), (
         "Builder class should return SharedBuilder"
+    )
     # Ensure import statement for base module types exists
     assert any(line.startswith("from ") and "import Shared, SharedBuilder, SharedReader" in line for line in user_lines)
