@@ -446,12 +446,15 @@ class Writer:
             helper.HintedVariable | None: The extracted hinted variable object, or None in case of error.
         """
         try:
+            # Check if this is a generic parameter
             param = field.slot.type.anyPointer.parameter
             type_name = new_type.generic_params[param.parameterIndex]
-            return helper.TypeHintedVariable(field.name, [helper.TypeHint(type_name)])
+            return helper.TypeHintedVariable(field.name, [helper.TypeHint(type_name, primary=True)])
 
-        except capnp.KjException:
-            return None
+        except (capnp.KjException, AttributeError, IndexError):
+            # Not a parameter, treat as a plain AnyPointer -> Any
+            self._add_typing_import("Any")
+            return helper.TypeHintedVariable(field.name, [helper.TypeHint("Any", primary=True)])
 
     def gen_const(self, schema: capnp._StructSchema) -> None:
         """Generate a `const` object.
@@ -524,14 +527,18 @@ class Writer:
             ):
                 param = field.slot.type.anyPointer.parameter
 
-                t = self.get_type_by_id(param.scopeId)
-
-                if t is not None:
-                    param_source = t.schema
-                    source_params: list[str] = [
-                        param.name for param in param_source.node.parameters
-                    ]
-                    referenced_params.append(source_params[param.parameterIndex])
+                # Try to get the type, but skip if not found (forward reference)
+                try:
+                    t = self.get_type_by_id(param.scopeId)
+                    if t is not None:
+                        param_source = t.schema
+                        source_params: list[str] = [
+                            param.name for param in param_source.node.parameters
+                        ]
+                        referenced_params.append(source_params[param.parameterIndex])
+                except KeyError:
+                    # Type not yet registered, skip for now
+                    pass
 
         return [self.register_type_var(param) for param in generic_params + referenced_params]
 
@@ -766,8 +773,38 @@ class Writer:
             )
         )
 
+        # Generate new_message with field parameters as kwargs
+        # This allows: MyStruct.new_message(field1=value1, field2=value2)
+        new_message_params: list[helper.TypeHintedVariable] = [
+            helper.TypeHintedVariable(
+                "num_first_segment_words",
+                [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                default="None",
+            ),
+            helper.TypeHintedVariable(
+                "allocate_seg_callable",
+                [helper.TypeHint("Any", primary=True)],
+                default="None",
+            ),
+        ]
+        
+        # Add each field as an optional kwarg parameter
+        # For union structs, only one field should be set at a time
+        for slot_field in slot_fields:
+            # Get the type suitable for initialization (Builder types for struct fields)
+            field_type = slot_field.get_type_with_affixes(["Builder"]) if slot_field.has_type_hint_with_builder_affix else slot_field.full_type_nested
+            # Make field optional since not all fields need to be set
+            field_param = helper.TypeHintedVariable(
+                slot_field.name,
+                [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")],
+                default="None",
+            )
+            new_message_params.append(field_param)
+        
         self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(helper.new_function("new_message", return_type=scoped_new_builder_type_name))
+        self.scope.add(
+            helper.new_function("new_message", parameters=new_message_params, return_type=scoped_new_builder_type_name)
+        )
 
         # Add read methods
         self._add_typing_import("BinaryIO")
@@ -1099,13 +1136,20 @@ class Writer:
                 param_fields = []
                 result_fields = []
 
+            # Build parameters for client methods (with dict union for structs)
+            # and separate parameters for server methods (Reader types only)
             parameters: list[str] = ["self"]
+            server_parameters: list[str] = ["self"]
+            
             for pf in param_fields:
                 try:
                     if param_schema is not None:
                         field_obj = next(f for f in param_schema.node.struct.fields if f.name == pf)
                         # Use get_type_name to resolve complex types (struct, enum, interface, list)
                         param_type = self.get_type_name(field_obj.slot.type)
+                        
+                        # Start with base type for server
+                        server_param_type = param_type
 
                         # For enum parameters, also accept string literals (like enum fields do)
                         if field_obj.slot.type.which() == capnp_types.CapnpElementType.ENUM:
@@ -1122,20 +1166,30 @@ class Writer:
                                     literal_type = f"Literal[{literal_values}]"
                                     self._add_typing_import("Literal")
                                     param_type = f"{param_type} | {literal_type}"
+                                    # Server methods receive the enum type, not string
+                                    server_param_type = param_type
                             except Exception as e:
                                 logger.debug(f"Could not add enum literals for {pf}: {e}")
 
-                        # For struct parameters, also accept dict (pycapnp dict-to-struct conversion)
+                        # For struct parameters in CLIENT methods, also accept dict (pycapnp dict-to-struct conversion)
+                        # For SERVER methods, use the Reader type specifically
                         elif field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
+                            # Server receives Reader objects from pycapnp
+                            # Get the Reader type (handles generics properly)
+                            server_param_type = helper.new_reader(param_type)
+                            # Client can pass dict or struct
                             param_type = f"{param_type} | dict[str, Any]"
                             self._add_typing_import("Any")
 
                         parameters.append(f"{pf}: {param_type}")
+                        server_parameters.append(f"{pf}: {server_param_type}")
                     else:
                         parameters.append(f"{pf}: Any")
+                        server_parameters.append(f"{pf}: Any")
                 except Exception as e:
                     logger.debug(f"Could not resolve parameter type for {pf}: {e}")
                     parameters.append(f"{pf}: Any")
+                    server_parameters.append(f"{pf}: Any")
             # Generate return type - for RPC methods with result fields, create a Protocol
             # with those fields as attributes so users can access promise.field_name
             # The result is also awaitable, so it inherits from Awaitable
@@ -1199,6 +1253,17 @@ class Writer:
                             )
                     except Exception:
                         server_return_type = "Any"
+            
+            # If server_return_type is just the Result class name (no dots), it needs scoping
+            # Result classes are defined in the interface scope, but Server is nested within it
+            # So we need to qualify with the full scope path
+            if server_return_type != "None" and server_return_type != "Any" and "." not in server_return_type:
+                # Check if this looks like a Result class (ends with "Result")
+                if server_return_type.endswith("Result") or return_type == server_return_type:
+                    # Get full scope path (excluding root)
+                    scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                    if scope_path:
+                        server_return_type = f"{scope_path}.{server_return_type}"
 
             # For interface return types, also accept Server implementations
             if is_interface_return:
@@ -1209,9 +1274,13 @@ class Writer:
                 self._add_typing_import("Awaitable")
                 server_return_type = f"Awaitable[{server_return_type}]"
 
-            # Add _context and **kwargs to server method parameters
-            # _context is provided by pycapnp RPC framework, **kwargs for additional params
-            server_params = parameters + ["_context", "**kwargs"]
+            # Server method signatures: pycapnp passes _context and supports **kwargs
+            # _context is passed as a keyword argument by pycapnp, so implementations
+            # can either accept it explicitly (_context=None) or catch it in **kwargs
+            # To allow this flexibility, we don't list _context in the stub signature
+            # Implementations can choose to include it or not
+            server_params = server_parameters + ["**kwargs"]
+            
             server_method_sig = helper.new_function(
                 method_name, parameters=server_params, return_type=server_return_type
             )
@@ -1237,12 +1306,12 @@ class Writer:
                         # For struct fields, use the Builder variant (e.g., ExpressionBuilder)
                         if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
                             # Append "Builder" to the struct type name
-                            # Handle scoped names like Calculator.Expression -> Calculator.ExpressionBuilder
+                            # Handle scoped names and generic types properly
                             if "." in field_type:
                                 parts = field_type.rsplit(".", 1)
-                                field_type = f"{parts[0]}.{parts[1]}Builder"
+                                field_type = f"{parts[0]}.{helper.new_builder(parts[1])}"
                             else:
-                                field_type = f"{field_type}Builder"
+                                field_type = helper.new_builder(field_type)
 
                         request_lines.append(f"    {pf}: {field_type}")
                     else:
@@ -1411,10 +1480,12 @@ class Writer:
         )
 
         # Import the regular definition name, alongside its builder and reader for structs
-        # Enums don't have Builder/Reader variants
-        if schema.node.which() == capnp_types.CapnpElementType.ENUM:
+        # Enums and Interfaces don't have Builder/Reader variants
+        node_type = schema.node.which()
+        if node_type in (capnp_types.CapnpElementType.ENUM, capnp_types.CapnpElementType.INTERFACE):
             self._add_import(f"from {python_import_path} import {definition_name}")
         else:
+            # Structs have Builder/Reader variants
             self._add_import(
                 f"from {python_import_path} import "
                 f"{definition_name}, {helper.new_builder(definition_name)}, {helper.new_reader(definition_name)}"
@@ -1606,6 +1677,12 @@ class Writer:
             # Traverse down to the innermost nested list element.
             while type_name == capnp_types.CapnpElementType.LIST:
                 type_name += type_reader.list.elementType.which()
+
+        elif type_reader_type == capnp_types.CapnpElementType.ANY_POINTER:
+            # AnyPointer is represented as Any in Python typing
+            self._add_typing_import("Any")
+            type_name = "Any"
+            element_type = None
 
         else:
             raise TypeError(f"Unknown type reader type '{type_reader_type}'.")

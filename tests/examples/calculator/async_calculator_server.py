@@ -48,7 +48,7 @@ class ValueImpl(calculator_capnp.Calculator.Value.Server):
     def __init__(self, value):
         self.value = value
 
-    async def read(self, **kwargs):
+    async def read(self, _context=None, **kwargs):
         return self.value
 
 
@@ -60,7 +60,7 @@ class FunctionImpl(calculator_capnp.Calculator.Function.Server):
         self.paramCount = paramCount
         self.body = body.as_builder()
 
-    async def call(self, params, _context, **kwargs):
+    async def call(self, params, _context=None, **kwargs):
         """Note that we're returning a Promise object here, and bypassing the
         helper functionality that normally sets the results struct from the
         returned object. Instead, we set _context.results directly inside of
@@ -77,7 +77,7 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     def __init__(self, op):
         self.op = op
 
-    async def call(self, params, **kwargs):
+    async def call(self, params, _context=None, **kwargs):
         assert len(params) == 2
 
         op = self.op
@@ -97,10 +97,10 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
 class CalculatorImpl(calculator_capnp.Calculator.Server):
     "Implementation of the Calculator Cap'n Proto interface."
 
-    async def evaluate(self, expression, _context, **kwargs):
+    async def evaluate(self, expression, _context=None, **kwargs):
         return ValueImpl(await evaluate_impl(expression))
 
-    async def defFunction(self, paramCount, body, _context, **kwargs):
+    async def defFunction(self, paramCount, body, _context=None, **kwargs):
         return FunctionImpl(paramCount, body)
 
     async def getOperator(self, op, **kwargs):

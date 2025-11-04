@@ -14,6 +14,7 @@ def new_builder(type_name: str) -> str:
     """Converts a type name to its builder variant.
 
     E.g. `MyClass` becomes `MyClassBuilder`.
+    For generic types like `MyClass[T]`, becomes `MyClassBuilder[T]`.
 
     Args:
         type_name (str): The original type name.
@@ -21,13 +22,18 @@ def new_builder(type_name: str) -> str:
     Returns:
         str: The builder variant.
     """
+    # Handle generic types: MyClass[T, U] -> MyClassBuilder[T, U]
+    if "[" in type_name:
+        base_name, generic_part = type_name.split("[", 1)
+        return f"{base_name}{BUILDER_NAME}[{generic_part}"
     return f"{type_name}{BUILDER_NAME}"
 
 
 def new_reader(type_name: str) -> str:
     """Converts a type name to its reader variant.
 
-    E.g. `MyClass` becomes `MyClassTeader`.
+    E.g. `MyClass` becomes `MyClassReader`.
+    For generic types like `MyClass[T]`, becomes `MyClassReader[T]`.
 
     Args:
         type_name (str): The original type name.
@@ -35,6 +41,10 @@ def new_reader(type_name: str) -> str:
     Returns:
         str: The reader variant.
     """
+    # Handle generic types: MyClass[T, U] -> MyClassReader[T, U]
+    if "[" in type_name:
+        base_name, generic_part = type_name.split("[", 1)
+        return f"{base_name}{READER_NAME}[{generic_part}"
     return f"{type_name}{READER_NAME}"
 
 
@@ -51,12 +61,19 @@ class TypeHint:
         """The string representation of the type hint.
 
         This is composed of the scopes (if any), the name of the hint, and the affix (if any).
+        For generic types like `MyClass[T]`, the affix is inserted before the brackets.
         """
-        if not self.scopes:
-            return f"{self.name}{self.affix}"
-
+        # Handle affixes for generic types: MyClass[T] + Builder -> MyClassBuilder[T]
+        if self.affix and "[" in self.name:
+            base_name, generic_part = self.name.split("[", 1)
+            full_name = f"{base_name}{self.affix}[{generic_part}"
         else:
-            return f"{'.'.join(self.scopes)}.{self.name}{self.affix}"
+            full_name = f"{self.name}{self.affix}"
+        
+        if not self.scopes:
+            return full_name
+        else:
+            return f"{'.'.join(self.scopes)}.{full_name}"
 
 
 @dataclass

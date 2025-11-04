@@ -120,6 +120,8 @@ def generate_calculator_stubs():
     if calculator_schema.exists():
         calculator_output.mkdir(parents=True, exist_ok=True)
         main(["-p", str(calculator_schema), "-o", str(calculator_output)])
+        # Copy the .capnp file to the output directory so it can be loaded
+        shutil.copy(calculator_schema, calculator_output / "calculator.capnp")
 
     return calculator_output
 

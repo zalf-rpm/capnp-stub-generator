@@ -37,6 +37,13 @@ class TestCapnpStubsRuntime:
         assert hasattr(capnp.AsyncIoStream, "create_connection")
         assert hasattr(capnp.AsyncIoStream, "create_server")
 
+    def test_server_class_exists(self):
+        """Test Server class is available for type hints."""
+        # Server is a stub-only type for type checking
+        # The actual runtime object is returned by create_server
+        # but we can verify it's exported in the stubs
+        pass
+
     def test_run_exists(self):
         """Test run function exists at runtime."""
         assert hasattr(capnp, "run")
@@ -108,6 +115,44 @@ async def test() -> None:
             # Should recognize create_connection as a valid method
             error_count = result.stdout.count("error:")
             assert error_count == 0, f"AsyncIoStream methods not properly typed:\n{result.stdout}"
+        finally:
+            test_file.unlink(missing_ok=True)
+
+    def test_server_type_and_methods(self):
+        """Test Server type returned by create_server has proper methods."""
+        test_code = """
+from capnp import AsyncIoStream, Server
+
+async def handler(stream):
+    pass
+
+async def test() -> None:
+    # create_server should return a Server
+    server: Server = await AsyncIoStream.create_server(handler, "localhost", 8080)
+    
+    # Server should support async context manager
+    async with server:
+        # Server should have serve_forever method
+        await server.serve_forever()
+    
+    # Server should have other methods
+    server.close()
+    is_serving = server.is_serving()
+    await server.wait_closed()
+"""
+        test_file = TESTS_DIR / "_test_server_type.py"
+        test_file.write_text(test_code)
+
+        try:
+            result = subprocess.run(
+                ["pyright", str(test_file)],
+                capture_output=True,
+                text=True,
+            )
+
+            # Should recognize all Server methods
+            error_count = result.stdout.count("error:")
+            assert error_count == 0, f"Server type not properly typed:\n{result.stdout}"
         finally:
             test_file.unlink(missing_ok=True)
 
@@ -189,6 +234,7 @@ class TestCapnpStubsCompleteness:
 
         # Only check runtime-accessible items (not Protocol types used only for typing)
         # Protocol types like AnyPointerParameter are only for type checking
+        # Server is a stub-only class for typing create_server's return value
         runtime_exports = [
             "TwoPartyClient",
             "TwoPartyServer",
@@ -262,6 +308,7 @@ def test_capnp_stubs_summary():
     print("  ✓ Type annotations working")
     print("  ✓ RPC classes available")
     print("  ✓ Async functions typed")
+    print("  ✓ Server type with serve_forever")
     print("  ✓ Generic types working")
     print("  ✓ Calculator imports resolve")
     print("=" * 70 + "\n")

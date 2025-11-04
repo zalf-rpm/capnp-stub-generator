@@ -224,12 +224,29 @@ class TwoPartyServer:
     def __init__(self, connection: Any, bootstrap: Any) -> None: ...
     async def on_disconnect(self) -> None: ...
 
+class Server:
+    """Server returned by AsyncIoStream.create_server."""
+    async def serve_forever(self) -> None:
+        """Run the server until cancelled."""
+        ...
+    async def wait_closed(self) -> None:
+        """Wait until the server is closed."""
+        ...
+    def close(self) -> None:
+        """Close the server."""
+        ...
+    def is_serving(self) -> bool:
+        """Return True if the server is actively serving."""
+        ...
+    async def __aenter__(self) -> Server: ...
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None: ...
+
 class AsyncIoStream:
     """Async I/O stream wrapper for Cap'n Proto RPC."""
     @staticmethod
     async def create_connection(host: str, port: int) -> AsyncIoStream: ...
     @staticmethod
-    async def create_server(callback: Any, host: str, port: int) -> Any: ...
+    async def create_server(callback: Any, host: str, port: int | None = None, **kwargs: Any) -> Server: ...
 
 # Async utilities
 async def run(coro: Any) -> Any:
@@ -278,6 +295,7 @@ __all__ = [
     "CastableBootstrap",
     "TwoPartyClient",
     "TwoPartyServer",
+    "Server",
     "AsyncIoStream",
     "run",
 ]

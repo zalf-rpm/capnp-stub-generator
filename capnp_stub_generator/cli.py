@@ -75,6 +75,16 @@ def setup_parser() -> argparse.ArgumentParser:
         help="directory to write all generated stub outputs; defaults to alongside each schema if omitted.",
     )
 
+    parser.add_argument(
+        "-I",
+        "--import-path",
+        dest="import_paths",
+        type=str,
+        nargs="+",
+        default=[],
+        help="additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).",
+    )
+
     _add_recursive_argument(parser)
 
     return parser

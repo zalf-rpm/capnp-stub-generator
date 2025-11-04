@@ -217,6 +217,8 @@ __marimo__/
 
 # Generated test artifacts / stub outputs
 /tests/_generated/
+/tests/_generated_zalfmas/
+/tests/_generated_zalfmas_summary/
 /tests/_generated_examples/
 /tests/_generated_addressbook_typing/
 /tests/_scratch/

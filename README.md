@@ -26,8 +26,31 @@ where the options are
 - `-c` - cleanup paths (delete matching files before generation)
 - `-e` - exclude paths that shall not be converted to stubs
 - `-r` - recursive file search
+- `-o` - output directory for generated stub files (defaults to adjacent to schema files)
+- `-I` - import paths for resolving absolute imports (e.g., `/capnp/c++.capnp`)
 
-Currently, stub files are always created adjacent to schema files.
+### Using Import Paths
+
+When your schemas use absolute imports (imports starting with `/`), you need to specify import paths using the `-I` flag:
+
+```bash
+capnp-stub-generator -p schemas/*.capnp -o output/ -I /path/to/imports
+```
+
+For example, if your schema has:
+```capnp
+using Cxx = import "/capnp/c++.capnp";
+```
+
+And `/capnp/c++.capnp` is located at `/path/to/imports/capnp/c++.capnp`, then use:
+```bash
+capnp-stub-generator -p my_schema.capnp -I /path/to/imports
+```
+
+Multiple import paths can be specified:
+```bash
+capnp-stub-generator -p schemas/*.capnp -I /path/to/imports1 -I /path/to/imports2
+```
 
 For a runnable example, see the [test generation script](./capnp-stub-generator/tests/test_generation.py).
 
