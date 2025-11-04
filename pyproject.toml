@@ -1,24 +1,31 @@
-[tool.poetry]
+[project]
 name = "capnp-stub-generator"
 version = "2.1.1"
 description = "Cap'n Proto stub generator"
-readme = "README.md"
-license = "LICENSE"
-authors = ["Adrian Figueroa <adrian.figueroa@metirionic.com>"]
+readme = { file = "README.md", content-type = "text/markdown" }
+authors = [
+  { name = "Adrian Figueroa", email = "adrian.figueroa@metirionic.com" },
+]
+requires-python = ">=3.10,<3.14"
+dependencies = ["pycapnp>=2.2.1,<3.0.0", "capnp-stubs"]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<4.0"
-pycapnp = ">=2.2.1,<3.0.0"
-ruff = ">=0.14.3,<0.15.0"
-pytest = ">=8.4.2,<9.0.0"
-capnp-stubs = {path = "capnp-stubs", develop = true}
-
-[tool.poetry.scripts]
+[project.scripts]
 capnp-stub-generator = "capnp_stub_generator.cli:main"
 
 [build-system]
-requires = ["poetry-core>=2.2.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+# Example for referencing local packages in editable mode: uncomment these lines while keeping the
+# above `project` table. If the line for the package in the dependencies section is commented out
+# it will have no effect.
+[tool.poetry.dependencies]
+capnp-stubs = { path = "capnp-stubs", develop = true }
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.14.3"
+pytest = ">=8.4.2,<9.0.0"
+pyright = ">=1.1.407,<2.0.0"
 
 [tool.ruff]
 line-length = 120
@@ -27,11 +34,6 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
-
-[dependency-groups]
-dev = [
-    "pyright (>=1.1.407,<2.0.0)"
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

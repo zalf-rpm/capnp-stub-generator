@@ -78,15 +78,23 @@ def format_outputs(raw_input: str, is_pyi: bool, line_length: int = LINE_LENGTH)
         return raw_input
 
 
-def generate_stubs(module: ModuleType, module_registry: ModuleRegistryType, output_file_path: str):
+def generate_stubs(
+    module: ModuleType,
+    module_registry: ModuleRegistryType,
+    output_file_path: str,
+    output_directory: str | None = None,
+    import_paths: list[str] | None = None,
+):
     """Entry-point for generating *.pyi stubs from a module definition.
 
     Args:
         module (ModuleType): The module to generate stubs for.
         module_registry (ModuleRegistryType): A registry of all detected modules.
         output_file_path (str): The name of the output stub files, without file extension.
+        output_directory (str | None): The directory where output files are written, if different from schema location.
+        import_paths (list[str] | None): Additional import paths for resolving absolute imports.
     """
-    writer = Writer(module, module_registry)
+    writer = Writer(module, module_registry, output_directory=output_directory, import_paths=import_paths)
     writer.generate_all_nested()
 
     for outputs, suffix, is_pyi in zip((writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), (True, False)):
@@ -173,13 +181,32 @@ def run(args: argparse.Namespace, root_directory: str):
 
     excluded_paths: set[str] = set()
     for exclude in excludes:
-        exclude_directory = os.path.join(root_directory, exclude)
-        excluded_paths = excluded_paths.union(glob.glob(exclude_directory, recursive=args.recursive))
+        exclude_path = os.path.join(root_directory, exclude)
+        # Handle both specific files and glob patterns
+        if os.path.isfile(exclude_path):
+            excluded_paths.add(exclude_path)
+        else:
+            excluded_paths = excluded_paths.union(glob.glob(exclude_path, recursive=args.recursive))
 
     search_paths: set[str] = set()
     for path in paths:
-        search_directory = os.path.join(root_directory, path)
-        search_paths = search_paths.union(glob.glob(search_directory, recursive=args.recursive))
+        search_path = os.path.join(root_directory, path)
+
+        # If recursive flag is set and path is a directory, find all .capnp files recursively
+        if args.recursive and os.path.isdir(search_path):
+            for root, dirs, files in os.walk(search_path):
+                for file in files:
+                    if file.endswith(".capnp"):
+                        search_paths.add(os.path.join(root, file))
+        # If path is a directory without recursive flag, find only direct children
+        elif os.path.isdir(search_path):
+            for file in os.listdir(search_path):
+                file_path = os.path.join(search_path, file)
+                if os.path.isfile(file_path) and file.endswith(".capnp"):
+                    search_paths.add(file_path)
+        # Otherwise use glob for patterns or specific files
+        else:
+            search_paths = search_paths.union(glob.glob(search_path, recursive=args.recursive))
 
     # The `valid_paths` contain the automatically detected search paths, except for specifically excluded paths.
     valid_paths = search_paths - excluded_paths
@@ -315,4 +342,15 @@ def run(args: argparse.Namespace, root_directory: str):
 
         output_file_name = replace_capnp_suffix(os.path.basename(path))
 
-        generate_stubs(module, module_registry, os.path.join(output_directory, output_file_name))
+        # Pass output_directory to generate_stubs so it can calculate relative paths
+        # Only pass it if it's different from the schema's directory
+        schema_directory = os.path.dirname(path)
+        output_dir_to_pass = output_directory if output_directory != schema_directory else None
+
+        generate_stubs(
+            module,
+            module_registry,
+            os.path.join(output_directory, output_file_name),
+            output_dir_to_pass,
+            absolute_import_paths,
+        )

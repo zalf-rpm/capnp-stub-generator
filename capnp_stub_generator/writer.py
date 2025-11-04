@@ -42,18 +42,28 @@ class Writer:
         "Awaitable",
     ]
 
-    def __init__(self, module: ModuleType, module_registry: capnp_types.ModuleRegistryType):
+    def __init__(
+        self,
+        module: ModuleType,
+        module_registry: capnp_types.ModuleRegistryType,
+        output_directory: str | None = None,
+        import_paths: list[str] | None = None,
+    ):
         """Initialize the stub writer with a module definition.
 
         Args:
             module (ModuleType): The module definition to parse and write a stub for.
             module_registry (ModuleRegistryType): The module registry, for finding dependencies between loaded modules.
+            output_directory (str | None): The directory where output files are written, if different from schema location.
+            import_paths (list[str] | None): Additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).
         """
         self.scope = Scope(name="", id=module.schema.node.id, parent=None, return_scope=None)
         self.scopes_by_id: dict[int, Scope] = {self.scope.id: self.scope}
 
         self._module = module
         self._module_registry = module_registry
+        self._output_directory = pathlib.Path(output_directory) if output_directory else None
+        self._import_paths = [pathlib.Path(p) for p in import_paths] if import_paths else []
 
         if self._module.__file__:
             self._module_path = pathlib.Path(self._module.__file__)
@@ -68,6 +78,9 @@ class Writer:
 
         self.type_vars: set[str] = set()
         self.type_map: dict[int, CapnpType] = {}
+
+        # Track imported module paths for capnp.load imports parameter
+        self._imported_module_paths: set[pathlib.Path] = set()
 
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
@@ -1575,6 +1588,9 @@ class Writer:
         # Since this is an import, there must be a parent module.
         assert matching_path is not None, f"The module named {module_name} was not provided to the stub generator."
 
+        # Track this imported module path for later use in capnp.load imports
+        self._imported_module_paths.add(matching_path)
+
         # Find the relative path to go from the parent module, to this imported module.
         common_path = os.path.commonpath([self._module_path, matching_path])
 
@@ -1895,11 +1911,69 @@ class Writer:
         out.append("capnp.remove_import_hook()")
         out.append("here = os.path.dirname(os.path.abspath(__file__))")
 
-        out.append(f'module_file = os.path.abspath(os.path.join(here, "{self.display_name}"))')
+        # Determine where the .capnp file is relative to the generated .py file
+        if self._output_directory:
+            # Output is in a different directory from the schema
+            # Calculate relative path from output directory to schema file
+            try:
+                rel_to_schema = os.path.relpath(self._module_path, self._output_directory)
+                out.append(f'module_file = os.path.abspath(os.path.join(here, "{rel_to_schema}"))')
+            except (ValueError, OSError):
+                # Fallback for different drives on Windows
+                out.append(f'module_file = "{self._module_path.as_posix()}"')
+        else:
+            # Output is in the same directory as the schema (default behavior)
+            out.append(f'module_file = os.path.abspath(os.path.join(here, "{self.display_name}"))')
+
+        # Build import_path with relative paths to imported modules
+        import_paths = ["here"]
+
+        # Determine the reference point for import paths
+        # If output_directory is set, we need paths relative to where the generated file will be
+        # Otherwise, paths relative to where the schema file is
+        reference_dir = self._output_directory if self._output_directory else self._module_path.parent
+
+        # Add import paths from CLI (-I flags) - these take precedence
+        if self._import_paths:
+            for import_path_dir in sorted(self._import_paths):
+                try:
+                    # Calculate relative path from reference directory to import path
+                    rel_path = os.path.relpath(import_path_dir, reference_dir)
+                    # Only add if it's not the same directory (not just ".")
+                    if rel_path != ".":
+                        import_paths.append(f'os.path.join(here, "{rel_path}")')
+                except (ValueError, OSError):
+                    # If relative path calculation fails (e.g., different drives on Windows), skip
+                    pass
+
+        # Add paths to imported modules (schemas that import each other)
+        if self._imported_module_paths:
+            # Calculate relative paths from reference directory to imported modules
+            unique_import_dirs: set[str] = set()
+
+            for imported_path in sorted(self._imported_module_paths):
+                try:
+                    # Get the directory of the imported module
+                    imported_dir = imported_path.parent
+
+                    # Calculate relative path from reference directory to imported module's directory
+                    rel_path = os.path.relpath(imported_dir, reference_dir)
+
+                    # Only add if it's not the same directory (not just ".")
+                    if rel_path != ".":
+                        unique_import_dirs.add(rel_path)
+                except (ValueError, OSError):
+                    # If relative path calculation fails (e.g., different drives on Windows), skip
+                    pass
+
+            for rel_path in sorted(unique_import_dirs):
+                import_paths.append(f'os.path.join(here, "{rel_path}")')
+
+        out.append(f"import_path = [{', '.join(import_paths)}]")
 
         for scope in self.scopes_by_id.values():
             if scope.parent is not None and scope.parent.is_root:
-                out.append(f"{scope.name} = capnp.load(module_file).{scope.name}")
+                out.append(f"{scope.name} = capnp.load(module_file, imports=import_path).{scope.name}")
                 out.append(f"{helper.new_builder(scope.name)} = {scope.name}")
                 out.append(f"{helper.new_reader(scope.name)} = {scope.name}")
 
