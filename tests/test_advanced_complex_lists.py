@@ -1,15 +1,51 @@
 from pathlib import Path
 
-import pytest
-
 from capnp_stub_generator.cli import main
 
-SCHEMA = Path(__file__).parent / "schemas" / "advanced_features.capnp"
+SCHEMAS_DIR = Path(__file__).parent / "schemas"
+SCHEMA = SCHEMAS_DIR / "advanced_features.capnp"
+DUMMY_SCHEMA = SCHEMAS_DIR / "dummy.capnp"
 
 
-@pytest.mark.skip(reason="Generator not yet supporting multi-dimensional list stubs")
 def test_complex_lists(tmp_path):
-    main(["-p", str(SCHEMA), "-o", str(tmp_path)])
+    """Test that multi-dimensional lists are properly typed with nested Sequence types."""
+    # Need to load dummy.capnp as well since advanced_features imports it
+    main(["-p", str(DUMMY_SCHEMA), str(SCHEMA), "-o", str(tmp_path)])
     stub = tmp_path / "advanced_features_capnp.pyi"
     assert stub.exists(), "Stub should be generated"
-    # Future: assert ints2d, inners2d, listListInner structure representation.
+
+    content = stub.read_text()
+
+    # Check for 2D int list
+    assert "def ints2d(self) -> Sequence[Sequence[int]]:" in content, (
+        "ints2d should be typed as Sequence[Sequence[int]]"
+    )
+
+    # Check for 2D struct list
+    assert "def inners2d(" in content, "inners2d field should exist"
+
+    # Find inners2d and check its type includes nested Sequence
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if "def inners2d(" in line:
+            # Check the next few lines for the return type
+            for j in range(i, min(i + 5, len(lines))):
+                if "-> Sequence[Sequence[" in lines[j]:
+                    assert "Inner" in lines[j], "inners2d should reference Inner type in nested Sequence"
+                    break
+            break
+
+    # Check for listListInner in Nested struct
+    assert "def listListInner(" in content, "listListInner field should exist"
+
+    # Verify nested Sequence typing for listListInner
+    found_list_list_inner_type = False
+    for line in lines:
+        if "def listListInner(" in line:
+            # Look for the return type annotation
+            for j in range(lines.index(line), min(lines.index(line) + 5, len(lines))):
+                if "-> Sequence[Sequence[" in lines[j] and "Inner" in lines[j]:
+                    found_list_list_inner_type = True
+                    break
+
+    assert found_list_list_inner_type, "listListInner should be typed with nested Sequence[Sequence[Inner...]]"

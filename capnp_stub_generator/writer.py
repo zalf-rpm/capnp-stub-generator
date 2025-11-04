@@ -658,13 +658,9 @@ class Writer:
         if slot_fields:
             for slot_field in slot_fields:
                 # Base class uses properties without setters (read-only interface)
-                # For interface fields, use only primary type (Protocol) not union with Server
-                if len(slot_field.type_hints) > 1 and any(".Server" in str(h) for h in slot_field.type_hints):
-                    # Interface field: use only primary type for reading
-                    field_type = slot_field.primary_type_nested
-                else:
-                    # Other fields: use full union type
-                    field_type = slot_field.full_type_nested
+                # Use only the primary (base) type, not the union with Reader/Builder
+                # This matches runtime behavior where you get the base type at the abstract level
+                field_type = slot_field.primary_type_nested
                 for line in helper.new_property(slot_field.name, field_type):
                     self.scope.add(line)
 
@@ -894,9 +890,10 @@ class Writer:
                 getter_type = field_copy.primary_type_nested  # Protocol only
                 setter_type = field_copy.full_type_nested  # Protocol | Server
             else:
-                # Primitive fields use the same type for getter and setter
-                getter_type = field_copy.full_type_nested
-                setter_type = None  # Use getter_type
+                # Primitive and enum fields: getter uses primary type (matches base class)
+                # setter accepts full union for flexibility (e.g., enum literals for enums)
+                getter_type = field_copy.primary_type_nested
+                setter_type = field_copy.full_type_nested if field_copy.full_type_nested != getter_type else None
             for line in helper.new_property(slot_field.name, getter_type, with_setter=True, setter_type=setter_type):
                 self.scope.add(line)
 
@@ -1047,8 +1044,55 @@ class Writer:
         self._add_typing_import("Iterator")
         self._add_typing_import("Any")
 
+        # Collect base classes (superclasses + Protocol)
+        base_classes = []
+        
+        # Process interface inheritance (extends)
+        if hasattr(schema.node.interface, 'superclasses'):
+            for superclass in schema.node.interface.superclasses:
+                try:
+                    # Get the superclass type
+                    superclass_type = self.get_type_by_id(superclass.id)
+                    base_classes.append(superclass_type.scoped_name)
+                except KeyError:
+                    # Superclass not yet registered - try to generate it first
+                    try:
+                        # Try to find and generate the superclass from the module registry
+                        for module_id, (path, module) in self._module_registry.items():
+                            if module_id == superclass.id:
+                                # Found the superclass module, generate it
+                                self.generate_nested(module.schema)
+                                superclass_type = self.get_type_by_id(superclass.id)
+                                base_classes.append(superclass_type.scoped_name)
+                                break
+                            # Check if it's a nested type in the module
+                            def find_nested_schema(schema_obj, target_id):
+                                for nested_node in schema_obj.node.nestedNodes:
+                                    if nested_node.id == target_id:
+                                        return schema_obj.get_nested(nested_node.name)
+                                    try:
+                                        nested_schema = schema_obj.get_nested(nested_node.name)
+                                        result = find_nested_schema(nested_schema, target_id)
+                                        if result:
+                                            return result
+                                    except Exception:
+                                        pass
+                                return None
+                            
+                            found_schema = find_nested_schema(module.schema, superclass.id)
+                            if found_schema:
+                                self.generate_nested(found_schema)
+                                superclass_type = self.get_type_by_id(superclass.id)
+                                base_classes.append(superclass_type.scoped_name)
+                                break
+                    except Exception as e:
+                        logger.debug(f"Could not resolve superclass {superclass.id}: {e}")
+        
+        # Always add Protocol as the last base class
+        base_classes.append("Protocol")
+
         # Open protocol scope
-        parent_scope = self.new_scope(name, schema.node, scope_heading=helper.new_class_declaration(name, ["Protocol"]))
+        parent_scope = self.new_scope(name, schema.node, scope_heading=helper.new_class_declaration(name, base_classes))
 
         # We'll generate a Server class with method signatures after collecting them
 
@@ -1066,6 +1110,10 @@ class Writer:
         except Exception:
             runtime_iface = None
 
+        # Save current interface scope before generating nested types
+        # Nested interface generation will change self.scope, we need to get it back
+        interface_scope = self.scope
+        
         for nested_node in schema.node.nestedNodes:
             try:
                 if runtime_iface is not None:
@@ -1075,6 +1123,9 @@ class Writer:
             except Exception as e:
                 logger.debug(f"Could not generate nested node {nested_node.name}: {e}")
 
+        # Restore interface scope after generating nested types
+        self.scope = interface_scope
+
         # Access runtime interface to enumerate methods (parsed schema lacks methods)
         try:
             runtime_iface = self._module
@@ -1083,7 +1134,8 @@ class Writer:
                     continue
                 runtime_iface = getattr(runtime_iface, s.name)
             methods = runtime_iface.schema.methods.items()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Could not enumerate methods for {name}: {e}")
             methods = []
 
         # Collect server method signatures to add to Server class
@@ -1190,11 +1242,41 @@ class Writer:
 
             # Collect server method signature (server methods are async and accept **kwargs)
             # Server methods return the actual value, not the Result protocol
-            # Extract the actual return type from result fields
+            # Extract the actual return type from result schema
             server_return_type = return_type
             is_interface_return = False
             result_type_scope = None
-            if result_fields and return_type != "None":
+            
+            # Try to get the result type from the result_schema directly
+            # The result_schema represents the actual return type (e.g., IdInformation)
+            # BUT: skip internal Cap'n Proto result structs (contain $)
+            if result_schema is not None and return_type != "None":
+                try:
+                    # Check if this is an internal Cap'n Proto result struct (has $ in name)
+                    result_display_name = helper.get_display_name(result_schema)
+                    if "$" not in result_display_name:
+                        # This is a user-defined type, use it
+                        result_type_id = result_schema.node.id
+                        if self.is_type_id_known(result_type_id):
+                            registered_result = self.get_type_by_id(result_type_id)
+                            server_return_type = registered_result.scoped_name
+                            result_type_scope = registered_result.scope
+                            # Check if it's an interface
+                            is_interface_return = result_schema.node.which() == "interface"
+                        else:
+                            # Try to generate it if not known
+                            self.generate_nested(result_schema)
+                            if self.is_type_id_known(result_type_id):
+                                registered_result = self.get_type_by_id(result_type_id)
+                                server_return_type = registered_result.scoped_name
+                                result_type_scope = registered_result.scope
+                except Exception as e:
+                    logger.debug(f"Could not resolve result schema type: {e}")
+                    # Fall back to old logic
+                    pass
+            
+            # Fallback: if we couldn't get the type from result_schema, try extracting from fields
+            if server_return_type == return_type and result_fields and return_type != "None":
                 # For single result field, unwrap the type
                 if len(result_fields) == 1:
                     # Try to get the type of the single result field
@@ -1357,12 +1439,31 @@ class Writer:
                     return_type="float",
                 )
             )
-        if method_count == 0 and name not in ("Function", "Value"):
+        # Ensure interface has some content (even if methods failed to generate)
+        # Check if anything was added to the scope (excluding the return_scope setup)
+        if not self.scope.lines and name not in ("Function", "Value"):
+            self.scope.add("...")
+        
+        if method_count == 0 and name not in ("Function", "Value") and not self.scope.lines:
             self.scope.add("...")
 
         # Now add the Server class with method signatures
+        # Server class should also inherit from superclass Server classes
+        server_base_classes = []
+        if hasattr(schema.node.interface, 'superclasses'):
+            for superclass in schema.node.interface.superclasses:
+                try:
+                    superclass_type = self.get_type_by_id(superclass.id)
+                    server_base_classes.append(f"{superclass_type.scoped_name}.Server")
+                except KeyError:
+                    logger.debug(f"Could not resolve superclass {superclass.id} for Server inheritance")
+        
         # Create a nested scope for the Server class
-        self.scope.add(helper.new_class_declaration("Server"))
+        if server_base_classes:
+            self.scope.add(helper.new_class_declaration("Server", server_base_classes))
+        else:
+            self.scope.add(helper.new_class_declaration("Server"))
+        
         server_scope = Scope(
             name="Server",
             id=schema.node.id + 1,  # Use a pseudo-ID
@@ -1383,6 +1484,11 @@ class Writer:
         # Merge server scope lines back to parent
         prev_scope.lines += self.scope.lines
         self.scope = prev_scope
+
+        # Debug: ensure the interface scope has content before returning
+        if not self.scope.lines:
+            logger.warning(f"Interface {name} has no content, adding placeholder")
+            self.scope.add("...")
 
         self.return_from_scope()
         return None
@@ -1650,7 +1756,22 @@ class Writer:
         element_type: Any | None = None
 
         if type_reader_type == capnp_types.CapnpElementType.STRUCT:
-            element_type = self.get_type_by_id(type_reader.struct.typeId)
+            # Check if the type is registered; if not, try to generate it first
+            type_id = type_reader.struct.typeId
+            if not self.is_type_id_known(type_id):
+                # Try to generate the struct before using it
+                try:
+                    # Use capnp's internal method to get the schema by ID
+                    all_nested = list(self._module.schema.node.nestedNodes)
+                    for nested_node in all_nested:
+                        if nested_node.id == type_id:
+                            nested_schema = self._module.schema.get_nested(nested_node.name)
+                            self.generate_nested(nested_schema)
+                            break
+                except Exception as e:
+                    logger.debug(f"Could not pre-generate struct with ID {type_id}: {e}")
+            
+            element_type = self.get_type_by_id(type_id)
             type_name = element_type.name
             generic_params = []
 

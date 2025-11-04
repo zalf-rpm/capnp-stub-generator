@@ -77,7 +77,7 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     def __init__(self, op):
         self.op = op
 
-    async def call(self, params, _context=None, **kwargs):
+    async def call(self, params, **kwargs):
         assert len(params) == 2
 
         op = self.op

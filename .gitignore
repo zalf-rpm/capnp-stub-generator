@@ -231,3 +231,4 @@ scratch/
 
    │ E               Attribute "Value" is unknown (reportAttributeAccessIssue)                                                                                                                                                                                             │
    │ E           2 errors, 0 warnings, 0 informations                                                                                                                                                                                                                      │
+tests/_generated_interface_inheritance
