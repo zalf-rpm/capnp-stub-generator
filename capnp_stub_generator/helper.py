@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+import keyword
 from copy import copy
 from dataclasses import dataclass, field
 from typing import Any
 
 BUILDER_NAME = "Builder"
 READER_NAME = "Reader"
+
+
+def sanitize_name(name: str) -> str:
+    """Sanitize a name to avoid Python keywords.
+
+    If the name is a Python keyword, append an underscore.
+    E.g. 'lambda' becomes 'lambda_', 'class' becomes 'class_'.
+
+    Args:
+        name (str): The original name.
+
+    Returns:
+        str: The sanitized name.
+    """
+    if keyword.iskeyword(name):
+        return f"{name}_"
+    return name
 
 
 def new_builder(type_name: str) -> str:
@@ -69,7 +87,7 @@ class TypeHint:
             full_name = f"{base_name}{self.affix}[{generic_part}"
         else:
             full_name = f"{self.name}{self.affix}"
-        
+
         if not self.scopes:
             return full_name
         else:

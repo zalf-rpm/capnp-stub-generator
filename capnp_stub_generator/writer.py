@@ -188,7 +188,9 @@ class Writer:
                 element_type = hinted_variable.primary_type_hint.name
                 # Check if this list element type has Builder/Reader variants
                 needs_builder = hinted_variable.has_type_hint_with_builder_affix
-                list_init_choices.append((field.name, element_type, needs_builder))
+                list_init_choices.append(
+                    (helper.sanitize_name(field.name), element_type, needs_builder)
+                )
 
         elif field_slot_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
             hinted_variable = self.gen_python_type_slot(field, field_slot_type)
@@ -221,7 +223,7 @@ class Writer:
             hints = [helper.TypeHint(type_name, primary=True)]
             # Add Server as a non-primary hint for Builder setter
             hints.append(helper.TypeHint(f"{type_name}.Server"))
-            hinted_variable = helper.TypeHintedVariable(field.name, hints)
+            hinted_variable = helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
 
         else:
             raise TypeError(f"Unknown field slot type {field_slot_type}.")
@@ -323,7 +325,7 @@ class Writer:
         self._add_typing_import("Sequence")
 
         hinted_variable = helper.TypeHintedVariable(
-            field.name,
+            helper.sanitize_name(field.name),
             [helper.TypeHint(type_name, primary=True)],
             nesting_depth=list_depth,
         )
@@ -357,7 +359,7 @@ class Writer:
         """
         python_type_name: str = capnp_types.CAPNP_TYPE_TO_PYTHON[field_type]
         return helper.TypeHintedVariable(
-            field.name, [helper.TypeHint(python_type_name, primary=True)]
+            helper.sanitize_name(field.name), [helper.TypeHint(python_type_name, primary=True)]
         )
 
     def gen_enum_slot(
@@ -391,13 +393,14 @@ class Writer:
             self._add_typing_import("Literal")
 
             return helper.TypeHintedVariable(
-                field.name,
+                helper.sanitize_name(field.name),
                 [helper.TypeHint(type_name, primary=True), helper.TypeHint(literal_type)],
             )
         except (AttributeError, TypeError):
             # Fallback if we can't get enumerants
             return helper.TypeHintedVariable(
-                field.name, [helper.TypeHint(type_name, primary=True), helper.TypeHint("str")]
+                helper.sanitize_name(field.name),
+                [helper.TypeHint(type_name, primary=True), helper.TypeHint("str")],
             )
 
     def gen_struct_slot(
@@ -423,7 +426,7 @@ class Writer:
                 self.gen_struct(schema)
 
         type_name = self.get_type_name(field.slot.type)
-        init_choices.append((field.name, type_name))
+        init_choices.append((helper.sanitize_name(field.name), type_name))
         hints = [helper.TypeHint(type_name, primary=True)]
         # If this is an interface type, also allow passing its Server implementation
         try:
@@ -431,7 +434,7 @@ class Writer:
                 hints.append(helper.TypeHint(f"{type_name}.Server"))
         except Exception:
             pass
-        return helper.TypeHintedVariable(field.name, hints)
+        return helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
 
     def gen_any_pointer_slot(
         self, field: capnp._DynamicStructReader, new_type: CapnpType
@@ -449,12 +452,16 @@ class Writer:
             # Check if this is a generic parameter
             param = field.slot.type.anyPointer.parameter
             type_name = new_type.generic_params[param.parameterIndex]
-            return helper.TypeHintedVariable(field.name, [helper.TypeHint(type_name, primary=True)])
+            return helper.TypeHintedVariable(
+                helper.sanitize_name(field.name), [helper.TypeHint(type_name, primary=True)]
+            )
 
         except (capnp.KjException, AttributeError, IndexError):
             # Not a parameter, treat as a plain AnyPointer -> Any
             self._add_typing_import("Any")
-            return helper.TypeHintedVariable(field.name, [helper.TypeHint("Any", primary=True)])
+            return helper.TypeHintedVariable(
+                helper.sanitize_name(field.name), [helper.TypeHint("Any", primary=True)]
+            )
 
     def gen_const(self, schema: capnp._StructSchema) -> None:
         """Generate a `const` object.
@@ -640,7 +647,8 @@ class Writer:
                 group_scoped_name = group_type.scoped_name
 
                 hinted_variable = helper.TypeHintedVariable(
-                    field.name, [helper.TypeHint(group_scoped_name, primary=True)]
+                    helper.sanitize_name(field.name),
+                    [helper.TypeHint(group_scoped_name, primary=True)],
                 )
                 hinted_variable.add_builder_from_primary_type()
                 hinted_variable.add_reader_from_primary_type()
@@ -648,7 +656,7 @@ class Writer:
                 # Don't add type_scope here since we already have the full scoped name
 
                 slot_fields.append(hinted_variable)
-                init_choices.append((field.name, group_scoped_name))
+                init_choices.append((helper.sanitize_name(field.name), group_scoped_name))
 
             else:
                 raise AssertionError(f"{schema.node.displayName}: {field.name}: {field.which()}")
@@ -787,12 +795,16 @@ class Writer:
                 default="None",
             ),
         ]
-        
+
         # Add each field as an optional kwarg parameter
         # For union structs, only one field should be set at a time
         for slot_field in slot_fields:
             # Get the type suitable for initialization (Builder types for struct fields)
-            field_type = slot_field.get_type_with_affixes(["Builder"]) if slot_field.has_type_hint_with_builder_affix else slot_field.full_type_nested
+            field_type = (
+                slot_field.get_type_with_affixes(["Builder"])
+                if slot_field.has_type_hint_with_builder_affix
+                else slot_field.full_type_nested
+            )
             # Make field optional since not all fields need to be set
             field_param = helper.TypeHintedVariable(
                 slot_field.name,
@@ -800,10 +812,14 @@ class Writer:
                 default="None",
             )
             new_message_params.append(field_param)
-        
+
         self.scope.add(helper.new_decorator("staticmethod"))
         self.scope.add(
-            helper.new_function("new_message", parameters=new_message_params, return_type=scoped_new_builder_type_name)
+            helper.new_function(
+                "new_message",
+                parameters=new_message_params,
+                return_type=scoped_new_builder_type_name,
+            )
         )
 
         # Add read methods
@@ -1140,14 +1156,14 @@ class Writer:
             # and separate parameters for server methods (Reader types only)
             parameters: list[str] = ["self"]
             server_parameters: list[str] = ["self"]
-            
+
             for pf in param_fields:
                 try:
                     if param_schema is not None:
                         field_obj = next(f for f in param_schema.node.struct.fields if f.name == pf)
                         # Use get_type_name to resolve complex types (struct, enum, interface, list)
                         param_type = self.get_type_name(field_obj.slot.type)
-                        
+
                         # Start with base type for server
                         server_param_type = param_type
 
@@ -1253,11 +1269,15 @@ class Writer:
                             )
                     except Exception:
                         server_return_type = "Any"
-            
+
             # If server_return_type is just the Result class name (no dots), it needs scoping
             # Result classes are defined in the interface scope, but Server is nested within it
             # So we need to qualify with the full scope path
-            if server_return_type != "None" and server_return_type != "Any" and "." not in server_return_type:
+            if (
+                server_return_type != "None"
+                and server_return_type != "Any"
+                and "." not in server_return_type
+            ):
                 # Check if this looks like a Result class (ends with "Result")
                 if server_return_type.endswith("Result") or return_type == server_return_type:
                     # Get full scope path (excluding root)
@@ -1280,7 +1300,7 @@ class Writer:
             # To allow this flexibility, we don't list _context in the stub signature
             # Implementations can choose to include it or not
             server_params = server_parameters + ["**kwargs"]
-            
+
             server_method_sig = helper.new_function(
                 method_name, parameters=server_params, return_type=server_return_type
             )
@@ -1456,10 +1476,29 @@ class Writer:
         common_path: str
         matching_path: pathlib.Path | None = None
 
-        # Find the path of the parent module, from which this schema is imported.
-        for path, module in self._module_registry.values():
-            for node in module.schema.node.nestedNodes:
-                if node.id == schema.node.id:
+        # First check if this schema is a top-level module in the registry
+        if schema.node.id in self._module_registry:
+            matching_path = pathlib.Path(self._module_registry[schema.node.id][0])
+        else:
+            # Find the path of the parent module, from which this schema is imported.
+            # We need to search recursively through nested nodes since schemas can be deeply nested
+            def search_nested_nodes(schema_obj, target_id):
+                """Recursively search for a target ID in nested nodes."""
+                for nested_node in schema_obj.node.nestedNodes:
+                    if nested_node.id == target_id:
+                        return True
+                    # Recursively search deeper by getting the nested schema
+                    try:
+                        nested_schema = schema_obj.get_nested(nested_node.name)
+                        if search_nested_nodes(nested_schema, target_id):
+                            return True
+                    except Exception:
+                        # If we can't get nested schema, just continue
+                        pass
+                return False
+
+            for module_id, (path, module) in self._module_registry.items():
+                if search_nested_nodes(module.schema, schema.node.id):
                     matching_path = pathlib.Path(path)
                     break
 
@@ -1481,15 +1520,29 @@ class Writer:
 
         # Import the regular definition name, alongside its builder and reader for structs
         # Enums and Interfaces don't have Builder/Reader variants
-        node_type = schema.node.which()
-        if node_type in (capnp_types.CapnpElementType.ENUM, capnp_types.CapnpElementType.INTERFACE):
-            self._add_import(f"from {python_import_path} import {definition_name}")
+        # For deeply nested types (e.g., Params.Irrigation.Parameters), we import the root parent
+        # and Python will resolve the full path via attribute access
+
+        # Check if this is a nested type (contains dots)
+        if "." in definition_name:
+            # Get the root parent (e.g., "Params" from "Params.Irrigation.Parameters")
+            root_name = definition_name.split(".")[0]
+            # Import only the root parent
+            self._add_import(f"from {python_import_path} import {root_name}")
         else:
-            # Structs have Builder/Reader variants
-            self._add_import(
-                f"from {python_import_path} import "
-                f"{definition_name}, {helper.new_builder(definition_name)}, {helper.new_reader(definition_name)}"
-            )
+            # Regular non-nested import
+            node_type = schema.node.which()
+            if node_type in (
+                capnp_types.CapnpElementType.ENUM,
+                capnp_types.CapnpElementType.INTERFACE,
+            ):
+                self._add_import(f"from {python_import_path} import {definition_name}")
+            else:
+                # Structs have Builder/Reader variants
+                self._add_import(
+                    f"from {python_import_path} import "
+                    f"{definition_name}, {helper.new_builder(definition_name)}, {helper.new_reader(definition_name)}"
+                )
 
         return self.register_type(
             schema.node.id, schema, name=definition_name, scope=self.scope.root

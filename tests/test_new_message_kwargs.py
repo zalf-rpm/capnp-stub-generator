@@ -6,7 +6,6 @@ allowing convenient struct initialization without using init() methods.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -34,7 +33,7 @@ class TestNewMessageKwargs:
 
     def test_new_message_with_literal(self, generate_calculator_stubs):
         """Test creating Expression with literal field."""
-        test_code = '''
+        test_code = """
 from _generated_examples.calculator import calculator_capnp
 
 # Create expression with literal value
@@ -46,7 +45,7 @@ value: float = expr.literal
 # Type checker should know which() returns a literal union
 which: str = expr.which()
 assert which == "literal"
-'''
+"""
         test_file = TESTS_DIR / "_test_new_message_literal.py"
         test_file.write_text(test_code)
 
@@ -59,7 +58,7 @@ assert which == "literal"
 
     def test_new_message_with_parameter(self, generate_calculator_stubs):
         """Test creating Expression with parameter field."""
-        test_code = '''
+        test_code = """
 from _generated_examples.calculator import calculator_capnp
 
 # Create expression with parameter reference
@@ -67,7 +66,7 @@ expr = calculator_capnp.Calculator.Expression.new_message(parameter=5)
 
 # Should be able to read the parameter
 param_idx: int = expr.parameter
-'''
+"""
         test_file = TESTS_DIR / "_test_new_message_parameter.py"
         test_file.write_text(test_code)
 
@@ -80,7 +79,7 @@ param_idx: int = expr.parameter
 
     def test_new_message_with_call_struct(self, generate_calculator_stubs):
         """Test creating Call struct directly (not in union)."""
-        test_code = '''
+        test_code = """
 from _generated_examples.calculator import calculator_capnp
 from typing import cast
 
@@ -100,7 +99,7 @@ call_struct = calculator_capnp.Calculator.Expression.Call.new_message(
 # Should have proper types
 function_obj = call_struct.function
 params = call_struct.params
-'''
+"""
         test_file = TESTS_DIR / "_test_new_message_call.py"
         test_file.write_text(test_code)
 
@@ -113,7 +112,7 @@ params = call_struct.params
 
     def test_new_message_nested_example(self, generate_calculator_stubs):
         """Test a complex nested example like in the user's code."""
-        test_code = '''
+        test_code = """
 from _generated_examples.calculator import calculator_capnp
 
 # Simulate creating a complex nested structure similar to user's example:
@@ -140,7 +139,7 @@ which3: str = exprs[2].which()
 val1: float = exprs[0].literal
 param1: int = exprs[1].parameter
 val3: float = exprs[2].literal
-'''
+"""
         test_file = TESTS_DIR / "_test_new_message_nested.py"
         test_file.write_text(test_code)
 
@@ -153,7 +152,7 @@ val3: float = exprs[2].literal
 
     def test_new_message_optional_params(self, generate_calculator_stubs):
         """Test that all field parameters are optional."""
-        test_code = '''
+        test_code = """
 from _generated_examples.calculator import calculator_capnp
 
 # Create empty expression (though not very useful, should type-check)
@@ -166,7 +165,7 @@ expr2 = calculator_capnp.Calculator.Expression.new_message(
 
 # Or a field
 expr3 = calculator_capnp.Calculator.Expression.new_message(literal=42.0)
-'''
+"""
         test_file = TESTS_DIR / "_test_new_message_optional.py"
         test_file.write_text(test_code)
 
@@ -183,7 +182,7 @@ class TestNewMessageWithInterfaces:
 
     def test_new_message_with_interface_field(self, generate_calculator_stubs):
         """Test that interface fields accept both Protocol and Server types."""
-        test_code = '''
+        test_code = """
 from _generated_examples.calculator import calculator_capnp
 
 class MyValue(calculator_capnp.Calculator.Value.Server):
@@ -200,7 +199,7 @@ expr = calculator_capnp.Calculator.Expression.new_message(
 
 # Type should be correct
 which: str = expr.which()
-'''
+"""
         test_file = TESTS_DIR / "_test_new_message_interface.py"
         test_file.write_text(test_code)
 

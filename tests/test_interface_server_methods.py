@@ -50,13 +50,16 @@ def test_server_methods_accept_context(calculator_stub_lines):
 
     # All server methods should have **kwargs for _context and other parameters
     assert "**kwargs" in content
-    
+
     # Find all Server classes and verify their methods
     import re
-    server_sections = re.findall(r"class Server:.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL)
-    
+
+    server_sections = re.findall(
+        r"class Server:.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL
+    )
+
     assert len(server_sections) > 0, "Should find at least one Server class"
-    
+
     for server_section in server_sections:
         # Find all method definitions in this Server class
         methods = re.findall(r"def \w+\([^)]*(?:\).*?)?(?=\n|$)", server_section, re.DOTALL)
@@ -64,7 +67,9 @@ def test_server_methods_accept_context(calculator_stub_lines):
             # Each method should have **kwargs
             assert "**kwargs" in method, f"Server method should have **kwargs: {method}"
             # Should NOT have explicit _context
-            assert "_context" not in method, f"Server method should not have explicit _context: {method}"
+            assert "_context" not in method, (
+                f"Server method should not have explicit _context: {method}"
+            )
 
 
 def test_server_methods_return_interface_or_implementation(calculator_stub_lines):
