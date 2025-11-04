@@ -169,9 +169,7 @@ class TestGeneratedStubsTypeCheck:
                 f"Pyright output:\n{result.stdout}"
             )
         elif error_count < expected_errors:
-            print(
-                f"\n✓ {example.name}: Type errors reduced from {expected_errors} to {error_count}!"
-            )
+            print(f"\n✓ {example.name}: Type errors reduced from {expected_errors} to {error_count}!")
             print("  Please update expected_errors in this test.")
 
 

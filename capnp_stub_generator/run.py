@@ -6,11 +6,12 @@ import argparse
 import glob
 import logging
 import os.path
+import subprocess
+import tempfile
+from pathlib import Path
 from types import ModuleType
 
-import black
 import capnp
-import isort
 
 from capnp_stub_generator.capnp_types import ModuleRegistryType
 from capnp_stub_generator.helper import replace_capnp_suffix
@@ -27,47 +28,54 @@ LINE_LENGTH = 120
 
 
 def format_outputs(raw_input: str, is_pyi: bool, line_length: int = LINE_LENGTH) -> str:
-    """Formats raw input by means of `black` and `isort`.
+    """Formats raw input using ruff.
 
     Args:
         raw_input (str): The unformatted input.
         is_pyi (bool): Whether or not the output is a `pyi` file.
+        line_length (int): Line length for formatting (not used, taken from pyproject.toml).
 
     Returns:
         str: The formatted outputs.
     """
-    # FIXME: Extract config from dev_policies
-    sorted_imports = isort.code(
-        raw_input, config=isort.Config(profile="black", line_length=line_length)
-    )
     try:
-        return black.format_str(
-            sorted_imports, mode=black.Mode(is_pyi=is_pyi, line_length=line_length)
-        )
+        # Write to temporary file for ruff to process
+        suffix = ".pyi" if is_pyi else ".py"
+        with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False, encoding="utf-8") as f:
+            temp_path = Path(f.name)
+            f.write(raw_input)
+
+        try:
+            # Run ruff check --fix to fix import ordering and other issues
+            subprocess.run(
+                ["ruff", "check", "--fix", "--select", "I", str(temp_path)],
+                capture_output=True,
+                check=False,  # Don't raise on non-zero exit
+            )
+
+            # Run ruff format to format the code
+            subprocess.run(
+                ["ruff", "format", str(temp_path)],
+                capture_output=True,
+                check=True,
+            )
+
+            # Read the formatted output
+            return temp_path.read_text(encoding="utf-8")
+
+        finally:
+            # Clean up temporary file
+            temp_path.unlink(missing_ok=True)
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Ruff formatting failed: {e}")
+        logger.error(f"Stdout: {e.stdout.decode('utf-8', errors='replace')}")
+        logger.error(f"Stderr: {e.stderr.decode('utf-8', errors='replace')}")
+        # Return unformatted output on error
+        return raw_input
     except Exception as e:
-        # Save unformatted output for debugging
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".pyi.unformatted", delete=False) as f:
-            f.write(sorted_imports)
-            logger.error(f"Black formatting failed. Unformatted output saved to: {f.name}")
-
-        # Print context around the error for debugging
-        error_msg = str(e)
-        if ":" in error_msg:
-            try:
-                # Extract line number from error message like "234:21: ..."
-                line_num = int(error_msg.split(":")[0].strip().split()[-1])
-                lines = sorted_imports.split("\n")
-                context_start = max(0, line_num - 3)
-                context_end = min(len(lines), line_num + 3)
-                logger.error(f"Black formatting error at line {line_num}:")
-                for i in range(context_start, context_end):
-                    marker = ">>>" if i == line_num - 1 else "   "
-                    logger.error(f"{marker} {i + 1:4}: {lines[i]}")
-            except (ValueError, IndexError):
-                pass
-        raise
+        logger.error(f"Unexpected error during formatting: {e}")
+        return raw_input
 
 
 def generate_stubs(module: ModuleType, module_registry: ModuleRegistryType, output_file_path: str):
@@ -81,9 +89,7 @@ def generate_stubs(module: ModuleType, module_registry: ModuleRegistryType, outp
     writer = Writer(module, module_registry)
     writer.generate_all_nested()
 
-    for outputs, suffix, is_pyi in zip(
-        (writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), (True, False)
-    ):
+    for outputs, suffix, is_pyi in zip((writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), (True, False)):
         formatted_output = format_outputs(outputs, is_pyi)
 
         with open(output_file_path + suffix, "w", encoding="utf8") as output_file:
@@ -168,9 +174,7 @@ def run(args: argparse.Namespace, root_directory: str):
     excluded_paths: set[str] = set()
     for exclude in excludes:
         exclude_directory = os.path.join(root_directory, exclude)
-        excluded_paths = excluded_paths.union(
-            glob.glob(exclude_directory, recursive=args.recursive)
-        )
+        excluded_paths = excluded_paths.union(glob.glob(exclude_directory, recursive=args.recursive))
 
     search_paths: set[str] = set()
     for path in paths:

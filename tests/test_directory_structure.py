@@ -131,10 +131,7 @@ def test_mixed_directory_levels(temp_schema_dir, temp_output_dir):
     assert len(all_pyi) == 3
 
     # Structure should match input
-    rel_paths_input = {
-        str(f.relative_to(temp_schema_dir).with_suffix(""))
-        for f in temp_schema_dir.rglob("*.capnp")
-    }
+    rel_paths_input = {str(f.relative_to(temp_schema_dir).with_suffix("")) for f in temp_schema_dir.rglob("*.capnp")}
     rel_paths_output = {str(f.relative_to(temp_output_dir).with_suffix("")) for f in all_pyi}
 
     # Transform _capnp suffix

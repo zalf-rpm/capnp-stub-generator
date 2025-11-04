@@ -41,14 +41,8 @@ def test_enum_and_nested_enum_definitions():
 def test_struct_fields_and_defaults():
     lines = _generate()
     # Main struct and nested struct reader/builder classes
-    assert any(
-        line.strip().startswith("class MidFeatureContainerReader(MidFeatureContainer):")
-        for line in lines
-    )
-    assert any(
-        line.strip().startswith("class MidFeatureContainerBuilder(MidFeatureContainer):")
-        for line in lines
-    )
+    assert any(line.strip().startswith("class MidFeatureContainerReader(MidFeatureContainer):") for line in lines)
+    assert any(line.strip().startswith("class MidFeatureContainerBuilder(MidFeatureContainer):") for line in lines)
     # Basic fields appear (now as properties)
     for field in ["id", "name", "mode", "nested"]:
         assert any(f"def {field}(self)" in line for line in lines)
@@ -65,9 +59,7 @@ def test_struct_fields_and_defaults():
 def test_list_and_sequence_annotations():
     lines = _generate()
     # Sequence import present
-    assert any(
-        line.startswith("from collections.abc import") and "Sequence" in line for line in lines
-    )
+    assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
     # Lists of nested struct and enums (now as properties)
     assert any("def nestedList(self)" in line and "Sequence" in line for line in lines)
     assert any("def enumList(self)" in line and "Sequence" in line for line in lines)

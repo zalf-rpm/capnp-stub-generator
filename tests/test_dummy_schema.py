@@ -36,9 +36,7 @@ class TestDummyEnumsAndTypes:
     def test_testalltypes_field_presence_and_collections_import(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any(
-            line.startswith("from collections.abc import")
-            and "Sequence" in line
-            and "Iterator" in line
+            line.startswith("from collections.abc import") and "Sequence" in line and "Iterator" in line
             for line in lines
         )
         # Fields are now properties
@@ -134,15 +132,11 @@ class TestDummyGroupsAndNested:
         assert any("class TestUsing" in line for line in lines)
         # Fields are now properties
         assert any(
-            "def outerNestedEnum(self)" in line
-            and "TestNestedTypes" in line
-            and "NestedEnum1" in line
+            "def outerNestedEnum(self)" in line and "TestNestedTypes" in line and "NestedEnum1" in line
             for line in lines
         )
         assert any(
-            "def innerNestedEnum(self)" in line
-            and "TestNestedTypes" in line
-            and "NestedEnum2" in line
+            "def innerNestedEnum(self)" in line and "TestNestedTypes" in line and "NestedEnum2" in line
             for line in lines
         )
 

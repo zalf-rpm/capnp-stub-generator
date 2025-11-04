@@ -56,12 +56,10 @@ def test_nested_types_enums_and_lists():
     assert any("class TestUsing" in line for line in lines)
     # Fields referencing nested enums use dotted names (not flattened, now as properties)
     assert any(
-        "def outerNestedEnum(self)" in line and "TestNestedTypes" in line and "NestedEnum1" in line
-        for line in lines
+        "def outerNestedEnum(self)" in line and "TestNestedTypes" in line and "NestedEnum1" in line for line in lines
     )
     assert any(
-        "def innerNestedEnum(self)" in line and "TestNestedTypes" in line and "NestedEnum2" in line
-        for line in lines
+        "def innerNestedEnum(self)" in line and "TestNestedTypes" in line and "NestedEnum2" in line for line in lines
     )
 
 

@@ -31,9 +31,7 @@ GENERATED_ZALFMAS_DIR = TESTS_DIR / "_generated_zalfmas"
 def pytest_configure(config):
     """Configure pytest with custom markers."""
     config.addinivalue_line("markers", "stub_generation: mark test as requiring stub generation")
-    config.addinivalue_line(
-        "markers", "pyright_validation: mark test as requiring pyright validation"
-    )
+    config.addinivalue_line("markers", "pyright_validation: mark test as requiring pyright validation")
     config.addinivalue_line("markers", "order(n): specify test execution order")
 
 
@@ -262,11 +260,11 @@ def pytest_collection_modifyitems(config, items):
     # Sort items by order
     def get_order(item):
         module_name = item.module.__name__.replace("tests.", "").replace("test_", "test_")
-        
+
         # Zalfmas tests go near the end
         if "zalfmas" in module_name:
             return zalfmas_order
-        
+
         # Extract just the test file name without test_ prefix
         for key in order_map:
             if key in module_name or module_name.endswith(key):

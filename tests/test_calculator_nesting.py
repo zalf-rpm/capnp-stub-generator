@@ -42,9 +42,7 @@ class TestCalculatorNestedInterfaceGeneration:
         content = stub_file.read_text()
 
         # Calculator.Expression is a nested struct, should be generated
-        assert "class Expression" in content, (
-            "Calculator.Expression should be generated (nested struct)"
-        )
+        assert "class Expression" in content, "Calculator.Expression should be generated (nested struct)"
 
     def test_nested_enum_exists_in_stub(self, generate_calculator_stubs):
         """Test that Calculator.Operator (nested enum) is in the stub."""
@@ -69,9 +67,7 @@ class TestCalculatorNestedInterfaceGeneration:
         _, output = run_pyright(file_path)
 
         # This specific error should not exist after proper nesting implementation
-        assert 'Cannot access attribute "Function"' not in output, (
-            "Calculator.Function should be accessible"
-        )
+        assert 'Cannot access attribute "Function"' not in output, "Calculator.Function should be accessible"
 
     def test_server_code_has_no_value_access_error(self, generate_calculator_stubs):
         """Test that Calculator.Value.Server can be accessed in server code."""
@@ -79,13 +75,9 @@ class TestCalculatorNestedInterfaceGeneration:
         _, output = run_pyright(file_path)
 
         # These specific errors should not exist after proper nesting implementation
-        assert 'Cannot access attribute "Value"' not in output, (
-            "Calculator.Value should be accessible"
-        )
+        assert 'Cannot access attribute "Value"' not in output, "Calculator.Value should be accessible"
 
-        assert 'Cannot access attribute "Function"' not in output, (
-            "Calculator.Function should be accessible"
-        )
+        assert 'Cannot access attribute "Function"' not in output, "Calculator.Function should be accessible"
 
     def test_server_code_has_no_calculator_server_error(self, generate_calculator_stubs):
         """Test that Calculator.Server can be accessed."""

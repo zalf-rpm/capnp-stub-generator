@@ -262,9 +262,7 @@ def test_generate_zalfmas_stubs_individually(generated_zalfmas_dir):
             print(f"  ✗ {schema_file.name}: {str(e)[:100]}")
             failed_schemas.append(schema_file.name)
 
-    print(
-        f"\nResults: {success_count}/{len(schema_files) - len(skip_schemas)} successful (excluding skipped schemas)"
-    )
+    print(f"\nResults: {success_count}/{len(schema_files) - len(skip_schemas)} successful (excluding skipped schemas)")
     if failed_schemas:
         print(f"Failed schemas: {', '.join(failed_schemas)}")
 
@@ -310,9 +308,7 @@ def test_generate_zalfmas_with_subdirectories(generated_zalfmas_dir):
 
     print(f"\nGenerating stubs for {len(files_to_generate)} files including ALL subdirectories...")
     print("Files from:")
-    print(
-        f"  - {len([f for f in files_to_generate if f.parent == ZALFMAS_DIR])} from root directory"
-    )
+    print(f"  - {len([f for f in files_to_generate if f.parent == ZALFMAS_DIR])} from root directory")
     print(f"  - {len(capnp_files)} from capnp/ subdirectory")
     print(f"  - {len(model_files)} from model/ subdirectories")
 
@@ -344,15 +340,9 @@ def test_generate_zalfmas_with_subdirectories(generated_zalfmas_dir):
     weberest_dir = model_dir / "weberest" if model_dir.exists() else None
     yieldstat_dir = model_dir / "yieldstat" if model_dir.exists() else None
 
-    monica_stubs = (
-        list(monica_dir.glob("*_capnp.pyi")) if monica_dir and monica_dir.exists() else []
-    )
-    weberest_stubs = (
-        list(weberest_dir.glob("*_capnp.pyi")) if weberest_dir and weberest_dir.exists() else []
-    )
-    yieldstat_stubs = (
-        list(yieldstat_dir.glob("*_capnp.pyi")) if yieldstat_dir and yieldstat_dir.exists() else []
-    )
+    monica_stubs = list(monica_dir.glob("*_capnp.pyi")) if monica_dir and monica_dir.exists() else []
+    weberest_stubs = list(weberest_dir.glob("*_capnp.pyi")) if weberest_dir and weberest_dir.exists() else []
+    yieldstat_stubs = list(yieldstat_dir.glob("*_capnp.pyi")) if yieldstat_dir and yieldstat_dir.exists() else []
 
     print("\n✓ Successfully generated stubs:")
     print(f"  - {len(root_stubs)} in root directory")
@@ -365,9 +355,7 @@ def test_generate_zalfmas_with_subdirectories(generated_zalfmas_dir):
     assert len(root_stubs) > 0, "Should have root-level stub files"
     assert capnp_subdir.exists(), "capnp/ subdirectory should exist"
     assert len(capnp_stubs) > 0, "Should have stub files in capnp/ subdirectory"
-    assert len(capnp_stubs) == len(capnp_files), (
-        f"Expected {len(capnp_files)} files in capnp/, got {len(capnp_stubs)}"
-    )
+    assert len(capnp_stubs) == len(capnp_files), f"Expected {len(capnp_files)} files in capnp/, got {len(capnp_stubs)}"
     assert model_dir and model_dir.exists(), "model/ subdirectory should exist"
     assert monica_dir and monica_dir.exists(), "model/monica/ subdirectory should exist"
     assert len(monica_stubs) > 0, "Should have stub files in model/monica/"

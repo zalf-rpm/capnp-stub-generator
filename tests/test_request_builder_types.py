@@ -32,9 +32,7 @@ class TestRequestBuilderStructure:
             if "class EvaluateRequest(Protocol):" in line:
                 in_evaluate_request = True
             elif in_evaluate_request and "expression:" in line:
-                assert "Calculator.ExpressionBuilder" in line, (
-                    f"Expected ExpressionBuilder, got: {line}"
-                )
+                assert "Calculator.ExpressionBuilder" in line, f"Expected ExpressionBuilder, got: {line}"
                 found_expression_field = True
                 break
             elif in_evaluate_request and (line.startswith("    def ") or line.startswith("class ")):
@@ -148,11 +146,7 @@ class TestRequestBuilderSendMethod:
                 assert "ReadResult:" in line
                 found_send = True
                 break
-            elif (
-                in_request
-                and line.startswith("    class ")
-                or (in_request and line.startswith("class "))
-            ):
+            elif in_request and line.startswith("    class ") or (in_request and line.startswith("class ")):
                 break
 
         assert found_send, "ReadRequest should have send() method"
@@ -174,11 +168,7 @@ class TestRequestBuilderSendMethod:
                 assert "CallResult:" in line
                 found_send = True
                 break
-            elif (
-                in_request
-                and line.startswith("    class ")
-                or (in_request and line.startswith("class "))
-            ):
+            elif in_request and line.startswith("    class ") or (in_request and line.startswith("class ")):
                 break
 
         assert found_send, "CallRequest should have send() method"
@@ -224,18 +214,14 @@ class TestRequestMethodReturnsRequest:
 
         assert "def evaluate_request(self) -> EvaluateRequest:" in stub_content
 
-    def test_deffunction_request_method_returns_deffunction_request(
-        self, generate_calculator_stubs
-    ):
+    def test_deffunction_request_method_returns_deffunction_request(self, generate_calculator_stubs):
         """Test that defFunction_request() returns DeffunctionRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
         assert "def defFunction_request(self) -> DeffunctionRequest:" in stub_content
 
-    def test_getoperator_request_method_returns_getoperator_request(
-        self, generate_calculator_stubs
-    ):
+    def test_getoperator_request_method_returns_getoperator_request(self, generate_calculator_stubs):
         """Test that getOperator_request() returns GetoperatorRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()

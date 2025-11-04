@@ -47,8 +47,7 @@ phones[2].type = "work"    # Valid
 
     if error_count > 0:
         pytest.fail(
-            f"Valid enum literals should type check but got {error_count} errors.\n"
-            f"Pyright output:\n{result.stdout}"
+            f"Valid enum literals should type check but got {error_count} errors.\nPyright output:\n{result.stdout}"
         )
 
 
@@ -117,10 +116,7 @@ phones[0].type = Person.PhoneNumber.Type.mobile
     error_count = result.stdout.count("error:")
 
     if error_count > 0:
-        pytest.fail(
-            f"Enum member should type check but got {error_count} errors.\n"
-            f"Pyright output:\n{result.stdout}"
-        )
+        pytest.fail(f"Enum member should type check but got {error_count} errors.\nPyright output:\n{result.stdout}")
 
 
 def test_enum_field_type_annotation(generate_all_example_stubs):
@@ -160,16 +156,12 @@ wrong_type: int = phones[0].type  # Should error!
 
     if error_count != 1:
         pytest.fail(
-            f"Expected exactly 1 error (wrong annotation) but got {error_count}.\n"
-            f"Pyright output:\n{result.stdout}"
+            f"Expected exactly 1 error (wrong annotation) but got {error_count}.\nPyright output:\n{result.stdout}"
         )
 
     # Check it's the right error
     if "int" not in result.stdout or "is not assignable" not in result.stdout:
-        pytest.fail(
-            f"Expected error about int assignment but got different error.\n"
-            f"Pyright output:\n{result.stdout}"
-        )
+        pytest.fail(f"Expected error about int assignment but got different error.\nPyright output:\n{result.stdout}")
 
     print("✓ Good! Correct error for wrong type annotation")
 

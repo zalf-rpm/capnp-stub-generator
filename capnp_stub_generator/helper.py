@@ -112,9 +112,7 @@ class TypeHintedVariable:
                 primary_type_hint_count += 1
 
         if primary_type_hint_count != 1:
-            raise ValueError(
-                f"There can only be exactly one primary type hint. Found {primary_type_hint_count}"
-            )
+            raise ValueError(f"There can only be exactly one primary type hint. Found {primary_type_hint_count}")
 
     def __str__(self) -> str:
         """String representation of this object.
@@ -126,9 +124,7 @@ class TypeHintedVariable:
 
     def _nest(self, unnested_type_name: str) -> str:
         if self.nesting_depth > 0:
-            return (
-                f"{self.nesting_depth * 'Sequence['}{unnested_type_name}{self.nesting_depth * ']'}"
-            )
+            return f"{self.nesting_depth * 'Sequence['}{unnested_type_name}{self.nesting_depth * ']'}"
 
         else:
             return unnested_type_name
@@ -429,9 +425,7 @@ def new_decorator(name: str, parameters: list[TypeHintedVariable] | list[str] | 
         return f"@{name}"
 
 
-def new_property(
-    name: str, return_type: str, with_setter: bool = False, setter_type: str | None = None
-) -> list[str]:
+def new_property(name: str, return_type: str, with_setter: bool = False, setter_type: str | None = None) -> list[str]:
     """Create a property declaration.
 
     Args:

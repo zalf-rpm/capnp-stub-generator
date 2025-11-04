@@ -246,9 +246,7 @@ class AsyncIoStream:
     @staticmethod
     async def create_connection(host: str, port: int) -> AsyncIoStream: ...
     @staticmethod
-    async def create_server(
-        callback: Any, host: str, port: int | None = None, **kwargs: Any
-    ) -> Server: ...
+    async def create_server(callback: Any, host: str, port: int | None = None, **kwargs: Any) -> Server: ...
 
 # Async utilities
 async def run(coro: Any) -> Any:

@@ -29,8 +29,7 @@ class TestRPCResultTypes:
 
         # evaluate should return EvaluateResult
         assert (
-            "def evaluate(self, expression: Calculator.Expression | dict[str, Any]) -> EvaluateResult:"
-            in stub_content
+            "def evaluate(self, expression: Calculator.Expression | dict[str, Any]) -> EvaluateResult:" in stub_content
         )
 
     def test_deffunction_returns_result_with_func_field(self, generate_calculator_stubs):
@@ -80,11 +79,7 @@ class TestRPCResultTypes:
             elif in_read_result and "value: float" in line:
                 found_value_float = True
                 break
-            elif (
-                in_read_result
-                and line.startswith("    class ")
-                or (in_read_result and line.startswith("class "))
-            ):
+            elif in_read_result and line.startswith("    class ") or (in_read_result and line.startswith("class ")):
                 break
 
         assert found_value_float, "ReadResult should have value: float field"
@@ -136,9 +131,7 @@ class TestEnumParametersAcceptLiterals:
 
         # getOperator should accept Operator | Literal["add", "subtract", "multiply", "divide"]
         assert "def getOperator(" in stub_content
-        assert (
-            'Calculator.Operator | Literal["add", "subtract", "multiply", "divide"]' in stub_content
-        )
+        assert 'Calculator.Operator | Literal["add", "subtract", "multiply", "divide"]' in stub_content
 
     def test_enum_literals_match_enum_values(self, generate_calculator_stubs):
         """Test that the enum literal values match the actual enum."""

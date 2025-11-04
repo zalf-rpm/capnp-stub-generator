@@ -65,10 +65,7 @@ class TestCalculatorClientBaseline:
 
         for attr in runtime_attrs:
             if f'"{attr}" is not a known attribute' in output:
-                pytest.fail(
-                    f"Runtime attribute '{attr}' still not recognized in stubs.\n"
-                    f"Pyright output:\n{output}"
-                )
+                pytest.fail(f"Runtime attribute '{attr}' still not recognized in stubs.\nPyright output:\n{output}")
 
 
 class TestCalculatorServerBaseline:
@@ -103,10 +100,7 @@ class TestCalculatorServerBaseline:
 
         for attr in runtime_attrs:
             if f'"{attr}" is not a known attribute' in output:
-                pytest.fail(
-                    f"Runtime attribute '{attr}' still not recognized in stubs.\n"
-                    f"Pyright output:\n{output}"
-                )
+                pytest.fail(f"Runtime attribute '{attr}' still not recognized in stubs.\nPyright output:\n{output}")
 
 
 class TestCalculatorErrorCategories:
@@ -125,8 +119,7 @@ class TestCalculatorErrorCategories:
         # Count errors by category
         nested_interface_errors = output.count('Cannot access attribute "Function"')
         runtime_attr_errors = sum(
-            output.count(f'"{attr}" is not a known attribute')
-            for attr in error_categories["runtime_attrs"]
+            output.count(f'"{attr}" is not a known attribute') for attr in error_categories["runtime_attrs"]
         )
 
         print("\nClient error categories:")
@@ -182,9 +175,7 @@ class TestCalculatorImprovementTracking:
             print(f"\n🎉 IMPROVEMENT! Errors reduced from {EXPECTED_TOTAL} to {total_errors}")
             print("Update EXPECTED_TOTAL in this test!")
 
-        assert total_errors <= EXPECTED_TOTAL, (
-            f"Type errors increased! Was {EXPECTED_TOTAL}, now {total_errors}"
-        )
+        assert total_errors <= EXPECTED_TOTAL, f"Type errors increased! Was {EXPECTED_TOTAL}, now {total_errors}"
 
     def test_no_regression_in_runtime_stubs(self, generate_calculator_stubs):
         """Ensure runtime stub additions don't cause regressions."""
@@ -200,8 +191,7 @@ class TestCalculatorImprovementTracking:
                     missing_attrs.append(attr)
 
             assert not missing_attrs, (
-                f"{file_name}: Missing runtime attributes: {missing_attrs}\n"
-                "These should be available in capnp stubs!"
+                f"{file_name}: Missing runtime attributes: {missing_attrs}\nThese should be available in capnp stubs!"
             )
 
 

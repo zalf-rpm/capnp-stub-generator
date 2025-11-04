@@ -29,14 +29,10 @@ def test_primitives_and_lists_imports_and_types():
     assert "from __future__ import annotations" in header
     # Iterator appears (for from_bytes) and Sequence appears (list fields) from collections.abc
     assert any(
-        line.startswith("from collections.abc import") and "Iterator" in line and "Sequence" in line
-        for line in lines
+        line.startswith("from collections.abc import") and "Iterator" in line and "Sequence" in line for line in lines
     )
     # Literal now appears for list init overloads, overload appears for typed init methods
-    assert any(
-        line.startswith("from typing import") and "Literal" in line and "overload" in line
-        for line in lines
-    )
+    assert any(line.startswith("from typing import") and "Literal" in line and "overload" in line for line in lines)
     # Basic field annotations present (now as properties)
     assert any("def aBool(self) -> bool" in line for line in lines)
     assert any("def ints(self) -> Sequence[int]" in line for line in lines)
@@ -50,9 +46,7 @@ def test_nested_enum_and_literal_and_overload():
     # Ensure Enum import present
     assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
     # Sequence import still expected for list fields
-    assert any(
-        line.startswith("from collections.abc import") and "Sequence" in line for line in lines
-    )
+    assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
     # Now overload is expected (for list init overloads)
     assert any("overload" in line for line in lines if line.startswith("from typing import"))
 
@@ -74,19 +68,12 @@ def test_interfaces_protocol_and_any_and_iterator():
     # Protocol import expected
     assert any(line.startswith("from typing import") and "Protocol" in line for line in lines)
     # Iterator from collections.abc
-    assert any(
-        line.startswith("from collections.abc import") and "Iterator" in line for line in lines
-    )
+    assert any(line.startswith("from collections.abc import") and "Iterator" in line for line in lines)
     # Interface methods now have result types
     # greet should have GreetResult return type (not bare str)
-    assert any(
-        "def greet" in line and "name: str" in line and "GreetResult" in line for line in lines
-    )
+    assert any("def greet" in line and "name: str" in line and "GreetResult" in line for line in lines)
     # streamNumbers should have StreamnumbersResult return type
-    assert any(
-        "def streamNumbers" in line and "count: int" in line and "StreamnumbersResult" in line
-        for line in lines
-    )
+    assert any("def streamNumbers" in line and "count: int" in line and "StreamnumbersResult" in line for line in lines)
 
 
 def test_imports_cross_module_reference():
@@ -106,12 +93,6 @@ def test_imports_cross_module_reference():
     user_out = os.path.join(out_dir, "import_user_capnp.pyi")
     user_lines = _read(user_out)
     # Imported type reference should include builders/readers in a union style annotation (now as property)
-    assert any(
-        "def shared(self)" in line and "SharedBuilder" in line and "SharedReader" in line
-        for line in user_lines
-    )
+    assert any("def shared(self)" in line and "SharedBuilder" in line and "SharedReader" in line for line in user_lines)
     # Ensure import statement for base module types exists
-    assert any(
-        line.startswith("from ") and "import Shared, SharedBuilder, SharedReader" in line
-        for line in user_lines
-    )
+    assert any(line.startswith("from ") and "import Shared, SharedBuilder, SharedReader" in line for line in user_lines)

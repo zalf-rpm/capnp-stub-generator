@@ -23,8 +23,7 @@ class TestCalculatorInterfaceMethodTypes:
 
         # Should have evaluate with Expression parameter and EvaluateResult return type
         assert (
-            "def evaluate(self, expression: Calculator.Expression | dict[str, Any]) -> EvaluateResult:"
-            in stub_content
+            "def evaluate(self, expression: Calculator.Expression | dict[str, Any]) -> EvaluateResult:" in stub_content
         )
 
         # Should NOT have Any for the expression parameter

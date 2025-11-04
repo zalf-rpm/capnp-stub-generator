@@ -48,13 +48,9 @@ class TestServerContextParameter:
                 assert match is not None, f"Could not find method {method_name} signature"
                 method_sig = match.group(0)
                 # Verify **kwargs is in the signature
-                assert "**kwargs" in method_sig, (
-                    f"Method {method_name} should have **kwargs parameter"
-                )
+                assert "**kwargs" in method_sig, f"Method {method_name} should have **kwargs parameter"
                 # Verify _context is NOT explicitly listed
-                assert "_context" not in method_sig, (
-                    f"Method {method_name} should not have explicit _context parameter"
-                )
+                assert "_context" not in method_sig, f"Method {method_name} should not have explicit _context parameter"
 
     def test_server_can_omit_context_entirely(self, generate_calculator_stubs):
         """Test that Server implementations can omit _context parameter.
@@ -167,9 +163,7 @@ class TestContextTypeHints:
         import re
 
         # Find all Server class sections
-        server_sections = re.findall(
-            r"class Server:.*?(?=\n    class |\n\nclass |\Z)", stub_content, re.DOTALL
-        )
+        server_sections = re.findall(r"class Server:.*?(?=\n    class |\n\nclass |\Z)", stub_content, re.DOTALL)
 
         assert server_sections, "No Server classes found in stubs"
 
@@ -178,9 +172,7 @@ class TestContextTypeHints:
             methods = re.findall(r"def \w+\([^)]+\)", server_section)
             for method_sig in methods:
                 # Should NOT have _context
-                assert "_context" not in method_sig, (
-                    f"Method should not have explicit _context: {method_sig}"
-                )
+                assert "_context" not in method_sig, f"Method should not have explicit _context: {method_sig}"
                 # Should have **kwargs
                 assert "**kwargs" in method_sig, f"Method should have **kwargs: {method_sig}"
 
