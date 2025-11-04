@@ -791,10 +791,26 @@ class Writer:
                 if slot_field.has_type_hint_with_builder_affix
                 else slot_field.full_type_nested
             )
+            # For struct fields, also accept dict for initialization
+            # This allows: MyStruct.new_message(nestedField={"innerField": value})
+            # For list fields: MyStruct.new_message(listField=[{"field": value}])
+            type_hints = [helper.TypeHint(field_type, primary=True)]
+            if slot_field.has_type_hint_with_builder_affix:
+                if slot_field.nesting_depth == 0:
+                    # Non-list struct fields accept dict directly
+                    type_hints.append(helper.TypeHint("dict[str, Any]"))
+                    self._add_typing_import("Any")
+                elif slot_field.nesting_depth == 1:
+                    # List of struct fields accept Sequence[dict]
+                    type_hints.append(helper.TypeHint("Sequence[dict[str, Any]]"))
+                    self._add_typing_import("Sequence")
+                    self._add_typing_import("Any")
+            type_hints.append(helper.TypeHint("None"))
+            
             # Make field optional since not all fields need to be set
             field_param = helper.TypeHintedVariable(
                 slot_field.name,
-                [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")],
+                type_hints,
                 default="None",
             )
             new_message_params.append(field_param)
@@ -852,7 +868,8 @@ class Writer:
             )
         )
 
-        self.scope.add(helper.new_function("to_dict", parameters=["self"], return_type="dict"))
+        self._add_typing_import("Any")
+        self.scope.add(helper.new_function("to_dict", parameters=["self"], return_type="dict[str, Any]"))
 
         self._add_import("from io import BufferedWriter")
 
@@ -898,6 +915,15 @@ class Writer:
             if slot_field.has_type_hint_with_builder_affix:
                 getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
                 setter_type = field_copy.full_type_nested
+                # For list of structs, also accept Sequence[dict] in setter
+                if slot_field.nesting_depth == 1:
+                    setter_type += " | Sequence[dict[str, Any]]"
+                    self._add_typing_import("Sequence")
+                    self._add_typing_import("Any")
+                # For non-list structs, also accept dict in setter
+                elif slot_field.nesting_depth == 0:
+                    setter_type += " | dict[str, Any]"
+                    self._add_typing_import("Any")
             # For interface fields: getter returns Protocol, setter accepts Protocol | Server
             elif len(slot_field.type_hints) > 1 and any(".Server" in str(h) for h in slot_field.type_hints):
                 getter_type = field_copy.primary_type_nested  # Protocol only
@@ -911,10 +937,11 @@ class Writer:
                 self.scope.add(line)
 
         self.scope.add(helper.new_decorator("staticmethod"))
+        self._add_typing_import("Any")
         self.scope.add(
             helper.new_function(
                 "from_dict",
-                parameters=[helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict", primary=True)])],
+                parameters=[helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict[str, Any]", primary=True)])],
                 return_type=scoped_new_builder_type_name,
             )
         )

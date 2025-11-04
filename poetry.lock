@@ -353,4 +353,4 @@ url = "../../Zalf/zalf-rpm/mas/mas_capnproto_schemas"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "f843c979000b6f3e4a172229ed6fdf0f678ab9528653c7d53b29de57ed2d83b9"
+content-hash = "85de860aba8420ff58ddb793cdeca7ee06b7fe420019cbbe2f18202cfda77590"

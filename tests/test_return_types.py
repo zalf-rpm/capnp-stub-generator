@@ -112,12 +112,12 @@ class TestStructReturnTypes:
         assert found_struct_field_getter, "Should find structField getter in Builder class"
 
     def test_builder_setter_accepts_union(self, dummy_stub_file):
-        """Builder class setters should accept base, Builder, or Reader types."""
+        """Builder class setters should accept base, Builder, Reader, or dict types."""
         content = dummy_stub_file.read_text()
 
-        # Builder setter should accept union for flexibility
-        assert "def structField(self, value: TestAllTypes | TestAllTypesBuilder | TestAllTypesReader)" in content, (
-            "Builder setter should accept union of base, Builder, and Reader types"
+        # Builder setter should accept union for flexibility, including dict for convenience
+        assert "def structField(self, value: TestAllTypes | TestAllTypesBuilder | TestAllTypesReader | dict[str, Any])" in content, (
+            "Builder setter should accept union of base, Builder, Reader, and dict types"
         )
 
     def test_list_fields_follow_same_pattern(self, dummy_stub_file):

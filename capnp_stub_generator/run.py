@@ -17,7 +17,8 @@ from capnp_stub_generator.capnp_types import ModuleRegistryType
 from capnp_stub_generator.helper import replace_capnp_suffix
 from capnp_stub_generator.writer import Writer
 
-capnp.remove_import_hook()
+if hasattr(capnp, 'remove_import_hook'):
+    capnp.remove_import_hook()
 
 
 logger = logging.getLogger(__name__)

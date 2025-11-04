@@ -243,7 +243,6 @@ def pytest_collection_modifyitems(config, items):
         ],
         # 6. Runtime and integration tests
         "runtime": [
-            "test_capnp_stubs",
             "test_pyright_validation",
         ],
     }

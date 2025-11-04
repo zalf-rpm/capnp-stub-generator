@@ -27,7 +27,6 @@ def writeAddressBook(file):
     bobPhones[1].number = "555-7654"
     bobPhones[1].type = "work"
     bob.employment.unemployed = None
-
     addresses.write(file)
 
 

@@ -29,7 +29,8 @@ class TestNewMessageKwargs:
         assert "literal: float | None = None" in stub_content
         assert "previousResult: Calculator.Value" in stub_content
         assert "parameter: int | None = None" in stub_content
-        assert "call: Calculator.Expression.CallBuilder | None = None" in stub_content
+        # Struct fields now accept both Builder and dict types
+        assert "call: Calculator.Expression.CallBuilder | dict[str, Any] | None = None" in stub_content
 
     def test_new_message_with_literal(self, generate_calculator_stubs):
         """Test creating Expression with literal field."""
