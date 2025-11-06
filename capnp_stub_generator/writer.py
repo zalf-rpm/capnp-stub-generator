@@ -40,6 +40,7 @@ class Writer:
         "Any",
         "BinaryIO",
         "Awaitable",
+        "NamedTuple",
     ]
 
     def __init__(
@@ -332,7 +333,7 @@ class Writer:
 
                         self.generate_nested(cast(capnp._StructSchema, cast(object, last_element)))
                     else:
-                        self.generate_nested(last_element)  # type: ignore[arg-type]
+                        self.generate_nested(last_element)
                     type_name = self.get_type_name(field.slot.type.list.elementType)
                 else:
                     raise AttributeError("Not a struct schema")
@@ -981,7 +982,7 @@ class Writer:
                 builder_type = f"{parts[0]}.{parts[1]}Builder"
             else:
                 builder_type = f"{field_type}Builder"
-            
+
             # Use self: Any only when using overloads (for compatibility with catch-all)
             # Otherwise use plain self so pyright can properly infer the return type
             if use_overload:
@@ -994,7 +995,7 @@ class Writer:
                     "self",
                     f'name: Literal["{field_name}"]',
                 ]
-            
+
             self.scope.add(
                 helper.new_function(
                     "init",
@@ -1009,7 +1010,7 @@ class Writer:
                 self.scope.add(helper.new_decorator("overload"))
             self._add_import("from capnp import _DynamicListBuilder")
             element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
-            
+
             # Use self: Any only when using overloads (for compatibility with catch-all)
             # Otherwise use plain self so pyright can properly infer the return type
             if use_overload:
@@ -1024,7 +1025,7 @@ class Writer:
                     f'name: Literal["{field_name}"]',
                     "size: int = ...",
                 ]
-            
+
             self.scope.add(
                 helper.new_function(
                     "init",
@@ -1221,7 +1222,7 @@ class Writer:
 
         # Collect server method signatures to add to Server class
         server_methods: list[str] = []
-        
+
         # Initialize dict to store NamedTuple info for direct struct returns
         self._server_namedtuples = {}
 
@@ -1304,6 +1305,10 @@ class Writer:
                 result_display_name = helper.get_display_name(result_schema)
                 # If the display name doesn't contain $, it's a user struct returned directly
                 is_direct_struct_return = "$" not in result_display_name
+            
+            # Initialize variables for server NamedTuple (used later if is_direct_struct_return)
+            server_result_namedtuple_name: str | None = None
+            server_result_namedtuple_fields: list[tuple[str, str]] | None = None
 
             # Generate CallContext for server methods
             # Every server method receives a _context parameter with a results attribute
@@ -1408,7 +1413,7 @@ class Writer:
                 # Both client and server return Awaitable[InfoResult]
                 self._add_typing_import("Awaitable")
                 result_class_name = f"{method_name.capitalize()}Result"
-                
+
                 if result_schema is not None:
                     try:
                         # Get the struct type from the type map or generate it
@@ -1431,14 +1436,14 @@ class Writer:
 
                         # Create a Result Protocol with the struct's fields (for client)
                         result_lines = [helper.new_class_declaration(result_class_name, ["Protocol"])]
-                        
+
                         # Check if the struct has unions
                         has_union = result_schema.node.struct.discriminantCount > 0
-                        
+
                         # Collect field names and types for server NamedTuple return
                         server_result_field_names = []
                         server_result_field_types = []
-                        
+
                         # Get all fields from the struct
                         for field in result_schema.node.struct.fields:
                             field_type = self.get_type_name(field.slot.type)
@@ -1457,11 +1462,11 @@ class Writer:
                                 except Exception:
                                     pass
                             result_lines.append(f"    {field.name}: {client_field_type}")
-                            
+
                             # For server return, collect field names and base field types (not Reader variant)
                             server_result_field_names.append(field.name)
                             server_result_field_types.append(field_type)
-                        
+
                         # If the struct has unions, add the which() method
                         if has_union:
                             self._add_typing_import("Literal")
@@ -1469,21 +1474,25 @@ class Writer:
                             field_names = [f'"{field.name}"' for field in result_schema.node.struct.fields]
                             which_return_type = f"Literal[{', '.join(field_names)}]"
                             result_lines.append(f"    def which(self) -> {which_return_type}: ...")
-                        
+
                         # Add the Result protocol to the scope
                         for line in result_lines:
                             self.scope.add(line)
-                        
+
                         # Build fully qualified Result name for references within the same interface scope
                         scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
-                        fully_qualified_result = f"{scope_path}.{result_class_name}" if scope_path else result_class_name
-                        
+                        fully_qualified_result = (
+                            f"{scope_path}.{result_class_name}" if scope_path else result_class_name
+                        )
+
                         return_type = f"Awaitable[{fully_qualified_result}]"
-                        
+
                         # Store server result info for later generation in Server class
                         # We'll use the same name (InfoResult) but it will be a NamedTuple under Server scope
                         server_result_namedtuple_name = result_class_name
-                        server_result_namedtuple_fields = list(zip(server_result_field_names, server_result_field_types))
+                        server_result_namedtuple_fields = list(
+                            zip(server_result_field_names, server_result_field_types)
+                        )
 
                         # Generate CallContext for server
                         # For direct struct return, _context.results should be typed as the Result protocol
@@ -1538,7 +1547,7 @@ class Writer:
             if is_direct_struct_return:
                 # Use Server.ResultName for the return type
                 # We'll store the info and generate the NamedTuple later when creating the Server class
-                if 'server_result_namedtuple_name' in locals() and 'server_result_namedtuple_fields' in locals():
+                if server_result_namedtuple_name is not None and server_result_namedtuple_fields is not None:
                     # Store this info for later use in server method generation
                     # Build fully qualified name: Identifiable.Server.InfoResult
                     scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
@@ -1547,9 +1556,12 @@ class Writer:
                     else:
                         server_return_type = f"Server.{server_result_namedtuple_name}"
                     # Store the info in a way we can access it later
-                    if not hasattr(self, '_server_namedtuples'):
+                    if not hasattr(self, "_server_namedtuples"):
                         self._server_namedtuples = {}
-                    self._server_namedtuples[method_name] = (server_result_namedtuple_name, server_result_namedtuple_fields)
+                    self._server_namedtuples[method_name] = (
+                        server_result_namedtuple_name,
+                        server_result_namedtuple_fields,
+                    )
                     # Mark that this type is already fully scoped
                     result_type_scope = self.scope  # This will prevent additional scoping
                 else:
@@ -1782,11 +1794,78 @@ class Writer:
         # scope.trace includes the current interface, so scope_path IS the fully qualified name
         scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
         fully_qualified_interface = scope_path if scope_path else name
+        
+        # Build server parameter type - should accept this Server OR ANY ancestor Server types
+        # This ensures compatibility with inherited _new_client signatures
+        # We need to recursively collect all ancestors, not just direct parents
+        def collect_all_ancestor_servers(node_id: int, visited: set[int] | None = None) -> set[str]:
+            """Recursively collect all ancestor Server types by node ID."""
+            if visited is None:
+                visited = set()
+            
+            # Avoid infinite loops
+            if node_id in visited:
+                return set()
+            visited.add(node_id)
+            
+            ancestors = set()
+            
+            # Try to get the schema for this node ID
+            # First check if it's in our type_map (same module or already generated)
+            schema_node = None
+            if node_id in self.type_map:
+                # Get the schema directly from the type_map
+                type_info = self.type_map[node_id]
+                if hasattr(type_info, 'schema') and hasattr(type_info.schema, 'node'):
+                    schema_node = type_info.schema.node
+            
+            # If not found in current module, check the module registry  
+            if schema_node is None:
+                for module_id, (path, module) in self._module_registry.items():
+                    # Check if this is the module itself (rare, but possible)
+                    if module_id == node_id:
+                        schema_node = module.schema.node
+                        break
+                    # Check all top-level types in this module
+                    for attr_name in dir(module.schema):
+                        if attr_name.startswith('_'):
+                            continue
+                        try:
+                            attr = getattr(module.schema, attr_name)
+                            if hasattr(attr, 'schema') and hasattr(attr.schema, 'node'):
+                                if attr.schema.node.id == node_id:
+                                    schema_node = attr.schema.node
+                                    break
+                        except (AttributeError, TypeError):
+                            continue
+                    if schema_node:
+                        break
+            
+            # If we found the schema, process its superclasses
+            if schema_node and schema_node.which() == "interface":
+                for superclass in schema_node.interface.superclasses:
+                    try:
+                        superclass_type = self.get_type_by_id(superclass.id)
+                        ancestor_server_type = f"{superclass_type.scoped_name}.Server"
+                        ancestors.add(ancestor_server_type)
+                        # Recursively collect ancestors of this superclass
+                        ancestors.update(collect_all_ancestor_servers(superclass.id, visited))
+                    except (KeyError, AttributeError):
+                        pass
+            
+            return ancestors
+        
+        server_types = [f"{fully_qualified_interface}.Server"]
+        ancestor_servers = collect_all_ancestor_servers(schema.node.id)
+        server_types.extend(sorted(ancestor_servers))  # Sort for consistency
+        
+        server_param_type = " | ".join(server_types)
+        
         self.scope.add("@classmethod")
         self.scope.add(
             helper.new_function(
                 "_new_client",
-                parameters=["cls", f"server: {fully_qualified_interface}.Server"],
+                parameters=["cls", f"server: {server_param_type}"],
                 return_type=fully_qualified_interface,
             )
         )
@@ -1820,7 +1899,7 @@ class Writer:
 
         # Add NamedTuple definitions for direct struct returns
         # These are generated inside the Server class as Server.InfoResult
-        if hasattr(self, '_server_namedtuples') and self._server_namedtuples:
+        if hasattr(self, "_server_namedtuples") and self._server_namedtuples:
             self._add_typing_import("NamedTuple")
             for method_name, (namedtuple_name, fields) in self._server_namedtuples.items():
                 self.scope.add(f"class {namedtuple_name}(NamedTuple):")

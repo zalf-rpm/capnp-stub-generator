@@ -500,61 +500,6 @@ class TestErrorHandling:
         stubs = list(temp_output_dir.glob("*_capnp.pyi"))
         assert len(stubs) == 0
 
-    @pytest.mark.skip(reason="capnp library aborts on syntax errors - this is expected")
-    def test_invalid_capnp_syntax(self, temp_output_dir, tmp_path):
-        """Test handling of schema with invalid syntax.
-
-        Note: This test is skipped because the capnp library itself aborts
-        on syntax errors rather than raising Python exceptions.
-        """
-        invalid_dir = tmp_path / "invalid"
-        invalid_dir.mkdir()
-
-        # Create schema with syntax error
-        invalid_schema = invalid_dir / "invalid.capnp"
-        invalid_schema.write_text("""
-@0xdbb9ad1f14bf0b42;
-
-struct InvalidStruct {
-    # Missing type and field number
-    field
-}
-""")
-
-        args = ["-p", str(invalid_schema), "-o", str(temp_output_dir)]
-
-        # Should handle the error gracefully (might raise but shouldn't crash)
-        with pytest.raises(Exception):
-            main(args)
-
-    @pytest.mark.skip(reason="capnp library aborts on missing imports - this is expected")
-    def test_schema_with_missing_import(self, temp_output_dir, tmp_path):
-        """Test handling of schema with missing import.
-
-        Note: This test is skipped because the capnp library itself aborts
-        on missing imports rather than raising Python exceptions.
-        """
-        schema_dir = tmp_path / "missing_import"
-        schema_dir.mkdir()
-
-        # Create schema that imports nonexistent file
-        schema = schema_dir / "missing_import.capnp"
-        schema.write_text("""
-@0xdbb9ad1f14bf0b43;
-
-using Missing = import "nonexistent.capnp";
-
-struct UseMissing {
-    field @0 :Missing.Something;
-}
-""")
-
-        args = ["-p", str(schema), "-o", str(temp_output_dir)]
-
-        # Should raise an error
-        with pytest.raises(Exception):
-            main(args)
-
 
 class TestCleanArgument:
     """Test the clean argument functionality."""
