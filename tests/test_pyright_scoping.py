@@ -13,14 +13,14 @@ def test_direct_struct_return_pyright_validation(tmp_path: Path):
     from tests.conftest import generate_stub_from_schema
 
     stub_path = generate_stub_from_schema("struct_return.capnp", tmp_path)
-    
+
     # Run pyright
-    result = subprocess.run(['pyright', str(stub_path)], capture_output=True, text=True)
-    
+    result = subprocess.run(["pyright", str(stub_path)], capture_output=True, text=True)
+
     if result.returncode != 0:
         print(f"Pyright output:\n{result.stdout}")
-        pytest.fail(f"Pyright validation failed for struct_return.capnp stubs")
-    
+        pytest.fail("Pyright validation failed for struct_return.capnp stubs")
+
     assert "0 errors" in result.stdout, "Should have no errors"
     print("✅ Direct struct return stubs pass pyright validation")
 
@@ -30,14 +30,14 @@ def test_nested_interface_pyright_validation(tmp_path: Path):
     from tests.conftest import generate_stub_from_schema
 
     stub_path = generate_stub_from_schema("fbp_simple.capnp", tmp_path)
-    
+
     # Run pyright
-    result = subprocess.run(['pyright', str(stub_path)], capture_output=True, text=True)
-    
+    result = subprocess.run(["pyright", str(stub_path)], capture_output=True, text=True)
+
     if result.returncode != 0:
         print(f"Pyright output:\n{result.stdout}")
-        pytest.fail(f"Pyright validation failed for fbp_simple.capnp stubs")
-    
+        pytest.fail("Pyright validation failed for fbp_simple.capnp stubs")
+
     assert "0 errors" in result.stdout, "Should have no errors"
     print("✅ Nested interface stubs pass pyright validation")
 
@@ -79,18 +79,18 @@ interface Channel {
 }
 """
     )
-    
+
     from tests.conftest import generate_stub_from_schema
 
     stub_path = generate_stub_from_schema("fbp_channel.capnp", tmp_path)
-    
+
     # Run pyright
-    result = subprocess.run(['pyright', str(stub_path)], capture_output=True, text=True)
-    
+    result = subprocess.run(["pyright", str(stub_path)], capture_output=True, text=True)
+
     if result.returncode != 0:
         print(f"Pyright output:\n{result.stdout}")
-        pytest.fail(f"Pyright validation failed for fbp_channel.capnp stubs")
-    
+        pytest.fail("Pyright validation failed for fbp_channel.capnp stubs")
+
     assert "0 errors" in result.stdout, "Should have no errors"
     print("✅ Complex nested interface stubs pass pyright validation")
 
@@ -101,7 +101,7 @@ def test_scoping_in_result_protocols(tmp_path: Path):
 
     stub_path = generate_stub_from_schema("struct_return.capnp", tmp_path)
     content = stub_path.read_text()
-    
+
     # Check that InfoResult is properly referenced with full scope
     assert "results: Identifiable.InfoResult" in content, (
         "CallContext.results should reference InfoResult with full scope"
@@ -112,7 +112,7 @@ def test_scoping_in_result_protocols(tmp_path: Path):
     assert "def send(self) -> Awaitable[Identifiable.InfoResult]:" in content, (
         "Request.send() should reference InfoResult with full scope"
     )
-    
+
     print("✅ Result protocols use proper scoping")
 
 
@@ -122,7 +122,7 @@ def test_scoping_in_nested_interfaces(tmp_path: Path):
 
     stub_path = generate_stub_from_schema("fbp_simple.capnp", tmp_path)
     content = stub_path.read_text()
-    
+
     # Check that ReadResult is properly referenced with full scope (Channel.Reader.ReadResult)
     assert "results: Channel.Reader.ReadResult" in content, (
         "CallContext.results should reference ReadResult with full scope"
@@ -133,5 +133,5 @@ def test_scoping_in_nested_interfaces(tmp_path: Path):
     assert "def send(self) -> Awaitable[Channel.Reader.ReadResult]:" in content, (
         "Request.send() should reference ReadResult with full scope"
     )
-    
+
     print("✅ Nested interface Result protocols use proper scoping")

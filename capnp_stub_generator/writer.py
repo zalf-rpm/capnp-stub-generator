@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 InitChoice = tuple[str, str]
 
+# Constants
+DISCRIMINANT_NONE = 65535  # Value indicating no discriminant (not part of a union)
+
 
 class Writer:
     """A class that handles writing the stub file, based on a provided module definition."""
@@ -166,6 +169,852 @@ class Writer:
                 import_lines.append("from typing import " + ", ".join(typing_names))
 
         return import_lines
+
+    # ===== Helper Methods for Type Name Manipulation =====
+
+    def _build_scoped_builder_type(self, field_type: str) -> str:
+        """Build Builder type name respecting scoped names and generics.
+
+        Args:
+            field_type (str): The base field type (e.g., "MyStruct", "Outer.Inner", or "Env[T]").
+
+        Returns:
+            str: The Builder type name (e.g., "MyStructBuilder", "Outer.InnerBuilder", or "EnvBuilder[T]").
+        """
+        # Check if there's a generic parameter
+        if "[" in field_type:
+            base_name, generic_part = field_type.split("[", 1)
+            # Now handle scoping in the base name
+            if "." in base_name:
+                parts = base_name.rsplit(".", 1)
+                return f"{parts[0]}.{parts[1]}Builder[{generic_part}"
+            else:
+                return f"{base_name}Builder[{generic_part}"
+        elif "." in field_type:
+            parts = field_type.rsplit(".", 1)
+            return f"{parts[0]}.{parts[1]}Builder"
+        else:
+            return f"{field_type}Builder"
+
+    def _build_scoped_reader_type(self, field_type: str) -> str:
+        """Build Reader type name respecting scoped names and generics.
+
+        Args:
+            field_type (str): The base field type (e.g., "MyStruct", "Outer.Inner", or "Env[T]").
+
+        Returns:
+            str: The Reader type name (e.g., "MyStructReader", "Outer.InnerReader", or "EnvReader[T]").
+        """
+        # Check if there's a generic parameter
+        if "[" in field_type:
+            base_name, generic_part = field_type.split("[", 1)
+            # Now handle scoping in the base name
+            if "." in base_name:
+                parts = base_name.rsplit(".", 1)
+                return f"{parts[0]}.{parts[1]}Reader[{generic_part}"
+            else:
+                return f"{base_name}Reader[{generic_part}"
+        elif "." in field_type:
+            parts = field_type.rsplit(".", 1)
+            return f"{parts[0]}.{parts[1]}Reader"
+        else:
+            return f"{field_type}Reader"
+
+    def _get_fully_qualified_name(self, name: str, scope: Scope | None = None) -> str:
+        """Get fully qualified name for a type within a scope.
+
+        Args:
+            name (str): The type name to qualify.
+            scope (Scope | None): The scope to use (defaults to current scope).
+
+        Returns:
+            str: The fully qualified name (e.g., "OuterStruct.InnerStruct").
+        """
+        if scope is None:
+            scope = self.scope
+
+        # If already qualified or is root, return as-is
+        if "." in name or scope.is_root:
+            return name
+
+        # Build scope path
+        scope_path = ".".join(s.name for s in scope.trace if not s.is_root)
+        if scope_path:
+            return f"{scope_path}.{name}"
+        return name
+
+    def _get_scope_path(self, scope: Scope | None = None) -> str:
+        """Get the scope path as a dotted string.
+
+        Args:
+            scope (Scope | None): The scope to get path for (defaults to current scope).
+
+        Returns:
+            str: The scope path (e.g., "OuterStruct.InnerStruct").
+        """
+        if scope is None:
+            scope = self.scope
+        return ".".join(s.name for s in scope.trace if not s.is_root)
+
+    # ===== Static Method Generators =====
+
+    def _add_from_bytes_methods(self, scoped_reader_type: str):
+        """Add from_bytes and from_bytes_packed static methods to current scope.
+
+        Args:
+            scoped_reader_type (str): The fully qualified Reader type name.
+        """
+        self._add_typing_import("Iterator")
+        self._add_import("from contextlib import contextmanager")
+
+        self.scope.add(helper.new_decorator("staticmethod"))
+        self.scope.add(helper.new_decorator("contextmanager"))
+        self.scope.add(
+            helper.new_function(
+                "from_bytes",
+                parameters=[
+                    helper.TypeHintedVariable("data", [helper.TypeHint("bytes", primary=True)]),
+                    helper.TypeHintedVariable(
+                        "traversal_limit_in_words",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
+                    ),
+                    helper.TypeHintedVariable(
+                        "nesting_limit",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
+                    ),
+                ],
+                return_type=helper.new_type_group("Iterator", [scoped_reader_type]),
+            )
+        )
+
+        self.scope.add(helper.new_decorator("staticmethod"))
+        self.scope.add(
+            helper.new_function(
+                "from_bytes_packed",
+                parameters=[
+                    helper.TypeHintedVariable("data", [helper.TypeHint("bytes", primary=True)]),
+                    helper.TypeHintedVariable(
+                        "traversal_limit_in_words",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
+                    ),
+                    helper.TypeHintedVariable(
+                        "nesting_limit",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
+                    ),
+                ],
+                return_type=scoped_reader_type,
+            )
+        )
+
+    def _add_read_methods(self, scoped_reader_type: str):
+        """Add read and read_packed static methods to current scope.
+
+        Args:
+            scoped_reader_type (str): The fully qualified Reader type name.
+        """
+        self._add_typing_import("BinaryIO")
+
+        self.scope.add(helper.new_decorator("staticmethod"))
+        self.scope.add(
+            helper.new_function(
+                "read",
+                parameters=[
+                    helper.TypeHintedVariable("file", [helper.TypeHint("BinaryIO", primary=True)]),
+                    helper.TypeHintedVariable(
+                        "traversal_limit_in_words",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
+                    ),
+                    helper.TypeHintedVariable(
+                        "nesting_limit",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
+                    ),
+                ],
+                return_type=scoped_reader_type,
+            )
+        )
+
+        self.scope.add(helper.new_decorator("staticmethod"))
+        self.scope.add(
+            helper.new_function(
+                "read_packed",
+                parameters=[
+                    helper.TypeHintedVariable("file", [helper.TypeHint("BinaryIO", primary=True)]),
+                    helper.TypeHintedVariable(
+                        "traversal_limit_in_words",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
+                    ),
+                    helper.TypeHintedVariable(
+                        "nesting_limit",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="...",
+                    ),
+                ],
+                return_type=scoped_reader_type,
+            )
+        )
+
+    def _add_write_methods(self):
+        """Add write and write_packed static methods to current scope."""
+        self._add_import("from io import BufferedWriter")
+
+        self.scope.add(helper.new_decorator("staticmethod"))
+        self.scope.add(
+            helper.new_function(
+                "write",
+                parameters=[helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])],
+            )
+        )
+
+        self.scope.add(helper.new_decorator("staticmethod"))
+        self.scope.add(
+            helper.new_function(
+                "write_packed",
+                parameters=[helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])],
+            )
+        )
+
+    def _add_base_properties(self, slot_fields: list[helper.TypeHintedVariable]):
+        """Add read-only properties to base struct class.
+
+        Args:
+            slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
+        """
+        for slot_field in slot_fields:
+            # Base class uses properties without setters (read-only interface)
+            # Use only the primary (base) type, not the union with Reader/Builder
+            field_type = slot_field.primary_type_nested
+            for line in helper.new_property(slot_field.name, field_type):
+                self.scope.add(line)
+
+    def _add_reader_properties(self, slot_fields: list[helper.TypeHintedVariable]):
+        """Add read-only properties to Reader class.
+
+        Args:
+            slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
+        """
+        for slot_field in slot_fields:
+            if slot_field.has_type_hint_with_reader_affix:
+                field_copy = copy(slot_field)
+                # Get the narrowed Reader-only type for this field
+                reader_type = field_copy.get_type_with_affixes([helper.READER_NAME])
+                for line in helper.new_property(slot_field.name, reader_type):
+                    self.scope.add(line)
+
+    def _add_builder_properties(self, slot_fields: list[helper.TypeHintedVariable]):
+        """Add mutable properties with setters to Builder class.
+
+        Args:
+            slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
+        """
+        for slot_field in slot_fields:
+            field_copy = copy(slot_field)
+            # Determine getter and setter types based on field characteristics
+            if slot_field.has_type_hint_with_builder_affix:
+                # For lists, use Sequence[ElementBuilder] for compatibility
+                if slot_field.nesting_depth == 1:
+                    getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
+                    setter_type = field_copy.full_type_nested + " | Sequence[dict[str, Any]]"
+                    self._add_typing_import("Sequence")
+                    self._add_typing_import("Any")
+                else:
+                    # For non-list structs
+                    getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
+                    setter_type = field_copy.full_type_nested + " | dict[str, Any]"
+                    self._add_typing_import("Any")
+            # For interface fields: getter returns Protocol, setter accepts Protocol | Server
+            elif len(slot_field.type_hints) > 1 and any(".Server" in str(h) for h in slot_field.type_hints):
+                getter_type = field_copy.primary_type_nested  # Protocol only
+                setter_type = field_copy.full_type_nested  # Protocol | Server
+            else:
+                # Primitive and enum fields
+                getter_type = field_copy.primary_type_nested
+                setter_type = field_copy.full_type_nested if field_copy.full_type_nested != getter_type else None
+
+            for line in helper.new_property(slot_field.name, getter_type, with_setter=True, setter_type=setter_type):
+                self.scope.add(line)
+
+    def _add_base_init_overloads(self, init_choices: list[InitChoice]):
+        """Add init method overloads to base struct class.
+
+        Args:
+            init_choices (list[InitChoice]): List of (field_name, field_type) tuples for overloads.
+        """
+        if not init_choices:
+            return
+
+        self._add_typing_import("Literal")
+        self._add_typing_import("Any")
+        use_overload = len(init_choices) > 1
+        if use_overload:
+            self._add_typing_import("overload")
+
+        for field_name, field_type in init_choices:
+            if use_overload:
+                self.scope.add(helper.new_decorator("overload"))
+
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=["self", f'name: Literal["{field_name}"]'],
+                    return_type=field_type,
+                )
+            )
+
+        # Add catch-all implementation (required when using @overload)
+        if use_overload:
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=[
+                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                        helper.TypeHintedVariable("name", [helper.TypeHint("str", primary=True)]),
+                        helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
+                    ],
+                    return_type="Any",
+                )
+            )
+
+    def _add_builder_init_overloads(
+        self,
+        init_choices: list[InitChoice],
+        list_init_choices: list[tuple[str, str, bool]],
+    ):
+        """Add init method overloads to Builder class.
+
+        Args:
+            init_choices (list[InitChoice]): List of (field_name, field_type) tuples for struct/group fields.
+            list_init_choices (list[tuple[str, str, bool]]): List of (field_name, element_type, needs_builder) for list fields.
+        """
+        total_init_overloads = len(init_choices) + len(list_init_choices) if list_init_choices else len(init_choices)
+        use_overload = total_init_overloads > 1
+
+        if use_overload:
+            self._add_typing_import("overload")
+        if init_choices or list_init_choices:
+            self._add_typing_import("Literal")
+
+        # Add init method overloads for union/group fields (return their Builder type)
+        for field_name, field_type in init_choices:
+            if use_overload:
+                self.scope.add(helper.new_decorator("overload"))
+            # Build builder type name (respect scoped names)
+            builder_type = self._build_scoped_builder_type(field_type)
+
+            # Use self: Any only when using overloads (for compatibility with catch-all)
+            if use_overload:
+                init_params = [
+                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                    helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
+                ]
+            else:
+                init_params = [
+                    "self",
+                    f'name: Literal["{field_name}"]',
+                ]
+
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=init_params,
+                    return_type=builder_type,
+                )
+            )
+
+        # Add init method overloads for lists (properly typed)
+        for field_name, element_type, needs_builder in list_init_choices:
+            if use_overload:
+                self.scope.add(helper.new_decorator("overload"))
+            self._add_import("from capnp import _DynamicListBuilder")
+            element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
+
+            # Use self: Any only when using overloads
+            if use_overload:
+                init_params_list = [
+                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                    helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
+                    helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
+                ]
+            else:
+                init_params_list = [
+                    "self",
+                    f'name: Literal["{field_name}"]',
+                    "size: int = ...",
+                ]
+
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=init_params_list,
+                    return_type=f"_DynamicListBuilder[{element_type_for_list}]",
+                )
+            )
+
+        # Add generic init method for other cases (catch-all)
+        if use_overload:
+            self._add_typing_import("Any")
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=[
+                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                        helper.TypeHintedVariable("name", [helper.TypeHint("str", primary=True)]),
+                        helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
+                    ],
+                    return_type="Any",
+                )
+            )
+
+    # ===== Struct Generation Helper Methods =====
+
+    def _add_new_message_method(
+        self,
+        slot_fields: list[helper.TypeHintedVariable],
+        scoped_builder_type: str,
+    ):
+        """Add new_message static method with field parameters as kwargs.
+
+        Args:
+            slot_fields (list[TypeHintedVariable]): The struct fields to add as parameters.
+            scoped_builder_type (str): The fully qualified Builder type name to return.
+        """
+        self._add_typing_import("Any")
+        new_message_params: list[helper.TypeHintedVariable] = [
+            helper.TypeHintedVariable(
+                "num_first_segment_words",
+                [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                default="None",
+            ),
+            helper.TypeHintedVariable(
+                "allocate_seg_callable",
+                [helper.TypeHint("Any", primary=True)],
+                default="None",
+            ),
+        ]
+
+        # Add each field as an optional kwarg parameter
+        for slot_field in slot_fields:
+            # Get the type suitable for initialization (Builder types for struct fields)
+            field_type = (
+                slot_field.get_type_with_affixes(["Builder"])
+                if slot_field.has_type_hint_with_builder_affix
+                else slot_field.full_type_nested
+            )
+            # For struct fields, also accept dict for initialization
+            type_hints = [helper.TypeHint(field_type, primary=True)]
+            if slot_field.has_type_hint_with_builder_affix:
+                if slot_field.nesting_depth == 0:
+                    # Non-list struct fields accept dict directly
+                    type_hints.append(helper.TypeHint("dict[str, Any]"))
+                    self._add_typing_import("Any")
+                elif slot_field.nesting_depth == 1:
+                    # List of struct fields accept Sequence[dict]
+                    type_hints.append(helper.TypeHint("Sequence[dict[str, Any]]"))
+                    self._add_typing_import("Sequence")
+                    self._add_typing_import("Any")
+            type_hints.append(helper.TypeHint("None"))
+
+            # Make field optional since not all fields need to be set
+            field_param = helper.TypeHintedVariable(
+                slot_field.name,
+                type_hints,
+                default="None",
+            )
+            new_message_params.append(field_param)
+
+        self.scope.add(helper.new_decorator("staticmethod"))
+        self.scope.add(
+            helper.new_function(
+                "new_message",
+                parameters=new_message_params,
+                return_type=scoped_builder_type,
+            )
+        )
+
+    def _gen_struct_base_class(
+        self,
+        slot_fields: list[helper.TypeHintedVariable],
+        init_choices: list[InitChoice],
+        schema: capnp._StructSchema,
+        scoped_reader_type: str,
+        scoped_builder_type: str,
+    ):
+        """Generate the base struct class with properties and methods.
+
+        Args:
+            slot_fields (list[TypeHintedVariable]): The struct fields.
+            init_choices (list[InitChoice]): Init method overload choices.
+            schema (_StructSchema): The struct schema.
+            scoped_reader_type (str): Fully qualified Reader type name.
+            scoped_builder_type (str): Fully qualified Builder type name.
+        """
+        # Add the slot fields as properties
+        if slot_fields:
+            self._add_base_properties(slot_fields)
+
+        # Add the `which` function for unions
+        if schema.node.struct.discriminantCount:
+            self._add_typing_import("Literal")
+            field_names = [
+                f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
+            ]
+            return_type = helper.new_type_group("Literal", field_names)
+            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
+
+        # Add init method overloads
+        self._add_base_init_overloads(init_choices)
+
+        # Add static methods
+        self._add_from_bytes_methods(scoped_reader_type)
+        self._add_new_message_method(slot_fields, scoped_builder_type)
+        self._add_read_methods(scoped_reader_type)
+
+        # Add to_dict method
+        self._add_typing_import("Any")
+        self.scope.add(helper.new_function("to_dict", parameters=["self"], return_type="dict[str, Any]"))
+
+    def _gen_struct_reader_class(
+        self,
+        slot_fields: list[helper.TypeHintedVariable],
+        new_type: CapnpType,
+        registered_params: list[str],
+        reader_type_name: str,
+        scoped_builder_type: str,
+    ):
+        """Generate the Reader class for a struct.
+
+        Args:
+            slot_fields (list[TypeHintedVariable]): The struct fields.
+            new_type (CapnpType): The registered type.
+            registered_params (list[str]): Generic type parameters.
+            reader_type_name (str): The Reader class name.
+            scoped_builder_type (str): Fully qualified Builder type name.
+        """
+        # Add the reader slot fields as properties
+        self._add_reader_properties(slot_fields)
+
+        # Build Reader class declaration with generic params
+        reader_params = [new_type.scoped_name]
+        if registered_params:
+            generic_param = helper.new_type_group("Generic", registered_params)
+            reader_params.append(generic_param)
+        reader_class_declaration = helper.new_class_declaration(reader_type_name, parameters=reader_params)
+
+        # Add the class declaration to parent scope
+        if self.scope.parent:
+            self.scope.parent.add(reader_class_declaration)
+
+        # Add as_builder method
+        self.scope.add(
+            helper.new_function(
+                "as_builder",
+                parameters=["self"],
+                return_type=scoped_builder_type,
+            )
+        )
+
+    def _gen_struct_builder_class(
+        self,
+        slot_fields: list[helper.TypeHintedVariable],
+        init_choices: list[InitChoice],
+        list_init_choices: list[tuple[str, str, bool]],
+        new_type: CapnpType,
+        registered_params: list[str],
+        builder_type_name: str,
+        scoped_builder_type: str,
+        scoped_reader_type: str,
+    ):
+        """Generate the Builder class for a struct.
+
+        Args:
+            slot_fields (list[TypeHintedVariable]): The struct fields.
+            init_choices (list[InitChoice]): Init method overload choices for structs.
+            list_init_choices (list[tuple[str, str, bool]]): Init method overload choices for lists.
+            new_type (CapnpType): The registered type.
+            registered_params (list[str]): Generic type parameters.
+            builder_type_name (str): The Builder class name.
+            scoped_builder_type (str): Fully qualified Builder type name.
+            scoped_reader_type (str): Fully qualified Reader type name.
+        """
+        # Add all builder slot fields with setters
+        self._add_builder_properties(slot_fields)
+
+        # Add from_dict method
+        self.scope.add(helper.new_decorator("staticmethod"))
+        self._add_typing_import("Any")
+        self.scope.add(
+            helper.new_function(
+                "from_dict",
+                parameters=[helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict[str, Any]", primary=True)])],
+                return_type=scoped_builder_type,
+            )
+        )
+
+        # Add init method overloads
+        self._add_builder_init_overloads(init_choices, list_init_choices)
+
+        # Add utility methods
+        self.scope.add(helper.new_function("copy", parameters=["self"], return_type=scoped_builder_type))
+        self.scope.add(helper.new_function("to_bytes", parameters=["self"], return_type="bytes"))
+        self.scope.add(helper.new_function("to_bytes_packed", parameters=["self"], return_type="bytes"))
+        self.scope.add(
+            helper.new_function(
+                "to_segments",
+                parameters=["self"],
+                return_type=helper.new_type_group("list", ["bytes"]),
+            )
+        )
+
+        # Build Builder class declaration with generic params
+        builder_params = [new_type.scoped_name]
+        if registered_params:
+            generic_param = helper.new_type_group("Generic", registered_params)
+            builder_params.append(generic_param)
+        builder_class_declaration = helper.new_class_declaration(builder_type_name, parameters=builder_params)
+
+        # Add the class declaration to parent scope
+        if self.scope.parent:
+            self.scope.parent.add(builder_class_declaration)
+
+        # Add as_reader method
+        self.scope.add(
+            helper.new_function(
+                "as_reader",
+                parameters=["self"],
+                return_type=scoped_reader_type,
+            )
+        )
+
+        # Add write methods
+        self._add_write_methods()
+
+    # ===== Interface Generation Helper Methods =====
+
+    def _collect_interface_base_classes(self, schema: capnp._StructSchema) -> list[str]:
+        """Collect base classes for an interface (superclasses + Protocol).
+
+        Args:
+            schema (_StructSchema): The interface schema.
+
+        Returns:
+            list[str]: List of base class names.
+        """
+        base_classes = []
+
+        # Process interface inheritance (extends)
+        if schema.node.which() == "interface":
+            interface_node = schema.node.interface
+            for superclass in interface_node.superclasses:
+                try:
+                    # Get the superclass type
+                    superclass_type = self.get_type_by_id(superclass.id)
+                    base_classes.append(superclass_type.scoped_name)
+                except KeyError:
+                    # Superclass not yet registered - try to generate it first
+                    try:
+                        # Try to find and generate the superclass from the module registry
+                        for module_id, (path, module) in self._module_registry.items():
+                            if module_id == superclass.id:
+                                # Found the superclass module, generate it
+                                self.generate_nested(module.schema)
+                                superclass_type = self.get_type_by_id(superclass.id)
+                                base_classes.append(superclass_type.scoped_name)
+                                break
+
+                            # Check if it's a nested type in the module
+                            def find_nested_schema(schema_obj, target_id):
+                                for nested_node in schema_obj.node.nestedNodes:
+                                    if nested_node.id == target_id:
+                                        return schema_obj.get_nested(nested_node.name)
+                                    try:
+                                        nested_schema = schema_obj.get_nested(nested_node.name)
+                                        result = find_nested_schema(nested_schema, target_id)
+                                        if result:
+                                            return result
+                                    except Exception:
+                                        pass
+                                return None
+
+                            found_schema = find_nested_schema(module.schema, superclass.id)
+                            if found_schema:
+                                self.generate_nested(found_schema)
+                                superclass_type = self.get_type_by_id(superclass.id)
+                                base_classes.append(superclass_type.scoped_name)
+                                break
+                    except Exception as e:
+                        logger.debug(f"Could not resolve superclass {superclass.id}: {e}")
+
+        # Always add Protocol as the last base class
+        base_classes.append("Protocol")
+
+        return base_classes
+
+    def _generate_nested_types_for_interface(self, schema: capnp._StructSchema, name: str):
+        """Generate all nested types for an interface.
+
+        Args:
+            schema (_StructSchema): The interface schema.
+            name (str): The interface name.
+        """
+        # Build runtime path for this interface (handles nested interfaces)
+        # Use self.scope.trace to get the full path including current interface
+        runtime_path = []
+        for s in self.scope.trace:
+            if s.is_root:
+                continue
+            runtime_path.append(s.name)
+
+        # Save current interface scope before generating nested types
+        interface_scope = self.scope
+
+        for nested_node in schema.node.nestedNodes:
+            try:
+                # Navigate to the nested type through runtime module
+                runtime_obj = self._module
+                for path_segment in runtime_path:
+                    runtime_obj = getattr(runtime_obj, path_segment)
+                runtime_nested = getattr(runtime_obj, nested_node.name)
+                nested_schema = runtime_nested.schema
+                self.generate_nested(nested_schema)
+            except Exception as e:  # pragma: no cover
+                logger.debug(f"Could not generate nested type {nested_node.name}: {e}")
+
+        # Restore interface scope after generating nested types
+        self.scope = interface_scope
+
+    def _collect_all_ancestor_servers(self, base_classes: list[str]) -> list[str]:
+        """Recursively collect all ancestor Server types for an interface.
+
+        Args:
+            base_classes (list[str]): Direct base classes of the interface.
+
+        Returns:
+            list[str]: List of all ancestor Server type names.
+        """
+        all_servers = []
+
+        def collect_ancestors(class_name: str):
+            if class_name == "Protocol":
+                return
+            # Add this class's Server
+            server_name = f"{class_name}.Server"
+            if server_name not in all_servers:
+                all_servers.append(server_name)
+
+            # Find this class's type info and recurse on its ancestors
+            try:
+                # Try to find the type by looking up in registered types
+                for type_id, capnp_type in self.type_map.items():
+                    if capnp_type.scoped_name == class_name:
+                        # Look up its schema to find its superclasses
+                        if hasattr(capnp_type.schema.node, "interface"):
+                            for superclass in capnp_type.schema.node.interface.superclasses:
+                                try:
+                                    superclass_type = self.get_type_by_id(superclass.id)
+                                    collect_ancestors(superclass_type.scoped_name)
+                                except KeyError:
+                                    pass
+                        break
+            except Exception:
+                pass
+
+        # Collect from all base classes (excluding Protocol)
+        for base_class in base_classes:
+            if base_class != "Protocol":
+                collect_ancestors(base_class)
+
+        return all_servers
+
+    def _add_new_client_method(self, name: str, base_classes: list[str], schema: capnp._StructSchema):
+        """Add _new_client() class method to create capability client from Server.
+
+        Args:
+            name (str): The interface name.
+            base_classes (list[str]): The interface base classes.
+            schema (_StructSchema): The interface schema.
+        """
+        scope_path = self._get_scope_path()
+        fully_qualified_interface = scope_path if scope_path else name
+
+        # Build server parameter type - should accept this Server OR ANY ancestor Server types
+        # This ensures compatibility with inherited _new_client signatures
+        # We need to recursively collect all ancestors, not just direct parents
+        def collect_all_ancestor_servers(node_id: int, visited: set[int] | None = None) -> set[str]:
+            """Recursively collect all ancestor Server types by node ID."""
+            if visited is None:
+                visited = set()
+
+            # Avoid infinite loops
+            if node_id in visited:
+                return set()
+            visited.add(node_id)
+
+            ancestors = set()
+
+            # Try to get the schema for this node ID
+            schema_node = None
+            if node_id in self.type_map:
+                type_info = self.type_map[node_id]
+                if hasattr(type_info, "schema") and hasattr(type_info.schema, "node"):
+                    schema_node = type_info.schema.node
+
+            # If not found in current module, check the module registry
+            if schema_node is None:
+                for module_id, (path, module) in self._module_registry.items():
+                    if module_id == node_id:
+                        schema_node = module.schema.node
+                        break
+                    # Check all top-level types in this module
+                    for attr_name in dir(module.schema):
+                        if attr_name.startswith("_"):
+                            continue
+                        try:
+                            attr = getattr(module.schema, attr_name)
+                            if hasattr(attr, "schema") and hasattr(attr.schema, "node"):
+                                if attr.schema.node.id == node_id:
+                                    schema_node = attr.schema.node
+                                    break
+                        except (AttributeError, TypeError):
+                            continue
+                    if schema_node:
+                        break
+
+            # If we found the schema, process its superclasses
+            if schema_node and schema_node.which() == "interface":
+                for superclass in schema_node.interface.superclasses:
+                    try:
+                        superclass_type = self.get_type_by_id(superclass.id)
+                        ancestor_server_type = f"{superclass_type.scoped_name}.Server"
+                        ancestors.add(ancestor_server_type)
+                        # Recursively collect ancestors of this superclass
+                        ancestors.update(collect_all_ancestor_servers(superclass.id, visited))
+                    except (KeyError, AttributeError):
+                        pass
+
+            return ancestors
+
+        server_types = [f"{fully_qualified_interface}.Server"]
+        ancestor_servers = collect_all_ancestor_servers(schema.node.id)
+        server_types.extend(sorted(ancestor_servers))  # Sort for consistency
+
+        server_param_type = " | ".join(server_types)
+
+        self.scope.add("@classmethod")
+        self.scope.add(
+            helper.new_function(
+                "_new_client",
+                parameters=["cls", f"server: {server_param_type}"],
+                return_type=fully_qualified_interface,
+            )
+        )
+
+    # ===== Slot Generation Methods =====
 
     def gen_slot(
         self,
@@ -681,239 +1530,26 @@ class Writer:
         # Finally, add the class declaration after the expansion of all nested schemas.
         parent_scope.add(class_declaration)
 
-        # Add the slot fields as properties (consistent with Reader/Builder pattern)
-        if slot_fields:
-            for slot_field in slot_fields:
-                # Base class uses properties without setters (read-only interface)
-                # Use only the primary (base) type, not the union with Reader/Builder
-                # This matches runtime behavior where you get the base type at the abstract level
-                field_type = slot_field.primary_type_nested
-                for line in helper.new_property(slot_field.name, field_type):
-                    self.scope.add(line)
-
-        # Add the `which` function, if there is a top-level union in the schema.
-        if schema.node.struct.discriminantCount:
-            self._add_typing_import("Literal")
-            field_names = [f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != 65535]
-            return_type = helper.new_type_group("Literal", field_names)
-
-            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
-
-        # Add an overloaded `init` function for each nested struct.
-        if init_choices:
-            self._add_typing_import("Literal")
-            self._add_typing_import("Any")
-            use_overload = len(init_choices) > 1
-            if use_overload:
-                self._add_typing_import("overload")
-
-            for field_name, field_type in init_choices:
-                if use_overload:
-                    self.scope.add(helper.new_decorator("overload"))
-
-                self.scope.add(
-                    helper.new_function(
-                        "init",
-                        parameters=["self", f'name: Literal["{field_name}"]'],
-                        return_type=field_type,
-                    )
-                )
-
-            # Add catch-all implementation (required when using @overload)
-            if use_overload:
-                self.scope.add(
-                    helper.new_function(
-                        "init",
-                        parameters=[
-                            helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                            helper.TypeHintedVariable("name", [helper.TypeHint("str", primary=True)]),
-                            helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
-                        ],
-                        return_type="Any",
-                    )
-                )
-
-        # Add static methods for converting from/to bytes.
-        self._add_typing_import("Iterator")
-        self._add_import("from contextlib import contextmanager")
-
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(helper.new_decorator("contextmanager"))
-        self.scope.add(
-            helper.new_function(
-                "from_bytes",
-                parameters=[
-                    helper.TypeHintedVariable("data", [helper.TypeHint("bytes", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "traversal_limit_in_words",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                    helper.TypeHintedVariable(
-                        "nesting_limit",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                ],
-                return_type=helper.new_type_group("Iterator", [scoped_new_reader_type_name]),
-            )
+        # Generate base struct class
+        self._gen_struct_base_class(
+            slot_fields,
+            init_choices,
+            schema,
+            scoped_new_reader_type_name,
+            scoped_new_builder_type_name,
         )
-
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "from_bytes_packed",
-                parameters=[
-                    helper.TypeHintedVariable("data", [helper.TypeHint("bytes", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "traversal_limit_in_words",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                    helper.TypeHintedVariable(
-                        "nesting_limit",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                ],
-                return_type=scoped_new_reader_type_name,
-            )
-        )
-
-        # Generate new_message with field parameters as kwargs
-        # This allows: MyStruct.new_message(field1=value1, field2=value2)
-        self._add_typing_import("Any")
-        new_message_params: list[helper.TypeHintedVariable] = [
-            helper.TypeHintedVariable(
-                "num_first_segment_words",
-                [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                default="None",
-            ),
-            helper.TypeHintedVariable(
-                "allocate_seg_callable",
-                [helper.TypeHint("Any", primary=True)],
-                default="None",
-            ),
-        ]
-
-        # Add each field as an optional kwarg parameter
-        # For union structs, only one field should be set at a time
-        for slot_field in slot_fields:
-            # Get the type suitable for initialization (Builder types for struct fields)
-            field_type = (
-                slot_field.get_type_with_affixes(["Builder"])
-                if slot_field.has_type_hint_with_builder_affix
-                else slot_field.full_type_nested
-            )
-            # For struct fields, also accept dict for initialization
-            # This allows: MyStruct.new_message(nestedField={"innerField": value})
-            # For list fields: MyStruct.new_message(listField=[{"field": value}])
-            type_hints = [helper.TypeHint(field_type, primary=True)]
-            if slot_field.has_type_hint_with_builder_affix:
-                if slot_field.nesting_depth == 0:
-                    # Non-list struct fields accept dict directly
-                    type_hints.append(helper.TypeHint("dict[str, Any]"))
-                    self._add_typing_import("Any")
-                elif slot_field.nesting_depth == 1:
-                    # List of struct fields accept Sequence[dict]
-                    type_hints.append(helper.TypeHint("Sequence[dict[str, Any]]"))
-                    self._add_typing_import("Sequence")
-                    self._add_typing_import("Any")
-            type_hints.append(helper.TypeHint("None"))
-
-            # Make field optional since not all fields need to be set
-            field_param = helper.TypeHintedVariable(
-                slot_field.name,
-                type_hints,
-                default="None",
-            )
-            new_message_params.append(field_param)
-
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "new_message",
-                parameters=new_message_params,
-                return_type=scoped_new_builder_type_name,
-            )
-        )
-
-        # Add read methods
-        self._add_typing_import("BinaryIO")
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "read",
-                parameters=[
-                    helper.TypeHintedVariable("file", [helper.TypeHint("BinaryIO", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "traversal_limit_in_words",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                    helper.TypeHintedVariable(
-                        "nesting_limit",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                ],
-                return_type=scoped_new_reader_type_name,
-            )
-        )
-
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "read_packed",
-                parameters=[
-                    helper.TypeHintedVariable("file", [helper.TypeHint("BinaryIO", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "traversal_limit_in_words",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                    helper.TypeHintedVariable(
-                        "nesting_limit",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                ],
-                return_type=scoped_new_reader_type_name,
-            )
-        )
-
-        self._add_typing_import("Any")
-        self.scope.add(helper.new_function("to_dict", parameters=["self"], return_type="dict[str, Any]"))
-
-        self._add_import("from io import BufferedWriter")
 
         self.return_from_scope()
 
         # Generate the reader class
         parent_scope = self.new_scope(new_reader_type_name, schema.node, register=False)
 
-        # Add the reader slot fields as properties (they're read-only at runtime)
-        for slot_field in slot_fields:
-            if slot_field.has_type_hint_with_reader_affix:
-                field_copy = copy(slot_field)
-                # Get the narrowed Reader-only type for this field (includes nesting for lists)
-                reader_type = field_copy.get_type_with_affixes([helper.READER_NAME])
-                for line in helper.new_property(slot_field.name, reader_type):
-                    self.scope.add(line)
-
-        # If the struct is generic, Reader should also be Generic with same type params
-        reader_params = [new_type.scoped_name]
-        if registered_params:
-            generic_param = helper.new_type_group("Generic", registered_params)
-            reader_params.append(generic_param)
-        reader_class_declaration = helper.new_class_declaration(new_reader_type_name, parameters=reader_params)
-        parent_scope.add(reader_class_declaration)
-        self.scope.add(
-            helper.new_function(
-                "as_builder",
-                parameters=["self"],
-                return_type=scoped_new_builder_type_name,
-            )
+        self._gen_struct_reader_class(
+            slot_fields,
+            new_type,
+            registered_params,
+            new_reader_type_name,
+            scoped_new_builder_type_name,
         )
 
         self.return_from_scope()
@@ -921,177 +1557,15 @@ class Writer:
         # Generate the builder class
         parent_scope = self.new_scope(new_builder_type_name, schema.node, register=False)
 
-        # Add all builder slot fields with setters (they're all mutable at runtime)
-        for slot_field in slot_fields:
-            field_copy = copy(slot_field)
-            # For fields with Builder/Reader variants (structs/groups), return only Builder type
-            # to allow proper mutation, but setter accepts union type for flexibility
-            if slot_field.has_type_hint_with_builder_affix:
-                # For lists, use Sequence[ElementBuilder] for compatibility with base Protocol
-                # The runtime type is _DynamicListBuilder, but we use Sequence for type checking
-                if slot_field.nesting_depth == 1:
-                    # element_type is like "Sequence[PersonBuilder]"
-                    getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
-                    setter_type = field_copy.full_type_nested + " | Sequence[dict[str, Any]]"
-                    self._add_typing_import("Sequence")
-                    self._add_typing_import("Any")
-                else:
-                    # For non-list structs
-                    getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
-                    setter_type = field_copy.full_type_nested + " | dict[str, Any]"
-                    self._add_typing_import("Any")
-            # For interface fields: getter returns Protocol, setter accepts Protocol | Server
-            elif len(slot_field.type_hints) > 1 and any(".Server" in str(h) for h in slot_field.type_hints):
-                getter_type = field_copy.primary_type_nested  # Protocol only
-                setter_type = field_copy.full_type_nested  # Protocol | Server
-            else:
-                # Primitive and enum fields: getter uses primary type (matches base class)
-                # setter accepts full union for flexibility (e.g., enum literals for enums)
-                getter_type = field_copy.primary_type_nested
-                setter_type = field_copy.full_type_nested if field_copy.full_type_nested != getter_type else None
-            for line in helper.new_property(slot_field.name, getter_type, with_setter=True, setter_type=setter_type):
-                self.scope.add(line)
-
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self._add_typing_import("Any")
-        self.scope.add(
-            helper.new_function(
-                "from_dict",
-                parameters=[helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict[str, Any]", primary=True)])],
-                return_type=scoped_new_builder_type_name,
-            )
-        )
-
-        # Add init method overloads for union/group fields and lists
-        # Only use @overload if there are multiple init signatures
-        total_init_overloads = len(init_choices) + len(list_init_choices) if list_init_choices else len(init_choices)
-        use_overload = total_init_overloads > 1
-
-        if use_overload:
-            self._add_typing_import("overload")
-        if init_choices or list_init_choices:
-            self._add_typing_import("Literal")
-
-        # Add init method overloads for union/group fields (return their Builder type)
-        for field_name, field_type in init_choices:
-            if use_overload:
-                self.scope.add(helper.new_decorator("overload"))
-            # Build builder type name (respect scoped names)
-            if "." in field_type:
-                parts = field_type.rsplit(".", 1)
-                builder_type = f"{parts[0]}.{parts[1]}Builder"
-            else:
-                builder_type = f"{field_type}Builder"
-
-            # Use self: Any only when using overloads (for compatibility with catch-all)
-            # Otherwise use plain self so pyright can properly infer the return type
-            if use_overload:
-                init_params = [
-                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                    helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                ]
-            else:
-                init_params = [
-                    "self",
-                    f'name: Literal["{field_name}"]',
-                ]
-
-            self.scope.add(
-                helper.new_function(
-                    "init",
-                    parameters=init_params,
-                    return_type=builder_type,
-                )
-            )
-
-        # Add init method overloads for lists (properly typed)
-        for field_name, element_type, needs_builder in list_init_choices:
-            if use_overload:
-                self.scope.add(helper.new_decorator("overload"))
-            self._add_import("from capnp import _DynamicListBuilder")
-            element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
-
-            # Use self: Any only when using overloads (for compatibility with catch-all)
-            # Otherwise use plain self so pyright can properly infer the return type
-            if use_overload:
-                init_params_list = [
-                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                    helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                    helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
-                ]
-            else:
-                init_params_list = [
-                    "self",
-                    f'name: Literal["{field_name}"]',
-                    "size: int = ...",
-                ]
-
-            self.scope.add(
-                helper.new_function(
-                    "init",
-                    parameters=init_params_list,
-                    return_type=f"_DynamicListBuilder[{element_type_for_list}]",
-                )
-            )
-
-        # Add generic init method for other cases (catch-all)
-        # Only add this if we're using overloads (i.e., multiple init signatures)
-        # This should NOT have @overload - it's the implementation, not an overload
-        if use_overload:
-            self._add_typing_import("Any")
-            self.scope.add(
-                helper.new_function(
-                    "init",
-                    parameters=[
-                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                        helper.TypeHintedVariable("name", [helper.TypeHint("str", primary=True)]),
-                        helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
-                    ],
-                    return_type="Any",
-                )
-            )
-
-        self.scope.add(helper.new_function("copy", parameters=["self"], return_type=scoped_new_builder_type_name))
-        self.scope.add(helper.new_function("to_bytes", parameters=["self"], return_type="bytes"))
-        self.scope.add(helper.new_function("to_bytes_packed", parameters=["self"], return_type="bytes"))
-        self.scope.add(
-            helper.new_function(
-                "to_segments",
-                parameters=["self"],
-                return_type=helper.new_type_group("list", ["bytes"]),
-            )
-        )
-
-        # If the struct is generic, Builder should also be Generic with same type params
-        builder_params = [new_type.scoped_name]
-        if registered_params:
-            generic_param = helper.new_type_group("Generic", registered_params)
-            builder_params.append(generic_param)
-        builder_class_declaration = helper.new_class_declaration(new_builder_type_name, parameters=builder_params)
-        parent_scope.add(builder_class_declaration)
-
-        self.scope.add(
-            helper.new_function(
-                "as_reader",
-                parameters=["self"],
-                return_type=scoped_new_reader_type_name,
-            )
-        )
-
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "write",
-                parameters=[helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])],
-            )
-        )
-
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "write_packed",
-                parameters=[helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])],
-            )
+        self._gen_struct_builder_class(
+            slot_fields,
+            init_choices,
+            list_init_choices,
+            new_type,
+            registered_params,
+            new_builder_type_name,
+            scoped_new_builder_type_name,
+            scoped_new_reader_type_name,
         )
 
         self.return_from_scope()
@@ -1124,54 +1598,7 @@ class Writer:
         self._add_typing_import("Any")
 
         # Collect base classes (superclasses + Protocol)
-        base_classes = []
-
-        # Process interface inheritance (extends)
-        # Note: schema.node is a union - must check which() before accessing union fields
-        if schema.node.which() == "interface":
-            interface_node = schema.node.interface
-            for superclass in interface_node.superclasses:
-                try:
-                    # Get the superclass type
-                    superclass_type = self.get_type_by_id(superclass.id)
-                    base_classes.append(superclass_type.scoped_name)
-                except KeyError:
-                    # Superclass not yet registered - try to generate it first
-                    try:
-                        # Try to find and generate the superclass from the module registry
-                        for module_id, (path, module) in self._module_registry.items():
-                            if module_id == superclass.id:
-                                # Found the superclass module, generate it
-                                self.generate_nested(module.schema)
-                                superclass_type = self.get_type_by_id(superclass.id)
-                                base_classes.append(superclass_type.scoped_name)
-                                break
-
-                            # Check if it's a nested type in the module
-                            def find_nested_schema(schema_obj, target_id):
-                                for nested_node in schema_obj.node.nestedNodes:
-                                    if nested_node.id == target_id:
-                                        return schema_obj.get_nested(nested_node.name)
-                                    try:
-                                        nested_schema = schema_obj.get_nested(nested_node.name)
-                                        result = find_nested_schema(nested_schema, target_id)
-                                        if result:
-                                            return result
-                                    except Exception:
-                                        pass
-                                return None
-
-                            found_schema = find_nested_schema(module.schema, superclass.id)
-                            if found_schema:
-                                self.generate_nested(found_schema)
-                                superclass_type = self.get_type_by_id(superclass.id)
-                                base_classes.append(superclass_type.scoped_name)
-                                break
-                    except Exception as e:
-                        logger.debug(f"Could not resolve superclass {superclass.id}: {e}")
-
-        # Always add Protocol as the last base class
-        base_classes.append("Protocol")
+        base_classes = self._collect_interface_base_classes(schema)
 
         # Open protocol scope
         parent_scope = self.new_scope(name, schema.node, scope_heading=helper.new_class_declaration(name, base_classes))
@@ -1179,34 +1606,7 @@ class Writer:
         # We'll generate a Server class with method signatures after collecting them
 
         # Generate all nested types (interfaces, structs, enums)
-        # so they're available as nested classes within the interface
-        # Note: InterfaceSchema doesn't have get_nested(), so we access through runtime module
-        # Build runtime path for this interface (handles nested interfaces)
-        try:
-            runtime_iface = self._module
-            # self.scope currently points to the interface scope; gather its parents excluding root
-            for s in self.scope.trace:
-                if s.is_root:
-                    continue
-                runtime_iface = getattr(runtime_iface, s.name)
-        except Exception:
-            runtime_iface = None
-
-        # Save current interface scope before generating nested types
-        # Nested interface generation will change self.scope, we need to get it back
-        interface_scope = self.scope
-
-        for nested_node in schema.node.nestedNodes:
-            try:
-                if runtime_iface is not None:
-                    nested_runtime = getattr(runtime_iface, nested_node.name)
-                    nested_schema = nested_runtime.schema
-                    self.generate_nested(nested_schema)
-            except Exception as e:
-                logger.warning(f"Could not generate nested node {nested_node.name} in interface {name}: {e}")
-
-        # Restore interface scope after generating nested types
-        self.scope = interface_scope
+        self._generate_nested_types_for_interface(schema, name)
 
         # Access runtime interface to enumerate methods (parsed schema lacks methods)
         try:
@@ -1305,7 +1705,7 @@ class Writer:
                 result_display_name = helper.get_display_name(result_schema)
                 # If the display name doesn't contain $, it's a user struct returned directly
                 is_direct_struct_return = "$" not in result_display_name
-            
+
             # Initialize variables for server NamedTuple (used later if is_direct_struct_return)
             server_result_namedtuple_name: str | None = None
             server_result_namedtuple_fields: list[tuple[str, str]] | None = None
@@ -1317,7 +1717,7 @@ class Writer:
 
             # Build fully qualified ResultsBuilder name for use in CallContext
             # Since both are nested classes, we need to qualify the reference
-            scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+            scope_path = self._get_scope_path()
             fully_qualified_results_builder = (
                 f"{scope_path}.{context_result_class_name}" if scope_path else context_result_class_name
             )
@@ -1420,7 +1820,6 @@ class Writer:
                         struct_type_id = result_schema.node.id
                         if self.is_type_id_known(struct_type_id):
                             registered_type = self.get_type_by_id(struct_type_id)
-                            struct_type_name = registered_type.scoped_name
                         else:
                             # Try to generate it - result_schema is guaranteed to be a struct schema here
                             # since we checked is_direct_struct_return
@@ -1430,9 +1829,6 @@ class Writer:
                                 pass
                             if self.is_type_id_known(struct_type_id):
                                 registered_type = self.get_type_by_id(struct_type_id)
-                                struct_type_name = registered_type.scoped_name
-                            else:
-                                struct_type_name = helper.get_display_name(result_schema)
 
                         # Create a Result Protocol with the struct's fields (for client)
                         result_lines = [helper.new_class_declaration(result_class_name, ["Protocol"])]
@@ -1480,7 +1876,7 @@ class Writer:
                             self.scope.add(line)
 
                         # Build fully qualified Result name for references within the same interface scope
-                        scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                        scope_path = self._get_scope_path()
                         fully_qualified_result = (
                             f"{scope_path}.{result_class_name}" if scope_path else result_class_name
                         )
@@ -1550,7 +1946,7 @@ class Writer:
                 if server_result_namedtuple_name is not None and server_result_namedtuple_fields is not None:
                     # Store this info for later use in server method generation
                     # Build fully qualified name: Identifiable.Server.InfoResult
-                    scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                    scope_path = self._get_scope_path()
                     if scope_path:
                         server_return_type = f"{scope_path}.Server.{server_result_namedtuple_name}"
                     else:
@@ -1674,7 +2070,7 @@ class Writer:
                     and server_return_type != interface_name  # Don't scope self-references
                 ):
                     # Get interface scope path (excluding root)
-                    scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                    scope_path = self._get_scope_path()
                     if scope_path:
                         server_return_type = f"{scope_path}.{server_return_type}"
 
@@ -1689,7 +2085,7 @@ class Writer:
             # Server method signatures: pycapnp always passes _context parameter
             # Make it mandatory and properly typed so implementations must include it
             # Get the fully qualified context class name
-            scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+            scope_path = self._get_scope_path()
             if scope_path:
                 fully_qualified_context = f"{scope_path}.{context_class_name}"
             else:
@@ -1724,11 +2120,7 @@ class Writer:
                         if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
                             # Append "Builder" to the struct type name
                             # Handle scoped names and generic types properly
-                            if "." in field_type:
-                                parts = field_type.rsplit(".", 1)
-                                field_type = f"{parts[0]}.{helper.new_builder(parts[1])}"
-                            else:
-                                field_type = helper.new_builder(field_type)
+                            field_type = self._build_scoped_builder_type(field_type)
 
                         request_lines.append(f"    {pf}: {field_type}")
                     else:
@@ -1746,7 +2138,7 @@ class Writer:
                 else:
                     # Build fully qualified result type name (e.g., Calculator.EvaluateResult or Calculator.Value.ReadResult)
                     # Get the full scope path excluding root
-                    scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                    scope_path = self._get_scope_path()
                     send_return_type = f"{scope_path}.{return_type}" if scope_path else return_type
             else:
                 send_return_type = "Any"
@@ -1788,87 +2180,8 @@ class Writer:
                     return_type="float",
                 )
             )
-        # Add _new_client() class method to create capability client from Server implementation
-        # This is provided by pycapnp at runtime for all interface types
-        # Need to fully qualify the interface name for nested interfaces
-        # scope.trace includes the current interface, so scope_path IS the fully qualified name
-        scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
-        fully_qualified_interface = scope_path if scope_path else name
-        
-        # Build server parameter type - should accept this Server OR ANY ancestor Server types
-        # This ensures compatibility with inherited _new_client signatures
-        # We need to recursively collect all ancestors, not just direct parents
-        def collect_all_ancestor_servers(node_id: int, visited: set[int] | None = None) -> set[str]:
-            """Recursively collect all ancestor Server types by node ID."""
-            if visited is None:
-                visited = set()
-            
-            # Avoid infinite loops
-            if node_id in visited:
-                return set()
-            visited.add(node_id)
-            
-            ancestors = set()
-            
-            # Try to get the schema for this node ID
-            # First check if it's in our type_map (same module or already generated)
-            schema_node = None
-            if node_id in self.type_map:
-                # Get the schema directly from the type_map
-                type_info = self.type_map[node_id]
-                if hasattr(type_info, 'schema') and hasattr(type_info.schema, 'node'):
-                    schema_node = type_info.schema.node
-            
-            # If not found in current module, check the module registry  
-            if schema_node is None:
-                for module_id, (path, module) in self._module_registry.items():
-                    # Check if this is the module itself (rare, but possible)
-                    if module_id == node_id:
-                        schema_node = module.schema.node
-                        break
-                    # Check all top-level types in this module
-                    for attr_name in dir(module.schema):
-                        if attr_name.startswith('_'):
-                            continue
-                        try:
-                            attr = getattr(module.schema, attr_name)
-                            if hasattr(attr, 'schema') and hasattr(attr.schema, 'node'):
-                                if attr.schema.node.id == node_id:
-                                    schema_node = attr.schema.node
-                                    break
-                        except (AttributeError, TypeError):
-                            continue
-                    if schema_node:
-                        break
-            
-            # If we found the schema, process its superclasses
-            if schema_node and schema_node.which() == "interface":
-                for superclass in schema_node.interface.superclasses:
-                    try:
-                        superclass_type = self.get_type_by_id(superclass.id)
-                        ancestor_server_type = f"{superclass_type.scoped_name}.Server"
-                        ancestors.add(ancestor_server_type)
-                        # Recursively collect ancestors of this superclass
-                        ancestors.update(collect_all_ancestor_servers(superclass.id, visited))
-                    except (KeyError, AttributeError):
-                        pass
-            
-            return ancestors
-        
-        server_types = [f"{fully_qualified_interface}.Server"]
-        ancestor_servers = collect_all_ancestor_servers(schema.node.id)
-        server_types.extend(sorted(ancestor_servers))  # Sort for consistency
-        
-        server_param_type = " | ".join(server_types)
-        
-        self.scope.add("@classmethod")
-        self.scope.add(
-            helper.new_function(
-                "_new_client",
-                parameters=["cls", f"server: {server_param_type}"],
-                return_type=fully_qualified_interface,
-            )
-        )
+        # Add _new_client() class method
+        self._add_new_client_method(name, base_classes, schema)
 
         # Now add the Server class with method signatures
         # Server class should also inherit from superclass Server classes

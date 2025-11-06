@@ -15,17 +15,17 @@ def test_direct_struct_return_generates_awaitable(tmp_path: Path):
     content = stub_path.read_text()
 
     # Should have: class ReadResult(Protocol): with struct fields
-    assert "class ReadResult(Protocol):" in content, (
-        "Direct struct return should create a Result Protocol"
-    )
-    
+    assert "class ReadResult(Protocol):" in content, "Direct struct return should create a Result Protocol"
+
     # Client method should return Awaitable[Channel.Reader.ReadResult] (properly scoped)
     assert "def read(self) -> Awaitable[Channel.Reader.ReadResult]:" in content, (
         "Direct struct return should be Awaitable[Channel.Reader.ReadResult]"
     )
 
     assert "class ReadCallContext(Protocol)" in content, "Should have CallContext for server _context"
-    assert "results: Channel.Reader.ReadResult" in content, "CallContext should have results: Channel.Reader.ReadResult for direct struct returns"
+    assert "results: Channel.Reader.ReadResult" in content, (
+        "CallContext should have results: Channel.Reader.ReadResult for direct struct returns"
+    )
 
 
 def test_named_result_fields_still_create_protocol(tmp_path: Path):
@@ -125,7 +125,9 @@ def test_request_send_method_returns_awaitable(tmp_path: Path):
     content = stub_path.read_text()
 
     # The ReadRequest Protocol should have send() returning Awaitable[Channel.Reader.ReadResult] (properly scoped)
-    assert "def send(self) -> Awaitable[Channel.Reader.ReadResult]:" in content, "send() method should return Awaitable[Channel.Reader.ReadResult]"
+    assert "def send(self) -> Awaitable[Channel.Reader.ReadResult]:" in content, (
+        "send() method should return Awaitable[Channel.Reader.ReadResult]"
+    )
 
 
 def test_server_method_returns_result_for_direct_struct(tmp_path: Path):
@@ -139,7 +141,9 @@ def test_server_method_returns_result_for_direct_struct(tmp_path: Path):
     # Check for the key parts (may span multiple lines)
     assert "def read(" in content, "Should have read method"
     assert "_context: Channel.Reader.ReadCallContext" in content, "Should have ReadCallContext parameter"
-    assert "Awaitable[Channel.Reader.Server.ReadResult]" in content, "Server method should return Awaitable[Channel.Reader.Server.ReadResult]"
+    assert "Awaitable[Channel.Reader.Server.ReadResult]" in content, (
+        "Server method should return Awaitable[Channel.Reader.Server.ReadResult]"
+    )
     assert "class ReadResult(NamedTuple):" in content, "Should have Server.ReadResult as NamedTuple"
 
 
