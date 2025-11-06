@@ -86,6 +86,9 @@ class Writer:
         # Track imported module paths for capnp.load imports parameter
         self._imported_module_paths: set[pathlib.Path] = set()
 
+        # Track all server NamedTuples globally (scope_name -> {method_name: (namedtuple_name, fields)})
+        self._all_server_namedtuples: dict[str, dict[str, tuple[str, list[tuple[str, str]]]]] = {}
+
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
     def _add_typing_import(self, module_name: Writer.VALID_TYPING_IMPORTS):
@@ -195,53 +198,6 @@ class Writer:
             return f"{parts[0]}.{parts[1]}Builder"
         else:
             return f"{field_type}Builder"
-
-    def _build_scoped_reader_type(self, field_type: str) -> str:
-        """Build Reader type name respecting scoped names and generics.
-
-        Args:
-            field_type (str): The base field type (e.g., "MyStruct", "Outer.Inner", or "Env[T]").
-
-        Returns:
-            str: The Reader type name (e.g., "MyStructReader", "Outer.InnerReader", or "EnvReader[T]").
-        """
-        # Check if there's a generic parameter
-        if "[" in field_type:
-            base_name, generic_part = field_type.split("[", 1)
-            # Now handle scoping in the base name
-            if "." in base_name:
-                parts = base_name.rsplit(".", 1)
-                return f"{parts[0]}.{parts[1]}Reader[{generic_part}"
-            else:
-                return f"{base_name}Reader[{generic_part}"
-        elif "." in field_type:
-            parts = field_type.rsplit(".", 1)
-            return f"{parts[0]}.{parts[1]}Reader"
-        else:
-            return f"{field_type}Reader"
-
-    def _get_fully_qualified_name(self, name: str, scope: Scope | None = None) -> str:
-        """Get fully qualified name for a type within a scope.
-
-        Args:
-            name (str): The type name to qualify.
-            scope (Scope | None): The scope to use (defaults to current scope).
-
-        Returns:
-            str: The fully qualified name (e.g., "OuterStruct.InnerStruct").
-        """
-        if scope is None:
-            scope = self.scope
-
-        # If already qualified or is root, return as-is
-        if "." in name or scope.is_root:
-            return name
-
-        # Build scope path
-        scope_path = ".".join(s.name for s in scope.trace if not s.is_root)
-        if scope_path:
-            return f"{scope_path}.{name}"
-        return name
 
     def _get_scope_path(self, scope: Scope | None = None) -> str:
         """Get the scope path as a dotted string.
@@ -887,49 +843,6 @@ class Writer:
 
         # Restore interface scope after generating nested types
         self.scope = interface_scope
-
-    def _collect_all_ancestor_servers(self, base_classes: list[str]) -> list[str]:
-        """Recursively collect all ancestor Server types for an interface.
-
-        Args:
-            base_classes (list[str]): Direct base classes of the interface.
-
-        Returns:
-            list[str]: List of all ancestor Server type names.
-        """
-        all_servers = []
-
-        def collect_ancestors(class_name: str):
-            if class_name == "Protocol":
-                return
-            # Add this class's Server
-            server_name = f"{class_name}.Server"
-            if server_name not in all_servers:
-                all_servers.append(server_name)
-
-            # Find this class's type info and recurse on its ancestors
-            try:
-                # Try to find the type by looking up in registered types
-                for type_id, capnp_type in self.type_map.items():
-                    if capnp_type.scoped_name == class_name:
-                        # Look up its schema to find its superclasses
-                        if hasattr(capnp_type.schema.node, "interface"):
-                            for superclass in capnp_type.schema.node.interface.superclasses:
-                                try:
-                                    superclass_type = self.get_type_by_id(superclass.id)
-                                    collect_ancestors(superclass_type.scoped_name)
-                                except KeyError:
-                                    pass
-                        break
-            except Exception:
-                pass
-
-        # Collect from all base classes (excluding Protocol)
-        for base_class in base_classes:
-            if base_class != "Protocol":
-                collect_ancestors(base_class)
-
-        return all_servers
 
     def _add_new_client_method(self, name: str, base_classes: list[str], schema: capnp._StructSchema):
         """Add _new_client() class method to create capability client from Server.
@@ -1626,9 +1539,7 @@ class Writer:
         # Initialize dict to store NamedTuple info for direct struct returns
         self._server_namedtuples = {}
 
-        method_count = 0
         for method_name, method in methods:
-            method_count += 1
             param_schema = None
             result_schema = None
             try:
@@ -2214,6 +2125,12 @@ class Writer:
         # These are generated inside the Server class as Server.InfoResult
         if hasattr(self, "_server_namedtuples") and self._server_namedtuples:
             self._add_typing_import("NamedTuple")
+            # Store in global dict for later use in .py file generation
+            # Use the fully qualified path for nested interfaces
+            fully_qualified_name = self._get_scope_path(prev_scope)
+            if not fully_qualified_name:
+                fully_qualified_name = name
+            self._all_server_namedtuples[fully_qualified_name] = self._server_namedtuples
             for method_name, (namedtuple_name, fields) in self._server_namedtuples.items():
                 self.scope.add(f"class {namedtuple_name}(NamedTuple):")
                 for field_name, field_type in fields:
@@ -2645,6 +2562,11 @@ class Writer:
         out.append(self.docstring)
         out.append("import os")
         out.append("import capnp")
+
+        # Add NamedTuple import if we have server namedtuples
+        if self._all_server_namedtuples:
+            out.append("from typing import NamedTuple")
+
         out.append("capnp.remove_import_hook()")
         out.append("here = os.path.dirname(os.path.abspath(__file__))")
 
@@ -2713,5 +2635,19 @@ class Writer:
                 out.append(f"{scope.name} = capnp.load(module_file, imports=import_path).{scope.name}")
                 out.append(f"{helper.new_builder(scope.name)} = {scope.name}")
                 out.append(f"{helper.new_reader(scope.name)} = {scope.name}")
+
+        # Add Server.InfoResult NamedTuples for interfaces
+        if self._all_server_namedtuples:
+            out.append("")
+            for interface_name, namedtuples_dict in sorted(self._all_server_namedtuples.items()):
+                for method_name, (namedtuple_name, fields) in sorted(namedtuples_dict.items()):
+                    # Create NamedTuple and attach to Server class
+                    # Use object as type for all fields to avoid import issues in .py file
+                    # Type information is in the .pyi file for static type checkers
+                    field_list = [f'("{field_name}", object)' for field_name, _ in fields]
+                    out.append(
+                        f"{interface_name}.Server.{namedtuple_name} = "
+                        f"NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])"
+                    )
 
         return "\n".join(out)

@@ -4,6 +4,8 @@ import uuid
 import capnp
 from _generated.zalfmas import common_capnp
 
+InfoResult = common_capnp.Identifiable.Server.InfoResult
+
 
 class Identifiable(common_capnp.Identifiable.Server):
     def __init__(
@@ -49,25 +51,26 @@ class Identifiable(common_capnp.Identifiable.Server):
     def description(self, d):
         self._description = d
 
-    async def info(self, _context, **kwargs):  # () -> IdInformation;
-        if self._init_info_func:
-            self._init_info_func()
-        r = _context.results
+    # async def info(self, _context, **kwargs):  # () -> IdInformation;
+    #     if self._init_info_func:
+    #         self._init_info_func()
+    #     r = _context.results
+    #     r.id = self.id
+    #     r.name = self.name
+    #     r.description = self.description
 
-        r.id = self.id
-        r.name = self.name
-        r.description = self.description
+    async def info(self, _context, **kwargs):
         return common_capnp.Identifiable.Server.InfoResult(id=self.id, name=self.name, description=self.description)
 
 
 async def main():
     identifiable = Identifiable(name="TestObject", description="This is a test object.")
-    # info = await identifiable.info()
 
     x = common_capnp.Identifiable._new_client(identifiable)
+
     info = await x.info()
-    print(f"Client: {dir(info)}")
-    print(f"Client: {dir(info)}")
+
+    print(f"Client: {info}")
 
 
 if __name__ == "__main__":

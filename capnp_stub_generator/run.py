@@ -25,16 +25,14 @@ logger = logging.getLogger(__name__)
 
 PYI_SUFFIX = ".pyi"
 PY_SUFFIX = ".py"
-LINE_LENGTH = 120
 
 
-def format_outputs(raw_input: str, is_pyi: bool, line_length: int = LINE_LENGTH) -> str:
+def format_outputs(raw_input: str, is_pyi: bool) -> str:
     """Formats raw input using ruff.
 
     Args:
         raw_input (str): The unformatted input.
         is_pyi (bool): Whether or not the output is a `pyi` file.
-        line_length (int): Line length for formatting (not used, taken from pyproject.toml).
 
     Returns:
         str: The formatted outputs.
@@ -195,7 +193,7 @@ def run(args: argparse.Namespace, root_directory: str):
 
         # If recursive flag is set and path is a directory, find all .capnp files recursively
         if args.recursive and os.path.isdir(search_path):
-            for root, dirs, files in os.walk(search_path):
+            for root, _, files in os.walk(search_path):
                 for file in files:
                     if file.endswith(".capnp"):
                         search_paths.add(os.path.join(root, file))

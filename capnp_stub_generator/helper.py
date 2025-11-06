@@ -135,14 +135,6 @@ class TypeHintedVariable:
         return self._generate_typed_variable(self.full_type)
 
     @property
-    def typed_variable_with_primary_hint(self) -> str:
-        """Returns the typed variable string, hinted only with the primary type hint."""
-        if self.primary_type_hint is None:
-            raise ValueError("No primary type hint available.")
-
-        return self._generate_typed_variable(str(self.primary_type_hint))
-
-    @property
     def primary_type_hint(self) -> TypeHint:
         """Returns the primary type hint."""
         for type_hint in self.type_hints:
@@ -170,28 +162,6 @@ class TypeHintedVariable:
 
     def _get_type_hints_for_affixes(self, affixes: list[str]) -> list[TypeHint]:
         return [self.get_type_hint_for_affix(affix) for affix in affixes]
-
-    def get_typed_variable_with_affixes(self, affixes: list[str] | None) -> str:
-        """Gets a typed version of this variable with the selected type hint affixes.
-
-        For example, when selecting the affixes "Reader" and "Builder" for the primary type "Something" and the variable
-        named "VariableName", this will return "VariableName: SomethingReader | SomethingBuilder".
-
-        Args:
-            affixes (list[str] | None): The affixes to select for type hints.
-
-        Returns:
-            str: The typed variable in string format.
-        """
-        type_hints: list[TypeHint] = []
-
-        if affixes is not None:
-            type_hints_for_affixes = self._get_type_hints_for_affixes(affixes)
-
-            if type_hints_for_affixes is not None:
-                type_hints.extend(type_hints_for_affixes)
-
-        return self._generate_typed_variable(self._join_type_hints(type_hints))
 
     def _join_type_hints(self, type_hints: list[TypeHint]) -> str:
         return " | ".join(str(type_hint) for type_hint in type_hints)
@@ -238,15 +208,6 @@ class TypeHintedVariable:
             raise ValueError("There can only be one primary type.")
 
         self.type_hints.append(new_type_hint)
-
-    def add_type_scope(self, scope: str):
-        """Add a scope to the type name.
-
-        Args:
-            scope (str): The scope name to prefix to the type name.
-        """
-        for type_hint in self.type_hints:
-            type_hint.scopes.append(scope)
 
     def get_type_hint_for_affix(self, affix: str) -> TypeHint:
         """Looks for a type hint that has the provided affix and returns it.
@@ -339,21 +300,6 @@ def join_parameters(parameters: list[TypeHintedVariable] | list[str] | None) -> 
         return ""
 
 
-def new_type_alias(alias: str, type_name: str) -> str:
-    """Generate a string for a type-alias.
-
-    For example, for a type alias `SomeType` with a type `TheType` this gives `SomeType = TheType`.
-
-    Args:
-        alias (str): The alias name.
-        type_name (str): The aliased type.
-
-    Returns:
-        str: The type alias.
-    """
-    return f"{alias} = {type_name}"
-
-
 def new_group(name: str, members: list[str]) -> str:
     """Create a string for a group name and its members.
 
@@ -444,26 +390,6 @@ def new_property(name: str, return_type: str, with_setter: bool = False, setter_
         lines.extend([f"@{name}.setter", f"def {name}(self, value: {param_type}) -> None: ..."])
 
     return lines
-
-
-def new_constructor(kwargs: list[str] | None = None) -> str:
-    """Creates a new constructor.
-
-    Args:
-        kwargs (list[str] | None, optional): The keyword arguments for the constructor. Defaults to None.
-
-    Returns:
-        str: The constructor string.
-    """
-    constructor_args = "self"
-
-    kwargs_ = ""
-
-    if kwargs:
-        # Prepend '*' for catching any positional arguments, before the keyword arguments.
-        kwargs_ = join_parameters(["*"] + [f"{kwarg} = ..." for kwarg in kwargs])
-
-    return new_function("__init__", parameters=[constructor_args, kwargs_])
 
 
 def new_class_declaration(name: str, parameters: list[str] | None = None) -> str:

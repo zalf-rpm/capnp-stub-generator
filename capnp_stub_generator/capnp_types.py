@@ -32,11 +32,9 @@ class CapnpFieldType:
 class CapnpElementType:
     """Types of capnproto elements."""
 
-    BOOL = "bool"
     ENUM = "enum"
     STRUCT = "struct"
     CONST = "const"
-    VOID = "void"
     LIST = "list"
     ANY_POINTER = "anyPointer"
     INTERFACE = "interface"
