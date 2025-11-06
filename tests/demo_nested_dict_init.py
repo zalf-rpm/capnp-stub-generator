@@ -63,12 +63,13 @@ def example_mixed_approaches():
 # Example 4: Calculator Expression with nested Call
 def example_calculator_nested():
     """Demonstrate nested dict initialization with Calculator Expression."""
-    from _generated_examples.calculator.calculator_capnp import Calculator
     from typing import cast
+
+    from _generated.examples.calculator.calculator_capnp import Calculator
 
     # Create an expression with a nested call using dict
     # Note: In real usage, function would be a proper Calculator.Function instance
-    func = cast(Calculator.Function, None)  # Placeholder for demo
+    func = cast(Calculator.Function, object())  # Placeholder for demo
 
     # You can now pass a dict for the Call struct
     expr = Calculator.Expression.new_message(

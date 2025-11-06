@@ -21,11 +21,12 @@ SCHEMAS_DIR = TESTS_DIR / "schemas"
 EXAMPLES_DIR = TESTS_DIR / "examples"
 ZALFMAS_DIR = TESTS_DIR / "zalfmas_capnp_schemas"
 
-# Generated output directories (centralized)
-GENERATED_DIR = TESTS_DIR / "_generated"
-GENERATED_EXAMPLES_DIR = TESTS_DIR / "_generated_examples"
-GENERATED_ADDRESSBOOK_DIR = TESTS_DIR / "_generated_addressbook_typing"
-GENERATED_ZALFMAS_DIR = TESTS_DIR / "_generated_zalfmas"
+# Generated output directories (all under one _generated root)
+GENERATED_ROOT = TESTS_DIR / "_generated"
+GENERATED_DIR = GENERATED_ROOT  # Core schemas directly under _generated
+GENERATED_EXAMPLES_DIR = GENERATED_ROOT / "examples"
+GENERATED_ADDRESSBOOK_DIR = GENERATED_ROOT / "addressbook"
+GENERATED_ZALFMAS_DIR = GENERATED_ROOT / "zalfmas"
 
 
 def pytest_configure(config):
@@ -38,26 +39,22 @@ def pytest_configure(config):
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_generated_dirs():
     """Clean up all generated directories before and after test session."""
-    # Setup: ensure clean slate
-    generated_dirs = [
-        GENERATED_DIR,
-        GENERATED_EXAMPLES_DIR,
-        GENERATED_ADDRESSBOOK_DIR,
-        GENERATED_ZALFMAS_DIR,
-    ]
+    # Setup: ensure clean slate - just remove the root and recreate
+    if GENERATED_ROOT.exists():
+        shutil.rmtree(GENERATED_ROOT)
 
-    for gen_dir in generated_dirs:
-        if gen_dir.exists():
-            shutil.rmtree(gen_dir)
+    GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
+
+    # Create subdirectories (GENERATED_DIR is GENERATED_ROOT itself, so skip it)
+    for gen_dir in [GENERATED_EXAMPLES_DIR, GENERATED_ADDRESSBOOK_DIR, GENERATED_ZALFMAS_DIR]:
         gen_dir.mkdir(parents=True, exist_ok=True)
 
     yield
 
     # Teardown: optionally keep generated files for inspection
     # Uncomment to clean up after tests
-    # for gen_dir in generated_dirs:
-    #     if gen_dir.exists():
-    #         shutil.rmtree(gen_dir)
+    # if GENERATED_ROOT.exists():
+    #     shutil.rmtree(GENERATED_ROOT)
 
 
 @pytest.fixture(scope="session")

@@ -12,7 +12,7 @@ TESTS_DIR = Path(__file__).parent
 
 def test_expression_init_call_returns_callbuilder(generate_calculator_stubs):
     code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 expr_builder: calculator_capnp.Calculator.ExpressionBuilder = calculator_capnp.Calculator.Expression.new_message()
 call_builder = expr_builder.init("call")

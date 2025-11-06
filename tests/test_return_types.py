@@ -116,9 +116,10 @@ class TestStructReturnTypes:
         content = dummy_stub_file.read_text()
 
         # Builder setter should accept union for flexibility, including dict for convenience
-        assert "def structField(self, value: TestAllTypes | TestAllTypesBuilder | TestAllTypesReader | dict[str, Any])" in content, (
-            "Builder setter should accept union of base, Builder, Reader, and dict types"
-        )
+        assert (
+            "def structField(self, value: TestAllTypes | TestAllTypesBuilder | TestAllTypesReader | dict[str, Any])"
+            in content
+        ), "Builder setter should accept union of base, Builder, Reader, and dict types"
 
     def test_list_fields_follow_same_pattern(self, dummy_stub_file):
         """List fields should follow the same narrowing pattern."""

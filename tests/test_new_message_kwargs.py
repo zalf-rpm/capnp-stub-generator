@@ -9,7 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import run_pyright
+
+from tests.conftest import run_pyright
 
 TESTS_DIR = Path(__file__).parent
 
@@ -35,7 +36,7 @@ class TestNewMessageKwargs:
     def test_new_message_with_literal(self, generate_calculator_stubs):
         """Test creating Expression with literal field."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 # Create expression with literal value
 expr = calculator_capnp.Calculator.Expression.new_message(literal=123.0)
@@ -60,7 +61,7 @@ assert which == "literal"
     def test_new_message_with_parameter(self, generate_calculator_stubs):
         """Test creating Expression with parameter field."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 # Create expression with parameter reference
 expr = calculator_capnp.Calculator.Expression.new_message(parameter=5)
@@ -81,7 +82,7 @@ param_idx: int = expr.parameter
     def test_new_message_with_call_struct(self, generate_calculator_stubs):
         """Test creating Call struct directly (not in union)."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 from typing import cast
 
 # Call can be created as a standalone struct
@@ -114,7 +115,7 @@ params = call_struct.params
     def test_new_message_nested_example(self, generate_calculator_stubs):
         """Test a complex nested example like in the user's code."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 # Simulate creating a complex nested structure similar to user's example:
 # registry_capnp.Registry.Entry.new_message(
@@ -154,7 +155,7 @@ val3: float = exprs[2].literal
     def test_new_message_optional_params(self, generate_calculator_stubs):
         """Test that all field parameters are optional."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 # Create empty expression (though not very useful, should type-check)
 expr = calculator_capnp.Calculator.Expression.new_message()
@@ -184,13 +185,13 @@ class TestNewMessageWithInterfaces:
     def test_new_message_with_interface_field(self, generate_calculator_stubs):
         """Test that interface fields accept both Protocol and Server types."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 class MyValue(calculator_capnp.Calculator.Value.Server):
     def __init__(self, val: float):
         self.val = val
     
-    async def read(self, **kwargs):
+    async def read(self, _context, **kwargs):
         return self.val
 
 # Should accept Value.Server implementation

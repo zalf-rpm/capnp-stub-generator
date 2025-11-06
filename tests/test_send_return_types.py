@@ -13,7 +13,7 @@ TESTS_DIR = Path(__file__).parent
 def test_send_returns_proper_result_type(generate_calculator_stubs):
     """Test that request.send() returns properly typed result."""
     code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 def test(calc: calculator_capnp.Calculator):
     request = calc.evaluate_request()
@@ -36,7 +36,7 @@ def test(calc: calculator_capnp.Calculator):
 def test_nested_interface_send_returns_proper_type(generate_calculator_stubs):
     """Test that nested interface request.send() returns properly scoped type."""
     code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 def test(value: calculator_capnp.Calculator.Value):
     request = value.read_request()
@@ -59,7 +59,7 @@ def test(value: calculator_capnp.Calculator.Value):
 def test_send_result_is_awaitable(generate_calculator_stubs):
     """Test that send() result can be awaited."""
     code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 async def test(calc: calculator_capnp.Calculator):
     request = calc.evaluate_request()

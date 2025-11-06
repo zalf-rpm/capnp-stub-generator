@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import capnp  # noqa: F401
-from _generated_examples.addressbook import addressbook_capnp
+from _generated.examples.addressbook import addressbook_capnp
 
 
 def writeAddressBook(file):

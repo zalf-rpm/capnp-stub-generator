@@ -1,16 +1,16 @@
 """Demonstrate the improvements in stub generation."""
 
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 
 # ✓ Client methods accept dict (convenience)
 async def client_example(calc: calculator_capnp.Calculator):
     # Can pass dict - pycapnp converts it
-    result1 = calc.evaluate({"literal": 123.0})
+    calc.evaluate({"literal": 123.0})
 
     # Can also pass Expression object
     expr = calculator_capnp.Calculator.Expression.new_message()
-    result2 = calc.evaluate(expr)
+    calc.evaluate(expr)
 
 
 # ✓ Server methods receive Reader types (not dict)

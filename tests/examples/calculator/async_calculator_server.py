@@ -5,7 +5,7 @@ import asyncio
 import logging
 
 import capnp
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -48,7 +48,7 @@ class ValueImpl(calculator_capnp.Calculator.Value.Server):
     def __init__(self, value):
         self.value = value
 
-    async def read(self, _context=None, **kwargs):
+    async def read(self, _context, **kwargs):
         return self.value
 
 
@@ -60,7 +60,7 @@ class FunctionImpl(calculator_capnp.Calculator.Function.Server):
         self.paramCount = paramCount
         self.body = body.as_builder()
 
-    async def call(self, params, _context=None, **kwargs):
+    async def call(self, params, _context, **kwargs):
         """Note that we're returning a Promise object here, and bypassing the
         helper functionality that normally sets the results struct from the
         returned object. Instead, we set _context.results directly inside of
@@ -77,7 +77,7 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     def __init__(self, op):
         self.op = op
 
-    async def call(self, params, **kwargs):
+    async def call(self, params, _context, **kwargs):
         assert len(params) == 2
 
         op = self.op
@@ -97,13 +97,13 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
 class CalculatorImpl(calculator_capnp.Calculator.Server):
     "Implementation of the Calculator Cap'n Proto interface."
 
-    async def evaluate(self, expression, _context=None, **kwargs):
+    async def evaluate(self, expression, _context, **kwargs):
         return ValueImpl(await evaluate_impl(expression))
 
-    async def defFunction(self, paramCount, body, _context=None, **kwargs):
+    async def defFunction(self, paramCount, body, _context, **kwargs):
         return FunctionImpl(paramCount, body)
 
-    async def getOperator(self, op, **kwargs):
+    async def getOperator(self, op, _context, **kwargs):
         return OperatorImpl(op)
 
 

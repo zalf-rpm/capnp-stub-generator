@@ -1,7 +1,8 @@
 """Tests for interface Server class method signatures."""
 
 import pytest
-from conftest import read_stub_file
+
+from tests.conftest import read_stub_file
 
 
 @pytest.fixture(scope="module")
@@ -34,8 +35,8 @@ def test_server_methods_have_signatures(calculator_stub_lines):
     assert "def call(self, params: Sequence[float]" in content
     assert "Awaitable[float]" in content
 
-    # Value.Server should have read method with **kwargs (no explicit _context)
-    assert "def read(self, **kwargs) -> Awaitable[float]:" in content
+    # Value.Server should have read method with _context parameter
+    assert "def read(self, _context: Calculator.Value.ReadCallContext, **kwargs: Any) -> Awaitable[float]:" in content
 
     # Calculator.Server should have evaluate method with Reader type
     assert "def evaluate(" in content
@@ -44,11 +45,11 @@ def test_server_methods_have_signatures(calculator_stub_lines):
 
 
 def test_server_methods_accept_context(calculator_stub_lines):
-    """Server methods should accept **kwargs to catch _context parameter."""
+    """Server methods should accept _context parameter and **kwargs."""
     lines = calculator_stub_lines
     content = "".join(lines)
 
-    # All server methods should have **kwargs for _context and other parameters
+    # All server methods should have **kwargs
     assert "**kwargs" in content
 
     # Find all Server classes and verify their methods
@@ -64,8 +65,10 @@ def test_server_methods_accept_context(calculator_stub_lines):
         for method in methods:
             # Each method should have **kwargs
             assert "**kwargs" in method, f"Server method should have **kwargs: {method}"
-            # Should NOT have explicit _context
-            assert "_context" not in method, f"Server method should not have explicit _context: {method}"
+            # Should have explicit _context parameter with type annotation
+            assert "_context:" in method, f"Server method should have _context parameter: {method}"
+            # _context should have a CallContext type
+            assert "CallContext" in method, f"Server method _context should be typed with CallContext: {method}"
 
 
 def test_server_methods_return_interface_or_implementation(calculator_stub_lines):
@@ -79,23 +82,31 @@ def test_server_methods_return_interface_or_implementation(calculator_stub_lines
 
 
 def test_server_method_parameters_match_protocol(calculator_stub_lines):
-    """Server method parameters should match the Protocol interface."""
+    """Server method parameters should match the Protocol interface plus _context."""
     lines = calculator_stub_lines
+    content = "".join(lines)
 
     # Find Function Protocol's call method
-    protocol_params = None
+    protocol_call_found = False
     for i, line in enumerate(lines):
         if "def call(self, params: Sequence[float])" in line:
-            protocol_params = "params: Sequence[float]"
-            break
+            # Make sure it's not in a Server class
+            context = "".join(lines[max(0, i - 10) : i])
+            if "class Server:" not in context:
+                protocol_call_found = True
+                break
 
-    assert protocol_params is not None, "Could not find Protocol call method"
+    assert protocol_call_found, "Could not find Protocol call method"
 
-    # Find Function.Server's call method - should have same params plus **kwargs
-    server_call_found = False
-    for line in lines:
-        if "def call(self, params: Sequence[float], **kwargs)" in line:
-            server_call_found = True
-            break
+    # Find Function.Server's call method - should have params, _context, and **kwargs
+    # Check for multi-line signature
+    server_call_found = (
+        "def call(\n                self, params: Sequence[float], _context: Calculator.Function.CallCallContext, **kwargs"
+        in content
+    )
+    server_call_found = (
+        server_call_found
+        or "def call(self, params: Sequence[float], _context: Calculator.Function.CallCallContext, **kwargs)" in content
+    )
 
-    assert server_call_found, "Server call method should have same params as Protocol plus **kwargs"
+    assert server_call_found, "Server call method should have same params as Protocol plus _context and **kwargs"

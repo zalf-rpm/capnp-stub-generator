@@ -10,7 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import run_pyright
+
+from tests.conftest import run_pyright
 
 TESTS_DIR = Path(__file__).parent
 
@@ -115,7 +116,6 @@ ref2 = TestSturdyRef.new_message(hostId={"host": "test"})
         finally:
             if test_file.exists():
                 test_file.unlink()
-
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ import argparse
 import asyncio
 
 import capnp
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 
 class PowerFunction(calculator_capnp.Calculator.Function.Server):
@@ -12,12 +12,11 @@ class PowerFunction(calculator_capnp.Calculator.Function.Server):
     we're implementing this on the client side and will pass a reference to
     the server.  The server will then be able to make calls back to the client."""
 
-    async def call(self, params, **kwargs):
+    async def call(self, params, _context, **kwargs):
         """Note the **kwargs. This is very necessary to include, since
-        protocols can add parameters over time. Also, by default, a _context
-        variable is passed to all server methods, but you can also return
-        results directly as python objects, and they'll be added to the
-        results struct in the correct order"""
+        protocols can add parameters over time. The _context parameter
+        is always passed by pycapnp and contains a results attribute
+        for setting return values."""
 
         return pow(params[0], params[1])
 

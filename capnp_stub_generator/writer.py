@@ -11,7 +11,7 @@ import pathlib
 from collections.abc import Iterator
 from copy import copy
 from types import ModuleType
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import capnp
 
@@ -267,7 +267,11 @@ class Writer:
 
             while True:
                 try:
-                    next_schema_element = next_schema_element.elementType
+                    # Use getattr to safely access elementType which may not exist on all schema types
+                    next_element = getattr(next_schema_element, "elementType", None)
+                    if next_element is None:
+                        break
+                    next_schema_element = next_element
 
                 except (AttributeError, capnp.KjException):
                     break
@@ -320,13 +324,22 @@ class Writer:
 
             # last_element may be a TypeReader; attempt to access its struct/interface schema.
             try:
-                self.generate_nested(last_element)  # type: ignore[arg-type]
+                # Check if it has the required attributes for a struct schema
+                if hasattr(last_element, "node") and hasattr(last_element, "as_struct"):
+                    if TYPE_CHECKING:
+                        # For type checking, cast via object to satisfy type checker
+                        from typing import cast
+
+                        self.generate_nested(cast(capnp._StructSchema, cast(object, last_element)))
+                    else:
+                        self.generate_nested(last_element)  # type: ignore[arg-type]
+                    type_name = self.get_type_name(field.slot.type.list.elementType)
+                else:
+                    raise AttributeError("Not a struct schema")
             except AttributeError:
                 # This is a built-in type and does not require generation.
                 create_extended_types = False
                 type_name = self.get_type_name(last_element)
-            else:
-                type_name = self.get_type_name(field.slot.type.list.elementType)
 
             list_depth = len(nested_list_elements)
 
@@ -806,7 +819,7 @@ class Writer:
                     self._add_typing_import("Sequence")
                     self._add_typing_import("Any")
             type_hints.append(helper.TypeHint("None"))
-            
+
             # Make field optional since not all fields need to be set
             field_param = helper.TypeHintedVariable(
                 slot_field.name,
@@ -913,16 +926,18 @@ class Writer:
             # For fields with Builder/Reader variants (structs/groups), return only Builder type
             # to allow proper mutation, but setter accepts union type for flexibility
             if slot_field.has_type_hint_with_builder_affix:
-                getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
-                setter_type = field_copy.full_type_nested
-                # For list of structs, also accept Sequence[dict] in setter
+                # For lists, use Sequence[ElementBuilder] for compatibility with base Protocol
+                # The runtime type is _DynamicListBuilder, but we use Sequence for type checking
                 if slot_field.nesting_depth == 1:
-                    setter_type += " | Sequence[dict[str, Any]]"
+                    # element_type is like "Sequence[PersonBuilder]"
+                    getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
+                    setter_type = field_copy.full_type_nested + " | Sequence[dict[str, Any]]"
                     self._add_typing_import("Sequence")
                     self._add_typing_import("Any")
-                # For non-list structs, also accept dict in setter
-                elif slot_field.nesting_depth == 0:
-                    setter_type += " | dict[str, Any]"
+                else:
+                    # For non-list structs
+                    getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
+                    setter_type = field_copy.full_type_nested + " | dict[str, Any]"
                     self._add_typing_import("Any")
             # For interface fields: getter returns Protocol, setter accepts Protocol | Server
             elif len(slot_field.type_hints) > 1 and any(".Server" in str(h) for h in slot_field.type_hints):
@@ -966,13 +981,24 @@ class Writer:
                 builder_type = f"{parts[0]}.{parts[1]}Builder"
             else:
                 builder_type = f"{field_type}Builder"
+            
+            # Use self: Any only when using overloads (for compatibility with catch-all)
+            # Otherwise use plain self so pyright can properly infer the return type
+            if use_overload:
+                init_params = [
+                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                    helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
+                ]
+            else:
+                init_params = [
+                    "self",
+                    f'name: Literal["{field_name}"]',
+                ]
+            
             self.scope.add(
                 helper.new_function(
                     "init",
-                    parameters=[
-                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                        helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                    ],
+                    parameters=init_params,
                     return_type=builder_type,
                 )
             )
@@ -983,14 +1009,26 @@ class Writer:
                 self.scope.add(helper.new_decorator("overload"))
             self._add_import("from capnp import _DynamicListBuilder")
             element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
+            
+            # Use self: Any only when using overloads (for compatibility with catch-all)
+            # Otherwise use plain self so pyright can properly infer the return type
+            if use_overload:
+                init_params_list = [
+                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
+                    helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
+                    helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
+                ]
+            else:
+                init_params_list = [
+                    "self",
+                    f'name: Literal["{field_name}"]',
+                    "size: int = ...",
+                ]
+            
             self.scope.add(
                 helper.new_function(
                     "init",
-                    parameters=[
-                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                        helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                        helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
-                    ],
+                    parameters=init_params_list,
                     return_type=f"_DynamicListBuilder[{element_type_for_list}]",
                 )
             )
@@ -1254,13 +1292,41 @@ class Writer:
             # with those fields as attributes so users can access promise.field_name
             # The result is also awaitable, so it inherits from Awaitable
             return_type = "None"
-            if result_fields:
-                # Create a result Protocol class with the result fields
+
+            # Check if the result is a direct struct return or a result with named fields
+            # Methods like `read() -> Msg` return the struct directly (no $ in display name)
+            # Methods like `reader() -> (r :Reader)` have internal result structs ($ in display name)
+            is_direct_struct_return = False
+            if result_schema and result_fields:
+                result_display_name = helper.get_display_name(result_schema)
+                # If the display name doesn't contain $, it's a user struct returned directly
+                is_direct_struct_return = "$" not in result_display_name
+
+            # Generate CallContext for server methods
+            # Every server method receives a _context parameter with a results attribute
+            context_class_name = f"{method_name.capitalize()}CallContext"
+            context_result_class_name = f"{method_name.capitalize()}ResultsBuilder"
+
+            # Build fully qualified ResultsBuilder name for use in CallContext
+            # Since both are nested classes, we need to qualify the reference
+            scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+            fully_qualified_results_builder = (
+                f"{scope_path}.{context_result_class_name}" if scope_path else context_result_class_name
+            )
+
+            if result_fields and not is_direct_struct_return:
+                # Create a result Protocol class with the result fields (for client)
                 result_class_name = f"{method_name.capitalize()}Result"
                 self._add_typing_import("Awaitable")
                 result_lines = [
                     helper.new_class_declaration(result_class_name, [f"Awaitable[{result_class_name}]", "Protocol"])
                 ]
+
+                # Also create the CallContext for server methods (with Builder types)
+                context_lines = []
+
+                # Generate the results builder Protocol for the server's _context.results
+                context_lines.append(helper.new_class_declaration(context_result_class_name, ["Protocol"]))
 
                 for rf in result_fields:
                     try:
@@ -1268,32 +1334,210 @@ class Writer:
                             field_obj = next(f for f in result_schema.node.struct.fields if f.name == rf)
                             # Use get_type_name to resolve complex types (struct, enum, interface, list)
                             field_type = self.get_type_name(field_obj.slot.type)
-                            result_lines.append(f"    {rf}: {field_type}")
+
+                            # For the CLIENT result protocol (result_lines): use Reader variant
+                            # because pycapnp returns Reader objects when awaiting promises
+                            client_field_type = field_type
+                            if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
+                                client_field_type = helper.new_reader(field_type)
+                            # For list fields containing structs, wrap the Reader type
+                            elif field_obj.slot.type.which() == capnp_types.CapnpElementType.LIST:
+                                # Check if the list element is a struct
+                                try:
+                                    element_type = field_obj.slot.type.list.elementType
+                                    if element_type.which() == capnp_types.CapnpElementType.STRUCT:
+                                        # Get the element type name
+                                        element_type_name = self.get_type_name(element_type)
+                                        # Rebuild the field_type with Reader suffix on the element
+                                        # field_type is like "Sequence[ElementType]", replace with "Sequence[ElementTypeReader]"
+                                        client_field_type = client_field_type.replace(
+                                            element_type_name, helper.new_reader(element_type_name)
+                                        )
+                                except Exception:
+                                    pass  # Keep original field_type
+
+                            result_lines.append(f"    {rf}: {client_field_type}")
+
+                            # For the SERVER context results (context_lines): use Builder variant
+                            # Server sets results using Builder objects
+                            server_field_type = field_type
+                            if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
+                                server_field_type = helper.new_builder(field_type)
+                            elif field_obj.slot.type.which() == capnp_types.CapnpElementType.LIST:
+                                # Check if the list element is a struct
+                                try:
+                                    element_type = field_obj.slot.type.list.elementType
+                                    if element_type.which() == capnp_types.CapnpElementType.STRUCT:
+                                        element_type_name = self.get_type_name(element_type)
+                                        # Use Builder for list elements in context.results
+                                        server_field_type = server_field_type.replace(
+                                            element_type_name, helper.new_builder(element_type_name)
+                                        )
+                                except Exception:
+                                    pass
+
+                            context_lines.append(f"    {rf}: {server_field_type}")
                         else:
                             result_lines.append(f"    {rf}: Any")
+                            context_lines.append(f"    {rf}: Any")
                     except Exception as e:
                         logger.debug(f"Could not resolve return type for {rf}: {e}")
                         result_lines.append(f"    {rf}: Any")
+                        context_lines.append(f"    {rf}: Any")
 
                 # Add the result Protocol class to the current scope
                 for line in result_lines:
                     self.scope.add(line)
 
+                # Add the context results Protocol
+                for line in context_lines:
+                    self.scope.add(line)
+
+                # Create the CallContext Protocol with the results attribute
+                self.scope.add(helper.new_class_declaration(context_class_name, ["Protocol"]))
+                self.scope.add(f"    results: {fully_qualified_results_builder}")
+
                 return_type = result_class_name
+
+            elif is_direct_struct_return:
+                # Method returns a struct directly, e.g., info() -> IdInformation
+                # Create a Result protocol with the struct's fields
+                # Both client and server return Awaitable[InfoResult]
+                self._add_typing_import("Awaitable")
+                result_class_name = f"{method_name.capitalize()}Result"
+                
+                if result_schema is not None:
+                    try:
+                        # Get the struct type from the type map or generate it
+                        struct_type_id = result_schema.node.id
+                        if self.is_type_id_known(struct_type_id):
+                            registered_type = self.get_type_by_id(struct_type_id)
+                            struct_type_name = registered_type.scoped_name
+                        else:
+                            # Try to generate it - result_schema is guaranteed to be a struct schema here
+                            # since we checked is_direct_struct_return
+                            try:
+                                self.generate_nested(result_schema)
+                            except Exception:
+                                pass
+                            if self.is_type_id_known(struct_type_id):
+                                registered_type = self.get_type_by_id(struct_type_id)
+                                struct_type_name = registered_type.scoped_name
+                            else:
+                                struct_type_name = helper.get_display_name(result_schema)
+
+                        # Create a Result Protocol with the struct's fields
+                        result_lines = [helper.new_class_declaration(result_class_name, ["Protocol"])]
+                        
+                        # Check if the struct has unions
+                        has_union = result_schema.node.struct.discriminantCount > 0
+                        
+                        # Collect field types for server tuple return
+                        server_tuple_field_types = []
+                        
+                        # Get all fields from the struct
+                        for field in result_schema.node.struct.fields:
+                            field_type = self.get_type_name(field.slot.type)
+                            # For client side, use Reader variant for struct fields
+                            client_field_type = field_type
+                            if field.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
+                                client_field_type = helper.new_reader(field_type)
+                            elif field.slot.type.which() == capnp_types.CapnpElementType.LIST:
+                                try:
+                                    element_type = field.slot.type.list.elementType
+                                    if element_type.which() == capnp_types.CapnpElementType.STRUCT:
+                                        element_type_name = self.get_type_name(element_type)
+                                        client_field_type = client_field_type.replace(
+                                            element_type_name, helper.new_reader(element_type_name)
+                                        )
+                                except Exception:
+                                    pass
+                            result_lines.append(f"    {field.name}: {client_field_type}")
+                            
+                            # For server return, collect the base field type (not Reader variant)
+                            server_tuple_field_types.append(field_type)
+                        
+                        # If the struct has unions, add the which() method
+                        if has_union:
+                            self._add_typing_import("Literal")
+                            # Get all field names for the union
+                            field_names = [f'"{field.name}"' for field in result_schema.node.struct.fields]
+                            which_return_type = f"Literal[{', '.join(field_names)}]"
+                            result_lines.append(f"    def which(self) -> {which_return_type}: ...")
+                        
+                        # Add the Result protocol to the scope
+                        for line in result_lines:
+                            self.scope.add(line)
+                        
+                        # Build fully qualified Result name for references within the same interface scope
+                        scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                        fully_qualified_result = f"{scope_path}.{result_class_name}" if scope_path else result_class_name
+                        
+                        return_type = f"Awaitable[{fully_qualified_result}]"
+                        
+                        # Store the tuple type for server return
+                        direct_struct_return_tuple_type = f"tuple[{', '.join(server_tuple_field_types)}]" if server_tuple_field_types else "None"
+
+                        # Generate CallContext for server
+                        # For direct struct return, _context.results should be typed as the Result protocol
+                        # since that's what server code actually interacts with
+                        self.scope.add(helper.new_class_declaration(context_class_name, ["Protocol"]))
+                        self.scope.add(f"    results: {fully_qualified_result}")
+                    except Exception as e:
+                        logger.debug(f"Could not resolve direct struct return type: {e}")
+                        return_type = "Awaitable[Any]"
+                        self._add_typing_import("Any")
+                        # Still generate CallContext
+                        self.scope.add(f"{context_result_class_name} = Any")
+                        self.scope.add("")
+                        self.scope.add(helper.new_class_declaration(context_class_name, ["Protocol"]))
+                        self.scope.add(f"    results: {fully_qualified_results_builder}")
+                else:
+                    return_type = "Awaitable[Any]"
+                    self._add_typing_import("Any")
+                    # Generate CallContext with Any
+                    self.scope.add(helper.new_class_declaration(context_result_class_name, ["Protocol"]))
+                    self.scope.add("    value: Any")
+                    self.scope.add(helper.new_class_declaration(context_class_name, ["Protocol"]))
+                    self.scope.add(f"    results: {fully_qualified_results_builder}")
+
+            # ALL interface client methods return promises (awaitable), even void methods
+            # So if return_type is still "None", wrap it in Awaitable[None]
+            if return_type == "None":
+                self._add_typing_import("Awaitable")
+                return_type = "Awaitable[None]"
+                # Generate CallContext for void methods
+                self.scope.add(helper.new_class_declaration(context_result_class_name, ["Protocol"]))
+                self.scope.add("    ...")
+                self.scope.add(helper.new_class_declaration(context_class_name, ["Protocol"]))
+                self.scope.add(f"    results: {fully_qualified_results_builder}")
 
             self.scope.add(helper.new_function(method_name, parameters=parameters, return_type=return_type))
 
             # Collect server method signature (server methods are async and accept **kwargs)
             # Server methods return the actual value, not the Result protocol
             # Extract the actual return type from result schema
-            server_return_type = return_type
+            # If return_type is already Awaitable[X], unwrap it first (from direct struct return or void)
+            if return_type.startswith("Awaitable[") and return_type.endswith("]"):
+                server_return_type = return_type[10:-1]  # Remove "Awaitable[" and "]"
+            else:
+                server_return_type = return_type
             is_interface_return = False
             result_type_scope = None
+
+            # Special case: direct struct returns return a tuple of values
+            # Server returns a tuple that pycapnp unpacks into _context.results
+            # Return type should be the tuple type (e.g., tuple[str, str, str])
+            if is_direct_struct_return:
+                # Use the tuple type we created above
+                server_return_type = direct_struct_return_tuple_type if 'direct_struct_return_tuple_type' in locals() else "None"
+                # Mark that this is already properly typed
+                result_type_scope = self.scope
 
             # Try to get the result type from the result_schema directly
             # The result_schema represents the actual return type (e.g., IdInformation)
             # BUT: skip internal Cap'n Proto result structs (contain $)
-            if result_schema is not None and return_type != "None":
+            elif result_schema is not None and return_type != "None":
                 try:
                     # Check if this is an internal Cap'n Proto result struct (has $ in name)
                     result_display_name = helper.get_display_name(result_schema)
@@ -1356,6 +1600,22 @@ class Writer:
                             is_interface_return = field_type.which() == capnp_types.CapnpElementType.INTERFACE
                     except Exception:
                         server_return_type = "Any"
+                elif len(result_fields) > 1:
+                    # For multiple result fields, server returns a tuple
+                    # Get types for each field
+                    field_types = []
+                    try:
+                        if result_schema is not None:
+                            for rf in result_fields:
+                                result_field = next(f for f in result_schema.node.struct.fields if f.name == rf)
+                                field_type_name = self.get_type_name(result_field.slot.type)
+                                field_types.append(field_type_name)
+
+                            # Build tuple type
+                            server_return_type = f"tuple[{', '.join(field_types)}]"
+                    except Exception as e:
+                        logger.debug(f"Could not resolve multiple result field types: {e}")
+                        server_return_type = "Any"
 
             # If we got a registered type from root scope, it's already properly scoped
             # Otherwise, check if we need to add interface scope
@@ -1370,10 +1630,12 @@ class Writer:
                 # Only add scope if the type doesn't already have a dot (isn't already scoped)
                 # and isn't a primitive type
                 # Also check if the return type is the interface itself (self-reference)
+                # Don't scope tuple types or generic types with brackets
                 if (
                     server_return_type not in primitive_types
                     and "." not in server_return_type
                     and not server_return_type.startswith("Sequence[")
+                    and not server_return_type.startswith("tuple[")
                     and server_return_type != interface_name  # Don't scope self-references
                 ):
                     # Get interface scope path (excluding root)
@@ -1385,17 +1647,21 @@ class Writer:
             if is_interface_return:
                 server_return_type = f"{server_return_type} | {server_return_type}.Server"
 
-            # Server methods are async, so wrap in Awaitable
-            if server_return_type != "None":
-                self._add_typing_import("Awaitable")
-                server_return_type = f"Awaitable[{server_return_type}]"
+            # Server methods are async, so wrap in Awaitable (including void methods)
+            self._add_typing_import("Awaitable")
+            server_return_type = f"Awaitable[{server_return_type}]"
 
-            # Server method signatures: pycapnp passes _context and supports **kwargs
-            # _context is passed as a keyword argument by pycapnp, so implementations
-            # can either accept it explicitly (_context=None) or catch it in **kwargs
-            # To allow this flexibility, we don't list _context in the stub signature
-            # Implementations can choose to include it or not
-            server_params = server_parameters + ["**kwargs"]
+            # Server method signatures: pycapnp always passes _context parameter
+            # Make it mandatory and properly typed so implementations must include it
+            # Get the fully qualified context class name
+            scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+            if scope_path:
+                fully_qualified_context = f"{scope_path}.{context_class_name}"
+            else:
+                fully_qualified_context = context_class_name
+
+            # kwargs can't be properly typed as they're used internally by pycapnp
+            server_params = server_parameters + [f"_context: {fully_qualified_context}", "**kwargs: Any"]
 
             server_method_sig = helper.new_function(
                 method_name, parameters=server_params, return_type=server_return_type
@@ -1438,10 +1704,15 @@ class Writer:
             # Add send() method that returns the result type
             # Use fully qualified name for the result type to avoid forward reference issues
             if return_type != "None":
-                # Build fully qualified result type name (e.g., Calculator.EvaluateResult or Calculator.Value.ReadResult)
-                # Get the full scope path excluding root
-                scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
-                send_return_type = f"{scope_path}.{return_type}" if scope_path else return_type
+                # Check if return_type is already fully qualified (contains Awaitable[...] from direct struct return)
+                if return_type.startswith("Awaitable["):
+                    # Direct struct return - already properly typed, don't add scope path
+                    send_return_type = return_type
+                else:
+                    # Build fully qualified result type name (e.g., Calculator.EvaluateResult or Calculator.Value.ReadResult)
+                    # Get the full scope path excluding root
+                    scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                    send_return_type = f"{scope_path}.{return_type}" if scope_path else return_type
             else:
                 send_return_type = "Any"
             request_lines.append(f"    def send(self) -> {send_return_type}: ...")
@@ -1482,6 +1753,21 @@ class Writer:
                     return_type="float",
                 )
             )
+        # Add _new_client() class method to create capability client from Server implementation
+        # This is provided by pycapnp at runtime for all interface types
+        # Need to fully qualify the interface name for nested interfaces
+        # scope.trace includes the current interface, so scope_path IS the fully qualified name
+        scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+        fully_qualified_interface = scope_path if scope_path else name
+        self.scope.add("@classmethod")
+        self.scope.add(
+            helper.new_function(
+                "_new_client",
+                parameters=["cls", f"server: {fully_qualified_interface}.Server"],
+                return_type=fully_qualified_interface,
+            )
+        )
+
         # Now add the Server class with method signatures
         # Server class should also inherit from superclass Server classes
         server_base_classes = []

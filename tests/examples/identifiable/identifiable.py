@@ -2,9 +2,7 @@ import asyncio
 import uuid
 
 import capnp
-from _generated_zalfmas import common_capnp
-
-# import common_capnp
+from _generated.zalfmas import common_capnp
 
 
 class Identifiable(common_capnp.Identifiable.Server):
@@ -51,19 +49,25 @@ class Identifiable(common_capnp.Identifiable.Server):
     def description(self, d):
         self._description = d
 
-    async def info(self, **kwargs):  # () -> IdInformation;
+    async def info(self, _context, **kwargs):  # () -> IdInformation;
         if self._init_info_func:
             self._init_info_func()
+        r = _context.results
 
-        id_infomation = common_capnp.IdInformation.new_message(id=self.id, name=self.name, description=self.description)
-        return id_infomation
+        r.id = self.id
+        r.name = self.name
+        r.description = self.description
+        return self.id, self.name, self.description
 
 
 async def main():
     identifiable = Identifiable(name="TestObject", description="This is a test object.")
-    print(f"Info: {await identifiable.info()}")
-    # Inspect the type of the object
-    print(f"Type: {type(await identifiable.info())}")
+    # info = await identifiable.info()
+
+    x = common_capnp.Identifiable._new_client(identifiable)
+    info = await x.info()
+    print(f"Client: {dir(info)}")
+    print(f"Client: {dir(info)}")
 
 
 if __name__ == "__main__":

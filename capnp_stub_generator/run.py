@@ -17,7 +17,7 @@ from capnp_stub_generator.capnp_types import ModuleRegistryType
 from capnp_stub_generator.helper import replace_capnp_suffix
 from capnp_stub_generator.writer import Writer
 
-if hasattr(capnp, 'remove_import_hook'):
+if hasattr(capnp, "remove_import_hook"):
     capnp.remove_import_hook()
 
 
@@ -322,6 +322,9 @@ def run(args: argparse.Namespace, root_directory: str):
                 if os.path.isfile(common_base):
                     common_base = os.path.dirname(common_base)
 
+    # Track output directories for py.typed marker
+    output_directories_used = set()
+
     for path, module in module_registry.values():
         if output_dir:
             abs_path = os.path.abspath(path)
@@ -341,6 +344,8 @@ def run(args: argparse.Namespace, root_directory: str):
             # No output_dir specified: place stubs next to source files
             output_directory = os.path.dirname(path)
 
+        output_directories_used.add(output_directory)
+
         output_file_name = replace_capnp_suffix(os.path.basename(path))
 
         # Pass output_directory to generate_stubs so it can calculate relative paths
@@ -355,3 +360,11 @@ def run(args: argparse.Namespace, root_directory: str):
             output_dir_to_pass,
             absolute_import_paths,
         )
+
+    # Create py.typed marker in each output directory to mark the package as typed (PEP 561)
+    for output_directory in output_directories_used:
+        py_typed_path = os.path.join(output_directory, "py.typed")
+        # Create an empty py.typed file if it doesn't exist
+        if not os.path.exists(py_typed_path):
+            with open(py_typed_path, "w", encoding="utf8") as f:
+                f.write("")  # Empty file as per PEP 561

@@ -18,30 +18,30 @@ TESTS_DIR = Path(__file__).parent
 class TestServerMethodSignatures:
     """Test that server method signatures are properly typed."""
 
-    def test_server_methods_use_reader_types(self):
+    def test_server_methods_use_reader_types(self, generate_calculator_stubs):
         """Test that Server.method() uses ExpressionReader, not Expression | dict."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 from typing import cast
 
 class ValueImpl(calculator_capnp.Calculator.Value.Server):
     def __init__(self, value: float):
         self.value = value
     
-    async def read(self, **kwargs):
+    async def read(self, _context, **kwargs):
         return self.value
 
 class MyCalculator(calculator_capnp.Calculator.Server):
-    async def evaluate(self, expression: calculator_capnp.Calculator.ExpressionReader, **kwargs):
+    async def evaluate(self, expression: calculator_capnp.Calculator.ExpressionReader, _context, **kwargs):
         # expression should be ExpressionReader, not dict
         literal_val: float = expression.literal
         return ValueImpl(literal_val)
         
-    async def defFunction(self, paramCount: int, body: calculator_capnp.Calculator.ExpressionReader, **kwargs):
+    async def defFunction(self, paramCount: int, body: calculator_capnp.Calculator.ExpressionReader, _context, **kwargs):
         func = cast(calculator_capnp.Calculator.Function, None)
         return func
         
-    async def getOperator(self, op, **kwargs):
+    async def getOperator(self, op, _context, **kwargs):
         func = cast(calculator_capnp.Calculator.Function, None)
         return func
 """
@@ -61,10 +61,10 @@ class MyCalculator(calculator_capnp.Calculator.Server):
         finally:
             test_file.unlink(missing_ok=True)
 
-    def test_client_methods_accept_dict(self):
+    def test_client_methods_accept_dict(self, generate_calculator_stubs):
         """Test that client methods accept dict | Expression."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 from typing import cast
 
 async def test_client():
@@ -93,24 +93,24 @@ async def test_client():
         finally:
             test_file.unlink(missing_ok=True)
 
-    def test_context_parameter_is_optional(self):
-        """Test that _context parameter is optional and properly typed."""
+    def test_context_parameter_is_required(self, generate_calculator_stubs):
+        """Test that _context parameter is required and properly typed."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 
 class MinimalServer(calculator_capnp.Calculator.Value.Server):
-    # Can omit _context entirely and use **kwargs
-    async def read(self, **kwargs):
+    # Must include _context
+    async def read(self, _context, **kwargs):
         return 42.0
 
 class ContextServer(calculator_capnp.Calculator.Value.Server):
     # Can include _context
-    async def read(self, _context=None, **kwargs):
+    async def read(self, _context, **kwargs):
         return 42.0
         
 class ContextUserServer(calculator_capnp.Calculator.Function.Server):
     # Can use _context when needed
-    async def call(self, params, _context=None, **kwargs):
+    async def call(self, params, _context, **kwargs):
         if _context is not None:
             # Use context for something
             pass
@@ -128,18 +128,18 @@ class ContextUserServer(calculator_capnp.Calculator.Function.Server):
 
             # Should have no type errors
             error_count = result.stdout.count("error:")
-            assert error_count == 0, f"_context should be optional:\n{result.stdout}"
+            assert error_count == 0, f"_context should be required:\n{result.stdout}"
         finally:
             test_file.unlink(missing_ok=True)
 
-    def test_kwargs_properly_typed(self):
+    def test_kwargs_properly_typed(self, generate_calculator_stubs):
         """Test that **kwargs is properly typed as Any."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 from typing import Any
 
 class ServerWithKwargs(calculator_capnp.Calculator.Function.Server):
-    async def call(self, params, _context=None, **kwargs: Any):
+    async def call(self, params, _context, **kwargs: Any):
         # kwargs should be typed as Any
         extra_param = kwargs.get("future_param", None)
         return sum(params)
@@ -160,21 +160,21 @@ class ServerWithKwargs(calculator_capnp.Calculator.Function.Server):
         finally:
             test_file.unlink(missing_ok=True)
 
-    def test_narrow_parameter_types(self):
+    def test_narrow_parameter_types(self, generate_calculator_stubs):
         """Test that parameter types are narrow, not dict[str, Any]."""
         test_code = """
-from _generated_examples.calculator import calculator_capnp
+from _generated.examples.calculator import calculator_capnp
 from typing import cast
 
 class ValueImpl(calculator_capnp.Calculator.Value.Server):
     def __init__(self, value: float):
         self.value = value
     
-    async def read(self, **kwargs):
+    async def read(self, _context, **kwargs):
         return self.value
 
 class TypedServer(calculator_capnp.Calculator.Server):
-    async def evaluate(self, expression: calculator_capnp.Calculator.ExpressionReader, **kwargs):
+    async def evaluate(self, expression: calculator_capnp.Calculator.ExpressionReader, _context, **kwargs):
         # Should have specific type, not dict[str, Any]
         # ExpressionReader has specific attributes
         which: str = expression.which()
@@ -184,7 +184,7 @@ class TypedServer(calculator_capnp.Calculator.Server):
             param_idx: int = expression.parameter
         return ValueImpl(0.0)
         
-    async def defFunction(self, paramCount: int, body: calculator_capnp.Calculator.ExpressionReader, **kwargs):
+    async def defFunction(self, paramCount: int, body: calculator_capnp.Calculator.ExpressionReader, _context, **kwargs):
         # paramCount should be int, not Any
         count: int = paramCount
         # body should be ExpressionReader with specific attributes
@@ -192,7 +192,7 @@ class TypedServer(calculator_capnp.Calculator.Server):
         func = cast(calculator_capnp.Calculator.Function, None)
         return func
         
-    async def getOperator(self, op, **kwargs):
+    async def getOperator(self, op, _context, **kwargs):
         # op can be Operator enum or string literal - should work either way
         # Check that we can use it as enum
         if isinstance(op, calculator_capnp.Calculator.Operator):
@@ -225,7 +225,7 @@ def test_server_signatures_summary():
     print("All server method signature tests passed!")
     print("  ✓ Server methods use Reader types (not dict union)")
     print("  ✓ Client methods accept dict for struct params")
-    print("  ✓ _context parameter is optional and typed")
+    print("  ✓ _context parameter is required and typed")
     print("  ✓ **kwargs is properly typed as Any")
     print("  ✓ Parameter types are narrow and specific")
     print("=" * 70 + "\n")

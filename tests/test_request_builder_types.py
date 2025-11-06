@@ -63,6 +63,7 @@ class TestRequestBuilderStructure:
             elif in_deffunction_request and "body:" in line:
                 assert "Calculator.ExpressionBuilder" in line
                 found_body = True
+                break  # Found both fields, exit
             elif in_deffunction_request and line.startswith("class "):
                 break
 

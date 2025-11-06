@@ -17,7 +17,7 @@ from capnp_stub_generator.cli import main
 TESTS_DIR = Path(__file__).parent
 ZALFMAS_DIR = TESTS_DIR / "zalfmas_capnp_schemas"
 IDENTIFIABLE_DIR = TESTS_DIR / "examples" / "identifiable"
-GENERATED_DIR = TESTS_DIR / "_generated_interface_inheritance"
+GENERATED_DIR = TESTS_DIR / "_generated" / "interface_inheritance"
 
 
 @pytest.fixture(scope="module")

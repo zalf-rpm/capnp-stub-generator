@@ -13,7 +13,8 @@ from __future__ import annotations
 import re
 
 import pytest
-from conftest import read_stub_file
+
+from tests.conftest import read_stub_file
 
 
 @pytest.fixture(scope="module")
