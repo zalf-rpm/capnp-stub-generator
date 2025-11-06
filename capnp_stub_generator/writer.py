@@ -1221,6 +1221,9 @@ class Writer:
 
         # Collect server method signatures to add to Server class
         server_methods: list[str] = []
+        
+        # Initialize dict to store NamedTuple info for direct struct returns
+        self._server_namedtuples = {}
 
         method_count = 0
         for method_name, method in methods:
@@ -1426,14 +1429,15 @@ class Writer:
                             else:
                                 struct_type_name = helper.get_display_name(result_schema)
 
-                        # Create a Result Protocol with the struct's fields
+                        # Create a Result Protocol with the struct's fields (for client)
                         result_lines = [helper.new_class_declaration(result_class_name, ["Protocol"])]
                         
                         # Check if the struct has unions
                         has_union = result_schema.node.struct.discriminantCount > 0
                         
-                        # Collect field types for server tuple return
-                        server_tuple_field_types = []
+                        # Collect field names and types for server NamedTuple return
+                        server_result_field_names = []
+                        server_result_field_types = []
                         
                         # Get all fields from the struct
                         for field in result_schema.node.struct.fields:
@@ -1454,8 +1458,9 @@ class Writer:
                                     pass
                             result_lines.append(f"    {field.name}: {client_field_type}")
                             
-                            # For server return, collect the base field type (not Reader variant)
-                            server_tuple_field_types.append(field_type)
+                            # For server return, collect field names and base field types (not Reader variant)
+                            server_result_field_names.append(field.name)
+                            server_result_field_types.append(field_type)
                         
                         # If the struct has unions, add the which() method
                         if has_union:
@@ -1475,8 +1480,10 @@ class Writer:
                         
                         return_type = f"Awaitable[{fully_qualified_result}]"
                         
-                        # Store the tuple type for server return
-                        direct_struct_return_tuple_type = f"tuple[{', '.join(server_tuple_field_types)}]" if server_tuple_field_types else "None"
+                        # Store server result info for later generation in Server class
+                        # We'll use the same name (InfoResult) but it will be a NamedTuple under Server scope
+                        server_result_namedtuple_name = result_class_name
+                        server_result_namedtuple_fields = list(zip(server_result_field_names, server_result_field_types))
 
                         # Generate CallContext for server
                         # For direct struct return, _context.results should be typed as the Result protocol
@@ -1525,14 +1532,30 @@ class Writer:
             is_interface_return = False
             result_type_scope = None
 
-            # Special case: direct struct returns return a tuple of values
-            # Server returns a tuple that pycapnp unpacks into _context.results
-            # Return type should be the tuple type (e.g., tuple[str, str, str])
+            # Special case: direct struct returns return a NamedTuple
+            # Server returns a NamedTuple (Server.InfoResult) that pycapnp unpacks into _context.results
+            # The NamedTuple will be generated inside the Server class
             if is_direct_struct_return:
-                # Use the tuple type we created above
-                server_return_type = direct_struct_return_tuple_type if 'direct_struct_return_tuple_type' in locals() else "None"
-                # Mark that this is already properly typed
-                result_type_scope = self.scope
+                # Use Server.ResultName for the return type
+                # We'll store the info and generate the NamedTuple later when creating the Server class
+                if 'server_result_namedtuple_name' in locals() and 'server_result_namedtuple_fields' in locals():
+                    # Store this info for later use in server method generation
+                    # Build fully qualified name: Identifiable.Server.InfoResult
+                    scope_path = ".".join(s.name for s in self.scope.trace if not s.is_root)
+                    if scope_path:
+                        server_return_type = f"{scope_path}.Server.{server_result_namedtuple_name}"
+                    else:
+                        server_return_type = f"Server.{server_result_namedtuple_name}"
+                    # Store the info in a way we can access it later
+                    if not hasattr(self, '_server_namedtuples'):
+                        self._server_namedtuples = {}
+                    self._server_namedtuples[method_name] = (server_result_namedtuple_name, server_result_namedtuple_fields)
+                    # Mark that this type is already fully scoped
+                    result_type_scope = self.scope  # This will prevent additional scoping
+                else:
+                    server_return_type = "None"
+                    # Mark that this is already properly typed
+                    result_type_scope = self.scope
 
             # Try to get the result type from the result_schema directly
             # The result_schema represents the actual return type (e.g., IdInformation)
@@ -1794,6 +1817,15 @@ class Writer:
         )
         prev_scope = self.scope
         self.scope = server_scope
+
+        # Add NamedTuple definitions for direct struct returns
+        # These are generated inside the Server class as Server.InfoResult
+        if hasattr(self, '_server_namedtuples') and self._server_namedtuples:
+            self._add_typing_import("NamedTuple")
+            for method_name, (namedtuple_name, fields) in self._server_namedtuples.items():
+                self.scope.add(f"class {namedtuple_name}(NamedTuple):")
+                for field_name, field_type in fields:
+                    self.scope.add(f"    {field_name}: {field_type}")
 
         if server_methods:
             # Add all collected server method signatures

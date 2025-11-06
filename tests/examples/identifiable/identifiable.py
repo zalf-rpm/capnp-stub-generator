@@ -57,7 +57,7 @@ class Identifiable(common_capnp.Identifiable.Server):
         r.id = self.id
         r.name = self.name
         r.description = self.description
-        return self.id, self.name, self.description
+        return common_capnp.Identifiable.Server.InfoResult(id=self.id, name=self.name, description=self.description)
 
 
 async def main():
