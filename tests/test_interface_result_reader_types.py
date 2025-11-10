@@ -19,10 +19,10 @@ def test_interface_result_has_reader_types(tmp_path: Path):
     assert "class ReadResult(Awaitable[ReadResult], Protocol):" in content
 
     # Server methods should return the base type (or Reader type), not Builder
-    # Server returns Awaitable[Msg] (or Awaitable[MsgReader])
+    # Server returns Awaitable[Msg | None] (or Awaitable[MsgReader | None])
     assert (
-        "def read(self, _context: Channel.Reader.ReadCallContext, **kwargs: Any) -> Awaitable[Msg]:" in content
-        or "def read(self, _context: Channel.Reader.ReadCallContext, **kwargs) -> Awaitable[MsgReader]:" in content
+        "def read(self, _context: Channel.Reader.ReadCallContext, **kwargs: Any) -> Awaitable[Msg | None]:" in content
+        or "def read(self, _context: Channel.Reader.ReadCallContext, **kwargs) -> Awaitable[MsgReader | None]:" in content
     )
 
 

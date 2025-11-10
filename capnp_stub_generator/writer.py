@@ -14,6 +14,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, Literal
 
 import capnp
+from capnp.lib.capnp import _DynamicStructReader, _StructSchema
 
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
@@ -21,6 +22,9 @@ from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
 capnp.remove_import_hook()
 
 logger = logging.getLogger(__name__)
+
+# Type aliases for capnp types
+TypeReader = _DynamicStructReader
 
 InitChoice = tuple[str, str]
 
@@ -597,7 +601,7 @@ class Writer:
         self,
         slot_fields: list[helper.TypeHintedVariable],
         init_choices: list[InitChoice],
-        schema: capnp._StructSchema,
+        schema: _StructSchema,
         scoped_reader_type: str,
         scoped_builder_type: str,
     ):
@@ -752,7 +756,7 @@ class Writer:
 
     # ===== Interface Generation Helper Methods =====
 
-    def _collect_interface_base_classes(self, schema: capnp._StructSchema) -> list[str]:
+    def _collect_interface_base_classes(self, schema: _StructSchema) -> list[str]:  # type: ignore[name-defined]
         """Collect base classes for an interface (superclasses + Protocol).
 
         Args:
@@ -811,7 +815,7 @@ class Writer:
 
         return base_classes
 
-    def _generate_nested_types_for_interface(self, schema: capnp._StructSchema, name: str):
+    def _generate_nested_types_for_interface(self, schema: _StructSchema, name: str):
         """Generate all nested types for an interface.
 
         Args:
@@ -844,7 +848,7 @@ class Writer:
         # Restore interface scope after generating nested types
         self.scope = interface_scope
 
-    def _add_new_client_method(self, name: str, base_classes: list[str], schema: capnp._StructSchema):
+    def _add_new_client_method(self, name: str, base_classes: list[str], schema: _StructSchema):
         """Add _new_client() class method to create capability client from Server.
 
         Args:
@@ -1043,8 +1047,8 @@ class Writer:
                     yield next_schema_element
 
         def list_elements(
-            list_: capnp.TypeReader,
-        ) -> Iterator[capnp.TypeReader]:
+            list_: TypeReader,
+        ) -> Iterator[TypeReader]:
             """An iterator over the list elements of nested lists.
 
             Args:
@@ -1093,7 +1097,7 @@ class Writer:
                         # For type checking, cast via object to satisfy type checker
                         from typing import cast
 
-                        self.generate_nested(cast(capnp._StructSchema, cast(object, last_element)))
+                        self.generate_nested(cast(_StructSchema, cast(object, last_element)))
                     else:
                         self.generate_nested(last_element)
                     type_name = self.get_type_name(field.slot.type.list.elementType)
@@ -1155,7 +1159,7 @@ class Writer:
         )
 
     def gen_enum_slot(
-        self, field: capnp._DynamicStructReader, schema: capnp._StructSchema
+        self, field: capnp._DynamicStructReader, schema: _StructSchema
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `enum`.
 
@@ -1198,7 +1202,7 @@ class Writer:
     def gen_struct_slot(
         self,
         field: capnp._DynamicStructReader,
-        schema: capnp._StructSchema,
+        schema: _StructSchema,
         init_choices: list[InitChoice],
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `struct`.
@@ -1253,7 +1257,7 @@ class Writer:
             self._add_typing_import("Any")
             return helper.TypeHintedVariable(helper.sanitize_name(field.name), [helper.TypeHint("Any", primary=True)])
 
-    def gen_const(self, schema: capnp._StructSchema) -> None:
+    def gen_const(self, schema: _StructSchema) -> None:
         """Generate a `const` object.
 
         Args:
@@ -1271,7 +1275,7 @@ class Writer:
         elif const_type == "struct":
             pass
 
-    def gen_enum(self, schema: capnp._StructSchema) -> CapnpType | None:
+    def gen_enum(self, schema: _StructSchema) -> CapnpType | None:
         """Generate an `enum` object.
 
         An enum object is translated into an ``Enum`` subclass instead of a ``Literal`` alias.
@@ -1300,7 +1304,7 @@ class Writer:
             self.scope.add(line)
         return None
 
-    def gen_generic(self, schema: capnp._StructSchema) -> list[str]:
+    def gen_generic(self, schema: _StructSchema) -> list[str]:
         """Generate a `generic` type variable.
 
         Args:
@@ -1333,7 +1337,7 @@ class Writer:
         return [self.register_type_var(param) for param in generic_params + referenced_params]
 
     # FIXME: refactor for reducing complexity
-    def gen_struct(self, schema: capnp._StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
+    def gen_struct(self, schema: _StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
         """Generate a `struct` object.
 
         Args:
@@ -1485,7 +1489,7 @@ class Writer:
 
         return new_type
 
-    def gen_interface(self, schema: capnp._StructSchema) -> CapnpType | None:
+    def gen_interface(self, schema: _StructSchema) -> CapnpType | None:
         """Generate an `interface` definition.
 
         The interface is represented as a Protocol with one method per RPC.
@@ -1990,8 +1994,9 @@ class Writer:
                 server_return_type = f"{server_return_type} | {server_return_type}.Server"
 
             # Server methods are async, so wrap in Awaitable (including void methods)
+            # Allow None return to support using _context.results directly
             self._add_typing_import("Awaitable")
-            server_return_type = f"Awaitable[{server_return_type}]"
+            server_return_type = f"Awaitable[{server_return_type} | None]"
 
             # Server method signatures: pycapnp always passes _context parameter
             # Make it mandatory and properly typed so implementations must include it
@@ -2155,7 +2160,7 @@ class Writer:
         self.return_from_scope()
         return None
 
-    def generate_nested(self, schema: capnp._StructSchema) -> None:
+    def generate_nested(self, schema: _StructSchema) -> None:
         """Generate the type for a nested schema.
 
         Args:
@@ -2192,7 +2197,7 @@ class Writer:
         for node in self._module.schema.node.nestedNodes:
             self.generate_nested(self._module.schema.get_nested(node.name))
 
-    def register_import(self, schema: capnp._StructSchema) -> CapnpType | None:
+    def register_import(self, schema: _StructSchema) -> CapnpType | None:
         """Determine, whether a schema is imported from the base module.
 
         If so, the type definition that the schema contains, is added to the type registry.
@@ -2301,7 +2306,7 @@ class Writer:
     def register_type(
         self,
         type_id: int,
-        schema: capnp._StructSchema,
+        schema: _StructSchema,
         name: str = "",
         scope: Scope | None = None,
     ) -> CapnpType:
@@ -2437,7 +2442,7 @@ class Writer:
 
         self.scope = self.scope.return_scope
 
-    def get_type_name(self, type_reader: capnp._DynamicStructReader | capnp.TypeReader) -> str:
+    def get_type_name(self, type_reader: capnp._DynamicStructReader | TypeReader) -> str:
         """Extract the type name from a type reader.
 
         The output type name is prepended by the scope name, if there is a parent scope.

@@ -33,15 +33,15 @@ def test_server_methods_have_signatures(calculator_stub_lines):
     # Function.Server should have call method
     assert "class Server:" in content
     assert "def call(self, params: Sequence[float]" in content
-    assert "Awaitable[float]" in content
+    assert "Awaitable[float" in content
 
     # Value.Server should have read method with _context parameter
-    assert "def read(self, _context: Calculator.Value.ReadCallContext, **kwargs: Any) -> Awaitable[float]:" in content
+    assert "def read(self, _context: Calculator.Value.ReadCallContext, **kwargs: Any) -> Awaitable[float | None]:" in content
 
     # Calculator.Server should have evaluate method with Reader type
     assert "def evaluate(" in content
     assert "expression: Calculator.ExpressionReader" in content
-    assert "Awaitable[Calculator.Value | Calculator.Value.Server]" in content
+    assert "Awaitable[Calculator.Value | Calculator.Value.Server | None]" in content
 
 
 def test_server_methods_accept_context(calculator_stub_lines):

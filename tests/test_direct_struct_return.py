@@ -137,12 +137,12 @@ def test_server_method_returns_result_for_direct_struct(tmp_path: Path):
     stub_path = generate_stub_from_schema("fbp_simple.capnp", tmp_path)
     content = stub_path.read_text()
 
-    # Server implementation returns Awaitable[Channel.Reader.Server.ReadResult] (NamedTuple)
+    # Server implementation returns Awaitable[Channel.Reader.Server.ReadResult | None] (NamedTuple)
     # Check for the key parts (may span multiple lines)
     assert "def read(" in content, "Should have read method"
     assert "_context: Channel.Reader.ReadCallContext" in content, "Should have ReadCallContext parameter"
-    assert "Awaitable[Channel.Reader.Server.ReadResult]" in content, (
-        "Server method should return Awaitable[Channel.Reader.Server.ReadResult]"
+    assert "Awaitable[Channel.Reader.Server.ReadResult | None]" in content, (
+        "Server method should return Awaitable[Channel.Reader.Server.ReadResult | None]"
     )
     assert "class ReadResult(NamedTuple):" in content, "Should have Server.ReadResult as NamedTuple"
 
