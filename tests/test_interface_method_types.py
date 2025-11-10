@@ -21,9 +21,10 @@ class TestCalculatorInterfaceMethodTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have evaluate with Expression parameter and EvaluateResult return type
+        # Should have evaluate with Expression parameter (optional) and EvaluateResult return type
         assert (
-            "def evaluate(self, expression: Calculator.Expression | dict[str, Any]) -> EvaluateResult:" in stub_content
+            "def evaluate(self, expression: Calculator.Expression | dict[str, Any] | None = None) -> EvaluateResult:"
+            in stub_content
         )
 
         # Should NOT have Any for the expression parameter
@@ -34,11 +35,11 @@ class TestCalculatorInterfaceMethodTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have defFunction with int and Expression parameters and DeffunctionResult return
-        assert (
-            "def defFunction(self, paramCount: int, body: Calculator.Expression | dict[str, Any]) -> DeffunctionResult:"
-            in stub_content
-        )
+        # Should have defFunction with int and Expression parameters (both optional) and DeffunctionResult return
+        assert "def defFunction(" in stub_content
+        assert "paramCount: int | None = None" in stub_content
+        assert "body: Calculator.Expression | dict[str, Any] | None = None" in stub_content
+        assert "DeffunctionResult:" in stub_content
 
         # Should NOT have Any for the body parameter
         assert "def defFunction(self, paramCount: int, body: Any)" not in stub_content
@@ -48,8 +49,8 @@ class TestCalculatorInterfaceMethodTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have getOperator with Operator parameter (including string literals)
-        # Note: Now accepts Operator | Literal[...] and returns GetoperatorResult
+        # Should have getOperator with Operator parameter (including string literals, optional)
+        # Note: Now accepts Operator | Literal[...] | None = None and returns GetoperatorResult
         assert "def getOperator(" in stub_content
         assert "Calculator.Operator" in stub_content
         assert "GetoperatorResult" in stub_content
@@ -62,8 +63,8 @@ class TestCalculatorInterfaceMethodTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have call with Sequence[float] parameter and CallResult return type
-        assert "def call(self, params: Sequence[float]) -> CallResult:" in stub_content
+        # Should have call with Sequence[float] parameter (optional) and CallResult return type
+        assert "def call(self, params: Sequence[float] | None = None) -> CallResult:" in stub_content
 
         # Should NOT have Any for the params parameter
         assert "def call(self, params: Any)" not in stub_content
@@ -94,12 +95,13 @@ class TestCalculatorInterfaceMethodTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # All main methods should have _request variants
-        assert "def evaluate_request(self) -> EvaluateRequest:" in stub_content
-        assert "def defFunction_request(self) -> DeffunctionRequest:" in stub_content
-        assert "def getOperator_request(self) -> GetoperatorRequest:" in stub_content
-        assert "def read_request(self) -> ReadRequest:" in stub_content
-        assert "def call_request(self) -> CallRequest:" in stub_content
+        # All main methods should have _request variants with proper return types
+        # Check for method name and return type (allowing for kwargs parameters)
+        assert "def evaluate_request(" in stub_content and ") -> EvaluateRequest:" in stub_content
+        assert "def defFunction_request(" in stub_content and ") -> DeffunctionRequest:" in stub_content
+        assert "def getOperator_request(" in stub_content and ") -> GetoperatorRequest:" in stub_content
+        assert "def read_request(" in stub_content and ") -> ReadRequest:" in stub_content
+        assert "def call_request(" in stub_content and ") -> CallRequest:" in stub_content
 
 
 class TestInterfaceMethodTypeRegression:
@@ -139,9 +141,9 @@ class TestInterfaceMethodTypeRegression:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Function.call should have Sequence[float], not Any
+        # Function.call should have Sequence[float] (optional), not Any
         assert "class Function(Protocol):" in stub_content
-        assert "def call(self, params: Sequence[float]) -> CallResult:" in stub_content
+        assert "def call(self, params: Sequence[float] | None = None) -> CallResult:" in stub_content
 
         # Value.read should return ReadResult with float field, not Any
         assert "class Value(Protocol):" in stub_content

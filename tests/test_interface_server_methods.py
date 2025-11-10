@@ -86,10 +86,10 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
     lines = calculator_stub_lines
     content = "".join(lines)
 
-    # Find Function Protocol's call method
+    # Find Function Protocol's call method (now optional parameters)
     protocol_call_found = False
     for i, line in enumerate(lines):
-        if "def call(self, params: Sequence[float])" in line:
+        if "def call(self, params: Sequence[float] | None = None)" in line:
             # Make sure it's not in a Server class
             context = "".join(lines[max(0, i - 10) : i])
             if "class Server:" not in context:
@@ -98,7 +98,8 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
 
     assert protocol_call_found, "Could not find Protocol call method"
 
-    # Find Function.Server's call method - should have params, _context, and **kwargs
+    # Find Function.Server's call method - should have params (required), _context, and **kwargs
+    # Server parameters remain required for type safety
     # Check for multi-line signature
     server_call_found = (
         "def call(\n                self, params: Sequence[float], _context: Calculator.Function.CallCallContext, **kwargs"

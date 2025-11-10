@@ -213,21 +213,22 @@ class TestRequestMethodReturnsRequest:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def evaluate_request(self) -> EvaluateRequest:" in stub_content
+        # Check for method name and return type (allowing for kwargs parameters)
+        assert "def evaluate_request(" in stub_content and ") -> EvaluateRequest:" in stub_content
 
     def test_deffunction_request_method_returns_deffunction_request(self, generate_calculator_stubs):
         """Test that defFunction_request() returns DeffunctionRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def defFunction_request(self) -> DeffunctionRequest:" in stub_content
+        assert "def defFunction_request(" in stub_content and ") -> DeffunctionRequest:" in stub_content
 
     def test_getoperator_request_method_returns_getoperator_request(self, generate_calculator_stubs):
         """Test that getOperator_request() returns GetoperatorRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def getOperator_request(self) -> GetoperatorRequest:" in stub_content
+        assert "def getOperator_request(" in stub_content and ") -> GetoperatorRequest:" in stub_content
 
 
 def test_request_builder_types_summary():

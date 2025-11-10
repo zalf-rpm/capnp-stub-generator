@@ -1598,14 +1598,20 @@ class Writer:
                             param_type = f"{param_type} | dict[str, Any]"
                             self._add_typing_import("Any")
 
-                        parameters.append(f"{pf}: {param_type}")
+                        # Client-side: all parameters are optional (Cap'n Proto allows calling without setting all params)
+                        parameters.append(f"{pf}: {param_type} | None = None")
+                        # Server-side: parameters remain required for type safety
                         server_parameters.append(f"{pf}: {server_param_type}")
                     else:
-                        parameters.append(f"{pf}: Any")
+                        # Client-side: all parameters are optional
+                        parameters.append(f"{pf}: Any = None")
+                        # Server-side: parameters remain required
                         server_parameters.append(f"{pf}: Any")
                 except Exception as e:
                     logger.debug(f"Could not resolve parameter type for {pf}: {e}")
-                    parameters.append(f"{pf}: Any")
+                    # Client-side: all parameters are optional
+                    parameters.append(f"{pf}: Any = None")
+                    # Server-side: parameters remain required
                     server_parameters.append(f"{pf}: Any")
             # Generate return type - for RPC methods with result fields, create a Protocol
             # with those fields as attributes so users can access promise.field_name
@@ -2024,6 +2030,10 @@ class Writer:
             # Create request builder Protocol with parameter fields and send() method
             request_lines = [helper.new_class_declaration(request_class_name, ["Protocol"])]
 
+            # Track init choices for request builder (similar to struct generation)
+            request_init_choices: list[InitChoice] = []
+            request_list_init_choices: list[tuple[str, str, bool]] = []
+
             # Add fields for each parameter
             # Request builder fields should be Builder types so they have init() methods
             for pf in param_fields:
@@ -2037,12 +2047,60 @@ class Writer:
                             # Append "Builder" to the struct type name
                             # Handle scoped names and generic types properly
                             field_type = self._build_scoped_builder_type(field_type)
+                            # Add to init choices for struct/group fields
+                            base_type = self.get_type_name(field_obj.slot.type)
+                            request_init_choices.append((pf, base_type))
+                        elif field_obj.slot.type.which() == capnp_types.CapnpElementType.LIST:
+                            # Track list fields for init() overloads
+                            element_type = field_obj.slot.type.list.elementType
+                            element_type_name = self.get_type_name(element_type)
+                            needs_builder = element_type.which() == capnp_types.CapnpElementType.STRUCT
+                            request_list_init_choices.append((pf, element_type_name, needs_builder))
 
                         request_lines.append(f"    {pf}: {field_type}")
                     else:
                         request_lines.append(f"    {pf}: Any")
                 except Exception:
                     request_lines.append(f"    {pf}: Any")
+
+            # Add init method overloads to the Request Protocol (like Builder classes)
+            if request_init_choices or request_list_init_choices:
+                total_init_overloads = len(request_init_choices) + len(request_list_init_choices)
+                use_overload = total_init_overloads > 1
+
+                if use_overload:
+                    self._add_typing_import("overload")
+                if request_init_choices or request_list_init_choices:
+                    self._add_typing_import("Literal")
+
+                # Add init method overloads for union/group fields (return their Builder type)
+                for field_name, field_type in request_init_choices:
+                    if use_overload:
+                        request_lines.append("    @overload")
+                    # Build builder type name (respect scoped names)
+                    builder_type = self._build_scoped_builder_type(field_type)
+
+                    if use_overload:
+                        request_lines.append(f'    def init(self, name: Literal["{field_name}"]) -> {builder_type}: ...')
+                    else:
+                        request_lines.append(f'    def init(self, name: Literal["{field_name}"]) -> {builder_type}: ...')
+
+                # Add init method overloads for lists (properly typed)
+                for field_name, element_type, needs_builder in request_list_init_choices:
+                    if use_overload:
+                        request_lines.append("    @overload")
+                    self._add_import("from capnp import _DynamicListBuilder")
+                    element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
+
+                    request_lines.append(
+                        f'    def init(self, name: Literal["{field_name}"], size: int = ...) -> '
+                        f"_DynamicListBuilder[{element_type_for_list}]: ..."
+                    )
+
+                # Add generic init method for other cases (catch-all)
+                if use_overload:
+                    self._add_typing_import("Any")
+                    request_lines.append("    def init(self, name: str, size: int = ...) -> Any: ...")
 
             # Add send() method that returns the result type
             # Use fully qualified name for the result type to avoid forward reference issues
@@ -2064,9 +2122,50 @@ class Writer:
             for line in request_lines:
                 self.scope.add(line)
 
-            # Now add the _request method that returns the builder
+            # Now add the _request method with kwargs parameters (like new_message)
+            # Build parameter list with typed kwargs
+            request_params: list[helper.TypeHintedVariable | str] = ["self"]
+            
+            # Add each parameter field as an optional kwarg
+            if param_schema is not None:
+                for pf in param_fields:
+                    try:
+                        field_obj = next(f for f in param_schema.node.struct.fields if f.name == pf)
+                        field_type = self.get_type_name(field_obj.slot.type)
+                        
+                        # Determine the appropriate type for the kwarg
+                        param_type_hints = [helper.TypeHint(field_type, primary=True)]
+                        
+                        # For struct parameters, also accept dict (like new_message)
+                        if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
+                            param_type_hints.append(helper.TypeHint("dict[str, Any]"))
+                            self._add_typing_import("Any")
+                        # For list of struct parameters, accept Sequence[dict]
+                        elif field_obj.slot.type.which() == capnp_types.CapnpElementType.LIST:
+                            try:
+                                element_type = field_obj.slot.type.list.elementType
+                                if element_type.which() == capnp_types.CapnpElementType.STRUCT:
+                                    param_type_hints.append(helper.TypeHint("Sequence[dict[str, Any]]"))
+                                    self._add_typing_import("Sequence")
+                                    self._add_typing_import("Any")
+                            except Exception:
+                                pass
+                        
+                        param_type_hints.append(helper.TypeHint("None"))
+                        
+                        # Create the parameter
+                        param_var = helper.TypeHintedVariable(
+                            pf,
+                            param_type_hints,
+                            default="None",
+                        )
+                        request_params.append(param_var)
+                    except Exception:
+                        # Fallback for unresolvable parameters
+                        pass
+            
             self.scope.add(
-                helper.new_function(request_method_name, parameters=["self"], return_type=request_class_name)
+                helper.new_function(request_method_name, parameters=request_params, return_type=request_class_name)
             )
 
         # Always ensure core RPC methods are present for known nested interfaces.
