@@ -23,9 +23,6 @@ capnp.remove_import_hook()
 
 logger = logging.getLogger(__name__)
 
-# Type aliases for capnp types
-TypeReader = _DynamicStructReader
-
 InitChoice = tuple[str, str]
 
 # Constants
@@ -491,7 +488,6 @@ class Writer:
         for field_name, element_type, needs_builder in list_init_choices:
             if use_overload:
                 self.scope.add(helper.new_decorator("overload"))
-            self._add_import("from capnp import _DynamicListBuilder")
             element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
 
             # Use self: Any only when using overloads
@@ -512,7 +508,7 @@ class Writer:
                 helper.new_function(
                     "init",
                     parameters=init_params_list,
-                    return_type=f"_DynamicListBuilder[{element_type_for_list}]",
+                    return_type=f"Sequence[{element_type_for_list}]",
                 )
             )
 
@@ -1047,15 +1043,15 @@ class Writer:
                     yield next_schema_element
 
         def list_elements(
-            list_: TypeReader,
-        ) -> Iterator[TypeReader]:
+            list_: _DynamicStructReader,
+        ) -> Iterator[_DynamicStructReader]:
             """An iterator over the list elements of nested lists.
 
             Args:
-                list_ (TypeReader): A list element.
+                list_ (_DynamicStructReader): A list element.
 
             Returns:
-                Iterator[TypeReader]: The next deeper nested list element.
+                Iterator[_DynamicStructReader]: The next deeper nested list element.
             """
             next_list_element = list_
 
@@ -1158,9 +1154,7 @@ class Writer:
             helper.sanitize_name(field.name), [helper.TypeHint(python_type_name, primary=True)]
         )
 
-    def gen_enum_slot(
-        self, field: capnp._DynamicStructReader, schema: _StructSchema
-    ) -> helper.TypeHintedVariable:
+    def gen_enum_slot(self, field: capnp._DynamicStructReader, schema: _StructSchema) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `enum`.
 
         Args:
@@ -2081,20 +2075,23 @@ class Writer:
                     builder_type = self._build_scoped_builder_type(field_type)
 
                     if use_overload:
-                        request_lines.append(f'    def init(self, name: Literal["{field_name}"]) -> {builder_type}: ...')
+                        request_lines.append(
+                            f'    def init(self, name: Literal["{field_name}"]) -> {builder_type}: ...'
+                        )
                     else:
-                        request_lines.append(f'    def init(self, name: Literal["{field_name}"]) -> {builder_type}: ...')
+                        request_lines.append(
+                            f'    def init(self, name: Literal["{field_name}"]) -> {builder_type}: ...'
+                        )
 
                 # Add init method overloads for lists (properly typed)
                 for field_name, element_type, needs_builder in request_list_init_choices:
                     if use_overload:
                         request_lines.append("    @overload")
-                    self._add_import("from capnp import _DynamicListBuilder")
                     element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
 
                     request_lines.append(
                         f'    def init(self, name: Literal["{field_name}"], size: int = ...) -> '
-                        f"_DynamicListBuilder[{element_type_for_list}]: ..."
+                        f"Sequence[{element_type_for_list}]: ..."
                     )
 
                 # Add generic init method for other cases (catch-all)
@@ -2125,17 +2122,17 @@ class Writer:
             # Now add the _request method with kwargs parameters (like new_message)
             # Build parameter list with typed kwargs
             request_params: list[helper.TypeHintedVariable | str] = ["self"]
-            
+
             # Add each parameter field as an optional kwarg
             if param_schema is not None:
                 for pf in param_fields:
                     try:
                         field_obj = next(f for f in param_schema.node.struct.fields if f.name == pf)
                         field_type = self.get_type_name(field_obj.slot.type)
-                        
+
                         # Determine the appropriate type for the kwarg
                         param_type_hints = [helper.TypeHint(field_type, primary=True)]
-                        
+
                         # For struct parameters, also accept dict (like new_message)
                         if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
                             param_type_hints.append(helper.TypeHint("dict[str, Any]"))
@@ -2150,9 +2147,9 @@ class Writer:
                                     self._add_typing_import("Any")
                             except Exception:
                                 pass
-                        
+
                         param_type_hints.append(helper.TypeHint("None"))
-                        
+
                         # Create the parameter
                         param_var = helper.TypeHintedVariable(
                             pf,
@@ -2163,7 +2160,7 @@ class Writer:
                     except Exception:
                         # Fallback for unresolvable parameters
                         pass
-            
+
             self.scope.add(
                 helper.new_function(request_method_name, parameters=request_params, return_type=request_class_name)
             )
@@ -2541,13 +2538,13 @@ class Writer:
 
         self.scope = self.scope.return_scope
 
-    def get_type_name(self, type_reader: capnp._DynamicStructReader | TypeReader) -> str:
+    def get_type_name(self, type_reader: _DynamicStructReader) -> str:
         """Extract the type name from a type reader.
 
         The output type name is prepended by the scope name, if there is a parent scope.
 
         Args:
-            type_reader (_DynamicStructReader | TypeReader): The type reader to get the type name from.
+            type_reader (_DynamicStructReader ): The type reader to get the type name from.
 
         Returns:
             str: The extracted type name.
