@@ -11,7 +11,7 @@ import pathlib
 from collections.abc import Iterator
 from copy import copy
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import capnp
 from capnp.lib.capnp import _DynamicStructReader, _StructSchema
@@ -488,7 +488,7 @@ class Writer:
         for field_name, element_type, needs_builder in list_init_choices:
             if use_overload:
                 self.scope.add(helper.new_decorator("overload"))
-            element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
+            element_type_for_list = self._build_scoped_builder_type(element_type) if needs_builder else element_type
 
             # Use self: Any only when using overloads
             if use_overload:
@@ -2087,7 +2087,7 @@ class Writer:
                 for field_name, element_type, needs_builder in request_list_init_choices:
                     if use_overload:
                         request_lines.append("    @overload")
-                    element_type_for_list = f"{element_type}Builder" if needs_builder else element_type
+                    element_type_for_list = self._build_scoped_builder_type(element_type) if needs_builder else element_type
 
                     request_lines.append(
                         f'    def init(self, name: Literal["{field_name}"], size: int = ...) -> '
@@ -2121,7 +2121,7 @@ class Writer:
 
             # Now add the _request method with kwargs parameters (like new_message)
             # Build parameter list with typed kwargs
-            request_params: list[helper.TypeHintedVariable | str] = ["self"]
+            request_params: list[helper.TypeHintedVariable] = []
 
             # Add each parameter field as an optional kwarg
             if param_schema is not None:
@@ -2161,8 +2161,13 @@ class Writer:
                         # Fallback for unresolvable parameters
                         pass
 
+            # Prepend "self" as a string
             self.scope.add(
-                helper.new_function(request_method_name, parameters=request_params, return_type=request_class_name)
+                helper.new_function(
+                    request_method_name,
+                    parameters=cast("list[str]", ["self"] + request_params),
+                    return_type=request_class_name,
+                )
             )
 
         # Always ensure core RPC methods are present for known nested interfaces.
