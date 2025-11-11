@@ -18,6 +18,7 @@ from capnp.lib.capnp import _DynamicStructReader, _StructSchema
 
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
+from capnp_stub_generator.writer_dto import StructFieldsCollection, StructGenerationContext
 
 capnp.remove_import_hook()
 
@@ -1330,9 +1331,286 @@ class Writer:
 
         return [self.register_type_var(param) for param in generic_params + referenced_params]
 
-    # FIXME: refactor for reducing complexity
+    # ===== Struct Generation Helper Methods (Phase 2 Refactoring) =====
+
+    def _setup_struct_generation(
+        self, schema: _StructSchema, type_name: str
+    ) -> tuple[StructGenerationContext | None, str]:
+        """Setup struct generation by checking imports, creating type, and preparing context.
+
+        This method handles the initial setup phase of struct generation including:
+        - Checking if the struct is already imported
+        - Determining the type name
+        - Handling generic parameters
+        - Creating the class declaration
+        - Setting up the scope
+        - Registering the type
+
+        Args:
+            schema: The Cap'n Proto struct schema
+            type_name: Optional type name override (empty string to auto-generate)
+
+        Returns:
+            A tuple of (context, class_declaration) where:
+            - context is None if the struct should be skipped (already imported or no parent)
+            - class_declaration is the string for the class declaration
+        """
+        # Check if already imported
+        imported = self.register_import(schema)
+        if imported is not None:
+            return None, ""
+
+        # Determine type name
+        if not type_name:
+            type_name = helper.get_display_name(schema)
+
+        # Handle generics
+        registered_params: list[str] = []
+        if schema.node.isGeneric:
+            registered_params = self.gen_generic(schema)
+
+        # Create class declaration
+        if registered_params:
+            parameter = helper.new_type_group("Generic", registered_params)
+            class_declaration = helper.new_class_declaration(type_name, parameters=[parameter])
+        else:
+            class_declaration = helper.new_class_declaration(type_name)
+
+        # Create scope
+        try:
+            self.new_scope(type_name, schema.node)
+        except NoParentError:
+            logger.warning(f"Skipping generation of {type_name} - parent scope not available")
+            return None, ""
+
+        # Register type
+        new_type = self.register_type(schema.node.id, schema, name=type_name)
+        new_type.generic_params = registered_params
+
+        # Create context with auto-generated names
+        context = StructGenerationContext.create(schema, type_name, new_type, registered_params)
+
+        return context, class_declaration
+
+    def _resolve_nested_schema(
+        self, nested_node: Any, parent_schema: _StructSchema, parent_type_name: str
+    ) -> _StructSchema | None:
+        """Resolve a nested schema from a nested node, with fallback strategies.
+
+        Args:
+            nested_node: The nested node to resolve
+            parent_schema: The parent struct schema
+            parent_type_name: The name of the parent type (for runtime fallback)
+
+        Returns:
+            The nested schema or None if it cannot be resolved
+        """
+        try:
+            return parent_schema.get_nested(nested_node.name)
+        except Exception:
+            # Fallback: access via runtime module (needed for nested interfaces)
+            try:
+                runtime_parent = getattr(self._module, parent_type_name)
+                runtime_nested = getattr(runtime_parent, nested_node.name)
+                return runtime_nested.schema
+            except Exception as e:
+                logger.debug(f"Could not resolve nested node {nested_node.name}: {e}")
+                return None
+
+    def _generate_nested_types(self, schema: _StructSchema, type_name: str) -> None:
+        """Generate all nested types (structs, enums, interfaces) within this struct.
+
+        Nested types must be generated before processing fields so they're available
+        for reference in field types.
+
+        Args:
+            schema: The struct schema containing nested nodes
+            type_name: The name of the parent type (for error messages and fallback)
+        """
+        for nested_node in schema.node.nestedNodes:
+            nested_schema = self._resolve_nested_schema(nested_node, schema, type_name)
+            if nested_schema:
+                try:
+                    self.generate_nested(nested_schema)
+                except Exception as e:
+                    logger.debug(f"Failed generating nested node {nested_node.name}: {e}")
+
+    def _process_slot_field(
+        self,
+        field: Any,
+        raw_field: Any,
+        context: StructGenerationContext,
+        fields_collection: StructFieldsCollection,
+    ) -> None:
+        """Process a SLOT field and add to collection.
+
+        Args:
+            field: The field descriptor
+            raw_field: The raw field from the schema
+            context: The struct generation context
+            fields_collection: The collection to add the field to
+        """
+        slot_field = self.gen_slot(
+            raw_field,
+            field,
+            context.new_type,
+            fields_collection.init_choices,
+            fields_collection.list_init_choices,
+        )
+
+        if slot_field is not None:
+            fields_collection.add_slot_field(slot_field)
+
+    def _process_group_field(
+        self,
+        field: Any,
+        raw_field: Any,
+        fields_collection: StructFieldsCollection,
+    ) -> None:
+        """Process a GROUP field and add to collection.
+
+        GROUP fields are essentially nested structs that are generated recursively.
+
+        Args:
+            field: The field descriptor
+            raw_field: The raw field from the schema
+            fields_collection: The collection to add the field to
+        """
+        # Capitalize first letter for group type name
+        group_name = field.name[0].upper() + field.name[1:]
+        assert group_name != field.name
+
+        # Generate the group struct recursively
+        raw_schema = raw_field.schema
+        group_type = self.gen_struct(raw_schema, type_name=group_name)
+        group_scoped_name = group_type.scoped_name
+
+        # Create hinted variable for the group field
+        hinted_variable = helper.TypeHintedVariable(
+            helper.sanitize_name(field.name),
+            [helper.TypeHint(group_scoped_name, primary=True)],
+        )
+        hinted_variable.add_builder_from_primary_type()
+        hinted_variable.add_reader_from_primary_type()
+
+        # Add to collections
+        fields_collection.add_slot_field(hinted_variable)
+        fields_collection.add_init_choice(helper.sanitize_name(field.name), group_scoped_name)
+
+    def _process_struct_fields(
+        self, schema: _StructSchema, context: StructGenerationContext
+    ) -> StructFieldsCollection:
+        """Process all fields in a struct and collect field metadata.
+
+        Args:
+            schema: The struct schema
+            context: The generation context
+
+        Returns:
+            Collection of processed fields and metadata
+        """
+        fields_collection = StructFieldsCollection()
+
+        for field, raw_field in zip(schema.node.struct.fields, schema.as_struct().fields_list):
+            field_type = field.which()
+
+            if field_type == capnp_types.CapnpFieldType.SLOT:
+                self._process_slot_field(field, raw_field, context, fields_collection)
+            elif field_type == capnp_types.CapnpFieldType.GROUP:
+                self._process_group_field(field, raw_field, fields_collection)
+            else:
+                raise AssertionError(f"{schema.node.displayName}: {field.name}: {field.which()}")
+
+        return fields_collection
+
+    def _generate_reader_class_with_scope(
+        self,
+        context: StructGenerationContext,
+        fields_collection: StructFieldsCollection,
+    ) -> None:
+        """Generate reader class with automatic scope management.
+
+        Args:
+            context: The generation context
+            fields_collection: The processed fields collection
+        """
+        self.new_scope(context.reader_type_name, context.schema.node, register=False)
+
+        self._gen_struct_reader_class(
+            fields_collection.slot_fields,
+            context.new_type,
+            context.registered_params,
+            context.reader_type_name,
+            context.scoped_builder_type_name,
+        )
+
+        self.return_from_scope()
+
+    def _generate_builder_class_with_scope(
+        self,
+        context: StructGenerationContext,
+        fields_collection: StructFieldsCollection,
+    ) -> None:
+        """Generate builder class with automatic scope management.
+
+        Args:
+            context: The generation context
+            fields_collection: The processed fields collection
+        """
+        self.new_scope(context.builder_type_name, context.schema.node, register=False)
+
+        self._gen_struct_builder_class(
+            fields_collection.slot_fields,
+            fields_collection.init_choices,
+            fields_collection.list_init_choices,
+            context.new_type,
+            context.registered_params,
+            context.builder_type_name,
+            context.scoped_builder_type_name,
+            context.scoped_reader_type_name,
+        )
+
+        self.return_from_scope()
+
+    def _generate_struct_classes(
+        self,
+        context: StructGenerationContext,
+        fields_collection: StructFieldsCollection,
+        class_declaration: str,
+    ) -> None:
+        """Generate base, reader, and builder classes for the struct.
+
+        Args:
+            context: Generation context with names and metadata
+            fields_collection: Processed fields and init choices
+            class_declaration: The class declaration string
+        """
+        # Add class declaration after nested types are generated
+        if self.scope.parent:
+            self.scope.parent.add(class_declaration)
+
+        # Generate base class
+        self._gen_struct_base_class(
+            fields_collection.slot_fields,
+            fields_collection.init_choices,
+            context.schema,
+            context.scoped_reader_type_name,
+            context.scoped_builder_type_name,
+        )
+
+        self.return_from_scope()
+
+        # Generate reader class
+        self._generate_reader_class_with_scope(context, fields_collection)
+
+        # Generate builder class
+        self._generate_builder_class_with_scope(context, fields_collection)
+
+
     def gen_struct(self, schema: _StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
         """Generate a `struct` object.
+
+        This orchestrator delegates to specialized methods for clarity and testability.
 
         Args:
             schema (_StructSchema): The schema to generate the `struct` object out of.
@@ -1343,145 +1621,29 @@ class Writer:
         """
         assert schema.node.which() == capnp_types.CapnpElementType.STRUCT
 
-        imported = self.register_import(schema)
-
-        if imported is not None:
-            return imported
-
-        if not type_name:
-            type_name = helper.get_display_name(schema)
-
-        registered_params: list[str] = []
-        if schema.node.isGeneric:
-            registered_params = self.gen_generic(schema)
-
-        class_declaration: str
-        if registered_params:
-            parameter = helper.new_type_group("Generic", registered_params)
-            class_declaration = helper.new_class_declaration(type_name, parameters=[parameter])
-
-        else:
-            class_declaration = helper.new_class_declaration(type_name)
-
-        # Do not write the class declaration to the scope, until all nested schemas were expanded.
-        try:
-            parent_scope = self.new_scope(type_name, schema.node)
-        except NoParentError:
-            # This can happen when a struct from another module references this struct
-            # but we haven't processed the parent yet. Skip it since it will be generated
-            # by its own module.
-            logger.warning(f"Skipping generation of {type_name} - parent scope not available")
-            return self.register_type(schema.node.id, schema, name=type_name, scope=self.scope.root)
-
-        new_type: CapnpType = self.register_type(schema.node.id, schema, name=type_name)
-        new_type.generic_params = registered_params
-
-        new_builder_type_name = helper.new_builder(new_type.name)
-        new_reader_type_name = helper.new_reader(new_type.name)
-        scoped_new_builder_type_name = helper.new_builder(new_type.scoped_name)
-        scoped_new_reader_type_name = helper.new_reader(new_type.scoped_name)
-
-        # Generate all nested types (structs, enums) defined within this struct FIRST
-        # before processing fields, so they're available for reference
-        for nested_node in schema.node.nestedNodes:
+        # Phase 1: Setup and initialization
+        context, class_declaration = self._setup_struct_generation(schema, type_name)
+        if context is None:
+            # Already imported or skipped due to missing parent scope
+            # Try to return the already registered type if available
             try:
-                nested_schema = schema.get_nested(nested_node.name)
-            except Exception:
-                # Fallback: access via runtime module (needed for nested interfaces)
-                try:
-                    runtime_parent = getattr(self._module, type_name)
-                    runtime_nested = getattr(runtime_parent, nested_node.name)
-                    nested_schema = runtime_nested.schema
-                except Exception as e:  # pragma: no cover - debug aid only
-                    logger.debug(f"Could not generate nested node {nested_node.name}: {e}")
-                    continue
-            try:
-                self.generate_nested(nested_schema)
-            except Exception as e:  # pragma: no cover - robustness
-                logger.debug(f"Failed generating nested node {nested_node.name}: {e}")
+                return self.get_type_by_id(schema.node.id)
+            except KeyError:
+                # In the NoParentError case, we need to register and return
+                if not type_name:
+                    type_name = helper.get_display_name(schema)
+                return self.register_type(schema.node.id, schema, name=type_name, scope=self.scope.root)
 
-        init_choices: list[InitChoice] = []
-        list_init_choices: list[tuple[str, str, bool]] = []  # Track (field_name, element_type, needs_builder) for lists
-        slot_fields: list[helper.TypeHintedVariable] = []
+        # Phase 2: Generate nested types (must be done before field processing)
+        self._generate_nested_types(schema, context.type_name)
 
-        for field, raw_field in zip(schema.node.struct.fields, schema.as_struct().fields_list):
-            field_type = field.which()
+        # Phase 3: Process all struct fields
+        fields_collection = self._process_struct_fields(schema, context)
 
-            if field_type == capnp_types.CapnpFieldType.SLOT:
-                slot_field = self.gen_slot(raw_field, field, new_type, init_choices, list_init_choices)
+        # Phase 4: Generate the three class variants
+        self._generate_struct_classes(context, fields_collection, class_declaration)
 
-                if slot_field is not None:
-                    slot_fields.append(slot_field)
-
-            elif field_type == capnp_types.CapnpFieldType.GROUP:
-                group_name = field.name[0].upper() + field.name[1:]
-
-                assert group_name != field.name
-
-                raw_schema = raw_field.schema
-                group_type = self.gen_struct(raw_schema, type_name=group_name)
-                # Use scoped_name to get the full qualified name
-                group_scoped_name = group_type.scoped_name
-
-                hinted_variable = helper.TypeHintedVariable(
-                    helper.sanitize_name(field.name),
-                    [helper.TypeHint(group_scoped_name, primary=True)],
-                )
-                hinted_variable.add_builder_from_primary_type()
-                hinted_variable.add_reader_from_primary_type()
-
-                # Don't add type_scope here since we already have the full scoped name
-
-                slot_fields.append(hinted_variable)
-                init_choices.append((helper.sanitize_name(field.name), group_scoped_name))
-
-            else:
-                raise AssertionError(f"{schema.node.displayName}: {field.name}: {field.which()}")
-
-        # Finally, add the class declaration after the expansion of all nested schemas.
-        parent_scope.add(class_declaration)
-
-        # Generate base struct class
-        self._gen_struct_base_class(
-            slot_fields,
-            init_choices,
-            schema,
-            scoped_new_reader_type_name,
-            scoped_new_builder_type_name,
-        )
-
-        self.return_from_scope()
-
-        # Generate the reader class
-        parent_scope = self.new_scope(new_reader_type_name, schema.node, register=False)
-
-        self._gen_struct_reader_class(
-            slot_fields,
-            new_type,
-            registered_params,
-            new_reader_type_name,
-            scoped_new_builder_type_name,
-        )
-
-        self.return_from_scope()
-
-        # Generate the builder class
-        parent_scope = self.new_scope(new_builder_type_name, schema.node, register=False)
-
-        self._gen_struct_builder_class(
-            slot_fields,
-            init_choices,
-            list_init_choices,
-            new_type,
-            registered_params,
-            new_builder_type_name,
-            scoped_new_builder_type_name,
-            scoped_new_reader_type_name,
-        )
-
-        self.return_from_scope()
-
-        return new_type
+        return context.new_type
 
     def gen_interface(self, schema: _StructSchema) -> CapnpType | None:
         """Generate an `interface` definition.
