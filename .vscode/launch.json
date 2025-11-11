@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: CLI Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/capnp_stub_generator/__main__.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-I",
+                "${workspaceFolder}/tests/zalfmas_capnp_schemas",
+                "-p",
+                "${workspaceFolder}/tests/zalfmas_capnp_schemas/fbp.capnp",
+                "-o",
+                "${workspaceFolder}/tests/_generated/zalfmas",
+            ]
+        }
+    ]
+}
