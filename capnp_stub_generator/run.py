@@ -218,7 +218,7 @@ def run(args: argparse.Namespace, root_directory: str):
 
     for path in valid_paths:
         module = parser.load(path, imports=absolute_import_paths)
-        module_registry[module.schema.node.id] = (path, module)  # type: ignore[attr-defined]
+        module_registry[module.schema.node.id] = (path, module)
 
     # If output_dir is specified, determine the common base path from the search patterns
     # to preserve directory structure

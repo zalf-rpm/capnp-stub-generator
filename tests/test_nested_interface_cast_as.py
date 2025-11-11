@@ -117,7 +117,7 @@ T = TypeVar('T')
 
 def cast_to(target_type: type[T]) -> T:
     '''Takes a type, returns an instance.'''
-    return None  # type: ignore
+    return None
 
 # Test: pass Protocol type, get instance
 result = cast_to(MyInterface)

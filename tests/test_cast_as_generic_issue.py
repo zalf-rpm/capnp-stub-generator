@@ -124,7 +124,7 @@ P = TypeVar('P', bound=interfaces_capnp.Greeter)
 def accept_interface_type(iface_type: type[P]) -> P:
     '''Accept an interface type, return an instance.'''
     # Mock implementation
-    return None  # type: ignore
+    return None
 
 # Test 2: Can we pass the interface?
 result = accept_interface_type(interfaces_capnp.Greeter)

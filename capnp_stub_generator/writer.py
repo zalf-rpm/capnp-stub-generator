@@ -756,7 +756,7 @@ class Writer:
 
     # ===== Interface Generation Helper Methods =====
 
-    def _collect_interface_base_classes(self, schema: _StructSchema) -> list[str]:  # type: ignore[name-defined]
+    def _collect_interface_base_classes(self, schema: _StructSchema) -> list[str]:
         """Collect base classes for an interface (superclasses + Protocol).
 
         Args:

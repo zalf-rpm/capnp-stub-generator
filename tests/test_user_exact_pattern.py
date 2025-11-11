@@ -94,7 +94,7 @@ async def main():
     # Pass the type
     first_reader = await con_man.try_connect(
         "capnp://example.com:5000/token",
-        cast_as=channel_capnp.Channel.Reader  # type[Reader]
+        cast_as=channel_capnp.Channel.Reader
     )
     
     # first_reader should be Reader instance

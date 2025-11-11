@@ -179,7 +179,7 @@ import channel_capnp
 
 async def main():
     # Simulate getting a reader (in real code, this would come from pycapnp)
-    reader: channel_capnp.Channel.Reader = None  # type: ignore
+    reader: channel_capnp.Channel.Reader = None
     
     if reader:
         # Call read() - returns ReadResult
