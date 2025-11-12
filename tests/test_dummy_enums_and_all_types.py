@@ -31,8 +31,9 @@ def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):
 
 def test_builder_reader_classes_for_all_types(dummy_stub_lines):
     lines = dummy_stub_lines
-    assert any(line.strip().startswith("class TestAllTypesReader(TestAllTypes):") for line in lines)
-    assert any(line.strip().startswith("class TestAllTypesBuilder(TestAllTypes):") for line in lines)
+    # Reader and Builder classes no longer inherit from base class
+    assert any(line.strip().startswith("class TestAllTypesReader:") for line in lines)
+    assert any(line.strip().startswith("class TestAllTypesBuilder:") for line in lines)
     # from_bytes contextmanager present
     assert any(line.strip().startswith("def from_bytes(") for line in lines) or any(
         "@contextmanager" in line for line in lines

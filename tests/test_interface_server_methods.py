@@ -24,16 +24,16 @@ def test_server_methods_have_signatures(calculator_stub_lines):
     assert "def call(self, params: Sequence[float]" in content
     assert "Awaitable[" in content  # Server.call returns Awaitable
 
-    # Value.Server should have read method with _context parameter and returns NamedTuple
-    # Method may span multiple lines
+    # Value.Server should have read method with _context parameter and returns NamedTuple with "Tuple" suffix
+    # CallContext is now inside Server, so reference is Calculator.Value.Server.ReadCallContext
     assert "def read(" in content
-    assert "_context: Calculator.Value.ReadCallContext" in content
-    assert "Awaitable[float | Calculator.Value.Server.ReadResult | None]" in content
+    assert "_context: Calculator.Value.Server.ReadCallContext" in content
+    assert "Awaitable[float | Calculator.Value.Server.ReadResultTuple | None]" in content
 
-    # Calculator.Server should have evaluate method with Reader type and return NamedTuple
+    # Calculator.Server should have evaluate method with Reader type and return NamedTuple with "Tuple" suffix
     assert "def evaluate(" in content
     assert "expression: Calculator.ExpressionReader" in content
-    assert "Awaitable[Calculator.Value.Server | Calculator.Server.EvaluateResult | None]" in content
+    assert "Awaitable[Calculator.Value.Server | Calculator.Server.EvaluateResultTuple | None]" in content
 
 
 def test_server_methods_accept_context(calculator_stub_lines):
@@ -95,14 +95,15 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
 
     # Find Function.Server's call method - should have params (required), _context, and **kwargs
     # Server parameters remain required for type safety
+    # CallContext is now inside Server, so reference is Calculator.Function.Server.CallCallContext
     # Check for multi-line signature
     server_call_found = (
-        "def call(\n                self, params: Sequence[float], _context: Calculator.Function.CallCallContext, **kwargs"
+        "def call(\n                self, params: Sequence[float], _context: Calculator.Function.Server.CallCallContext, **kwargs"
         in content
     )
     server_call_found = (
         server_call_found
-        or "def call(self, params: Sequence[float], _context: Calculator.Function.CallCallContext, **kwargs)" in content
+        or "def call(self, params: Sequence[float], _context: Calculator.Function.Server.CallCallContext, **kwargs)" in content
     )
 
     assert server_call_found, "Server call method should have same params as Protocol plus _context and **kwargs"

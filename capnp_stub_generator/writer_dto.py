@@ -418,18 +418,20 @@ class MethodSignatureCollection:
 class ServerMethodsCollection:
     """Collection of server method signatures for Server class generation.
 
-    Accumulates server method signatures and NamedTuple definitions as methods
-    are processed, providing everything needed to generate the final Server class.
+    Accumulates server method signatures, NamedTuple definitions, and context classes
+    as methods are processed, providing everything needed to generate the final Server class.
 
     Attributes:
         server_methods: List of server method signature lines
         namedtuples: Dict mapping result type names to list of (field_name, field_type) tuples
+        context_classes: List of context class lines (CallContext and ResultsBuilder)
     """
 
     def __init__(self):
         """Initialize empty collection."""
         self.server_methods: list[str] = []
         self.namedtuples: dict[str, list[tuple[str, str]]] = {}
+        self.context_classes: list[str] = []
 
     def add_server_method(self, signature: str) -> None:
         """Add a server method signature.
@@ -448,6 +450,14 @@ class ServerMethodsCollection:
         """
         self.namedtuples[result_type] = fields
 
+    def add_context_lines(self, lines: list[str]) -> None:
+        """Add context class lines (CallContext and ResultsBuilder).
+
+        Args:
+            lines: List of lines for context classes
+        """
+        self.context_classes.extend(lines)
+
     def has_methods(self) -> bool:
         """Check if any server methods were added.
 
@@ -458,4 +468,9 @@ class ServerMethodsCollection:
 
     def __repr__(self) -> str:
         """Return a readable representation for debugging."""
-        return f"ServerMethodsCollection(methods={len(self.server_methods)}, namedtuples={len(self.namedtuples)})"
+        return (
+            f"ServerMethodsCollection("
+            f"methods={len(self.server_methods)}, "
+            f"namedtuples={len(self.namedtuples)}, "
+            f"context_classes={len(self.context_classes)})"
+        )

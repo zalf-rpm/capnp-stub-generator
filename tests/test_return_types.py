@@ -18,14 +18,14 @@ def interface_stub_file(basic_stubs):
 class TestStructReturnTypes:
     """Test that struct field return types are correctly narrowed per class."""
 
-    def test_base_class_returns_base_type(self, dummy_stub_file):
-        """Base class properties should return only the base type, not union."""
+    def test_base_class_has_no_field_properties(self, dummy_stub_file):
+        """Base class should not have field properties (these are on Reader/Builder)."""
         content = dummy_stub_file.read_text()
         lines = content.split("\n")
 
         # Find the base TestAllTypes class
         in_base_class = False
-        found_struct_field = False
+        has_struct_field = False
 
         for i, line in enumerate(lines):
             if "class TestAllTypes:" in line:
@@ -38,28 +38,22 @@ class TestStructReturnTypes:
                 break
 
             if in_base_class and "def structField(self) ->" in line:
-                # Should return only TestAllTypes, not a union
-                assert "TestAllTypes:" in line or "-> TestAllTypes" in lines[i : i + 2].__str__(), (
-                    "Base class should return base type"
-                )
-                assert "TestAllTypesBuilder" not in line, "Base class should NOT include Builder in return type"
-                assert "TestAllTypesReader" not in line, "Base class should NOT include Reader in return type"
-                found_struct_field = True
+                has_struct_field = True
                 break
 
-        assert found_struct_field, "Should find structField in base class"
+        assert not has_struct_field, "Base class should NOT have field properties"
 
     def test_reader_class_returns_reader_type(self, dummy_stub_file):
         """Reader class properties should return Reader types."""
         content = dummy_stub_file.read_text()
         lines = content.split("\n")
 
-        # Find the Reader class
+        # Find the Reader class - no longer inherits
         in_reader_class = False
         found_struct_field = False
 
         for i, line in enumerate(lines):
-            if "class TestAllTypesReader(TestAllTypes):" in line:
+            if "class TestAllTypesReader:" in line:
                 in_reader_class = True
             elif in_reader_class and line.startswith("class ") and "TestAllTypesReader" not in line:
                 # We've left the Reader class
@@ -79,12 +73,12 @@ class TestStructReturnTypes:
         content = dummy_stub_file.read_text()
         lines = content.split("\n")
 
-        # Find the Builder class
+        # Find the Builder class - no longer inherits
         in_builder_class = False
         found_struct_field_getter = False
 
         for i, line in enumerate(lines):
-            if "class TestAllTypesBuilder(TestAllTypes):" in line:
+            if "class TestAllTypesBuilder:" in line:
                 in_builder_class = True
             elif in_builder_class and line.startswith("class ") and "TestAllTypesBuilder" not in line:
                 # We've left the Builder class
@@ -100,36 +94,22 @@ class TestStructReturnTypes:
         assert found_struct_field_getter, "Should find structField getter in Builder class"
 
     def test_builder_setter_accepts_union(self, dummy_stub_file):
-        """Builder class setters should accept base, Builder, Reader, or dict types."""
+        """Builder class setters should accept Builder, Reader, or dict types (not base)."""
         content = dummy_stub_file.read_text()
 
-        # Builder setter should accept union for flexibility, including dict for convenience
+        # Builder setter should accept Builder/Reader + dict, but NOT base type
+        # Base type (_StructModule) doesn't make sense as a setter value
         assert (
-            "def structField(self, value: TestAllTypes | TestAllTypesBuilder | TestAllTypesReader | dict[str, Any])"
+            "def structField(self, value: TestAllTypesBuilder | TestAllTypesReader | dict[str, Any])"
             in content
-        ), "Builder setter should accept union of base, Builder, Reader, and dict types"
+        ), "Builder setter should accept union of Builder, Reader, and dict types (not base)"
 
     def test_list_fields_follow_same_pattern(self, dummy_stub_file):
         """List fields should follow the same narrowing pattern."""
         content = dummy_stub_file.read_text()
         lines = content.split("\n")
 
-        # Check base class list field
-        in_base = False
-        found_base_list = False
-        for line in lines:
-            if "class TestAllTypes:" in line:
-                in_base = True
-            elif in_base and "class TestAllTypesReader" in line:
-                break
-            if in_base and "def structList(self) ->" in line:
-                # Should be Sequence[TestAllTypes] not union
-                assert "Sequence[TestAllTypes]" in line, "Base class list should be Sequence[BaseType]"
-                found_base_list = True
-                break
-
-        assert found_base_list, "Should find structList in base class"
-
+        # Base class no longer has field properties
         # Check Reader class list field
         in_reader = False
         found_reader_list = False
@@ -204,11 +184,11 @@ class TestStaticMethodReturnTypes:
         content = dummy_stub_file.read_text()
         lines = content.split("\n")
 
-        # Find Reader class
+        # Find Reader class - no longer inherits
         in_reader = False
         reader_content = []
         for line in lines:
-            if "class TestAllTypesReader(TestAllTypes):" in line:
+            if "class TestAllTypesReader:" in line:
                 in_reader = True
             elif in_reader and line.startswith("class ") and "TestAllTypesReader" not in line:
                 break
@@ -216,48 +196,44 @@ class TestStaticMethodReturnTypes:
                 reader_content.append(line)
 
         reader_text = "\n".join(reader_content)
-        # new_message should not be redefined in Reader (inherits from base but unusable)
-        # The key is that Reader doesn't override it, so the inherited one would be wrong
-        # At runtime, _DynamicStructReader doesn't have new_message
+        # new_message should not be in Reader class
         assert "def new_message(" not in reader_text, "Reader class should not declare new_message"
 
 
 class TestRuntimeAccuracy:
     """Test that type annotations match actual runtime behavior."""
 
-    def test_base_type_matches_runtime_abstract(self, dummy_stub_file):
-        """Base class types should match the abstract interface at runtime.
+    def test_base_type_matches_runtime_struct_module(self, dummy_stub_file):
+        """Base class types should match the _StructModule at runtime.
 
-        At runtime, you never actually get a base class instance,
-        you always get a Builder or Reader. But the base class
-        defines the abstract interface, so its return types should
-        be the base types.
+        At runtime, the base class is a _StructModule which provides
+        static factory methods like new_message(), from_bytes(), etc.
+        It does not have field properties - those are on Reader/Builder.
         """
         content = dummy_stub_file.read_text()
 
-        # This is correct: base class properties return base types
-        # even though at runtime you'll get specific Builder/Reader instances
+        # Base class should have factory methods but no field properties
         assert "class TestAllTypes:" in content
-        # The property typing reflects the abstract interface
-        # This allows both Reader and Builder (which inherit from base) to be used
+        assert "def new_message(" in content
+        assert "def from_bytes(" in content
 
-    def test_annotations_support_variance(self, dummy_stub_file):
-        """Type annotations should support proper variance/substitution.
+    def test_annotations_reflect_runtime_structure(self, dummy_stub_file):
+        """Type annotations should reflect actual runtime class structure.
 
-        A function expecting TestAllTypes should accept:
-        - TestAllTypes (base, though abstract)
-        - TestAllTypesReader (subtype)
-        - TestAllTypesBuilder (subtype)
+        At runtime:
+        - Base class is _StructModule (factory methods, no field properties)
+        - Reader is _DynamicStructReader (field properties, read-only)
+        - Builder is _DynamicStructBuilder (field properties with setters)
 
-        But a function returning TestAllTypes might actually return
-        either Reader or Builder at runtime (Liskov substitution).
+        None of these classes inherit from each other.
         """
         content = dummy_stub_file.read_text()
 
-        # This is validated by pyright/mypy through inheritance
-        assert "class TestAllTypesReader(TestAllTypes):" in content
-        assert "class TestAllTypesBuilder(TestAllTypes):" in content
-        # Inheritance ensures proper subtyping
+        # Base, Reader, and Builder are separate classes
+        assert "class TestAllTypes:" in content
+        assert "class TestAllTypesReader:" in content
+        assert "class TestAllTypesBuilder:" in content
+        # They don't inherit from each other
 
 
 def test_return_types_summary():
@@ -266,10 +242,10 @@ def test_return_types_summary():
     Summary of correct return type behavior:
 
     Structs:
-    - Base class properties: BaseType (abstract interface)
+    - Base class: Factory methods only (new_message, from_bytes, etc.)
     - Reader class properties: ReaderType (read-only, narrow)
     - Builder class properties: BuilderType (mutable, narrow)
-    - Builder setters: BaseType | BuilderType | ReaderType (flexible)
+    - Builder setters: BuilderType | ReaderType | dict (flexible, no base type)
     - new_message(): BuilderType (creates mutable)
     - from_bytes/read(): ReaderType (loads read-only)
 
@@ -278,7 +254,11 @@ def test_return_types_summary():
     - Methods return interface types directly
     - Server methods return Awaitable[Type]
 
-    This matches pycapnp runtime behavior and provides
-    accurate type checking with proper variance.
+    This matches pycapnp runtime behavior where:
+    - Base = _StructModule (factory)
+    - Reader = _DynamicStructReader
+    - Builder = _DynamicStructBuilder
+    None of these inherit from each other, so base type is not
+    accepted in setters (you can't set a field to a factory module).
     """
     pass  # Documentation test

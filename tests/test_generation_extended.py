@@ -79,11 +79,7 @@ def test_imports_cross_module_reference():
     # Both import_base and import_user should already be generated together
     user_stub = generated_dir / "import_user_capnp.pyi"
     user_lines = _read(user_stub)
-    # Base class should use only the base type (Shared), not union with Builder/Reader
-    # This matches runtime behavior where the base class property returns the base type
-    assert any("def shared(self) -> Shared:" in line for line in user_lines), (
-        "Base class should return Shared (not union)"
-    )
+    # Base class no longer has field properties - only Reader/Builder do
     # Reader class should narrow to SharedReader
     assert any("def shared(self) -> SharedReader:" in line for line in user_lines), (
         "Reader class should return SharedReader"

@@ -353,12 +353,9 @@ class Writer:
         Args:
             slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
         """
-        for slot_field in slot_fields:
-            # Base class uses properties without setters (read-only interface)
-            # Use only the primary (base) type, not the union with Reader/Builder
-            field_type = slot_field.primary_type_nested
-            for line in helper.new_property(slot_field.name, field_type):
-                self.scope.add(line)
+        # Base class (StructModule) does not have field properties
+        # Properties are only on Reader and Builder classes
+        pass
 
     def _add_reader_properties(self, slot_fields: list[helper.TypeHintedVariable]):
         """Add read-only properties to Reader class.
@@ -366,12 +363,18 @@ class Writer:
         Args:
             slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
         """
+        # Reader class needs all properties, not just those with Reader affix
         for slot_field in slot_fields:
             if slot_field.has_type_hint_with_reader_affix:
                 field_copy = copy(slot_field)
                 # Get the narrowed Reader-only type for this field
                 reader_type = field_copy.get_type_with_affixes([helper.READER_NAME])
                 for line in helper.new_property(slot_field.name, reader_type):
+                    self.scope.add(line)
+            else:
+                # Add primitive and other fields with their primary type
+                field_type = slot_field.primary_type_nested
+                for line in helper.new_property(slot_field.name, field_type):
                     self.scope.add(line)
 
     def _add_builder_properties(self, slot_fields: list[helper.TypeHintedVariable]):
@@ -387,13 +390,16 @@ class Writer:
                 # For lists, use Sequence[ElementBuilder] for compatibility
                 if slot_field.nesting_depth == 1:
                     getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
-                    setter_type = field_copy.full_type_nested + " | Sequence[dict[str, Any]]"
+                    # Setter accepts Builder/Reader types + dict, but NOT the base type
+                    setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
+                    setter_type = field_copy.get_type_with_affixes(setter_types) + " | Sequence[dict[str, Any]]"
                     self._add_typing_import("Sequence")
                     self._add_typing_import("Any")
                 else:
-                    # For non-list structs
+                    # For non-list structs: setter accepts Builder/Reader + dict, but NOT the base type
                     getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
-                    setter_type = field_copy.full_type_nested + " | dict[str, Any]"
+                    setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
+                    setter_type = field_copy.get_type_with_affixes(setter_types) + " | dict[str, Any]"
                     self._add_typing_import("Any")
             # For interface fields: getter returns Protocol, setter accepts Protocol | Server
             elif len(slot_field.type_hints) > 1 and any(".Server" in str(h) for h in slot_field.type_hints):
@@ -652,6 +658,7 @@ class Writer:
         registered_params: list[str],
         reader_type_name: str,
         scoped_builder_type: str,
+        schema: _StructSchema,
     ):
         """Generate the Reader class for a struct.
 
@@ -661,12 +668,22 @@ class Writer:
             registered_params (list[str]): Generic type parameters.
             reader_type_name (str): The Reader class name.
             scoped_builder_type (str): Fully qualified Builder type name.
+            schema (_StructSchema): The struct schema.
         """
         # Add the reader slot fields as properties
         self._add_reader_properties(slot_fields)
 
-        # Build Reader class declaration with generic params
-        reader_params = [new_type.scoped_name]
+        # Add the `which` function for unions
+        if schema.node.struct.discriminantCount:
+            self._add_typing_import("Literal")
+            field_names = [
+                f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
+            ]
+            return_type = helper.new_type_group("Literal", field_names)
+            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
+
+        # Build Reader class declaration - no longer inherits from base class
+        reader_params = []
         if registered_params:
             generic_param = helper.new_type_group("Generic", registered_params)
             reader_params.append(generic_param)
@@ -695,6 +712,7 @@ class Writer:
         builder_type_name: str,
         scoped_builder_type: str,
         scoped_reader_type: str,
+        schema: _StructSchema,
     ):
         """Generate the Builder class for a struct.
 
@@ -707,9 +725,19 @@ class Writer:
             builder_type_name (str): The Builder class name.
             scoped_builder_type (str): Fully qualified Builder type name.
             scoped_reader_type (str): Fully qualified Reader type name.
+            schema (_StructSchema): The struct schema.
         """
         # Add all builder slot fields with setters
         self._add_builder_properties(slot_fields)
+
+        # Add the `which` function for unions
+        if schema.node.struct.discriminantCount:
+            self._add_typing_import("Literal")
+            field_names = [
+                f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
+            ]
+            return_type = helper.new_type_group("Literal", field_names)
+            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
 
         # Add from_dict method
         self.scope.add(helper.new_decorator("staticmethod"))
@@ -737,8 +765,8 @@ class Writer:
             )
         )
 
-        # Build Builder class declaration with generic params
-        builder_params = [new_type.scoped_name]
+        # Build Builder class declaration - no longer inherits from base class
+        builder_params = []
         if registered_params:
             generic_param = helper.new_type_group("Generic", registered_params)
             builder_params.append(generic_param)
@@ -1549,6 +1577,7 @@ class Writer:
             context.registered_params,
             context.reader_type_name,
             context.scoped_builder_type_name,
+            context.schema,
         )
 
         self.return_from_scope()
@@ -1575,6 +1604,7 @@ class Writer:
             context.builder_type_name,
             context.scoped_builder_type_name,
             context.scoped_reader_type_name,
+            context.schema,
         )
 
         self.return_from_scope()
@@ -2059,17 +2089,22 @@ class Writer:
                         field_obj = next(f for f in struct_node.fields if f.name == rf)
                         field_type = self.get_type_name(field_obj.slot.type)
 
-                        # For struct types, use Reader for Result Protocol
+                        # For struct types, accept both Builder and Reader in Result Protocol
                         field_type_enum = field_obj.slot.type.which()
                         if field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                            field_type = helper.new_reader(field_type)
+                            builder_type = helper.new_builder(field_type)
+                            reader_type = helper.new_reader(field_type)
+                            field_type = f"{builder_type} | {reader_type}"
                         elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                            # For lists of structs, use Reader for elements
+                            # For lists of structs, accept both Builder and Reader for elements
                             element_type_obj = field_obj.slot.type.list.elementType
                             if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
                                 element_type_name = self.get_type_name(element_type_obj)
+                                element_builder = helper.new_builder(element_type_name)
                                 element_reader = helper.new_reader(element_type_name)
-                                field_type = field_type.replace(element_type_name, element_reader)
+                                field_type = field_type.replace(
+                                    element_type_name, f"{element_builder} | {element_reader}"
+                                )
 
                         lines.append(f"    {rf}: {field_type}")
                     except Exception:
@@ -2096,24 +2131,29 @@ class Writer:
         self._add_typing_import("Awaitable")
         lines.append(f"class {result_class_name}(Awaitable[{result_class_name}], Protocol):")
 
-        # Add result fields with Reader types for structs
+        # Add result fields with Builder | Reader types for structs
         if method_info.result_schema is not None:
             for rf in method_info.result_fields:
                 try:
                     field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == rf)
                     field_type = self.get_type_name(field_obj.slot.type)
 
-                    # For struct types, use Reader for Result Protocol (client receives Reader)
+                    # For struct types, accept both Builder and Reader in Result Protocol
                     field_type_enum = field_obj.slot.type.which()
                     if field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                        field_type = helper.new_reader(field_type)
+                        builder_type = helper.new_builder(field_type)
+                        reader_type = helper.new_reader(field_type)
+                        field_type = f"{builder_type} | {reader_type}"
                     elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                        # For lists of structs, use Reader for elements
+                        # For lists of structs, accept both Builder and Reader for elements
                         element_type_obj = field_obj.slot.type.list.elementType
                         if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
                             element_type_name = self.get_type_name(element_type_obj)
+                            element_builder = helper.new_builder(element_type_name)
                             element_reader = helper.new_reader(element_type_name)
-                            field_type = field_type.replace(element_type_name, element_reader)
+                            field_type = field_type.replace(
+                                element_type_name, f"{element_builder} | {element_reader}"
+                            )
 
                     lines.append(f"    {rf}: {field_type}")
                 except Exception:
@@ -2205,8 +2245,8 @@ class Writer:
     ) -> list[tuple[str, str]]:
         """Collect result fields for NamedTuple definition.
 
-        Gets the field names and their base types (not Builder, not Reader)
-        for use in Server NamedTuple result types.
+        Gets the field names and their types for Server NamedTuple result types.
+        For structs, accepts both Builder and Reader types.
 
         Args:
             method_info: Information about the method
@@ -2223,12 +2263,17 @@ class Writer:
             try:
                 field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == field_name)
 
-                # Get base type (not Builder, not Reader)
+                # Get base type
                 field_type = self.get_type_name(field_obj.slot.type)
 
-                # For interfaces in NamedTuples, server returns Interface.Server
+                # For structs, accept both Builder and Reader
                 field_type_enum = field_obj.slot.type.which()
-                if field_type_enum == capnp_types.CapnpElementType.INTERFACE:
+                if field_type_enum == capnp_types.CapnpElementType.STRUCT:
+                    builder_type = helper.new_builder(field_type)
+                    reader_type = helper.new_reader(field_type)
+                    field_type = f"{builder_type} | {reader_type}"
+                # For interfaces in NamedTuples, server returns Interface.Server
+                elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                     field_type = f"{field_type}.Server"
 
                 # Sanitize field name to avoid conflicts with tuple methods
@@ -2265,13 +2310,14 @@ class Writer:
         """
         method_name = helper.sanitize_name(method_info.method_name)
 
-        # Generate CallContext type name with full scope path
+        # Generate CallContext type name - it's inside Server class
         scope_path = self._get_scope_path()
         context_class_name = f"{method_name.title()}CallContext"
         if scope_path:
-            context_type = f"{scope_path}.{context_class_name}"
+            # CallContext is now under Server, not at interface level
+            context_type = f"{scope_path}.Server.{context_class_name}"
         else:
-            context_type = context_class_name
+            context_type = f"Server.{context_class_name}"
 
         # Server methods have: self, params..., _context: CallContext, **kwargs
         param_parts = ["self"]
@@ -2329,11 +2375,11 @@ class Writer:
                 except Exception:
                     pass
 
-            # Generate return type
+            # Generate return type - use NamedTuple with "Tuple" suffix
             if scope_path:
-                full_server_path = f"{scope_path}.Server.{result_type}"
+                full_server_path = f"{scope_path}.Server.{result_type}Tuple"
             else:
-                full_server_path = f"Server.{result_type}"
+                full_server_path = f"Server.{result_type}Tuple"
 
             if is_single_primitive_or_interface and single_field_type:
                 # For single primitive/interface: allow both the primitive/interface.Server and the NamedTuple
@@ -2379,7 +2425,7 @@ class Writer:
         Args:
             method_info: Information about the method
             has_results: Whether the method has results
-            result_type_for_context: Optional result type for direct struct returns
+            result_type_for_context: Result type name (points to interface-level Protocol)
 
         Returns:
             List of lines for CallContext Protocol
@@ -2392,19 +2438,16 @@ class Writer:
         if has_results:
             scope_path = self._get_scope_path()
 
+            # CallContext.results always points to the Result Protocol at interface level
             if result_type_for_context:
-                # Direct struct return: use the Result Protocol directly
                 if scope_path:
+                    # Use interface-level Result Protocol
                     fully_qualified_results = f"{scope_path}.{result_type_for_context}"
                 else:
                     fully_qualified_results = result_type_for_context
             else:
-                # Named field return: use ResultsBuilder
-                results_builder_name = f"{method_name.title()}ResultsBuilder"
-                if scope_path:
-                    fully_qualified_results = f"{scope_path}.{results_builder_name}"
-                else:
-                    fully_qualified_results = results_builder_name
+                # Shouldn't happen, but fallback
+                fully_qualified_results = "Any"
 
             lines.append(f"    results: {fully_qualified_results}")
         else:
@@ -2417,13 +2460,13 @@ class Writer:
         self,
         method_info: MethodInfo,
     ) -> list[tuple[str, str]]:
-        """Process result fields to get Builder types for server.
+        """Process result fields to get Builder|Reader types for server.
 
         Args:
             method_info: Information about the method
 
         Returns:
-            List of (field_name, builder_type) tuples
+            List of (field_name, type) tuples where type can be Builder | Reader for structs
         """
         result_fields_info = []
 
@@ -2435,23 +2478,29 @@ class Writer:
                 field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == field_name)
 
                 field_type = self.get_type_name(field_obj.slot.type)
-                builder_type = field_type
+                result_type = field_type
 
                 field_type_enum = field_obj.slot.type.which()
 
-                # For structs, use Builder
+                # For structs, accept both Builder and Reader
                 if field_type_enum == capnp_types.CapnpElementType.STRUCT:
                     builder_type = helper.new_builder(field_type)
+                    reader_type = helper.new_reader(field_type)
+                    result_type = f"{builder_type} | {reader_type}"
 
-                # For lists of structs, use Builder for elements
+                # For lists of structs, accept both Builder and Reader for elements
                 elif field_type_enum == capnp_types.CapnpElementType.LIST:
                     element_type_obj = field_obj.slot.type.list.elementType
                     if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
                         element_type_name = self.get_type_name(element_type_obj)
                         element_builder = helper.new_builder(element_type_name)
-                        builder_type = builder_type.replace(element_type_name, element_builder)
+                        element_reader = helper.new_reader(element_type_name)
+                        # Replace element type with Builder | Reader union
+                        result_type = result_type.replace(
+                            element_type_name, f"{element_builder} | {element_reader}"
+                        )
 
-                result_fields_info.append((field_name, builder_type))
+                result_fields_info.append((field_name, result_type))
 
             except Exception as e:
                 logger.debug(f"Could not process result field {field_name}: {e}")
@@ -2513,12 +2562,9 @@ class Writer:
         result_lines = self._generate_result_protocol(method_info, result_type, is_direct_struct_return)
         collection.set_result_class(result_lines)
 
-        # Generate ResultsBuilder and CallContext for server
-        # For direct struct returns, CallContext.results should be the Result Protocol itself
-        # For named field returns, CallContext.results should be ResultsBuilder
+        # Generate CallContext for server - points to Result Protocol at interface level
         if is_direct_struct_return:
-            # Direct struct return: CallContext.results should be the Result Protocol
-            # Pass result_type (e.g., "ReadResult") to CallContext generation
+            # Direct struct return: CallContext.results points to interface-level Result Protocol
             has_results = True
             callcontext_lines = self._generate_callcontext_protocol(
                 method_info, has_results, result_type_for_context=result_type
@@ -2526,15 +2572,13 @@ class Writer:
             for line in callcontext_lines:
                 collection.server_context_lines.append(line)
         else:
-            # Named field return or void: generate ResultsBuilder if needed
+            # Named field return or void: CallContext.results points to Result Protocol
             has_results = bool(method_info.result_fields)
-            if has_results:
-                result_fields_info = self._process_result_fields_for_server(method_info)
-                results_builder_lines = self._generate_results_builder_protocol(method_info, result_fields_info)
-                for line in results_builder_lines:
-                    collection.server_context_lines.append(line)
-
-            callcontext_lines = self._generate_callcontext_protocol(method_info, has_results)
+            # Pass result_type so CallContext can reference the Protocol
+            result_type_for_ctx = f"{method_info.method_name.title()}Result" if has_results else None
+            callcontext_lines = self._generate_callcontext_protocol(
+                method_info, has_results, result_type_for_context=result_type_for_ctx
+            )
             for line in callcontext_lines:
                 collection.server_context_lines.append(line)
 
@@ -2549,10 +2593,12 @@ class Writer:
         collection.set_server_method(server_sig)
         server_collection.add_server_method(server_sig)
 
-        # Collect NamedTuple definition for server results
+        # Collect NamedTuple definition for server results with "Tuple" suffix
         if method_info.result_fields:
             result_fields_for_namedtuple = self._collect_result_fields_for_namedtuple(method_info)
-            server_collection.add_namedtuple(result_type, result_fields_for_namedtuple)
+            # Add "Tuple" suffix to distinguish from Protocol
+            namedtuple_name = f"{result_type}Tuple"
+            server_collection.add_namedtuple(namedtuple_name, result_fields_for_namedtuple)
 
         return collection
 
@@ -2602,6 +2648,19 @@ class Writer:
                 else:
                     # Empty NamedTuple (void return)
                     self.scope.add("        pass")
+            self.scope.add("")
+
+        # Add context classes (CallContext and ResultsBuilder) inside Server class
+        if server_collection.context_classes:
+            # Update indentation for context classes to be inside Server
+            for line in server_collection.context_classes:
+                if line.startswith("class "):
+                    self.scope.add(f"    {line}")
+                elif line.strip():
+                    self.scope.add(f"    {line}")
+                else:
+                    self.scope.add(line)
+            self.scope.add("")
 
         # Add all server method signatures
         if server_collection.has_methods():
@@ -2667,8 +2726,8 @@ class Writer:
             for line in method_collection.result_class_lines:
                 self.scope.add(line)
 
-            for line in method_collection.server_context_lines:
-                self.scope.add(line)
+            # Store context lines for Server class (not at interface level)
+            server_collection.add_context_lines(method_collection.server_context_lines)
 
             for line in method_collection.request_helper_lines:
                 self.scope.add(line)

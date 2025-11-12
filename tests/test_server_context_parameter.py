@@ -22,9 +22,9 @@ class TestServerContextParameter:
 
         stub_content = stub_file.read_text()
 
-        # Check that CallContext types are generated
+        # Check that CallContext types are generated inside Server class
         assert "CallContext(Protocol):" in stub_content
-        assert "ResultsBuilder(Protocol):" in stub_content
+        # ResultsBuilder no longer exists - CallContext.results now points to NamedTuple
 
         # Check that Server methods have _context parameter
         import re
@@ -110,7 +110,9 @@ def test_server_context_parameter_summary(generate_calculator_stubs):
 
     # Count CallContext types generated
     callcontext_count = len(re.findall(r"class \w+CallContext\(Protocol\):", content))
-    resultsbuilder_count = len(re.findall(r"class \w+ResultsBuilder\(Protocol\):", content))
+    
+    # Count NamedTuple result types (now with "Tuple" suffix)
+    namedtuple_count = len(re.findall(r"class \w+ResultTuple\(NamedTuple\):", content))
 
     # Count Server methods with _context
     server_methods_with_context = len(re.findall(r"def \w+\([^)]*_context:[^)]*\)", content))
@@ -119,15 +121,16 @@ def test_server_context_parameter_summary(generate_calculator_stubs):
     print("SERVER CONTEXT PARAMETER TEST SUMMARY")
     print("=" * 70)
     assert callcontext_count > 0, "Should generate CallContext types"
-    assert resultsbuilder_count > 0, "Should generate ResultsBuilder types"
+    assert namedtuple_count > 0, "Should generate NamedTuple result types"
     assert server_methods_with_context > 0, "Server methods should have _context parameter"
 
     print("All context parameter tests passed!")
     print(f"  ✓ Generated {callcontext_count} CallContext types")
-    print(f"  ✓ Generated {resultsbuilder_count} ResultsBuilder types")
+    print(f"  ✓ Generated {namedtuple_count} NamedTuple result types")
     print(f"  ✓ {server_methods_with_context} Server methods have typed _context")
     print("  ✓ _context is mandatory in all Server method signatures")
     print("  ✓ _context properly typed with CallContext for IDE support")
     print("\nThe _context parameter is explicitly listed in all Server method signatures")
     print("with proper CallContext typing for full type safety and IDE autocomplete.")
+    print("CallContext.results now points to NamedTuple (which accepts Builder|Reader).")
     print("=" * 70)
