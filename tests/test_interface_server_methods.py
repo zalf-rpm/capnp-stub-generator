@@ -7,7 +7,7 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines):
 
     # Check that interface modules exist (no longer Protocol)
     assert any("class Value:" in line for line in lines)
-    
+
     # Check that Server classes exist
     assert any("class Server(Protocol):" in line for line in lines)
 
@@ -106,7 +106,8 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
     )
     server_call_found = (
         server_call_found
-        or "def call(self, params: Sequence[float], _context: Calculator.Function.Server.CallCallContext, **kwargs)" in content
+        or "def call(self, params: Sequence[float], _context: Calculator.Function.Server.CallCallContext, **kwargs)"
+        in content
     )
 
     assert server_call_found, "Server call method should have same params as Protocol plus _context and **kwargs"

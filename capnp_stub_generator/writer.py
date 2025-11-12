@@ -99,7 +99,7 @@ class Writer:
 
         # Track all server NamedTuples globally (scope_name -> {method_name: (namedtuple_name, fields)})
         self._all_server_namedtuples: dict[str, dict[str, tuple[str, list[tuple[str, str]]]]] = {}
-        
+
         # Track all interfaces for cast_as overloads (interface_name -> (client_name, base_client_names))
         self._all_interfaces: dict[str, tuple[str, list[str]]] = {}
 
@@ -2021,12 +2021,12 @@ class Writer:
         # Collect parameters that need init() overloads
         list_params = self._get_list_parameters(method_info, parameters)
         struct_params = self._get_struct_parameters(method_info, parameters)
-        
+
         # Add init() overloads if there are list or struct parameters
         if list_params or struct_params:
             self._add_typing_import("overload")
             self._add_typing_import("Literal")
-            
+
             # Add list init overloads
             if list_params:
                 self._add_typing_import("Sequence")
@@ -2040,14 +2040,12 @@ class Writer:
                         f'    def init(self, name: Literal["{field_name}"], '
                         f"size: int = ...) -> Sequence[{element_type_for_list}]: ..."
                     )
-            
+
             # Add struct init overloads
             for field_name, builder_type in struct_params:
                 lines.append("    @overload")
-                lines.append(
-                    f'    def init(self, name: Literal["{field_name}"]) -> {builder_type}: ...'
-                )
-            
+                lines.append(f'    def init(self, name: Literal["{field_name}"]) -> {builder_type}: ...')
+
             # Add a catchall overload for pyright
             lines.append("    @overload")
             lines.append("    def init(self, name: str, size: int = ...) -> Any: ...")
@@ -2074,16 +2072,6 @@ class Writer:
         Returns:
             List of lines for the Result Protocol class
         """
-        # Compute scoped result type for use in Awaitable[]
-        # Result classes are nested inside the interface, so we need the full interface path prefix
-        scope_depth = len([s for s in self.scope.trace if not s.is_root])
-        interface_path = self._get_scope_path()
-
-        if scope_depth >= 1 and interface_path and result_type != "None":
-            scoped_result_type = f"{interface_path}.{result_type}"
-        else:
-            scoped_result_type = result_type
-
         # For direct struct returns, generate a Protocol with the struct's fields
         if is_direct_struct_return:
             lines = []
@@ -2179,9 +2167,7 @@ class Writer:
                             element_type_name = self.get_type_name(element_type_obj)
                             element_builder = helper.new_builder(element_type_name)
                             element_reader = helper.new_reader(element_type_name)
-                            field_type = field_type.replace(
-                                element_type_name, f"{element_builder} | {element_reader}"
-                            )
+                            field_type = field_type.replace(element_type_name, f"{element_builder} | {element_reader}")
 
                     lines.append(f"    {rf}: {field_type}")
                 except Exception:
@@ -2205,7 +2191,7 @@ class Writer:
         """
         method_name = helper.sanitize_name(method_info.method_name)
         request_class_name = f"{method_name.title()}Request"
-        
+
         # Scope the request class name to the interface
         # Request classes are nested in the interface module, so we need the interface path
         interface_path = self._get_scope_path()
@@ -2372,7 +2358,6 @@ class Writer:
             # Check if this is a single primitive/interface return
             is_single_primitive_or_interface = False
             single_field_type = None
-            is_interface_return = False
 
             if len(method_info.result_fields) == 1 and method_info.result_schema is not None:
                 field_name = method_info.result_fields[0]
@@ -2405,7 +2390,6 @@ class Writer:
                     elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                         # Interface type - server returns Interface.Server
                         is_single_primitive_or_interface = True
-                        is_interface_return = True
                         interface_type = self.get_type_name(field_obj.slot.type)
                         single_field_type = f"{interface_type}.Server"
                 except Exception:
@@ -2532,9 +2516,7 @@ class Writer:
                         element_builder = helper.new_builder(element_type_name)
                         element_reader = helper.new_reader(element_type_name)
                         # Replace element type with Builder | Reader union
-                        result_type = result_type.replace(
-                            element_type_name, f"{element_builder} | {element_reader}"
-                        )
+                        result_type = result_type.replace(element_type_name, f"{element_builder} | {element_reader}")
 
                 result_fields_info.append((field_name, result_type))
 
@@ -2780,7 +2762,7 @@ class Writer:
                     server_base_classes.append(f"{superclass_type.scoped_name}.Server")
                 except KeyError:
                     logger.debug(f"Could not resolve superclass {superclass.id} for _new_client check")
-        
+
         # Only add _new_client if Server class will exist
         if server_collection.has_methods() or server_base_classes:
             # _new_client returns Client class
@@ -2798,7 +2780,7 @@ class Writer:
             interface_full_name = context.registered_type.scoped_name
             if interface_full_name not in self._all_server_namedtuples:
                 self._all_server_namedtuples[interface_full_name] = {}
-            
+
             for namedtuple_name, fields in server_collection.namedtuples.items():
                 # Extract method name from namedtuple name (remove "Tuple" suffix and convert to method name)
                 # e.g., "SaveResultTuple" -> "save"
@@ -2806,7 +2788,7 @@ class Writer:
                 if not method_name:
                     # Fallback: use the namedtuple name without Tuple
                     method_name = namedtuple_name.replace("Tuple", "").lower()
-                
+
                 self._all_server_namedtuples[interface_full_name][method_name] = (namedtuple_name, fields)
 
         # Save parent scope BEFORE closing interface scope
@@ -2818,26 +2800,28 @@ class Writer:
 
         # Close interface scope
         self.return_from_scope()
-        
+
         # Phase 5: Generate separate Client Protocol class at saved parent scope level
         if server_collection.has_methods() or server_base_classes or client_method_collection:
             # Temporarily set scope to parent, generate client, then restore
             current_scope = self.scope
             self.scope = parent_scope
-            self._generate_client_class(context, client_method_collection, request_helper_collection, server_base_classes)
+            self._generate_client_class(
+                context, client_method_collection, request_helper_collection, server_base_classes
+            )
             self.scope = current_scope
-            
+
             # Track this interface for cast_as overloads with inheritance info
             interface_full_name = context.registered_type.scoped_name
             client_full_name = f"{interface_full_name}Client"
-            
+
             # Build list of base client names from server_base_classes
             base_client_names = []
             for server_base in server_base_classes:
                 if ".Server" in server_base:
                     interface_name = server_base.replace(".Server", "")
                     base_client_names.append(f"{interface_name}Client")
-            
+
             self._all_interfaces[interface_full_name] = (client_full_name, base_client_names)
 
         return context.registered_type
@@ -2858,7 +2842,7 @@ class Writer:
             server_base_classes: List of server base classes for inheritance resolution
         """
         client_class_name = f"{context.name}Client"
-        
+
         # Build client base classes - inherit from superclass Clients
         client_base_classes = []
         has_parent_clients = False
@@ -2870,14 +2854,14 @@ class Writer:
                 interface_name = server_base.replace(".Server", "")
                 client_base_classes.append(f"{interface_name}Client")
                 has_parent_clients = True
-        
+
         # Only add Protocol if there are no parent Client classes
         if not has_parent_clients:
             client_base_classes.insert(0, "Protocol")
-        
+
         # Generate Client class declaration
         self.scope.add(helper.new_class_declaration(client_class_name, client_base_classes))
-        
+
         # Add client methods and request helpers with proper indentation
         all_method_lines = client_method_lines + request_helper_lines
         if all_method_lines:

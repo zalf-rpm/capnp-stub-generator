@@ -99,10 +99,9 @@ class TestStructReturnTypes:
 
         # Builder setter should accept Builder/Reader + dict, but NOT base type
         # Base type (_StructModule) doesn't make sense as a setter value
-        assert (
-            "def structField(self, value: TestAllTypesBuilder | TestAllTypesReader | dict[str, Any])"
-            in content
-        ), "Builder setter should accept union of Builder, Reader, and dict types (not base)"
+        assert "def structField(self, value: TestAllTypesBuilder | TestAllTypesReader | dict[str, Any])" in content, (
+            "Builder setter should accept union of Builder, Reader, and dict types (not base)"
+        )
 
     def test_list_fields_follow_same_pattern(self, dummy_stub_file):
         """List fields should follow the same narrowing pattern."""
@@ -135,7 +134,7 @@ class TestInterfaceReturnTypes:
 
         # Should have the interface module (not Protocol anymore)
         assert "class Greeter:" in content, "Should have interface module"
-        
+
         # Should have the Client Protocol class
         assert "class GreeterClient(Protocol):" in content, "Should have Client Protocol"
 
@@ -150,7 +149,7 @@ class TestInterfaceReturnTypes:
         # Should have interface module and Client class
         assert "class Greeter:" in content
         assert "class GreeterClient(Protocol):" in content
-        
+
         # Client methods should not reference non-existent Builder/Reader types
         client_section = content.split("class GreeterClient(Protocol):")[1].split("\nclass ")[0]
         assert "GreeterBuilder" not in client_section, "Interface methods should not reference Builder"

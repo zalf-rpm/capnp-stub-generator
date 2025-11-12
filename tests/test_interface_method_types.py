@@ -98,11 +98,11 @@ class TestCalculatorInterfaceMethodTypes:
 
         # All main methods should have _request variants with proper return types
         # Check for method name and return type (allowing for kwargs parameters)
-        assert "def evaluate_request(" in stub_content and ") -> EvaluateRequest:" in stub_content
-        assert "def defFunction_request(" in stub_content and ") -> DeffunctionRequest:" in stub_content
-        assert "def getOperator_request(" in stub_content and ") -> GetoperatorRequest:" in stub_content
-        assert "def read_request(" in stub_content and ") -> ReadRequest:" in stub_content
-        assert "def call_request(" in stub_content and ") -> CallRequest:" in stub_content
+        assert "def evaluate_request(" in stub_content and ") -> Calculator.EvaluateRequest:" in stub_content
+        assert "def defFunction_request(" in stub_content and ") -> Calculator.DeffunctionRequest:" in stub_content
+        assert "def getOperator_request(" in stub_content and ") -> Calculator.GetoperatorRequest:" in stub_content
+        assert "def read_request(" in stub_content and ") -> Calculator.Value.ReadRequest:" in stub_content
+        assert "def call_request(" in stub_content and ") -> Calculator.Function.CallRequest:" in stub_content
 
 
 class TestInterfaceMethodTypeRegression:
@@ -150,7 +150,7 @@ class TestInterfaceMethodTypeRegression:
         assert "params: Sequence[float] | None = None" in stub_content
         assert ") -> Calculator.Function.CallResult:" in stub_content
 
-        # Value.read should return ReadResult with float field, not Any  
+        # Value.read should return ReadResult with float field, not Any
         # Value is now an interface module, ValueClient has the methods
         assert "class Value:" in stub_content
         assert "class ValueClient(Protocol):" in stub_content

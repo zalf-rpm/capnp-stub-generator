@@ -209,26 +209,26 @@ class TestRequestMethodReturnsRequest:
     """Test that *_request() methods return proper request types."""
 
     def test_evaluate_request_method_returns_evaluate_request(self, generate_calculator_stubs):
-        """Test that evaluate_request() returns EvaluateRequest."""
+        """Test that evaluate_request() returns Calculator.EvaluateRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
         # Check for method name and return type (allowing for kwargs parameters)
-        assert "def evaluate_request(" in stub_content and ") -> EvaluateRequest:" in stub_content
+        assert "def evaluate_request(" in stub_content and ") -> Calculator.EvaluateRequest:" in stub_content
 
     def test_deffunction_request_method_returns_deffunction_request(self, generate_calculator_stubs):
-        """Test that defFunction_request() returns DeffunctionRequest."""
+        """Test that defFunction_request() returns Calculator.DeffunctionRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def defFunction_request(" in stub_content and ") -> DeffunctionRequest:" in stub_content
+        assert "def defFunction_request(" in stub_content and ") -> Calculator.DeffunctionRequest:" in stub_content
 
     def test_getoperator_request_method_returns_getoperator_request(self, generate_calculator_stubs):
-        """Test that getOperator_request() returns GetoperatorRequest."""
+        """Test that getOperator_request() returns Calculator.GetoperatorRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def getOperator_request(" in stub_content and ") -> GetoperatorRequest:" in stub_content
+        assert "def getOperator_request(" in stub_content and ") -> Calculator.GetoperatorRequest:" in stub_content
 
 
 def test_request_builder_types_summary():

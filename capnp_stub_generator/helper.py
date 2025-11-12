@@ -283,10 +283,10 @@ def replace_capnp_suffix(original: str) -> str:
     result = original
     if result.endswith(".capnp"):
         result = result.replace(".capnp", "_capnp")
-    
+
     # Replace hyphens with underscores to create valid Python identifiers
     result = result.replace("-", "_")
-    
+
     return result
 
 

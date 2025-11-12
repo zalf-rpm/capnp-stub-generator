@@ -56,9 +56,7 @@ class TestServerContextParameter:
 
         # Test Calculator.Function.call
         # Function is now an interface module, not Protocol
-        function_section = re.search(
-            r"class Function:.*?(?=\nclass [A-Z])", content, re.DOTALL
-        )
+        function_section = re.search(r"class Function:.*?(?=\nclass [A-Z])", content, re.DOTALL)
         assert function_section, "Calculator.Function not found"
 
         server_call = re.search(
@@ -111,7 +109,7 @@ def test_server_context_parameter_summary(generate_calculator_stubs):
 
     # Count CallContext types generated
     callcontext_count = len(re.findall(r"class \w+CallContext\(Protocol\):", content))
-    
+
     # Count NamedTuple result types (now with "Tuple" suffix)
     namedtuple_count = len(re.findall(r"class \w+ResultTuple\(NamedTuple\):", content))
 

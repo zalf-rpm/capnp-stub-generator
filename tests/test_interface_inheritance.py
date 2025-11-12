@@ -48,6 +48,8 @@ def test_simple_interface_inheritance(generated_dir):
         ZALFMAS_DIR / "climate.capnp",
         ZALFMAS_DIR / "soil.capnp",
         ZALFMAS_DIR / "management.capnp",
+        ZALFMAS_DIR / "crop.capnp",
+        ZALFMAS_DIR / "registry.capnp",
         ZALFMAS_DIR / "persistence.capnp",
         ZALFMAS_DIR / "service.capnp",
         ZALFMAS_DIR / "date.capnp",
@@ -66,9 +68,11 @@ def test_simple_interface_inheritance(generated_dir):
 
     # Check that ClimateInstance interface exists (no longer inherits)
     assert "class ClimateInstance:" in content, "ClimateInstance interface module should exist"
-    
+
     # Check that ClimateInstanceClient extends IdentifiableClient
-    assert "class ClimateInstanceClient(IdentifiableClient):" in content, "ClimateInstanceClient should extend IdentifiableClient"
+    assert "class ClimateInstanceClient(IdentifiableClient):" in content, (
+        "ClimateInstanceClient should extend IdentifiableClient"
+    )
 
     # Check that ClimateInstance.Server extends Identifiable.Server
     # The Server class should be nested, so we need to find it in context
@@ -107,10 +111,8 @@ def test_multiple_interface_inheritance(generated_dir):
     content = stub_file.read_text()
 
     # Check that IdentifiableHolder extends both Identifiable and Holder
-    assert "class IdentifiableHolder:" in content, (
-        "IdentifiableHolder interface module should exist"
-    )
-    
+    assert "class IdentifiableHolder:" in content, "IdentifiableHolder interface module should exist"
+
     # Check that IdentifiableHolderClient extends both IdentifiableClient and HolderClient
     assert "class IdentifiableHolderClient(IdentifiableClient, HolderClient):" in content, (
         "IdentifiableHolderClient should extend both IdentifiableClient and HolderClient"
@@ -159,9 +161,7 @@ def test_interface_with_persistent_inheritance(generated_dir):
     content = stub_file.read_text()
 
     # Check that Service extends both Identifiable and Persistent
-    assert "class Service:" in content, (
-        "Service should extend both Identifiable and Persistent"
-    )
+    assert "class Service:" in content, "Service should extend both Identifiable and Persistent"
 
     # Check Server class inheritance - Service.Server should extend both base Servers
     lines = content.split("\n")
@@ -231,6 +231,8 @@ def test_interface_method_inheritance_visibility(generated_dir):
         ZALFMAS_DIR / "climate.capnp",
         ZALFMAS_DIR / "soil.capnp",
         ZALFMAS_DIR / "management.capnp",
+        ZALFMAS_DIR / "crop.capnp",
+        ZALFMAS_DIR / "registry.capnp",
         ZALFMAS_DIR / "persistence.capnp",
         ZALFMAS_DIR / "service.capnp",
         ZALFMAS_DIR / "date.capnp",
@@ -245,14 +247,16 @@ def test_interface_method_inheritance_visibility(generated_dir):
     model_stub = (generated_dir / "zalfmas" / "model_capnp.pyi").read_text()
     common_stub = (generated_dir / "zalfmas" / "common_capnp.pyi").read_text()
 
-    # Verify Identifiable has info() method  
+    # Verify Identifiable has info() method
     # This should be in the IdentifiableClient class
     assert "class IdentifiableClient(Protocol):" in common_stub, "Should have IdentifiableClient"
     assert "def info(self)" in common_stub, "Identifiable should have info() method"
 
     # Verify ClimateInstance interface exists and ClimateInstanceClient extends IdentifiableClient
     assert "class ClimateInstance:" in model_stub, "ClimateInstance interface should exist"
-    assert "class ClimateInstanceClient(IdentifiableClient):" in model_stub, "ClimateInstanceClient should extend IdentifiableClient"
+    assert "class ClimateInstanceClient(IdentifiableClient):" in model_stub, (
+        "ClimateInstanceClient should extend IdentifiableClient"
+    )
 
     # The actual info() method will be inherited from IdentifiableClient via inheritance
     # Python's Protocol mechanism handles this - we don't need to repeat the method
