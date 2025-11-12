@@ -2751,6 +2751,23 @@ class Writer:
         # Phase 4: Generate Server class
         self._generate_server_class(context, server_collection)
 
+        # Track NamedTuples globally for .py file export
+        if server_collection.namedtuples:
+            # Use scoped name to handle nested interfaces correctly
+            interface_full_name = context.registered_type.scoped_name
+            if interface_full_name not in self._all_server_namedtuples:
+                self._all_server_namedtuples[interface_full_name] = {}
+            
+            for namedtuple_name, fields in server_collection.namedtuples.items():
+                # Extract method name from namedtuple name (remove "Tuple" suffix and convert to method name)
+                # e.g., "SaveResultTuple" -> "save"
+                method_name = namedtuple_name.replace("ResultTuple", "Result").replace("Result", "").lower()
+                if not method_name:
+                    # Fallback: use the namedtuple name without Tuple
+                    method_name = namedtuple_name.replace("Tuple", "").lower()
+                
+                self._all_server_namedtuples[interface_full_name][method_name] = (namedtuple_name, fields)
+
         # Ensure interface has some content (even if methods failed to generate)
         if not self.scope.lines:
             self.scope.add("...")
