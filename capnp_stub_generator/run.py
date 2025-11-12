@@ -6,7 +6,9 @@ import argparse
 import glob
 import logging
 import os.path
+import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from types import ModuleType
@@ -31,6 +33,330 @@ class PyrightValidationError(Exception):
     """Raised when pyright validation finds type errors in generated stubs."""
 
     pass
+
+
+def find_capnp_stubs_package() -> str | None:
+    """Find the installed capnp-stubs package directory.
+
+    Checks both standard site-packages and .pth files for the package location.
+
+    Returns:
+        Path to the capnp-stubs directory, or None if not found.
+    """
+    # First check for direct capnp-stubs directory
+    for path in sys.path:
+        capnp_stubs_path = os.path.join(path, "capnp-stubs")
+        if os.path.isdir(capnp_stubs_path):
+            logger.info(f"Found capnp-stubs package at: {capnp_stubs_path}")
+            return capnp_stubs_path
+
+    # Check for .pth files that might point to capnp-stubs
+    for path in sys.path:
+        if os.path.isdir(path):
+            pth_file = os.path.join(path, "capnp_stubs.pth")
+            if os.path.exists(pth_file):
+                with open(pth_file) as f:
+                    pth_path = f.read().strip()
+                    capnp_stubs_path = os.path.join(pth_path, "capnp-stubs")
+                    if os.path.isdir(capnp_stubs_path):
+                        logger.info(f"Found capnp-stubs package via .pth file at: {capnp_stubs_path}")
+                        return capnp_stubs_path
+
+    return None
+
+
+def _sort_interfaces_by_inheritance(interfaces: dict[str, tuple[str, list[str]]]) -> list[tuple[str, str]]:
+    """Sort interfaces by inheritance depth - most derived first.
+
+    This ensures overloads are ordered correctly with specific types before general types.
+
+    Args:
+        interfaces: Dict mapping interface_name -> (client_name, base_client_names)
+
+    Returns:
+        Sorted list of (interface_name, client_name) tuples, most derived first
+    """
+    # Build a mapping of client_name -> interface_name for reverse lookup
+    client_to_interface = {}
+    for iface_name, (client_name, _) in interfaces.items():
+        client_to_interface[client_name] = iface_name
+
+    # Compute depth for each interface (number of ancestors)
+    def compute_depth(interface_name: str, visited: set[str] | None = None) -> int:
+        if visited is None:
+            visited = set()
+
+        if interface_name in visited:
+            # Circular dependency - shouldn't happen but handle gracefully
+            return 0
+
+        visited.add(interface_name)
+
+        if interface_name not in interfaces:
+            # Base interface not in our set
+            return 0
+
+        _, base_client_names = interfaces[interface_name]
+        if not base_client_names:
+            # No bases - this is a root
+            return 0
+
+        # Depth is 1 + max depth of any base
+        max_base_depth = 0
+        for base_client_name in base_client_names:
+            # Convert client name back to interface name
+            base_interface_name = client_to_interface.get(base_client_name)
+            if base_interface_name:
+                base_depth = compute_depth(base_interface_name, visited.copy())
+                max_base_depth = max(max_base_depth, base_depth)
+
+        return 1 + max_base_depth
+
+    # Compute depths for all interfaces
+    interface_depths = []
+    for interface_name, (client_name, _) in interfaces.items():
+        depth = compute_depth(interface_name)
+        interface_depths.append((depth, interface_name, client_name))
+
+    # Sort by depth (descending) then by name (ascending for stability)
+    interface_depths.sort(key=lambda x: (-x[0], x[1]))
+
+    # Return just the (interface_name, client_name) tuples
+    return [(iface_name, client_name) for _, iface_name, client_name in interface_depths]
+
+
+def augment_capnp_stubs_with_overloads(
+    source_stubs_path: str,
+    augmented_stubs_dir: str,
+    output_dir: str,
+    interfaces: dict[str, tuple[str, list[str]]],
+) -> None:
+    """Copy capnp-stubs package and augment with cast_as overloads.
+
+    This copies the entire capnp-stubs package to a separate directory
+    and augments lib/capnp.pyi with overloaded cast_as methods for generated interfaces.
+
+    Args:
+        source_stubs_path: Path to the source capnp-stubs package.
+        augmented_stubs_dir: Directory where the augmented capnp-stubs should be placed (beside output).
+        output_dir: The output directory where generated stubs are located (for relative import calculation).
+        interfaces: Dictionary mapping interface names to (client_name, base_client_names) tuples.
+    """
+    if not interfaces:
+        logger.info("No interfaces found, skipping capnp-stubs augmentation.")
+        return
+
+    # Create destination path for augmented stubs
+    dest_stubs_path = os.path.join(augmented_stubs_dir, "capnp-stubs")
+
+    # Copy the entire capnp-stubs directory
+    if os.path.exists(dest_stubs_path):
+        shutil.rmtree(dest_stubs_path)
+    shutil.copytree(source_stubs_path, dest_stubs_path)
+    logger.info(f"Copied capnp-stubs to: {dest_stubs_path}")
+
+    # Path to lib/capnp.pyi
+    capnp_pyi_path = os.path.join(dest_stubs_path, "lib", "capnp.pyi")
+
+    if not os.path.exists(capnp_pyi_path):
+        logger.warning(f"Could not find lib/capnp.pyi at {capnp_pyi_path}, skipping augmentation.")
+        return
+
+    # Read the original file
+    with open(capnp_pyi_path, encoding="utf8") as f:
+        original_content = f.read()
+
+    lines = original_content.split("\n")
+
+    # Find where to add overload import
+    typing_import_idx = None
+    for i, line in enumerate(lines):
+        if line.startswith("from typing import"):
+            typing_import_idx = i
+            break
+
+    if typing_import_idx is None:
+        logger.warning("Could not find 'from typing import' in lib/capnp.pyi, skipping augmentation.")
+        return
+
+    # Add overload to the typing import if not already present
+    typing_line = lines[typing_import_idx]
+    if "overload" not in typing_line:
+        # Add overload to the import
+        typing_line = typing_line.replace("from typing import ", "from typing import overload, ")
+        lines[typing_import_idx] = typing_line
+
+    # Find the end of ALL imports (including multi-line imports)
+    # We need to skip past all import statements and multi-line parenthesized imports
+    import_end_idx = typing_import_idx + 1
+    in_multiline_import = False
+
+    for i in range(typing_import_idx + 1, len(lines)):
+        line = lines[i]
+        stripped = line.strip()
+
+        # Check if we're in a multi-line import
+        if "from " in stripped and "import (" in stripped and ")" not in stripped:
+            in_multiline_import = True
+            continue
+
+        if in_multiline_import:
+            if ")" in stripped:
+                in_multiline_import = False
+            continue
+
+        # Check if this is a single-line import
+        if stripped.startswith("import ") or stripped.startswith("from "):
+            continue
+
+        # Empty lines or comments between imports - continue
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        # We've found the first non-import line
+        import_end_idx = i
+        break
+
+    # Build the module imports section
+    # Extract unique modules from interface names and build import paths relative to output
+    # Map: module_capnp_name -> (from_path, module_name)
+    module_imports = {}
+
+    for interface_name in interfaces.keys():
+        # interface_name is like "calculator.calculator_capnp.Calculator" or
+        # "models.monica.monica_management_capnp.MonicaManagement"
+        # We need to extract the module path (ends with _capnp)
+        parts = interface_name.split(".")
+
+        # Find the part that ends with _capnp
+        capnp_module_idx = None
+        for i, part in enumerate(parts):
+            if part.endswith("_capnp"):
+                capnp_module_idx = i
+                break
+
+        if capnp_module_idx is None:
+            # Couldn't find a capnp module, skip
+            continue
+
+        # Get the capnp module name
+        capnp_module_name = parts[capnp_module_idx]
+
+        # Get the base name of the output directory to use as the root module
+        output_base_name = os.path.basename(os.path.abspath(output_dir))
+
+        # Build the from path
+        if capnp_module_idx == 0:
+            # Top-level module: from <output_base> import calculator_capnp
+            from_path = output_base_name
+        else:
+            # Nested module: from <output_base>.models.monica import monica_management_capnp
+            subpath = ".".join(parts[:capnp_module_idx])
+            from_path = f"{output_base_name}.{subpath}"
+
+        # Store unique import (from_path, module_name)
+        module_imports[capnp_module_name] = from_path
+
+    # Build import lines
+    import_lines = [
+        "",
+        "# Generated imports for project-specific interfaces",
+    ]
+    for capnp_module_name in sorted(module_imports.keys()):
+        from_path = module_imports[capnp_module_name]
+        import_lines.append(f"from {from_path} import {capnp_module_name}  # type: ignore[import-not-found]")
+
+    # Insert the imports after the existing imports
+    lines[import_end_idx:import_end_idx] = import_lines
+
+    # Now find _CastableBootstrap class and its cast_as method
+    cast_as_line_idx = None
+    in_castable_bootstrap = False
+
+    for i, line in enumerate(lines):
+        if "class _CastableBootstrap" in line:
+            in_castable_bootstrap = True
+        elif in_castable_bootstrap and "def cast_as(self, interface:" in line:
+            cast_as_line_idx = i
+            break
+        elif in_castable_bootstrap and line.strip().startswith("class ") and "_CastableBootstrap" not in line:
+            # Found another class, stop looking
+            break
+
+    if cast_as_line_idx is None:
+        logger.warning("Could not find cast_as method in _CastableBootstrap class, skipping augmentation.")
+        return
+
+    # Sort interfaces by inheritance depth (most derived first)
+    sorted_interfaces = _sort_interfaces_by_inheritance(interfaces)
+
+    # Build the overloads (insert before the existing cast_as method)
+    overload_lines = []
+
+    for interface_name, client_name in sorted_interfaces:
+        # interface_name is like "calculator.calculator_capnp.Calculator" or
+        # "models.monica.monica_management_capnp.MonicaManagement"
+        parts = interface_name.split(".")
+
+        # Find the part that ends with _capnp
+        capnp_module_idx = None
+        capnp_module_name = None
+        for j, part in enumerate(parts):
+            if part.endswith("_capnp"):
+                capnp_module_idx = j
+                capnp_module_name = part
+                break
+
+        if capnp_module_idx is None or capnp_module_name is None:
+            logger.warning(f"Could not find capnp module in interface name: {interface_name}")
+            continue
+
+        # Get the from path from module_imports
+        from_path = module_imports.get(capnp_module_name)
+        if not from_path:
+            logger.warning(f"Could not find import path for module {capnp_module_name}")
+            continue
+
+        # Build qualified names: capnp_module_name.RestOfPath
+        # For "calculator.calculator_capnp.Calculator" -> "calculator_capnp.Calculator"
+        # For "models.monica.monica_management_capnp.MonicaManagement" -> "monica_management_capnp.MonicaManagement"
+        interface_suffix = ".".join(parts[capnp_module_idx:])
+        client_suffix = ".".join(client_name.split(".")[capnp_module_idx:])
+
+        qualified_interface = interface_suffix
+        qualified_client = client_suffix
+
+        overload_lines.append("    @overload")
+        overload_lines.append(
+            f"    def cast_as(self, interface: type[{qualified_interface}]) -> {qualified_client}: ..."
+        )
+
+    # Add a catchall overload that matches the original function definition
+    overload_lines.append("    @overload")
+    overload_lines.append("    def cast_as(self, interface: Any) -> _DynamicCapabilityClient: ...")
+
+    # Insert overloads before the original cast_as method
+    lines[cast_as_line_idx:cast_as_line_idx] = overload_lines
+
+    # Write back
+    augmented_content = "\n".join(lines)
+    with open(capnp_pyi_path, "w", encoding="utf8") as f:
+        f.write(augmented_content)
+
+    logger.info(f"Augmented {capnp_pyi_path} with {len(interfaces)} cast_as overload(s).")
+
+    # Format the augmented file with ruff
+    try:
+        subprocess.run(
+            ["ruff", "format", capnp_pyi_path],
+            capture_output=True,
+            check=True,
+        )
+        logger.info(f"Formatted augmented file: {capnp_pyi_path}")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to format augmented file: {e}")
+    except FileNotFoundError:
+        logger.warning("ruff not found, skipping formatting of augmented file")
 
 
 def validate_with_pyright(output_directories: set[str]) -> None:
@@ -140,7 +466,8 @@ def generate_stubs(
     output_file_path: str,
     output_directory: str | None = None,
     import_paths: list[str] | None = None,
-):
+    module_path_prefix: str | None = None,
+) -> dict[str, tuple[str, list[str]]]:
     """Entry-point for generating *.pyi stubs from a module definition.
 
     Args:
@@ -149,6 +476,10 @@ def generate_stubs(
         output_file_path (str): The name of the output stub files, without file extension.
         output_directory (str | None): The directory where output files are written, if different from schema location.
         import_paths (list[str] | None): Additional import paths for resolving absolute imports.
+        module_path_prefix (str | None): Prefix for module path (e.g., "calculator" for subdirectory structure).
+
+    Returns:
+        dict[str, tuple[str, list[str]]]: Dictionary mapping interface names to (client_name, base_client_names) tuples.
     """
     writer = Writer(module, module_registry, output_directory=output_directory, import_paths=import_paths)
     writer.generate_all_nested()
@@ -160,6 +491,28 @@ def generate_stubs(
             output_file.write(formatted_output)
 
     logger.info("Wrote stubs to '%s(%s/%s)'.", output_file_path, PYI_SUFFIX, PY_SUFFIX)
+
+    # Return interfaces found in this module (with module prefix)
+    module_name = os.path.basename(output_file_path)
+
+    # If module_path_prefix is provided, prepend it
+    if module_path_prefix:
+        full_module_name = f"{module_path_prefix}.{module_name}"
+    else:
+        full_module_name = module_name
+
+    interfaces_with_module = {}
+    for interface_name, (client_name, base_client_names) in writer._all_interfaces.items():
+        # Add module prefix to make fully qualified names
+        qualified_interface = f"{full_module_name}.{interface_name}"
+        qualified_client = f"{full_module_name}.{client_name}"
+
+        # Also qualify the base client names
+        qualified_base_clients = [f"{full_module_name}.{base}" for base in base_client_names]
+
+        interfaces_with_module[qualified_interface] = (qualified_client, qualified_base_clients)
+
+    return interfaces_with_module
 
 
 def extract_base_from_pattern(pattern: str) -> str:
@@ -381,6 +734,10 @@ def run(args: argparse.Namespace, root_directory: str):
     # Track output directories for py.typed marker
     output_directories_used = set()
 
+    # Collect all interfaces from all modules for cast_as overloads
+    # Map of output_dir -> {interface_name: (client_name, base_client_names)}
+    all_interfaces_by_dir: dict[str, dict[str, tuple[str, list[str]]]] = {}
+
     for path, module in module_registry.values():
         if output_dir:
             abs_path = os.path.abspath(path)
@@ -404,18 +761,36 @@ def run(args: argparse.Namespace, root_directory: str):
 
         output_file_name = replace_capnp_suffix(os.path.basename(path))
 
+        # Calculate module path prefix for subdirectory structure
+        # This is used for fully qualified module names in cast_as overloads
+        module_path_prefix = None
+        if output_dir and output_directory != output_dir:
+            # Calculate the relative path from output_dir to output_directory
+            rel_module_path = os.path.relpath(output_directory, output_dir)
+            # Convert path separators to dots for Python module path
+            # Skip if it's just "." (current directory)
+            if rel_module_path != ".":
+                module_path_prefix = rel_module_path.replace(os.sep, ".")
+
         # Pass output_directory to generate_stubs so it can calculate relative paths
         # Only pass it if it's different from the schema's directory
         schema_directory = os.path.dirname(path)
         output_dir_to_pass = output_directory if output_directory != schema_directory else None
 
-        generate_stubs(
+        module_interfaces = generate_stubs(
             module,
             module_registry,
             os.path.join(output_directory, output_file_name),
             output_dir_to_pass,
             absolute_import_paths,
+            module_path_prefix,
         )
+
+        # Collect interfaces for this output directory
+        if module_interfaces:
+            if output_directory not in all_interfaces_by_dir:
+                all_interfaces_by_dir[output_directory] = {}
+            all_interfaces_by_dir[output_directory].update(module_interfaces)
 
     # Create py.typed marker in each output directory to mark the package as typed (PEP 561)
     for output_directory in output_directories_used:
@@ -424,6 +799,37 @@ def run(args: argparse.Namespace, root_directory: str):
         if not os.path.exists(py_typed_path):
             with open(py_typed_path, "w", encoding="utf8") as f:
                 f.write("")  # Empty file as per PEP 561
+
+    # Augment capnp-stubs with cast_as overloads if requested
+    if args.augment_capnp_stubs:
+        source_stubs_path = find_capnp_stubs_package()
+        if source_stubs_path:
+            # Combine all interfaces from all directories
+            all_interfaces = {}
+            for interfaces in all_interfaces_by_dir.values():
+                all_interfaces.update(interfaces)
+
+            # Determine where to place augmented stubs (beside output directories, not inside)
+            # If output_dir is specified, place augmented stubs beside it
+            # Otherwise, pick a common parent directory of all output directories
+            if output_dir:
+                # Place augmented stubs in the parent directory of output_dir
+                augmented_stubs_dir = os.path.dirname(os.path.abspath(output_dir))
+            else:
+                # Find common parent of all output directories
+                output_dirs_list = list(output_directories_used)
+                if len(output_dirs_list) == 1:
+                    augmented_stubs_dir = output_dirs_list[0]
+                else:
+                    augmented_stubs_dir = os.path.commonpath([os.path.abspath(d) for d in output_dirs_list])
+
+            # Use the absolute path to output_dir for import path calculation
+            actual_output_dir = os.path.abspath(output_dir) if output_dir else list(output_directories_used)[0]
+            augment_capnp_stubs_with_overloads(
+                source_stubs_path, augmented_stubs_dir, actual_output_dir, all_interfaces
+            )
+        else:
+            logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found in sys.path")
 
     # Validate generated stubs with pyright (unless disabled)
     if not skip_pyright:

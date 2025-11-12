@@ -93,6 +93,14 @@ def setup_parser() -> argparse.ArgumentParser:
         help="skip pyright validation of generated stubs.",
     )
 
+    parser.add_argument(
+        "--augment-capnp-stubs",
+        dest="augment_capnp_stubs",
+        default=False,
+        action="store_true",
+        help="augment installed capnp-stubs package with cast_as() overloads and copy to output directory.",
+    )
+
     _add_recursive_argument(parser)
 
     return parser
