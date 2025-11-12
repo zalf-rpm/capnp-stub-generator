@@ -1,6 +1,6 @@
 """Generate type hints for *.capnp schemas.
 
-Note: This generator requires pycapnp >= 1.0.0.
+Note: This generator requires pycapnp >= 2.0.0.
 """
 
 from __future__ import annotations

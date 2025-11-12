@@ -6,7 +6,7 @@ This is a Python stub generator that creates `.pyi` type hint files from Cap'n P
 ## Key Requirements
 - **Python Version**: 3.10 - 3.13
 - **Core Dependency**: pycapnp >= 2.2.1, < 3.0.0
-- **Compatibility**: Generated stubs are only compatible with pycapnp >= 1.1.1
+- **Compatibility**: Generated stubs are only compatible with pycapnp >= 2.0.0
 - **Output Structure**: Generated stubs must match the exact structure and API of pycapnp runtime modules
 
 ## Project Structure
@@ -230,7 +230,7 @@ def test_my_feature(basic_stubs):
     """Test description."""
     stub_file = basic_stubs / "my_schema_capnp.pyi"
     content = stub_file.read_text()
-    
+
     # Assert on content
     assert "expected_content" in content
 ```
@@ -243,7 +243,7 @@ For line-by-line assertions on dummy.capnp:
 def test_dummy_feature(dummy_stub_lines):
     """Test description."""
     lines = dummy_stub_lines
-    
+
     # Check for specific patterns
     assert any("class MyStruct" in line for line in lines)
     assert any("def myField(self)" in line for line in lines)
@@ -263,17 +263,17 @@ import addressbook_capnp
 book = addressbook_capnp.AddressBook.new_message()
 # ... code that should type check
 '''
-    
+
     test_file = addressbook_stubs / "test_my_typing.py"
     test_file.write_text(test_code)
-    
+
     # Run pyright
     result = subprocess.run(
         ["pyright", str(test_file)],
         capture_output=True,
         text=True,
     )
-    
+
     error_count = result.stdout.count("error:")
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 ```
@@ -287,10 +287,10 @@ def test_custom_generation(tmp_path):
     """Test with custom stub generation."""
     output_dir = tmp_path / "output"
     output_dir.mkdir()
-    
+
     # Generate stubs
     main(["-p", str(schema_path), "-o", str(output_dir), "--no-pyright"])
-    
+
     # Verify output
     stub_file = output_dir / "my_schema_capnp.pyi"
     assert stub_file.exists()
@@ -302,7 +302,7 @@ def test_custom_generation(tmp_path):
    ```bash
    # For basic tests
    touch tests/schemas/basic/new_feature.capnp
-   
+
    # For examples
    mkdir tests/schemas/examples/new_example
    touch tests/schemas/examples/new_example/example.capnp
@@ -452,7 +452,7 @@ Current test coverage includes:
 1. **DO NOT use `--no-pyright` in tests**
    - All test stubs are validated with pyright during generation
    - This ensures type correctness and catches errors early
-   
+
 2. **Fix pyright errors, don't ignore them**
    - If pyright reports an error, the generator code must be fixed
    - Do not work around errors by disabling validation

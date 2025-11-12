@@ -1,7 +1,7 @@
 """Command-line interface for generating type hints for *.capnp schemas.
 
 Notes:
-    - The outputs of this generator are only compatible with pycapnp version >= 1.1.1.
+    - The outputs of this generator are only compatible with pycapnp version >= 2.0.0.
 """
 
 from __future__ import annotations
