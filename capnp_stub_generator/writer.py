@@ -99,6 +99,9 @@ class Writer:
 
         # Track all server NamedTuples globally (scope_name -> {method_name: (namedtuple_name, fields)})
         self._all_server_namedtuples: dict[str, dict[str, tuple[str, list[tuple[str, str]]]]] = {}
+        
+        # Track all interfaces for cast_as overloads (interface_name -> (client_name, base_client_names))
+        self._all_interfaces: dict[str, tuple[str, list[str]]] = {}
 
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
@@ -882,13 +885,16 @@ class Writer:
         # Restore interface scope after generating nested types
         self.scope = interface_scope
 
-    def _add_new_client_method(self, name: str, base_classes: list[str], schema: _StructSchema):
+    def _add_new_client_method(
+        self, name: str, base_classes: list[str], schema: _StructSchema, client_return_type: str | None = None
+    ):
         """Add _new_client() class method to create capability client from Server.
 
         Args:
             name (str): The interface name.
             base_classes (list[str]): The interface base classes.
             schema (_StructSchema): The interface schema.
+            client_return_type (str | None): Optional client class name to return (default: interface name).
         """
         scope_path = self._get_scope_path()
         fully_qualified_interface = scope_path if scope_path else name
@@ -956,12 +962,27 @@ class Writer:
 
         server_param_type = " | ".join(server_types)
 
+        # Determine return type
+        if client_return_type:
+            # For nested interfaces: Calculator.Value -> Calculator.ValueClient
+            # For top-level: Greeter -> GreeterClient
+            # Use quoted string for forward reference since Client class comes after
+            if scope_path and "." in scope_path:
+                # Nested interface - replace last component with client name
+                parts = scope_path.rsplit(".", 1)
+                return_type = f'"{parts[0]}.{client_return_type}"'
+            else:
+                # Top-level interface
+                return_type = f'"{client_return_type}"'
+        else:
+            return_type = fully_qualified_interface
+
         self.scope.add("@classmethod")
         self.scope.add(
             helper.new_function(
                 "_new_client",
                 parameters=["cls", f"server: {server_param_type}"],
-                return_type=fully_qualified_interface,
+                return_type=return_type,
             )
         )
 
@@ -1026,9 +1047,10 @@ class Writer:
             except Exception:
                 type_name = "Any"
                 self._add_typing_import("Union")
-            # For reading: return only the Protocol type
-            # For writing (in Builder): accept Protocol | Server
-            hints = [helper.TypeHint(type_name, primary=True)]
+            # For reading: return the Client type (capabilities are always clients at runtime)
+            # For writing (in Builder): accept Client | Server
+            client_type = f"{type_name}Client"
+            hints = [helper.TypeHint(client_type, primary=True)]
             # Add Server as a non-primary hint for Builder setter
             hints.append(helper.TypeHint(f"{type_name}.Server"))
             hinted_variable = helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
@@ -2095,6 +2117,9 @@ class Writer:
                             builder_type = helper.new_builder(field_type)
                             reader_type = helper.new_reader(field_type)
                             field_type = f"{builder_type} | {reader_type}"
+                        elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
+                            # For interface types, use the Client class (capabilities are always clients)
+                            field_type = f"{field_type}Client"
                         elif field_type_enum == capnp_types.CapnpElementType.LIST:
                             # For lists of structs, accept both Builder and Reader for elements
                             element_type_obj = field_obj.slot.type.list.elementType
@@ -2144,6 +2169,9 @@ class Writer:
                         builder_type = helper.new_builder(field_type)
                         reader_type = helper.new_reader(field_type)
                         field_type = f"{builder_type} | {reader_type}"
+                    elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
+                        # For interface types, use the Client class (capabilities are always clients)
+                        field_type = f"{field_type}Client"
                     elif field_type_enum == capnp_types.CapnpElementType.LIST:
                         # For lists of structs, accept both Builder and Reader for elements
                         element_type_obj = field_obj.slot.type.list.elementType
@@ -2177,12 +2205,20 @@ class Writer:
         """
         method_name = helper.sanitize_name(method_info.method_name)
         request_class_name = f"{method_name.title()}Request"
+        
+        # Scope the request class name to the interface
+        # Request classes are nested in the interface module, so we need the interface path
+        interface_path = self._get_scope_path()
+        if interface_path:
+            scoped_request_class = f"{interface_path}.{request_class_name}"
+        else:
+            scoped_request_class = request_class_name
 
         # Build parameter list (similar to client method)
         param_list = ["self"] + [p.to_request_param() for p in parameters]
         param_str = ", ".join(param_list)
 
-        lines = [f"def {method_name}_request({param_str}) -> {request_class_name}: ..."]
+        lines = [f"def {method_name}_request({param_str}) -> {scoped_request_class}: ..."]
 
         return lines
 
@@ -2680,7 +2716,8 @@ class Writer:
 
         This orchestrator delegates to specialized methods for clarity and testability.
         Each interface generates:
-        - Protocol class with client methods
+        - Interface module with nested types and factory methods
+        - Separate Client Protocol class with client methods
         - Request/Result Protocol classes for each method
         - Server class with server method signatures
 
@@ -2699,11 +2736,11 @@ class Writer:
             imported_type = self.register_import(schema)
             return imported_type
 
-        # Open protocol scope
+        # Open interface scope (no Protocol - this is _InterfaceModule)
         self.new_scope(
             context.name,
             context.schema.node,
-            scope_heading=helper.new_class_declaration(context.name, context.base_classes),
+            scope_heading=f"class {context.name}:",
         )
 
         # Phase 2: Generate nested types
@@ -2712,14 +2749,17 @@ class Writer:
         # Phase 3: Enumerate and process methods
         methods = self._enumerate_interface_methods(context)
         server_collection = ServerMethodsCollection()
+        client_method_collection = []  # Collect client methods for separate Client class
+        request_helper_collection = []  # Collect request helpers for Client class
 
         for method_info in methods:
             method_collection = self._process_interface_method(method_info, server_collection)
 
-            # Add generated components to scope
-            for line in method_collection.client_method_lines:
-                self.scope.add(line)
+            # Collect client methods and request helpers for Client class (don't add to interface)
+            client_method_collection.extend(method_collection.client_method_lines)
+            request_helper_collection.extend(method_collection.request_helper_lines)
 
+            # Add Request/Result classes to interface module
             for line in method_collection.request_class_lines:
                 self.scope.add(line)
 
@@ -2729,10 +2769,7 @@ class Writer:
             # Store context lines for Server class (not at interface level)
             server_collection.add_context_lines(method_collection.server_context_lines)
 
-            for line in method_collection.request_helper_lines:
-                self.scope.add(line)
-
-        # Phase 3.5: Add _new_client class method to interface Protocol
+        # Phase 3.5: Add _new_client class method to interface module
         # Only add if Server class will be generated (has methods or inheritance)
         server_base_classes = []
         if context.schema.node.which() == "interface":
@@ -2744,9 +2781,13 @@ class Writer:
                 except KeyError:
                     logger.debug(f"Could not resolve superclass {superclass.id} for _new_client check")
         
-        # Only add _new_client if Server class will exist (matches _generate_server_class logic)
+        # Only add _new_client if Server class will exist
         if server_collection.has_methods() or server_base_classes:
-            self._add_new_client_method(context.name, context.base_classes, context.schema)
+            # _new_client returns Client class
+            client_class_name = f"{context.name}Client"
+            self._add_new_client_method(
+                context.name, context.base_classes, context.schema, client_return_type=client_class_name
+            )
 
         # Phase 4: Generate Server class
         self._generate_server_class(context, server_collection)
@@ -2768,14 +2809,84 @@ class Writer:
                 
                 self._all_server_namedtuples[interface_full_name][method_name] = (namedtuple_name, fields)
 
+        # Save parent scope BEFORE closing interface scope
+        parent_scope = self.scope.parent if self.scope.parent else self.scope
+
         # Ensure interface has some content (even if methods failed to generate)
         if not self.scope.lines:
             self.scope.add("...")
 
-        # Cleanup
+        # Close interface scope
         self.return_from_scope()
+        
+        # Phase 5: Generate separate Client Protocol class at saved parent scope level
+        if server_collection.has_methods() or server_base_classes or client_method_collection:
+            # Temporarily set scope to parent, generate client, then restore
+            current_scope = self.scope
+            self.scope = parent_scope
+            self._generate_client_class(context, client_method_collection, request_helper_collection, server_base_classes)
+            self.scope = current_scope
+            
+            # Track this interface for cast_as overloads with inheritance info
+            interface_full_name = context.registered_type.scoped_name
+            client_full_name = f"{interface_full_name}Client"
+            
+            # Build list of base client names from server_base_classes
+            base_client_names = []
+            for server_base in server_base_classes:
+                if ".Server" in server_base:
+                    interface_name = server_base.replace(".Server", "")
+                    base_client_names.append(f"{interface_name}Client")
+            
+            self._all_interfaces[interface_full_name] = (client_full_name, base_client_names)
 
         return context.registered_type
+
+    def _generate_client_class(
+        self,
+        context: InterfaceGenerationContext,
+        client_method_lines: list[str],
+        request_helper_lines: list[str],
+        server_base_classes: list[str],
+    ) -> None:
+        """Generate the Client Protocol class with all client methods.
+
+        Args:
+            context: The interface generation context
+            client_method_lines: List of client method lines to add
+            request_helper_lines: List of request helper method lines to add
+            server_base_classes: List of server base classes for inheritance resolution
+        """
+        client_class_name = f"{context.name}Client"
+        
+        # Build client base classes - inherit from superclass Clients
+        client_base_classes = []
+        has_parent_clients = False
+        for server_base in server_base_classes:
+            # Extract interface name from Server type and build Client type
+            # e.g., "Calculator.Server" -> "CalculatorClient"
+            # e.g., "Identifiable.Server" -> "IdentifiableClient"
+            if ".Server" in server_base:
+                interface_name = server_base.replace(".Server", "")
+                client_base_classes.append(f"{interface_name}Client")
+                has_parent_clients = True
+        
+        # Only add Protocol if there are no parent Client classes
+        if not has_parent_clients:
+            client_base_classes.insert(0, "Protocol")
+        
+        # Generate Client class declaration
+        self.scope.add(helper.new_class_declaration(client_class_name, client_base_classes))
+        
+        # Add client methods and request helpers with proper indentation
+        all_method_lines = client_method_lines + request_helper_lines
+        if all_method_lines:
+            for line in all_method_lines:
+                # Methods come without indentation, add class-level indentation
+                self.scope.add(f"    {line}")
+        else:
+            # Empty client class (inherits everything from superclasses)
+            self.scope.add("    ...")
 
     def generate_nested(self, schema: _StructSchema) -> None:
         """Generate the type for a nested schema.
@@ -2896,7 +3007,13 @@ class Writer:
                 capnp_types.CapnpElementType.ENUM,
                 capnp_types.CapnpElementType.INTERFACE,
             ):
-                self._add_import(f"from {python_import_path} import {definition_name}")
+                if node_type == capnp_types.CapnpElementType.INTERFACE:
+                    # For interfaces, import both the interface module and the Client class
+                    client_name = f"{definition_name}Client"
+                    self._add_import(f"from {python_import_path} import {definition_name}, {client_name}")
+                else:
+                    # Enums just need the enum itself
+                    self._add_import(f"from {python_import_path} import {definition_name}")
             else:
                 # Structs have Builder/Reader variants
                 self._add_import(

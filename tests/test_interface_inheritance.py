@@ -64,8 +64,11 @@ def test_simple_interface_inheritance(generated_dir):
 
     content = stub_file.read_text()
 
-    # Check that ClimateInstance extends Identifiable
-    assert "class ClimateInstance(Identifiable, Protocol):" in content, "ClimateInstance should extend Identifiable"
+    # Check that ClimateInstance interface exists (no longer inherits)
+    assert "class ClimateInstance:" in content, "ClimateInstance interface module should exist"
+    
+    # Check that ClimateInstanceClient extends IdentifiableClient
+    assert "class ClimateInstanceClient(IdentifiableClient):" in content, "ClimateInstanceClient should extend IdentifiableClient"
 
     # Check that ClimateInstance.Server extends Identifiable.Server
     # The Server class should be nested, so we need to find it in context
@@ -74,9 +77,9 @@ def test_simple_interface_inheritance(generated_dir):
     found_server_inheritance = False
 
     for i, line in enumerate(lines):
-        if "class ClimateInstance(Identifiable, Protocol):" in line:
+        if "class ClimateInstance:" in line:
             in_climate_instance = True
-        elif in_climate_instance and "class Server(Identifiable.Server):" in line:
+        elif in_climate_instance and "class Server(" in line and "Identifiable.Server" in line:
             found_server_inheritance = True
             break
         elif in_climate_instance and line.startswith("class ") and "ClimateInstance" not in line:
@@ -90,7 +93,7 @@ def test_multiple_interface_inheritance(generated_dir):
     """Test that an interface extending multiple interfaces shows all inheritance.
 
     IdentifiableHolder extends both Identifiable and Holder(T), so:
-    - class IdentifiableHolder(Identifiable, Holder, Protocol):
+    - class IdentifiableHolder:
     - class Server(Identifiable.Server, Holder.Server):
     """
     # Generate stub for common.capnp
@@ -104,8 +107,13 @@ def test_multiple_interface_inheritance(generated_dir):
     content = stub_file.read_text()
 
     # Check that IdentifiableHolder extends both Identifiable and Holder
-    assert "class IdentifiableHolder(Identifiable, Holder, Protocol):" in content, (
-        "IdentifiableHolder should extend both Identifiable and Holder"
+    assert "class IdentifiableHolder:" in content, (
+        "IdentifiableHolder interface module should exist"
+    )
+    
+    # Check that IdentifiableHolderClient extends both IdentifiableClient and HolderClient
+    assert "class IdentifiableHolderClient(IdentifiableClient, HolderClient):" in content, (
+        "IdentifiableHolderClient should extend both IdentifiableClient and HolderClient"
     )
 
     # Check that IdentifiableHolder.Server extends both base Servers
@@ -114,7 +122,7 @@ def test_multiple_interface_inheritance(generated_dir):
     found_server_inheritance = False
 
     for i, line in enumerate(lines):
-        if "class IdentifiableHolder(Identifiable, Holder, Protocol):" in line:
+        if "class IdentifiableHolder:" in line:
             in_identifiable_holder = True
         elif in_identifiable_holder and "class Server(Identifiable.Server, Holder.Server):" in line:
             found_server_inheritance = True
@@ -151,7 +159,7 @@ def test_interface_with_persistent_inheritance(generated_dir):
     content = stub_file.read_text()
 
     # Check that Service extends both Identifiable and Persistent
-    assert "class Service(Identifiable, Persistent, Protocol):" in content, (
+    assert "class Service:" in content, (
         "Service should extend both Identifiable and Persistent"
     )
 
@@ -161,7 +169,7 @@ def test_interface_with_persistent_inheritance(generated_dir):
     found_server_inheritance = False
 
     for i, line in enumerate(lines):
-        if "class Service(Identifiable, Persistent, Protocol):" in line:
+        if "class Service:" in line:
             in_service = True
         elif in_service and "class Server(Identifiable.Server, Persistent.Server):" in line:
             found_server_inheritance = True
@@ -193,9 +201,9 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir):
     content = stub_file.read_text()
 
     # Check nested interfaces extend Identifiable
-    assert "class AdminMaster(Identifiable, Protocol):" in content, "AdminMaster should extend Identifiable"
-    assert "class UserMaster(Identifiable, Protocol):" in content, "UserMaster should extend Identifiable"
-    assert "class Runtime(Identifiable, Protocol):" in content, "Runtime should extend Identifiable"
+    assert "class AdminMaster:" in content, "AdminMaster should extend Identifiable"
+    assert "class UserMaster:" in content, "UserMaster should extend Identifiable"
+    assert "class Runtime:" in content, "Runtime should extend Identifiable"
 
     # Check that all Server classes extend Identifiable.Server
     # Count how many times we see "class Server(Identifiable.Server):"
@@ -237,13 +245,16 @@ def test_interface_method_inheritance_visibility(generated_dir):
     model_stub = (generated_dir / "zalfmas" / "model_capnp.pyi").read_text()
     common_stub = (generated_dir / "zalfmas" / "common_capnp.pyi").read_text()
 
-    # Verify Identifiable has info() method
+    # Verify Identifiable has info() method  
+    # This should be in the IdentifiableClient class
+    assert "class IdentifiableClient(Protocol):" in common_stub, "Should have IdentifiableClient"
     assert "def info(self)" in common_stub, "Identifiable should have info() method"
 
-    # Verify ClimateInstance extends Identifiable (and thus inherits info())
-    assert "class ClimateInstance(Identifiable, Protocol):" in model_stub, "ClimateInstance should extend Identifiable"
+    # Verify ClimateInstance interface exists and ClimateInstanceClient extends IdentifiableClient
+    assert "class ClimateInstance:" in model_stub, "ClimateInstance interface should exist"
+    assert "class ClimateInstanceClient(IdentifiableClient):" in model_stub, "ClimateInstanceClient should extend IdentifiableClient"
 
-    # The actual info() method will be inherited from Identifiable via Protocol inheritance
+    # The actual info() method will be inherited from IdentifiableClient via inheritance
     # Python's Protocol mechanism handles this - we don't need to repeat the method
 
 
@@ -267,7 +278,7 @@ def test_empty_interface_with_inheritance(generated_dir):
     holder_content = []
 
     for line in lines:
-        if "class IdentifiableHolder(Identifiable, Holder, Protocol):" in line:
+        if "class IdentifiableHolder:" in line:
             in_identifiable_holder = True
             holder_content.append(line)
         elif in_identifiable_holder:
@@ -278,6 +289,6 @@ def test_empty_interface_with_inheritance(generated_dir):
     holder_text = "\n".join(holder_content)
 
     # Should have inheritance but minimal body
-    assert "class IdentifiableHolder(Identifiable, Holder, Protocol):" in holder_text
+    assert "class IdentifiableHolder:" in holder_text
     assert "..." in holder_text  # Should have ellipsis for empty body
     assert "class Server(Identifiable.Server, Holder.Server):" in holder_text

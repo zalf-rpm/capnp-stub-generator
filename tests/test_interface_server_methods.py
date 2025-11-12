@@ -5,8 +5,10 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines):
     """Server classes should be generated for all interfaces."""
     lines = calculator_stub_lines
 
-    # Check that Server classes exist for each interface
-    assert any("class Value(Protocol):" in line for line in lines)
+    # Check that interface modules exist (no longer Protocol)
+    assert any("class Value:" in line for line in lines)
+    
+    # Check that Server classes exist
     assert any("class Server(Protocol):" in line for line in lines)
 
     # Count Server classes - should be 3 (Value, Function, Calculator)
@@ -67,13 +69,14 @@ def test_server_methods_accept_context(calculator_stub_lines):
 
 
 def test_server_methods_return_interface_or_implementation(calculator_stub_lines):
-    """Server methods returning interfaces should accept implementations."""
+    """Server methods returning interfaces return Server types."""
     lines = calculator_stub_lines
     content = "".join(lines)
 
-    # Methods returning interfaces should allow Interface | Interface.Server
-    assert "Calculator.Value | Calculator.Value.Server" in content
-    assert "Calculator.Function | Calculator.Function.Server" in content
+    # Server methods returning interfaces return Interface.Server types
+    # (not Interface | Interface.Server because servers work with Server implementations)
+    assert "Calculator.Value.Server" in content
+    assert "Calculator.Function.Server" in content
 
 
 def test_server_method_parameters_match_protocol(calculator_stub_lines):

@@ -143,13 +143,17 @@ class TestInterfaceMethodTypeRegression:
         stub_content = stub_file.read_text()
 
         # Function.call should have Sequence[float] (optional), not Any
-        assert "class Function(Protocol):" in stub_content
+        # Function is now an interface module, FunctionClient has the methods
+        assert "class Function:" in stub_content
+        assert "class FunctionClient(Protocol):" in stub_content
         assert "def call(" in stub_content
         assert "params: Sequence[float] | None = None" in stub_content
         assert ") -> Calculator.Function.CallResult:" in stub_content
 
-        # Value.read should return ReadResult with float field, not Any
-        assert "class Value(Protocol):" in stub_content
+        # Value.read should return ReadResult with float field, not Any  
+        # Value is now an interface module, ValueClient has the methods
+        assert "class Value:" in stub_content
+        assert "class ValueClient(Protocol):" in stub_content
         assert "def read(self) -> Calculator.Value.ReadResult:" in stub_content
 
 

@@ -267,21 +267,27 @@ class TypeHintedVariable:
 
 
 def replace_capnp_suffix(original: str) -> str:
-    """If found, replaces the .capnp suffix in a string with _capnp.
+    """If found, replaces the .capnp suffix in a string with _capnp and converts hyphens to underscores.
 
-    For example, `some_module.capnp` becomes `some_module_capnp`.
+    This matches the behavior of pycapnp which converts hyphens to underscores in module names
+    to create valid Python identifiers.
+
+    For example, `some-module.capnp` becomes `some_module_capnp`.
 
     Args:
         original (str): The string to replace the suffix in.
 
     Returns:
-        str: The string with the replaced suffix.
+        str: The string with the replaced suffix and hyphens converted to underscores.
     """
-    if original.endswith(".capnp"):
-        return original.replace(".capnp", "_capnp")
-
-    else:
-        return original
+    result = original
+    if result.endswith(".capnp"):
+        result = result.replace(".capnp", "_capnp")
+    
+    # Replace hyphens with underscores to create valid Python identifiers
+    result = result.replace("-", "_")
+    
+    return result
 
 
 def join_parameters(parameters: list[TypeHintedVariable] | list[str] | None) -> str:

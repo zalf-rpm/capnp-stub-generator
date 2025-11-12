@@ -130,28 +130,31 @@ class TestInterfaceReturnTypes:
     """Test that interface types don't have Builder/Reader variants."""
 
     def test_interface_has_no_builder_reader(self, interface_stub_file):
-        """Interfaces should only have the Protocol, no Builder/Reader classes."""
+        """Interfaces now have an interface module and separate Client class."""
         content = interface_stub_file.read_text()
 
-        # Should have the Protocol (actual name is Greeter, not TestGreeter)
-        assert "class Greeter(Protocol):" in content, "Should have Protocol definition"
+        # Should have the interface module (not Protocol anymore)
+        assert "class Greeter:" in content, "Should have interface module"
+        
+        # Should have the Client Protocol class
+        assert "class GreeterClient(Protocol):" in content, "Should have Client Protocol"
 
         # Should NOT have Builder/Reader variants
         assert "class GreeterBuilder" not in content, "Interfaces should not have Builder class"
         assert "class GreeterReader" not in content, "Interfaces should not have Reader class"
 
     def test_interface_methods_return_interface_type(self, interface_stub_file):
-        """Interface methods should return interface types (not Builder/Reader)."""
+        """Interface client methods should return result types (not Builder/Reader)."""
         content = interface_stub_file.read_text()
 
-        # Interface methods should reference only the Protocol type
-        # Not Builder/Reader since interfaces don't have those variants
-        assert "class Greeter(Protocol):" in content
-
-        # Methods should not reference non-existent Builder/Reader types
-        lines_after_greeter = content.split("class Greeter(Protocol):")[1].split("\nclass ")[0]
-        assert "GreeterBuilder" not in lines_after_greeter, "Interface methods should not reference Builder"
-        assert "GreeterReader" not in lines_after_greeter, "Interface methods should not reference Reader"
+        # Should have interface module and Client class
+        assert "class Greeter:" in content
+        assert "class GreeterClient(Protocol):" in content
+        
+        # Client methods should not reference non-existent Builder/Reader types
+        client_section = content.split("class GreeterClient(Protocol):")[1].split("\nclass ")[0]
+        assert "GreeterBuilder" not in client_section, "Interface methods should not reference Builder"
+        assert "GreeterReader" not in client_section, "Interface methods should not reference Reader"
 
 
 class TestStaticMethodReturnTypes:

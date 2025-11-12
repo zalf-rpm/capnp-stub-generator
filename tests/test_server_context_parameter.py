@@ -55,8 +55,9 @@ class TestServerContextParameter:
         import re
 
         # Test Calculator.Function.call
+        # Function is now an interface module, not Protocol
         function_section = re.search(
-            r"class Function\(Protocol\):.*?(?=\n    class [A-Z]|\nclass [A-Z])", content, re.DOTALL
+            r"class Function:.*?(?=\nclass [A-Z])", content, re.DOTALL
         )
         assert function_section, "Calculator.Function not found"
 
