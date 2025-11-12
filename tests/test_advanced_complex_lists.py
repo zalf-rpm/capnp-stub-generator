@@ -1,17 +1,11 @@
-from pathlib import Path
+"""Test generation of complex list types."""
 
-from capnp_stub_generator.cli import main
-
-SCHEMAS_DIR = Path(__file__).parent / "schemas"
-SCHEMA = SCHEMAS_DIR / "advanced_features.capnp"
-DUMMY_SCHEMA = SCHEMAS_DIR / "dummy.capnp"
+from __future__ import annotations
 
 
-def test_complex_lists(tmp_path):
+def test_complex_lists(basic_stubs):
     """Test that multi-dimensional lists are properly typed with nested Sequence types."""
-    # Need to load dummy.capnp as well since advanced_features imports it
-    main(["-p", str(DUMMY_SCHEMA), str(SCHEMA), "-o", str(tmp_path)])
-    stub = tmp_path / "advanced_features_capnp.pyi"
+    stub = basic_stubs / "advanced_features_capnp.pyi"
     assert stub.exists(), "Stub should be generated"
 
     content = stub.read_text()

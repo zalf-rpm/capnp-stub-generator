@@ -1,13 +1,4 @@
-from pathlib import Path
-
-from capnp_stub_generator.cli import main
-
-SCHEMAS_DIR = Path(__file__).parent / "schemas"
-SCHEMA = SCHEMAS_DIR / "advanced_features.capnp"
-DUMMY_SCHEMA = SCHEMAS_DIR / "dummy.capnp"
-
-
-def test_name_annotations(tmp_path):
+def test_name_annotations(basic_stubs):
     """Test that Cap'n Proto name annotations ($Cxx.name) are handled.
 
     Note: The generator currently uses the original schema names rather than
@@ -15,9 +6,7 @@ def test_name_annotations(tmp_path):
     the Python API, which uses the original names. The annotations are
     primarily for C++ code generation.
     """
-    # Need to load dummy.capnp as well since advanced_features imports it
-    main(["-p", str(DUMMY_SCHEMA), str(SCHEMA), "-o", str(tmp_path)])
-    stub = tmp_path / "advanced_features_capnp.pyi"
+    stub = basic_stubs / "advanced_features_capnp.pyi"
     assert stub.exists(), "Stub should be generated"
 
     content = stub.read_text()

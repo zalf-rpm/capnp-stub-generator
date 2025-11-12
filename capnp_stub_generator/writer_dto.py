@@ -7,7 +7,7 @@ and reduce coupling between methods in the Writer class.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from capnp.lib.capnp import _StructSchema
@@ -150,3 +150,312 @@ class StructFieldsCollection:
             f"init_choices={len(self.init_choices)}, "
             f"list_init_choices={len(self.list_init_choices)})"
         )
+
+
+# ===== Interface Generation DTOs =====
+
+
+@dataclass
+class InterfaceGenerationContext:
+    """Context object containing all metadata needed for interface generation.
+
+    This object groups together interface-specific metadata, reducing the number
+    of parameters passed between interface generation methods.
+
+    Attributes:
+        schema: The Cap'n Proto interface schema being processed
+        name: The interface name
+        registered_type: The registered CapnpType object
+        base_classes: List of base class names (superclasses + Protocol)
+        parent_scope: The parent scope for this interface
+    """
+
+    schema: _StructSchema
+    name: str
+    registered_type: CapnpType
+    base_classes: list[str]
+    parent_scope: Any  # Scope type
+
+    @classmethod
+    def create(
+        cls,
+        schema: _StructSchema,
+        name: str,
+        registered_type: CapnpType,
+        base_classes: list[str],
+        parent_scope: Any,
+    ) -> InterfaceGenerationContext:
+        """Factory method to create interface context.
+
+        Args:
+            schema: The Cap'n Proto interface schema
+            name: The interface name
+            registered_type: The registered type object
+            base_classes: List of base class names
+            parent_scope: The parent scope
+
+        Returns:
+            A fully initialized InterfaceGenerationContext
+        """
+        return cls(
+            schema=schema,
+            name=name,
+            registered_type=registered_type,
+            base_classes=base_classes,
+            parent_scope=parent_scope,
+        )
+
+
+@dataclass
+class MethodInfo:
+    """Information about a single RPC method.
+
+    Encapsulates all the metadata extracted from a runtime method object,
+    providing safe defaults for missing information.
+
+    Attributes:
+        method_name: Name of the method
+        method: The runtime method object
+        param_schema: Parameter struct schema (or None if unavailable)
+        result_schema: Result struct schema (or None if unavailable)
+        param_fields: List of parameter field names
+        result_fields: List of result field names
+    """
+
+    method_name: str
+    method: Any
+    param_schema: _StructSchema | None
+    result_schema: _StructSchema | None
+    param_fields: list[str]
+    result_fields: list[str]
+
+    @classmethod
+    def from_runtime_method(cls, method_name: str, method: Any) -> MethodInfo:
+        """Create MethodInfo from a runtime method object.
+
+        Handles all error cases and returns safe defaults when schemas
+        or field information cannot be extracted.
+
+        Args:
+            method_name: Name of the method
+            method: The runtime method object
+
+        Returns:
+            A MethodInfo with all available information
+        """
+        param_schema = None
+        result_schema = None
+        param_fields: list[str] = []
+        result_fields: list[str] = []
+
+        try:
+            param_schema = method.param_type
+            result_schema = method.result_type
+            if param_schema is not None:
+                param_fields = [f.name for f in param_schema.node.struct.fields]
+            if result_schema is not None:
+                result_fields = [f.name for f in result_schema.node.struct.fields]
+        except Exception:
+            # Safe defaults already set
+            pass
+
+        return cls(
+            method_name=method_name,
+            method=method,
+            param_schema=param_schema,
+            result_schema=result_schema,
+            param_fields=param_fields,
+            result_fields=result_fields,
+        )
+
+
+@dataclass
+class ParameterInfo:
+    """Information about a processed method parameter with type variants.
+
+    Different method contexts (client, server, request) need different type
+    representations for the same parameter. This class encapsulates all variants.
+
+    Attributes:
+        name: Parameter name
+        client_type: Type for client method signature (may include dict unions)
+        server_type: Type for server method signature (uses Reader types)
+        request_type: Type for request builder (usually same as client_type)
+    """
+
+    name: str
+    client_type: str
+    server_type: str
+    request_type: str
+
+    def to_client_param(self) -> str:
+        """Format as client method parameter (optional with default).
+
+        Returns:
+            Parameter string like "name: Type | None = None"
+        """
+        return f"{self.name}: {self.client_type} | None = None"
+
+    def to_server_param(self) -> str:
+        """Format as server method parameter (required).
+
+        Returns:
+            Parameter string like "name: Type"
+        """
+        return f"{self.name}: {self.server_type}"
+
+    def to_request_param(self) -> str:
+        """Format as request method parameter (optional with default).
+
+        Returns:
+            Parameter string like "name: Type | None = None"
+        """
+        return f"{self.name}: {self.request_type} | None = None"
+
+
+class MethodSignatureCollection:
+    """Collection of generated method signatures and Protocol classes.
+
+    Accumulates all the components needed for a complete method implementation:
+    - Client method signature
+    - Request Protocol class lines
+    - Result Protocol class lines
+    - _request helper method
+    - Server CallContext and ResultsBuilder lines
+    - Server method signature
+    - NamedTuple info for direct struct returns
+
+    Attributes:
+        method_name: Name of the method
+        client_method_lines: Lines for the client method
+        request_class_lines: Lines for the Request Protocol class
+        result_class_lines: Lines for the Result Protocol class
+        request_helper_lines: Lines for the _request helper method
+        server_context_lines: Lines for CallContext and ResultsBuilder Protocols
+        server_method_signature: Server method signature line
+        uses_direct_struct_return: Flag for NamedTuple direct returns
+        namedtuple_info: Tuple of (result_type, field_name, field_type) or None
+    """
+
+    def __init__(self, method_name: str):
+        """Initialize empty collection for a method.
+
+        Args:
+            method_name: Name of the method being processed
+        """
+        self.method_name = method_name
+        self.client_method_lines: list[str] = []
+        self.request_class_lines: list[str] = []
+        self.result_class_lines: list[str] = []
+        self.request_helper_lines: list[str] = []
+        self.server_context_lines: list[str] = []
+        self.server_method_signature: str = ""
+        self.uses_direct_struct_return: bool = False
+        self.namedtuple_info: tuple[str, str, str] | None = None
+
+    def set_client_method(self, lines: list[str]) -> None:
+        """Set the client method signature lines.
+
+        Args:
+            lines: List of lines for the client method
+        """
+        self.client_method_lines = lines
+
+    def set_request_class(self, lines: list[str]) -> None:
+        """Set the Request Protocol class lines.
+
+        Args:
+            lines: List of lines for the Request Protocol class
+        """
+        self.request_class_lines = lines
+
+    def set_result_class(self, lines: list[str]) -> None:
+        """Set the Result Protocol class lines.
+
+        Args:
+            lines: List of lines for the Result Protocol class
+        """
+        self.result_class_lines = lines
+
+    def set_request_helper(self, lines: list[str]) -> None:
+        """Set the _request helper method lines.
+
+        Args:
+            lines: List of lines for the _request helper method
+        """
+        self.request_helper_lines = lines
+
+    def set_server_method(self, signature: str) -> None:
+        """Set the server method signature.
+
+        Args:
+            signature: Single-line server method signature
+        """
+        self.server_method_signature = signature
+
+    def set_namedtuple_info(self, result_type: str, field_name: str, field_type: str) -> None:
+        """Set info for direct struct return (NamedTuple).
+
+        Args:
+            result_type: The result type name
+            field_name: The field name in the NamedTuple
+            field_type: The field type
+        """
+        self.uses_direct_struct_return = True
+        self.namedtuple_info = (result_type, field_name, field_type)
+
+    def __repr__(self) -> str:
+        """Return a readable representation for debugging."""
+        return (
+            f"MethodSignatureCollection("
+            f"method={self.method_name}, "
+            f"client_lines={len(self.client_method_lines)}, "
+            f"request_lines={len(self.request_class_lines)}, "
+            f"result_lines={len(self.result_class_lines)})"
+        )
+
+
+class ServerMethodsCollection:
+    """Collection of server method signatures for Server class generation.
+
+    Accumulates server method signatures and NamedTuple definitions as methods
+    are processed, providing everything needed to generate the final Server class.
+
+    Attributes:
+        server_methods: List of server method signature lines
+        namedtuples: Dict mapping result type names to list of (field_name, field_type) tuples
+    """
+
+    def __init__(self):
+        """Initialize empty collection."""
+        self.server_methods: list[str] = []
+        self.namedtuples: dict[str, list[tuple[str, str]]] = {}
+
+    def add_server_method(self, signature: str) -> None:
+        """Add a server method signature.
+
+        Args:
+            signature: Single-line server method signature
+        """
+        self.server_methods.append(signature)
+
+    def add_namedtuple(self, result_type: str, fields: list[tuple[str, str]]) -> None:
+        """Add a NamedTuple definition.
+
+        Args:
+            result_type: The result type name (used as key)
+            fields: List of (field_name, field_type) tuples
+        """
+        self.namedtuples[result_type] = fields
+
+    def has_methods(self) -> bool:
+        """Check if any server methods were added.
+
+        Returns:
+            True if at least one server method exists
+        """
+        return len(self.server_methods) > 0
+
+    def __repr__(self) -> str:
+        """Return a readable representation for debugging."""
+        return f"ServerMethodsCollection(methods={len(self.server_methods)}, namedtuples={len(self.namedtuples)})"

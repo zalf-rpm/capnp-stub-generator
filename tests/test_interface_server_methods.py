@@ -1,16 +1,5 @@
 """Tests for interface Server class method signatures."""
 
-import pytest
-
-from tests.conftest import read_stub_file
-
-
-@pytest.fixture(scope="module")
-def calculator_stub_lines(generate_calculator_stubs):
-    """Read calculator.capnp stub file lines."""
-    stub_path = generate_calculator_stubs / "calculator_capnp.pyi"
-    return read_stub_file(stub_path)
-
 
 def test_server_class_exists_for_interfaces(calculator_stub_lines):
     """Server classes should be generated for all interfaces."""
@@ -18,10 +7,10 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines):
 
     # Check that Server classes exist for each interface
     assert any("class Value(Protocol):" in line for line in lines)
-    assert any("class Server:" in line for line in lines)
+    assert any("class Server(Protocol):" in line for line in lines)
 
     # Count Server classes - should be 3 (Value, Function, Calculator)
-    server_count = sum(1 for line in lines if line.strip() == "class Server:")
+    server_count = sum(1 for line in lines if line.strip() == "class Server(Protocol):")
     assert server_count == 3, f"Expected 3 Server classes, found {server_count}"
 
 
@@ -31,17 +20,20 @@ def test_server_methods_have_signatures(calculator_stub_lines):
     content = "".join(lines)
 
     # Function.Server should have call method
-    assert "class Server:" in content
+    assert "class Server(Protocol):" in content
     assert "def call(self, params: Sequence[float]" in content
-    assert "Awaitable[float" in content
+    assert "Awaitable[" in content  # Server.call returns Awaitable
 
-    # Value.Server should have read method with _context parameter
-    assert "def read(self, _context: Calculator.Value.ReadCallContext, **kwargs: Any) -> Awaitable[float | None]:" in content
+    # Value.Server should have read method with _context parameter and returns NamedTuple
+    # Method may span multiple lines
+    assert "def read(" in content
+    assert "_context: Calculator.Value.ReadCallContext" in content
+    assert "Awaitable[float | Calculator.Value.Server.ReadResult | None]" in content
 
-    # Calculator.Server should have evaluate method with Reader type
+    # Calculator.Server should have evaluate method with Reader type and return NamedTuple
     assert "def evaluate(" in content
     assert "expression: Calculator.ExpressionReader" in content
-    assert "Awaitable[Calculator.Value | Calculator.Value.Server | None]" in content
+    assert "Awaitable[Calculator.Value.Server | Calculator.Server.EvaluateResult | None]" in content
 
 
 def test_server_methods_accept_context(calculator_stub_lines):
@@ -55,7 +47,7 @@ def test_server_methods_accept_context(calculator_stub_lines):
     # Find all Server classes and verify their methods
     import re
 
-    server_sections = re.findall(r"class Server:.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL)
+    server_sections = re.findall(r"class Server\(Protocol\):.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL)
 
     assert len(server_sections) > 0, "Should find at least one Server class"
 
@@ -63,7 +55,10 @@ def test_server_methods_accept_context(calculator_stub_lines):
         # Find all method definitions in this Server class
         methods = re.findall(r"def \w+\([^)]*(?:\).*?)?(?=\n|$)", server_section, re.DOTALL)
         for method in methods:
-            # Each method should have **kwargs
+            # Skip dunder methods like __enter__ and __exit__
+            if "def __" in method:
+                continue
+            # Each RPC method should have **kwargs
             assert "**kwargs" in method, f"Server method should have **kwargs: {method}"
             # Should have explicit _context parameter with type annotation
             assert "_context:" in method, f"Server method should have _context parameter: {method}"

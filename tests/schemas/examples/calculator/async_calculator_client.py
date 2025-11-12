@@ -28,7 +28,7 @@ def parse_args():
     return parser.parse_args()
 
 
-async def main(connection):
+async def main(connection: capnp.AsyncIoStream):
     client = capnp.TwoPartyClient(connection)
 
     # Bootstrap the Calculator interface

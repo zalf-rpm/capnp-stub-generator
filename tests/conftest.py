@@ -1,271 +1,248 @@
-"""Central pytest configuration and shared fixtures for capnp-stub-generator tests.
-
-This module provides:
-- Centralized stub generation with proper ordering
-- Shared fixtures for all tests
-- Common helper functions
-- Proper setup and teardown
-"""
+"""Pytest configuration and fixtures for capnp stub generator tests."""
 
 from __future__ import annotations
 
-import shutil
+import logging
 import subprocess
 from pathlib import Path
 
 import pytest
 
-# Test directories
+# Test directory structure
 TESTS_DIR = Path(__file__).parent
 SCHEMAS_DIR = TESTS_DIR / "schemas"
-EXAMPLES_DIR = TESTS_DIR / "examples"
-ZALFMAS_DIR = TESTS_DIR / "zalfmas_capnp_schemas"
+GENERATED_DIR = TESTS_DIR / "_generated"
 
-# Generated output directories (all under one _generated root)
-GENERATED_ROOT = TESTS_DIR / "_generated"
-GENERATED_DIR = GENERATED_ROOT  # Core schemas directly under _generated
-GENERATED_EXAMPLES_DIR = GENERATED_ROOT / "examples"
-GENERATED_ADDRESSBOOK_DIR = GENERATED_ROOT / "addressbook"
-GENERATED_ZALFMAS_DIR = GENERATED_ROOT / "zalfmas"
+# Schema subdirectories
+BASIC_SCHEMAS_DIR = SCHEMAS_DIR / "basic"
+EXAMPLES_SCHEMAS_DIR = SCHEMAS_DIR / "examples"
+ZALFMAS_SCHEMAS_DIR = SCHEMAS_DIR / "zalfmas"
 
-
-def pytest_configure(config):
-    """Configure pytest with custom markers."""
-    config.addinivalue_line("markers", "stub_generation: mark test as requiring stub generation")
-    config.addinivalue_line("markers", "pyright_validation: mark test as requiring pyright validation")
-    config.addinivalue_line("markers", "order(n): specify test execution order")
+# Generated output subdirectories
+BASIC_GENERATED_DIR = GENERATED_DIR / "basic"
+EXAMPLES_GENERATED_DIR = GENERATED_DIR / "examples"
+ZALFMAS_GENERATED_DIR = GENERATED_DIR / "zalfmas"
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_generated_dirs():
-    """Clean up all generated directories before and after test session."""
-    # Setup: ensure clean slate - just remove the root and recreate
-    if GENERATED_ROOT.exists():
-        shutil.rmtree(GENERATED_ROOT)
+def generate_all_stubs():
+    """Generate all test stubs once at the beginning of the test session.
 
-    GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
+    This fixture runs automatically before any tests and generates stubs for:
+    - Basic test schemas
+    - Example schemas (calculator, addressbook, etc.)
+    - Zalfmas schemas
 
-    # Create subdirectories (GENERATED_DIR is GENERATED_ROOT itself, so skip it)
-    for gen_dir in [GENERATED_EXAMPLES_DIR, GENERATED_ADDRESSBOOK_DIR, GENERATED_ZALFMAS_DIR]:
-        gen_dir.mkdir(parents=True, exist_ok=True)
+    All other tests should use the generated stubs from this fixture.
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("Generating all test stubs...")
 
-    yield
+    # Clean generated directory
+    if GENERATED_DIR.exists():
+        import shutil
 
-    # Teardown: optionally keep generated files for inspection
-    # Uncomment to clean up after tests
-    # if GENERATED_ROOT.exists():
-    #     shutil.rmtree(GENERATED_ROOT)
+        shutil.rmtree(GENERATED_DIR)
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Generate basic schemas
+    logger.info(f"Generating basic schemas from {BASIC_SCHEMAS_DIR}")
+    result = subprocess.run(
+        [
+            "capnp-stub-generator",
+            "-p",
+            str(BASIC_SCHEMAS_DIR),
+            "-o",
+            str(BASIC_GENERATED_DIR),
+            "-r",  # Recursive to find all schemas
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.error(f"Failed to generate basic schemas:\n{result.stderr}")
+        pytest.fail(f"Basic schema generation failed: {result.stderr}")
+
+    # Generate example schemas (recursive to get subdirectories)
+    logger.info(f"Generating example schemas from {EXAMPLES_SCHEMAS_DIR}")
+    result = subprocess.run(
+        [
+            "capnp-stub-generator",
+            "-p",
+            str(EXAMPLES_SCHEMAS_DIR),
+            "-o",
+            str(EXAMPLES_GENERATED_DIR),
+            "-r",  # Recursive
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.error(f"Failed to generate example schemas:\n{result.stderr}")
+        pytest.fail(f"Example schema generation failed: {result.stderr}")
+
+    # Generate zalfmas schemas (recursive, with exclusions)
+    logger.info(f"Generating zalfmas schemas from {ZALFMAS_SCHEMAS_DIR}")
+    result = subprocess.run(
+        [
+            "capnp-stub-generator",
+            "-p",
+            str(ZALFMAS_SCHEMAS_DIR),
+            "-o",
+            str(ZALFMAS_GENERATED_DIR),
+            "-r",
+            "-e",
+            str(ZALFMAS_SCHEMAS_DIR / "a.capnp"),  # Exclude problematic file
+            "-I",
+            str(ZALFMAS_SCHEMAS_DIR),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.error(f"Failed to generate zalfmas schemas:\n{result.stderr}")
+        pytest.fail(f"Zalfmas schema generation failed: {result.stderr}")
+
+    logger.info("✓ All test stubs generated successfully")
+
+    # Return paths for tests to use
+    return {
+        "basic": BASIC_GENERATED_DIR,
+        "examples": EXAMPLES_GENERATED_DIR,
+        "zalfmas": ZALFMAS_GENERATED_DIR,
+    }
 
 
 @pytest.fixture(scope="session")
-def generate_core_stubs():
-    """Generate stubs for core test schemas (dummy.capnp, etc.) once per session."""
-    from capnp_stub_generator.cli import main
+def generated_stubs(generate_all_stubs):
+    """Provide access to generated stub directories.
 
-    # Generate all core schema stubs in one go
-    schema_files = [
-        SCHEMAS_DIR / "dummy.capnp",
-        SCHEMAS_DIR / "primitives.capnp",
-        SCHEMAS_DIR / "nested.capnp",
-        SCHEMAS_DIR / "unions.capnp",
-        SCHEMAS_DIR / "interfaces.capnp",
-        SCHEMAS_DIR / "advanced_features.capnp",
-    ]
-
-    existing_schemas = [str(s) for s in schema_files if s.exists()]
-
-    if existing_schemas:
-        main(["-p"] + existing_schemas + ["-o", str(GENERATED_DIR)])
-
-    return GENERATED_DIR
+    Returns:
+        dict: Dictionary with keys "basic", "examples", "zalfmas"
+              pointing to generated stub directories.
+    """
+    return generate_all_stubs
 
 
 @pytest.fixture(scope="session")
-def generate_import_stubs():
-    """Generate stubs for import test schemas."""
-    from capnp_stub_generator.cli import main
-
-    import_base = SCHEMAS_DIR / "import_base.capnp"
-    import_user = SCHEMAS_DIR / "import_user.capnp"
-
-    if import_base.exists() and import_user.exists():
-        main(["-p", str(import_base), str(import_user), "-o", str(GENERATED_DIR)])
-
-    return GENERATED_DIR
+def calculator_stubs(generated_stubs):
+    """Provide path to generated calculator stubs."""
+    return generated_stubs["examples"] / "calculator"
 
 
 @pytest.fixture(scope="session")
-def generate_addressbook_stubs():
-    """Generate stubs for addressbook example."""
-    from capnp_stub_generator.cli import main
-
-    addressbook_schema = EXAMPLES_DIR / "addressbook" / "addressbook.capnp"
-
-    if addressbook_schema.exists():
-        main(["-p", str(addressbook_schema), "-o", str(GENERATED_ADDRESSBOOK_DIR)])
-
-    return GENERATED_ADDRESSBOOK_DIR
+def addressbook_stubs(generated_stubs):
+    """Provide path to generated addressbook stubs."""
+    return generated_stubs["examples"] / "addressbook"
 
 
 @pytest.fixture(scope="session")
-def generate_calculator_stubs():
-    """Generate stubs for calculator example."""
-    from capnp_stub_generator.cli import main
-
-    calculator_schema = EXAMPLES_DIR / "calculator" / "calculator.capnp"
-    calculator_output = GENERATED_EXAMPLES_DIR / "calculator"
-
-    if calculator_schema.exists():
-        calculator_output.mkdir(parents=True, exist_ok=True)
-        main(["-p", str(calculator_schema), "-o", str(calculator_output)])
-        # Copy the .capnp file to the output directory so it can be loaded
-        shutil.copy(calculator_schema, calculator_output / "calculator.capnp")
-
-    return calculator_output
+def basic_stubs(generated_stubs):
+    """Provide path to generated basic test stubs."""
+    return generated_stubs["basic"]
 
 
 @pytest.fixture(scope="session")
-def generate_all_example_stubs():
-    """Generate stubs for all example schemas."""
-    from capnp_stub_generator.cli import main
-
-    examples = ["addressbook", "calculator"]
-    generated = {}
-
-    for example in examples:
-        schema_path = EXAMPLES_DIR / example / f"{example}.capnp"
-        output_dir = GENERATED_EXAMPLES_DIR / example
-
-        if schema_path.exists():
-            output_dir.mkdir(parents=True, exist_ok=True)
-            main(["-p", str(schema_path), "-o", str(output_dir)])
-            generated[example] = output_dir
-
-    return generated
+def zalfmas_stubs(generated_stubs):
+    """Provide path to generated zalfmas stubs."""
+    return generated_stubs["zalfmas"]
 
 
-# Helper functions
+# Legacy fixtures for backward compatibility (deprecated)
+@pytest.fixture
+def generate_calculator_stubs(calculator_stubs):
+    """Deprecated: Use calculator_stubs fixture instead."""
+    return calculator_stubs
 
 
-def read_stub_file(stub_path: Path) -> list[str]:
-    """Read a stub file and return lines."""
-    with open(stub_path, encoding="utf-8") as f:
+@pytest.fixture
+def calculator_stub_lines(calculator_stubs):
+    """Read calculator stub file lines."""
+    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    with open(stub_file) as f:
         return f.readlines()
 
 
-def generate_stub_from_schema(schema_name: str, output_dir: Path | None = None) -> Path:
-    """Generate a stub from a schema file and return the stub path."""
-    from capnp_stub_generator.cli import main
+# Constants for backward compatibility
+SCHEMAS_DIR_OLD = BASIC_SCHEMAS_DIR  # For tests that reference SCHEMAS_DIR
 
-    if output_dir is None:
-        output_dir = GENERATED_DIR
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    schema_path = SCHEMAS_DIR / schema_name
+# Helper functions for tests
+def read_stub_file(stub_path: Path) -> list[str]:
+    """Read a stub file and return its lines.
 
-    if not schema_path.exists():
-        raise FileNotFoundError(f"Schema not found: {schema_path}")
+    Args:
+        stub_path: Path to the .pyi stub file
 
-    main(["-p", str(schema_path), "-o", str(output_dir)])
+    Returns:
+        List of lines from the stub file
+    """
+    with open(stub_path) as f:
+        return f.readlines()
 
-    stub_name = schema_name.replace(".capnp", "_capnp.pyi")
+
+def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
+    """Generate a stub from a schema file (for temporary test generation).
+
+    This should only be used for CLI tests or temporary validation.
+    Most tests should use the pre-generated stubs from generate_all_stubs fixture.
+
+    Args:
+        schema_name: Name of the schema file (e.g., "calculator.capnp")
+        output_dir: Directory to write the generated stub
+
+    Returns:
+        Path to the generated .pyi file
+    """
+    # Find the schema file in any of the schema directories
+    schema_path = None
+    for schema_dir in [BASIC_SCHEMAS_DIR, EXAMPLES_SCHEMAS_DIR, ZALFMAS_SCHEMAS_DIR]:
+        candidate = schema_dir / schema_name
+        if candidate.exists():
+            schema_path = candidate
+            break
+        # Also check subdirectories
+        for subdir in schema_dir.rglob("*"):
+            if subdir.is_dir():
+                candidate = subdir / schema_name
+                if candidate.exists():
+                    schema_path = candidate
+                    break
+        if schema_path:
+            break
+
+    if not schema_path:
+        pytest.fail(f"Schema {schema_name} not found in schema directories")
+
+    # Generate the stub
+    result = subprocess.run(
+        [
+            "capnp-stub-generator",
+            "-p",
+            str(schema_path),
+            "-o",
+            str(output_dir),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        pytest.fail(f"Failed to generate stub: {result.stderr}")
+
+    # Return path to generated .pyi file
+    stub_name = schema_path.stem + "_capnp.pyi"
     return output_dir / stub_name
 
 
-def run_pyright(file_path: Path, cwd: Path | None = None) -> tuple[int, str]:
-    """Run pyright on a file and return error count and output."""
-    if cwd is None:
-        cwd = TESTS_DIR
-
-    result = subprocess.run(
-        ["pyright", str(file_path)],
-        capture_output=True,
-        text=True,
-        cwd=str(cwd),
-    )
-    error_count = result.stdout.count("error:")
-    return error_count, result.stdout
+# Specific stub fixtures for individual files
+@pytest.fixture(scope="session")
+def dummy_stub_file(basic_stubs):
+    """Provide path to dummy_capnp.pyi."""
+    return basic_stubs / "dummy_capnp.pyi"
 
 
-def run_pyright_on_directory(dir_path: Path) -> tuple[int, str]:
-    """Run pyright on all files in a directory."""
-    result = subprocess.run(
-        ["pyright", str(dir_path)],
-        capture_output=True,
-        text=True,
-    )
-    error_count = result.stdout.count("error:")
-    return error_count, result.stdout
-
-
-# Test ordering hook
-def pytest_collection_modifyitems(config, items):
-    """Order tests based on dependencies and markers."""
-    # Define test order groups
-    order_groups = {
-        # 1. Core stub generation tests (no dependencies)
-        "generation": [
-            "test_generation_extended",
-            "test_basic_low",
-            "test_mid_features",
-        ],
-        # 2. Dummy schema tests (depend on core generation)
-        "dummy": [
-            "test_dummy_enums_and_all_types",
-            "test_dummy_lists_and_defaults",
-            "test_dummy_groups_and_nested",
-            "test_dummy_unions",
-            "test_dummy_constants_versions_names",
-        ],
-        # 3. Advanced feature tests
-        "advanced": [
-            "test_advanced_unions",
-            "test_advanced_groups",
-            "test_advanced_versioning_constants",
-            "test_advanced_name_annotations",
-            "test_advanced_complex_lists",
-            "test_advanced_generics_anypointer_interface",
-        ],
-        # 4. Typing validation tests
-        "typing": [
-            "test_init_list_typing",
-            "test_enum_literal_validation",
-            "test_addressbook_typing",
-        ],
-        # 5. Example tests
-        "examples": [
-            "test_calculator_baseline",
-            "test_calculator_nesting",
-            "test_real_world_examples",
-        ],
-        # 6. Runtime and integration tests
-        "runtime": [
-            "test_pyright_validation",
-        ],
-    }
-
-    # Create order mapping
-    order_map = {}
-    for order_idx, (group_name, modules) in enumerate(order_groups.items()):
-        for module_idx, module_name in enumerate(modules):
-            order_map[module_name] = (order_idx, module_idx)
-
-    # Add zalfmas tests at the end (but before unknown tests)
-    zalfmas_order = (len(order_groups), 0)
-
-    # Sort items by order
-    def get_order(item):
-        module_name = item.module.__name__.replace("tests.", "").replace("test_", "test_")
-
-        # Zalfmas tests go near the end
-        if "zalfmas" in module_name:
-            return zalfmas_order
-
-        # Extract just the test file name without test_ prefix
-        for key in order_map:
-            if key in module_name or module_name.endswith(key):
-                return order_map[key]
-        # Unknown tests go last
-        return (999, 999)
-
-    items.sort(key=get_order)
+@pytest.fixture(scope="session")
+def dummy_stub_lines(dummy_stub_file):
+    """Read dummy stub file lines."""
+    return read_stub_file(dummy_stub_file)

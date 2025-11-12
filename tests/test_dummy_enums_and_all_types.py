@@ -2,17 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
-from tests.conftest import read_stub_file
-
-
-@pytest.fixture(scope="module")
-def dummy_stub_lines(generate_core_stubs):
-    """Read dummy.capnp stub file lines."""
-    stub_path = generate_core_stubs / "dummy_capnp.pyi"
-    return read_stub_file(stub_path)
-
 
 def test_enum_definition_and_imports(dummy_stub_lines):
     lines = dummy_stub_lines

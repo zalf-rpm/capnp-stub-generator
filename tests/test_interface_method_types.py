@@ -22,10 +22,9 @@ class TestCalculatorInterfaceMethodTypes:
         stub_content = stub_file.read_text()
 
         # Should have evaluate with Expression parameter (optional) and EvaluateResult return type
-        assert (
-            "def evaluate(self, expression: Calculator.Expression | dict[str, Any] | None = None) -> EvaluateResult:"
-            in stub_content
-        )
+        assert "def evaluate(" in stub_content
+        assert "expression: Calculator.Expression | dict[str, Any] | None = None" in stub_content
+        assert ") -> Calculator.EvaluateResult:" in stub_content
 
         # Should NOT have Any for the expression parameter
         assert "def evaluate(self, expression: Any)" not in stub_content
@@ -64,7 +63,9 @@ class TestCalculatorInterfaceMethodTypes:
         stub_content = stub_file.read_text()
 
         # Should have call with Sequence[float] parameter (optional) and CallResult return type
-        assert "def call(self, params: Sequence[float] | None = None) -> CallResult:" in stub_content
+        assert "def call(" in stub_content
+        assert "params: Sequence[float] | None = None" in stub_content
+        assert ") -> Calculator.Function.CallResult:" in stub_content
 
         # Should NOT have Any for the params parameter
         assert "def call(self, params: Any)" not in stub_content
@@ -75,7 +76,7 @@ class TestCalculatorInterfaceMethodTypes:
         stub_content = stub_file.read_text()
 
         # Should have read returning ReadResult
-        assert "def read(self) -> ReadResult:" in stub_content
+        assert "def read(self) -> Calculator.Value.ReadResult:" in stub_content
 
         # ReadResult should have float value field
         assert "class ReadResult" in stub_content
@@ -143,11 +144,13 @@ class TestInterfaceMethodTypeRegression:
 
         # Function.call should have Sequence[float] (optional), not Any
         assert "class Function(Protocol):" in stub_content
-        assert "def call(self, params: Sequence[float] | None = None) -> CallResult:" in stub_content
+        assert "def call(" in stub_content
+        assert "params: Sequence[float] | None = None" in stub_content
+        assert ") -> Calculator.Function.CallResult:" in stub_content
 
         # Value.read should return ReadResult with float field, not Any
         assert "class Value(Protocol):" in stub_content
-        assert "def read(self) -> ReadResult:" in stub_content
+        assert "def read(self) -> Calculator.Value.ReadResult:" in stub_content
 
 
 class TestInterfaceMethodComplexTypes:
@@ -168,12 +171,12 @@ class TestInterfaceMethodComplexTypes:
         stub_content = stub_file.read_text()
 
         # evaluate returns EvaluateResult which has a .value field of type Calculator.Value
-        assert "-> EvaluateResult:" in stub_content
+        assert "-> Calculator.EvaluateResult:" in stub_content
         assert "class EvaluateResult" in stub_content
         assert "value: Calculator.Value" in stub_content
 
         # defFunction and getOperator return results which have .func field of type Calculator.Function
-        assert "-> DeffunctionResult:" in stub_content
+        assert "-> Calculator.DeffunctionResult:" in stub_content
         assert "func: Calculator.Function" in stub_content
 
     def test_enum_parameter_types(self, generate_calculator_stubs):

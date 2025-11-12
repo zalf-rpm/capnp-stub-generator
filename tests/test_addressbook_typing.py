@@ -17,9 +17,9 @@ import pytest
 TESTS_DIR = Path(__file__).parent
 
 
-def test_init_returns_typed_list(generate_addressbook_stubs):
+def test_init_returns_typed_list(addressbook_stubs):
     """Test that init() returns a properly typed list, not Any."""
-    GENERATED_DIR = generate_addressbook_stubs
+    GENERATED_DIR = addressbook_stubs
     # Create a test file that uses init
     test_code = """
 import addressbook_capnp
@@ -58,9 +58,9 @@ alice.email = "alice@example.com"  # Should type check
         )
 
 
-def test_list_element_access_typed(generate_addressbook_stubs):
+def test_list_element_access_typed(addressbook_stubs):
     """Test that accessing list elements gives proper types."""
-    GENERATED_DIR = generate_addressbook_stubs
+    GENERATED_DIR = addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -100,9 +100,9 @@ bob_phones[0].number = "555-4567"
         )
 
 
-def test_iteration_typed(generate_addressbook_stubs):
+def test_iteration_typed(addressbook_stubs):
     """Test that iterating over lists gives proper types."""
-    GENERATED_DIR = generate_addressbook_stubs
+    GENERATED_DIR = addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -142,9 +142,9 @@ for person in addresses.people:
         )
 
 
-def test_union_field_access(generate_addressbook_stubs):
+def test_union_field_access(addressbook_stubs):
     """Test that union fields are properly typed."""
-    GENERATED_DIR = generate_addressbook_stubs
+    GENERATED_DIR = addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -180,9 +180,9 @@ bob.employment.unemployed = None
         )
 
 
-def test_nested_init_typed(generate_addressbook_stubs):
+def test_nested_init_typed(addressbook_stubs):
     """Test that nested init() calls return proper types."""
-    GENERATED_DIR = generate_addressbook_stubs
+    GENERATED_DIR = addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -221,7 +221,7 @@ phones[1].type = "work"
         )
 
 
-def test_all_addressbook_typing_summary(generate_addressbook_stubs):
+def test_all_addressbook_typing_summary(addressbook_stubs):
     """Provide a summary of addressbook typing tests."""
     print("\n" + "=" * 70)
     print("ADDRESSBOOK TYPING TEST SUMMARY")

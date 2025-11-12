@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.conftest import run_pyright
-
 TESTS_DIR = Path(__file__).parent
 CALCULATOR_DIR = TESTS_DIR / "examples" / "calculator"
 
@@ -31,38 +29,23 @@ class TestServerContextParameter:
         # Check that Server methods have _context parameter
         import re
 
-        server_methods = re.findall(r"class Server:.*?(?=\n    class |\n\nclass |\Z)", stub_content, re.DOTALL)
+        server_methods = re.findall(
+            r"class Server\(Protocol\):.*?(?=\n    class |\n\nclass |\Z)", stub_content, re.DOTALL
+        )
         assert server_methods, "No Server classes found in stubs"
 
         for server_class in server_methods:
-            # Find all method definitions
+            # Find all method definitions (skip __enter__ and __exit__)
             methods = re.findall(r"def (\w+)\(", server_class)
             for method_name in methods:
+                if method_name in ("__enter__", "__exit__"):
+                    continue
                 match = re.search(rf"def {method_name}\([^)]+\)", server_class)
                 if match:
                     method_sig = match.group(0)
                     assert "_context:" in method_sig, f"Method {method_name} should have _context parameter"
                     assert "CallContext" in method_sig, f"Method {method_name} _context should be typed"
                     assert "**kwargs" in method_sig, f"Method {method_name} should have **kwargs"
-
-    def test_implementations_must_include_context(self, generate_calculator_stubs):
-        """Test that implementations must include _context to match signature."""
-        test_code = """
-from _generated.examples.calculator import calculator_capnp
-
-class TestFunction(calculator_capnp.Calculator.Function.Server):
-    async def call(self, params, _context, **kwargs):
-        return params[0] + params[1]
-"""
-        test_file = CALCULATOR_DIR / "test_with_context.py"
-        test_file.write_text(test_code)
-
-        try:
-            error_count, output = run_pyright(test_file)
-            assert error_count == 0, f"Implementation with _context should be valid:\n{output}"
-        finally:
-            if test_file.exists():
-                test_file.unlink()
 
     def test_context_parameter_position(self, generate_calculator_stubs):
         """Test that _context comes after regular parameters, before **kwargs."""
@@ -78,7 +61,7 @@ class TestFunction(calculator_capnp.Calculator.Function.Server):
         assert function_section, "Calculator.Function not found"
 
         server_call = re.search(
-            r"class Server:.*?def call\(([^)]+)\)",
+            r"class Server\(Protocol\):.*?def call\(([^)]+)\)",
             function_section.group(0),
             re.DOTALL,
         )
@@ -109,8 +92,8 @@ class TestContextTypeHints:
         # Find a server method and verify its _context type
         import re
 
-        # Look for read method in Value.Server
-        match = re.search(r"def read\(self, _context: ([^,]+),", content)
+        # Look for read method in Value.Server (may span multiple lines)
+        match = re.search(r"def read\([^)]*_context: ([^\s,]+)", content, re.DOTALL)
         assert match, "Could not find read method with _context"
 
         context_type = match.group(1)

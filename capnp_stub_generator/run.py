@@ -27,6 +27,63 @@ PYI_SUFFIX = ".pyi"
 PY_SUFFIX = ".py"
 
 
+class PyrightValidationError(Exception):
+    """Raised when pyright validation finds type errors in generated stubs."""
+
+    pass
+
+
+def validate_with_pyright(output_directories: set[str]) -> None:
+    """Validate generated stub files using pyright.
+
+    Args:
+        output_directories: Set of directories containing generated stubs.
+
+    Raises:
+        PyrightValidationError: If pyright finds any type errors.
+    """
+    # Collect all .pyi files from output directories
+    stub_files = []
+    for output_dir in output_directories:
+        for root, _, files in os.walk(output_dir):
+            for file in files:
+                if file.endswith(".pyi"):
+                    stub_files.append(os.path.join(root, file))
+
+    if not stub_files:
+        logger.warning("No stub files found to validate")
+        return
+
+    logger.info(f"Validating {len(stub_files)} generated stub file(s) with pyright...")
+
+    try:
+        # Run pyright on all stub files
+        result = subprocess.run(
+            ["pyright"] + stub_files,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        # Check for errors in output
+        error_count = result.stdout.count(" error:")
+
+        if error_count > 0 or result.returncode != 0:
+            error_msg = f"Pyright validation failed with {error_count} error(s):\n\n{result.stdout}"
+            logger.error(error_msg)
+            raise PyrightValidationError(error_msg)
+
+        logger.info("✓ Pyright validation passed - no type errors found")
+
+    except FileNotFoundError:
+        logger.error("pyright not found. Please install pyright: npm install -g pyright")
+        raise PyrightValidationError("pyright command not found. Please install pyright.")
+    except subprocess.SubprocessError as e:
+        error_msg = f"Error running pyright: {e}"
+        logger.error(error_msg)
+        raise PyrightValidationError(error_msg)
+
+
 def format_outputs(raw_input: str, is_pyi: bool) -> str:
     """Formats raw input using ruff.
 
@@ -169,6 +226,7 @@ def run(args: argparse.Namespace, root_directory: str):
     clean: list[str] = args.clean
     output_dir: str = getattr(args, "output_dir", "")
     import_paths: list[str] = getattr(args, "import_paths", [])
+    skip_pyright: bool = getattr(args, "skip_pyright", False)
 
     cleanup_paths: set[str] = set()
     for c in clean:
@@ -366,3 +424,7 @@ def run(args: argparse.Namespace, root_directory: str):
         if not os.path.exists(py_typed_path):
             with open(py_typed_path, "w", encoding="utf8") as f:
                 f.write("")  # Empty file as per PEP 561
+
+    # Validate generated stubs with pyright (unless disabled)
+    if not skip_pyright:
+        validate_with_pyright(output_directories_used)

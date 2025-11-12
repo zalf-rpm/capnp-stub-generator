@@ -23,7 +23,7 @@ class TestRequestBuilderStructure:
         # Should have EvaluateRequest class
         assert "class EvaluateRequest(Protocol):" in stub_content
 
-        # Should have expression field with ExpressionBuilder type
+        # Should have expression field with Expression type (allows dict for init)
         lines = stub_content.split("\n")
         in_evaluate_request = False
         found_expression_field = False
@@ -32,7 +32,7 @@ class TestRequestBuilderStructure:
             if "class EvaluateRequest(Protocol):" in line:
                 in_evaluate_request = True
             elif in_evaluate_request and "expression:" in line:
-                assert "Calculator.ExpressionBuilder" in line, f"Expected ExpressionBuilder, got: {line}"
+                assert "Calculator.Expression" in line, f"Expected Expression type, got: {line}"
                 found_expression_field = True
                 break
             elif in_evaluate_request and (line.startswith("    def ") or line.startswith("class ")):
@@ -61,7 +61,7 @@ class TestRequestBuilderStructure:
                 assert "int" in line
                 found_param_count = True
             elif in_deffunction_request and "body:" in line:
-                assert "Calculator.ExpressionBuilder" in line
+                assert "Calculator.Expression" in line, f"Expected Expression type, got: {line}"
                 found_body = True
                 break  # Found both fields, exit
             elif in_deffunction_request and line.startswith("class "):

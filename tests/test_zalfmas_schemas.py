@@ -18,7 +18,7 @@ from capnp_stub_generator.cli import main
 
 # Test directories
 TESTS_DIR = Path(__file__).parent
-ZALFMAS_DIR = TESTS_DIR / "zalfmas_capnp_schemas"
+ZALFMAS_DIR = TESTS_DIR / "schemas" / "zalfmas"
 GENERATED_ZALFMAS_DIR = TESTS_DIR / "_generated" / "zalfmas"
 
 

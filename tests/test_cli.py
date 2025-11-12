@@ -23,7 +23,8 @@ from capnp_stub_generator.cli import main, setup_parser
 
 # Test directories
 TESTS_DIR = Path(__file__).parent
-SCHEMAS_DIR = TESTS_DIR / "schemas"
+SCHEMAS_DIR = TESTS_DIR / "schemas" / "basic"  # Updated to new location
+EXAMPLES_DIR = TESTS_DIR / "schemas" / "examples"  # Updated to new location
 
 
 @pytest.fixture
@@ -579,10 +580,14 @@ class TestRealWorldScenarios:
         result = main(args)
         assert result == 0
 
-        # Both stubs should be generated
-        for schema in existing_schemas:
-            stub_name = schema.stem + "_capnp.pyi"
-            assert (temp_output_dir / stub_name).exists()
+        # Both stubs should be generated (may be in subdirectory preserving structure)
+        stubs = list(temp_output_dir.glob("**/*_capnp.pyi"))
+        assert len(stubs) >= 2, f"Expected at least 2 stubs, found {len(stubs)}: {stubs}"
+
+        # Verify expected stub names are present
+        stub_names = [s.name for s in stubs]
+        assert "import_base_capnp.pyi" in stub_names
+        assert "import_user_capnp.pyi" in stub_names
 
     def test_large_directory_recursive(self, temp_output_dir):
         """Test recursive generation on a larger directory."""

@@ -1,30 +1,18 @@
 """Test that struct and interface return types are accurate and match runtime behavior."""
 
-from pathlib import Path
-
 import pytest
 
-from capnp_stub_generator.cli import main
+
+@pytest.fixture(scope="module")
+def dummy_stub_file(basic_stubs):
+    """Get pre-generated dummy schema stub."""
+    return basic_stubs / "dummy_capnp.pyi"
 
 
 @pytest.fixture(scope="module")
-def dummy_stub_file(tmp_path_factory):
-    """Generate dummy schema stub for testing."""
-    tmp_dir = tmp_path_factory.mktemp("return_types")
-    schema_path = Path(__file__).parent / "schemas" / "dummy.capnp"
-    main(["-p", str(schema_path), "-o", str(tmp_dir)])
-    stub_file = tmp_dir / "dummy_capnp.pyi"
-    return stub_file
-
-
-@pytest.fixture(scope="module")
-def interface_stub_file(tmp_path_factory):
-    """Generate interface schema stub for testing."""
-    tmp_dir = tmp_path_factory.mktemp("interface_types")
-    schema_path = Path(__file__).parent / "schemas" / "interfaces.capnp"
-    main(["-p", str(schema_path), "-o", str(tmp_dir)])
-    stub_file = tmp_dir / "interfaces_capnp.pyi"
-    return stub_file
+def interface_stub_file(basic_stubs):
+    """Get pre-generated interface schema stub."""
+    return basic_stubs / "interfaces_capnp.pyi"
 
 
 class TestStructReturnTypes:

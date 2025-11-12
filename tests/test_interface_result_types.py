@@ -27,11 +27,9 @@ class TestRPCResultTypes:
         # Should have value field
         assert "value: Calculator.Value" in stub_content
 
-        # evaluate should return EvaluateResult (with optional parameter)
-        assert (
-            "def evaluate(self, expression: Calculator.Expression | dict[str, Any] | None = None) -> EvaluateResult:"
-            in stub_content
-        )
+        # evaluate should return Calculator.EvaluateResult (which is Awaitable)
+        assert "def evaluate(" in stub_content
+        assert "-> Calculator.EvaluateResult:" in stub_content
 
     def test_deffunction_returns_result_with_func_field(self, generate_calculator_stubs):
         """Test that defFunction() returns a result with .func attribute."""
@@ -44,11 +42,11 @@ class TestRPCResultTypes:
         # Should have func field
         assert "func: Calculator.Function" in stub_content
 
-        # defFunction should return DeffunctionResult (with optional parameters)
+        # defFunction should return Calculator.DeffunctionResult (which is Awaitable)
         assert "def defFunction(" in stub_content
         assert "paramCount: int | None = None" in stub_content
         assert "body: Calculator.Expression | dict[str, Any] | None = None" in stub_content
-        assert "DeffunctionResult:" in stub_content
+        assert "-> Calculator.DeffunctionResult:" in stub_content
 
     def test_getoperator_returns_result_with_func_field(self, generate_calculator_stubs):
         """Test that getOperator() returns a result with .func attribute."""
@@ -93,24 +91,30 @@ class TestRPCResultTypes:
         # Should have CallResult class
         assert "class CallResult" in stub_content
 
-        # call should return CallResult (with optional parameter)
-        assert "def call(self, params: Sequence[float] | None = None) -> CallResult:" in stub_content
+        # call should return Calculator.Function.CallResult (which is Awaitable)
+        assert (
+            "def call(self, params: Sequence[float] | None = None) -> Calculator.Function.CallResult:" in stub_content
+        )
 
 
 class TestRPCResultsAreAwaitable:
     """Test that RPC result types are awaitable."""
 
-    def test_result_types_inherit_awaitable(self, generate_calculator_stubs):
-        """Test that result types inherit from Awaitable."""
+    def test_result_types_are_protocols(self, generate_calculator_stubs):
+        """Test that result types are Protocol classes that inherit from Awaitable."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # All result types should inherit from Awaitable[Self]
+        # All result types should inherit from Awaitable[Result] for promise pipelining
         assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in stub_content
         assert "class DeffunctionResult(Awaitable[DeffunctionResult], Protocol):" in stub_content
         assert "class GetoperatorResult(Awaitable[GetoperatorResult], Protocol):" in stub_content
         assert "class ReadResult(Awaitable[ReadResult], Protocol):" in stub_content
         assert "class CallResult(Awaitable[CallResult], Protocol):" in stub_content
+
+        # Methods should return the Result directly (not wrapped in Awaitable)
+        assert "-> Calculator.EvaluateResult:" in stub_content
+        assert "-> Calculator.Value.ReadResult:" in stub_content
 
     def test_awaitable_imported(self, generate_calculator_stubs):
         """Test that Awaitable is imported from typing."""
@@ -140,7 +144,7 @@ class TestEnumParametersAcceptLiterals:
         stub_content = stub_file.read_text()
 
         # Just check that the literal types are present somewhere (client method)
-        assert'Literal["add", "subtract", "multiply", "divide"]' in stub_content
+        assert 'Literal["add", "subtract", "multiply", "divide"]' in stub_content
 
     def test_literal_imported(self, generate_calculator_stubs):
         """Test that Literal is imported."""

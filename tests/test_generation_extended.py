@@ -2,29 +2,27 @@
 
 from __future__ import annotations
 
-import os
 import re
+from pathlib import Path
 
-from capnp_stub_generator.cli import main
+here = Path(__file__).parent
+generated_dir = here / "_generated" / "basic"
 
-here = os.path.dirname(__file__)
 
-
-def _read(path: str) -> list[str]:
+def _read(path: str | Path) -> list[str]:
     with open(path, encoding="utf8") as f:
         return f.readlines()
 
 
-def _generate(schema: str) -> str:
-    out_dir = os.path.join(here, "_generated")
-    os.makedirs(out_dir, exist_ok=True)
-    main(["-p", os.path.join(here, "schemas", schema), "-o", out_dir])
-    return os.path.join(out_dir, f"{os.path.splitext(schema)[0]}_capnp.pyi")
+def _get_stub_path(schema: str) -> Path:
+    """Get path to pre-generated stub file."""
+    stub_name = f"{Path(schema).stem}_capnp.pyi"
+    return generated_dir / stub_name
 
 
 def test_primitives_and_lists_imports_and_types():
-    out = _generate("primitives.capnp")
-    lines = _read(out)
+    stub_path = _get_stub_path("primitives.capnp")
+    lines = _read(stub_path)
     header = "".join(lines[:15])
     assert "from __future__ import annotations" in header
     # Iterator appears (for from_bytes) and Sequence appears (list fields) from collections.abc
@@ -39,8 +37,8 @@ def test_primitives_and_lists_imports_and_types():
 
 
 def test_nested_enum_and_literal_and_overload():
-    out = _generate("nested.capnp")
-    lines = _read(out)
+    stub_path = _get_stub_path("nested.capnp")
+    lines = _read(stub_path)
     # Enum should now be a real Enum subclass, not a Literal alias
     assert any(re.match(r"^\s*class Kind\(Enum\):", line) for line in lines)
     # Ensure Enum import present
@@ -52,8 +50,8 @@ def test_nested_enum_and_literal_and_overload():
 
 
 def test_unions_literal_and_overload_and_which():
-    out = _generate("unions.capnp")
-    lines = _read(out)
+    stub_path = _get_stub_path("unions.capnp")
+    lines = _read(stub_path)
     # Expect Literal import (union which methods)
     assert any(line.startswith("from typing import") and "Literal" in line for line in lines)
     # Overload is only imported when there are multiple init methods (2+)
@@ -63,8 +61,8 @@ def test_unions_literal_and_overload_and_which():
 
 
 def test_interfaces_protocol_and_any_and_iterator():
-    out = _generate("interfaces.capnp")
-    lines = _read(out)
+    stub_path = _get_stub_path("interfaces.capnp")
+    lines = _read(stub_path)
     # Protocol import expected
     assert any(line.startswith("from typing import") and "Protocol" in line for line in lines)
     # Iterator from collections.abc
@@ -77,21 +75,10 @@ def test_interfaces_protocol_and_any_and_iterator():
 
 
 def test_imports_cross_module_reference():
-    # Generate base first then user module to ensure registry contains imported types
-    # Generate both modules together so registry contains both
-    out_dir = os.path.join(here, "_generated")
-    os.makedirs(out_dir, exist_ok=True)
-    main(
-        [
-            "-p",
-            os.path.join(here, "schemas", "import_base.capnp"),
-            os.path.join(here, "schemas", "import_user.capnp"),
-            "-o",
-            out_dir,
-        ]
-    )
-    user_out = os.path.join(out_dir, "import_user_capnp.pyi")
-    user_lines = _read(user_out)
+    # Use pre-generated stubs from basic directory
+    # Both import_base and import_user should already be generated together
+    user_stub = generated_dir / "import_user_capnp.pyi"
+    user_lines = _read(user_stub)
     # Base class should use only the base type (Shared), not union with Builder/Reader
     # This matches runtime behavior where the base class property returns the base type
     assert any("def shared(self) -> Shared:" in line for line in user_lines), (

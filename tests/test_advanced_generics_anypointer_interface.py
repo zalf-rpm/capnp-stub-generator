@@ -1,17 +1,11 @@
 from pathlib import Path
 
-from capnp_stub_generator.cli import main
-
-SCHEMAS_DIR = Path(__file__).parent / "schemas"
-SCHEMA = SCHEMAS_DIR / "advanced_features.capnp"
-DUMMY_SCHEMA = SCHEMAS_DIR / "dummy.capnp"
+SCHEMAS_DIR = Path(__file__).parent / "schemas" / "basic"
 
 
-def test_generics_anypointer_interface(tmp_path):
+def test_generics_anypointer_interface(basic_stubs):
     """Test that generics with AnyPointer, generic instantiations, and interfaces are handled."""
-    # Need to load dummy.capnp as well since advanced_features imports it
-    main(["-p", str(DUMMY_SCHEMA), str(SCHEMA), "-o", str(tmp_path)])
-    stub = tmp_path / "advanced_features_capnp.pyi"
+    stub = basic_stubs / "advanced_features_capnp.pyi"
     assert stub.exists(), "Stub should be generated"
 
     content = stub.read_text()

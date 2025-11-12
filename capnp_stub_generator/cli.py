@@ -85,6 +85,14 @@ def setup_parser() -> argparse.ArgumentParser:
         help="additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).",
     )
 
+    parser.add_argument(
+        "--no-pyright",
+        dest="skip_pyright",
+        default=False,
+        action="store_true",
+        help="skip pyright validation of generated stubs.",
+    )
+
     _add_recursive_argument(parser)
 
     return parser

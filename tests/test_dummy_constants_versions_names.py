@@ -2,31 +2,9 @@
 
 from __future__ import annotations
 
-import os
 
-from capnp_stub_generator.cli import main
-
-here = os.path.dirname(__file__)
-_out_dir = os.path.join(here, "_generated")
-
-
-def _generate() -> list[str]:
-    os.makedirs(_out_dir, exist_ok=True)
-    main(
-        [
-            "-p",
-            os.path.join(here, "schemas", "dummy.capnp"),
-            "-o",
-            _out_dir,
-        ]
-    )
-    path = os.path.join(_out_dir, "dummy_capnp.pyi")
-    with open(path, encoding="utf8") as f:
-        return f.readlines()
-
-
-def test_global_constants_and_derived_constant_present():
-    lines = _generate()
+def test_global_constants_and_derived_constant_present(dummy_stub_lines):
+    lines = dummy_stub_lines
     # Global constants - only primitive types are currently generated
     assert any("globalInt:" in line for line in lines)
     assert any("globalText:" in line for line in lines)
@@ -35,8 +13,8 @@ def test_global_constants_and_derived_constant_present():
     # assert any("derivedConstant:" in line for line in lines)
 
 
-def test_struct_constants_section():
-    lines = _generate()
+def test_struct_constants_section(dummy_stub_lines):
+    lines = dummy_stub_lines
     assert any("class TestConstants" in line for line in lines)
     # Struct-level constants are not currently generated in stub files
     # This is acceptable as stubs are for type checking, not runtime values
@@ -51,8 +29,8 @@ def test_struct_constants_section():
     #     assert any(name in line for line in lines)
 
 
-def test_versioned_structs_fields_and_defaults():
-    lines = _generate()
+def test_versioned_structs_fields_and_defaults(dummy_stub_lines):
+    lines = dummy_stub_lines
     assert any("class TestOldVersion" in line for line in lines)
     assert any("class TestNewVersion" in line for line in lines)
     # Fields should be present (now as properties)
@@ -63,8 +41,8 @@ def test_versioned_structs_fields_and_defaults():
     # assert any("new2:" in line and '"baz"' in line for line in lines)
 
 
-def test_name_annotations_renamed_struct_enum_fields():
-    lines = _generate()
+def test_name_annotations_renamed_struct_enum_fields(dummy_stub_lines):
+    lines = dummy_stub_lines
     # Name annotations ($Cxx.name) are not currently processed by the generator
     # The structs use their schema names, not the C++ annotation names
     assert any("class TestNameAnnotation" in line for line in lines)
@@ -76,7 +54,7 @@ def test_name_annotations_renamed_struct_enum_fields():
     # assert any("goodFieldName:" in line for line in lines)
 
 
-def test_empty_struct_representation():
-    lines = _generate()
+def test_empty_struct_representation(dummy_stub_lines):
+    lines = dummy_stub_lines
     # TestEmptyStruct should still produce a class
     assert any("class TestEmptyStruct" in line for line in lines)

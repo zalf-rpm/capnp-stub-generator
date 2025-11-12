@@ -2,32 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import re
 
-from capnp_stub_generator.cli import main
 
-here = os.path.dirname(__file__)
-_out_dir = os.path.join(here, "_generated")
-
-
-def _generate() -> list[str]:
-    os.makedirs(_out_dir, exist_ok=True)
-    main(
-        [
-            "-p",
-            os.path.join(here, "schemas", "dummy.capnp"),
-            "-o",
-            _out_dir,
-        ]
-    )
-    path = os.path.join(_out_dir, "dummy_capnp.pyi")
-    with open(path, encoding="utf8") as f:
-        return f.readlines()
-
-
-def test_group_field_members_materialized():
-    lines = _generate()
+def test_group_field_members_materialized(dummy_stub_lines):
+    lines = dummy_stub_lines
     # Ensure TestGroups appears and group members appear flattened or via nested classes
     assert any("class TestGroups" in line for line in lines)
     # Look for group-specific field names (corge/grault/garply) multiple times (now as properties)
@@ -35,8 +14,8 @@ def test_group_field_members_materialized():
     assert count_corge >= 3  # across foo/bar/baz groups
 
 
-def test_interleaved_groups_union_and_nested_group_fields():
-    lines = _generate()
+def test_interleaved_groups_union_and_nested_group_fields(dummy_stub_lines):
+    lines = dummy_stub_lines
     assert any("class TestInterleavedGroups" in line for line in lines)
     # Expect nested group names or fields plugh/xyzzy/fred across two groups (now as properties)
     found = {name: False for name in ["plugh", "xyzzy", "fred", "waldo"]}
@@ -47,8 +26,8 @@ def test_interleaved_groups_union_and_nested_group_fields():
     assert all(found.values())
 
 
-def test_nested_types_enums_and_lists():
-    lines = _generate()
+def test_nested_types_enums_and_lists(dummy_stub_lines):
+    lines = dummy_stub_lines
     # Nested enums are under their parent struct, not flattened
     assert any(re.match(r"^\s*class NestedEnum1\(Enum\):", line) for line in lines)
     assert any(re.match(r"^\s*class NestedEnum2\(Enum\):", line) for line in lines)
@@ -63,8 +42,8 @@ def test_nested_types_enums_and_lists():
     )
 
 
-def test_using_type_aliases_resolved():
-    lines = _generate()
+def test_using_type_aliases_resolved(dummy_stub_lines):
+    lines = dummy_stub_lines
     # OuterNestedEnum alias should result in field typing referencing original enum builder/reader variants
     assert any("OuterNestedEnum" in line and "Literal" not in line for line in lines)
     # Ensure the Using struct fields appear
