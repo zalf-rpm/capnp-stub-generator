@@ -10,36 +10,38 @@ def test_generics_anypointer_interface(basic_stubs):
 
     content = stub.read_text()
 
-    # Check for GenericBox struct with AnyPointer
-    assert "class GenericBox:" in content, "GenericBox struct should exist"
+    # Check for GenericBox struct Protocol  
+    assert "class _GenericBoxModule(Protocol):" in content, "GenericBox Protocol should exist"
     assert "def value(self) -> Any:" in content, "GenericBox.value should be typed as Any (from AnyPointer)"
+    # Check for TypeAlias
+    assert "GenericBox: TypeAlias = _GenericBoxModule" in content, "GenericBox TypeAlias should exist"
 
     # Check for generic instantiations in AdvancedContainer
     assert "def enumBox(self)" in content, "enumBox field should exist"
     assert "def innerBox(self)" in content, "innerBox field should exist"
 
-    # Both should reference GenericBox
+    # Both should reference GenericBox (via Protocol or TypeAlias)
     lines = content.split("\n")
     found_enum_box = False
     found_inner_box = False
 
     for i, line in enumerate(lines):
         if "def enumBox(self)" in line:
-            # Check return type in next few lines
+            # Check return type in next few lines - should reference _GenericBoxModule
             for j in range(i, min(i + 3, len(lines))):
-                if "GenericBox" in lines[j]:
+                if "GenericBox" in lines[j] or "_GenericBoxModule" in lines[j]:
                     found_enum_box = True
                     break
         if "def innerBox(self)" in line:
             for j in range(i, min(i + 3, len(lines))):
-                if "GenericBox" in lines[j]:
+                if "GenericBox" in lines[j] or "_GenericBoxModule" in lines[j]:
                     found_inner_box = True
                     break
 
     assert found_enum_box, "enumBox should be typed as GenericBox"
     assert found_inner_box, "innerBox should be typed as GenericBox"
 
-    # Check for interface (now interface module, not Protocol)
+    # Check for interface (interfaces remain as classes, not Protocols)
     assert "class TestIface:" in content, "TestIface interface module should exist"
     assert "class TestIfaceClient(Protocol):" in content, "TestIfaceClient should be a Protocol"
 

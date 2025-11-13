@@ -12,8 +12,9 @@ def test_name_annotations(basic_stubs):
     content = stub.read_text()
 
     # The Python API uses the original names from the schema, not the C++ annotations
-    # This is correct behavior - name annotations are for other language bindings
-    assert "class BadName:" in content, "BadName struct should use original name"
+    # With Protocol structure, check for the Protocol and TypeAlias
+    assert "class _BadNameModule(Protocol):" in content, "BadName Protocol should use original name"
+    assert "BadName: TypeAlias = _BadNameModule" in content, "BadName TypeAlias should exist"
 
     # Check that the struct has the expected fields (using original names)
     assert "union {" in content or "def badField(self)" in content or "def alt(self)" in content, (
@@ -26,9 +27,9 @@ def test_name_annotations(basic_stubs):
     found_oops_enum = False
 
     for line in lines:
-        if "class BadName:" in line:
+        if "class _BadNameModule(Protocol):" in line:
             in_badname = True
-        elif in_badname and line.startswith("class ") and "BadName" not in line and "Oops" not in line:
+        elif in_badname and line.startswith("class ") and "_BadNameModule" not in line and "Oops" not in line:
             in_badname = False
 
         if in_badname and "class Oops(Enum):" in line:

@@ -32,7 +32,7 @@ class TestRequestBuilderStructure:
             if "class EvaluateRequest(Protocol):" in line:
                 in_evaluate_request = True
             elif in_evaluate_request and "expression:" in line:
-                assert "Calculator.Expression" in line, f"Expected Expression type, got: {line}"
+                assert "Calculator._ExpressionModule" in line, f"Expected Expression type, got: {line}"
                 found_expression_field = True
                 break
             elif in_evaluate_request and (line.startswith("    def ") or line.startswith("class ")):
@@ -61,7 +61,7 @@ class TestRequestBuilderStructure:
                 assert "int" in line
                 found_param_count = True
             elif in_deffunction_request and "body:" in line:
-                assert "Calculator.Expression" in line, f"Expected Expression type, got: {line}"
+                assert "Calculator._ExpressionModule" in line, f"Expected Expression type, got: {line}"
                 found_body = True
                 break  # Found both fields, exit
             elif in_deffunction_request and line.startswith("class "):
@@ -183,8 +183,8 @@ class TestRequestBuilderFieldAccess:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # With nested structure, check for TypeAlias and nested Builder class
-        assert "ExpressionBuilder: TypeAlias = Expression.Builder" in stub_content
+        # With Protocol structure, check for TypeAlias
+        assert "ExpressionBuilder: TypeAlias = _ExpressionModule.Builder" in stub_content
 
         # Should have init overload for "call" that returns Call.Builder
         assert "def init(self" in stub_content and 'Literal["call"]' in stub_content

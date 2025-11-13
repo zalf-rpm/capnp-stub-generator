@@ -81,11 +81,11 @@ def test_imports_cross_module_reference():
     user_lines = _read(user_stub)
     # With nested structure, Shared.Reader and Shared.Builder are used
     # Reader class should return Shared.Reader
-    assert any("def shared(self) -> Shared.Reader:" in line for line in user_lines), (
+    assert any("def shared(self) -> _SharedModule.Reader:" in line for line in user_lines), (
         "Reader class should return Shared.Reader"
     )
     # Builder class should narrow to Shared.Builder
-    assert any("def shared(self) -> Shared.Builder:" in line for line in user_lines), (
+    assert any("def shared(self) -> _SharedModule.Builder:" in line for line in user_lines), (
         "Builder class should return Shared.Builder"
     )
     # Ensure import statement for base module types exists (only imports Shared, not Builder/Reader)

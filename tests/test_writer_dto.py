@@ -24,7 +24,7 @@ class TestStructGenerationContext:
     """Tests for StructGenerationContext."""
 
     def test_create_factory_method(self):
-        """Test that the factory method creates context with all name variants."""
+        """Test that the factory method creates context with Protocol-based name variants."""
         # Create mock objects
         mock_schema = Mock()
         mock_new_type = Mock()
@@ -45,11 +45,12 @@ class TestStructGenerationContext:
         assert context.new_type == mock_new_type
         assert context.registered_params == ["T"]
 
-        # Verify generated names - with nested structure
+        # Verify generated names - with Protocol structure
         assert context.reader_type_name == "PersonReader"
         assert context.builder_type_name == "PersonBuilder"
-        assert context.scoped_reader_type_name == "Company.Person.Reader"
-        assert context.scoped_builder_type_name == "Company.Person.Builder"
+        # Scoped names use Protocol naming: Company.Person -> Company._PersonModule
+        assert context.scoped_reader_type_name == "Company._PersonModule.Reader"
+        assert context.scoped_builder_type_name == "Company._PersonModule.Builder"
 
     def test_create_with_empty_generic_params(self):
         """Test context creation with no generic parameters."""
@@ -66,7 +67,7 @@ class TestStructGenerationContext:
         assert context.reader_type_name == "PersonReader"
 
     def test_create_with_nested_type(self):
-        """Test context creation with nested type names."""
+        """Test context creation with nested type names using Protocol structure."""
         mock_schema = Mock()
         mock_new_type = Mock()
         mock_new_type.name = "Inner"
@@ -76,9 +77,9 @@ class TestStructGenerationContext:
             schema=mock_schema, type_name="Inner", new_type=mock_new_type, registered_params=[]
         )
 
-        # With nested structure
-        assert context.scoped_reader_type_name == "Outer.Middle.Inner.Reader"
-        assert context.scoped_builder_type_name == "Outer.Middle.Inner.Builder"
+        # With Protocol structure: Outer.Middle.Inner -> Outer.Middle._InnerModule
+        assert context.scoped_reader_type_name == "Outer.Middle._InnerModule.Reader"
+        assert context.scoped_builder_type_name == "Outer.Middle._InnerModule.Builder"
 
 
 class TestStructFieldsCollection:

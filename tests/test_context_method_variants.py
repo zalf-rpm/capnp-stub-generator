@@ -13,8 +13,8 @@ def test_both_method_variants_exist(calculator_stubs):
     stub_file = calculator_stubs / "calculator_capnp.pyi"
     content = stub_file.read_text()
 
-    # Regular method with individual parameters
-    assert "def evaluate(\n            self,\n            expression: Calculator.Expression.Reader," in content
+    # Regular method with individual parameters (using Protocol names)
+    assert "def evaluate(\n            self,\n            expression: Calculator._ExpressionModule.Reader," in content
     assert "_context: Calculator.Server.EvaluateCallContext" in content
     assert "**kwargs: Any" in content
 

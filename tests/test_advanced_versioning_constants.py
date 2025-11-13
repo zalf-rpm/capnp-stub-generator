@@ -9,9 +9,9 @@ def test_advanced_constants_and_version_fields(basic_stubs):
     assert "baseInt: int" in content, "baseInt constant should be declared"
     assert "baseText: str" in content, "baseText constant should be declared"
 
-    # Check for versioned structs
-    assert "class OldVersion:" in content, "OldVersion struct should exist"
-    assert "class NewVersion:" in content, "NewVersion struct should exist"
+    # Check for versioned structs with Protocol structure
+    assert "class _OldVersionModule(Protocol):" in content, "OldVersion Protocol should exist"
+    assert "class _NewVersionModule(Protocol):" in content, "NewVersion Protocol should exist"
 
     # Check that NewVersion has additional fields
     assert "def old1(self) -> int:" in content, "old1 field should be in NewVersion"

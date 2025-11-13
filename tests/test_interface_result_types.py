@@ -45,7 +45,7 @@ class TestRPCResultTypes:
         # defFunction should return Calculator.DeffunctionResult (which is Awaitable)
         assert "def defFunction(" in stub_content
         assert "paramCount: int | None = None" in stub_content
-        assert "body: Calculator.Expression | dict[str, Any] | None = None" in stub_content
+        assert "body: Calculator._ExpressionModule | dict[str, Any] | None = None" in stub_content
         assert "-> Calculator.DeffunctionResult:" in stub_content
 
     def test_getoperator_returns_result_with_func_field(self, generate_calculator_stubs):

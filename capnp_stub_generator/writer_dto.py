@@ -75,13 +75,59 @@ class StructGenerationContext:
         reader_type_name = helper.new_reader_flat(new_type.name)
         builder_type_name = helper.new_builder_flat(new_type.name)
 
-        # For scoped names, use nested class syntax (e.g., "Outer.Inner.Reader" not "Outer.InnerReader")
-        scoped_reader_type_name = f"{new_type.scoped_name}.Reader"
-        scoped_builder_type_name = f"{new_type.scoped_name}.Builder"
+        # For scoped names with Protocol approach, use _<Name>Module.Reader format
+        # Build the scoped Protocol module name first
+        scoped_protocol_name = new_type.scoped_name.replace(new_type.name, f"_{new_type.name}Module")
+        scoped_reader_type_name = f"{scoped_protocol_name}.Reader"
+        scoped_builder_type_name = f"{scoped_protocol_name}.Builder"
 
         return cls(
             schema=schema,
             type_name=type_name,
+            new_type=new_type,
+            registered_params=registered_params,
+            reader_type_name=reader_type_name,
+            builder_type_name=builder_type_name,
+            scoped_reader_type_name=scoped_reader_type_name,
+            scoped_builder_type_name=scoped_builder_type_name,
+        )
+
+    @classmethod
+    def create_with_protocol(
+        cls,
+        schema: _StructSchema,
+        user_type_name: str,
+        protocol_class_name: str,
+        new_type: CapnpType,
+        registered_params: list[str],
+    ) -> StructGenerationContext:
+        """Factory method for Protocol-based struct generation.
+
+        Args:
+            schema: The Cap'n Proto struct schema
+            user_type_name: The user-facing type name (e.g., "SimplePrimitives")
+            protocol_class_name: The Protocol class name (e.g., "_SimplePrimitivesModule")
+            new_type: The registered type object (with Protocol name)
+            registered_params: Generic type parameters
+
+        Returns:
+            A fully initialized StructGenerationContext
+        """
+        from capnp_stub_generator import helper
+
+        # For TypeAlias names, use the user-facing name
+        reader_type_name = helper.new_reader_flat(user_type_name)
+        builder_type_name = helper.new_builder_flat(user_type_name)
+
+        # For scoped names, use the Protocol-based scoped_name directly
+        # new_type.scoped_name is already the full Protocol path
+        scoped_protocol_name = new_type.scoped_name
+        scoped_reader_type_name = f"{scoped_protocol_name}.Reader"
+        scoped_builder_type_name = f"{scoped_protocol_name}.Builder"
+
+        return cls(
+            schema=schema,
+            type_name=user_type_name,
             new_type=new_type,
             registered_params=registered_params,
             reader_type_name=reader_type_name,

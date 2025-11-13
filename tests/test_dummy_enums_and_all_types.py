@@ -32,8 +32,8 @@ def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):
 def test_builder_reader_classes_for_all_types(dummy_stub_lines):
     lines = dummy_stub_lines
     # With nested structure, check for TypeAlias declarations and nested classes
-    assert any("TestAllTypesReader: TypeAlias = TestAllTypes.Reader" in line for line in lines)
-    assert any("TestAllTypesBuilder: TypeAlias = TestAllTypes.Builder" in line for line in lines)
+    assert any("TestAllTypesReader: TypeAlias = _TestAllTypesModule.Reader" in line for line in lines)
+    assert any("TestAllTypesBuilder: TypeAlias = _TestAllTypesModule.Builder" in line for line in lines)
     # Reader and Builder are now nested inside TestAllTypes
     assert any(line.strip().startswith("class Reader:") for line in lines)
     assert any(line.strip().startswith("class Builder:") for line in lines)

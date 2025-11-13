@@ -21,7 +21,7 @@ def test_enum_color_defined(basic_low_stub_lines):
 
 def test_basiclow_struct_and_fields(basic_low_stub_lines):
     lines = basic_low_stub_lines
-    assert any("class BasicLow:" in line for line in lines)
+    assert any("class _BasicLowModule(Protocol):" in line for line in lines)
     content = "".join(lines)
     assert "name" in content and "id" in content
 

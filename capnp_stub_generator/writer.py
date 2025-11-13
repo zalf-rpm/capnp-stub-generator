@@ -1416,7 +1416,7 @@ class Writer:
         - Checking if the struct is already imported
         - Determining the type name
         - Handling generic parameters
-        - Creating the class declaration
+        - Creating the Protocol class declaration with underscore prefix
         - Setting up the scope
         - Registering the type
 
@@ -1425,9 +1425,9 @@ class Writer:
             type_name: Optional type name override (empty string to auto-generate)
 
         Returns:
-            A tuple of (context, class_declaration) where:
+            A tuple of (context, protocol_declaration) where:
             - context is None if the struct should be skipped (already imported or no parent)
-            - class_declaration is the string for the class declaration
+            - protocol_declaration is the string for the Protocol class declaration
         """
         # Check if already imported
         imported = self.register_import(schema)
@@ -1443,28 +1443,33 @@ class Writer:
         if schema.node.isGeneric:
             registered_params = self.gen_generic(schema)
 
-        # Create class declaration
+        # Create Protocol class declaration with underscore prefix
+        protocol_class_name = f"_{type_name}Module"
+        self._add_typing_import("Protocol")
+        
         if registered_params:
             parameter = helper.new_type_group("Generic", registered_params)
-            class_declaration = helper.new_class_declaration(type_name, parameters=[parameter])
+            protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=[parameter, "Protocol"])
         else:
-            class_declaration = helper.new_class_declaration(type_name)
+            protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=["Protocol"])
 
-        # Create scope
+        # Create scope using the Protocol class name
         try:
-            self.new_scope(type_name, schema.node)
+            self.new_scope(protocol_class_name, schema.node)
         except NoParentError:
             logger.warning(f"Skipping generation of {type_name} - parent scope not available")
             return None, ""
 
-        # Register type
-        new_type = self.register_type(schema.node.id, schema, name=type_name)
+        # Register type with the Protocol class name for correct scoped_name generation
+        # The type's scoped_name will be used for all internal type references
+        new_type = self.register_type(schema.node.id, schema, name=protocol_class_name)
         new_type.generic_params = registered_params
 
         # Create context with auto-generated names
-        context = StructGenerationContext.create(schema, type_name, new_type, registered_params)
+        # Pass the original type_name for TypeAlias generation
+        context = StructGenerationContext.create_with_protocol(schema, type_name, protocol_class_name, new_type, registered_params)
 
-        return context, class_declaration
+        return context, protocol_declaration
 
     def _resolve_nested_schema(
         self, nested_node: Any, parent_schema: _StructSchema, parent_type_name: str
@@ -1504,10 +1509,8 @@ class Writer:
         for nested_node in schema.node.nestedNodes:
             nested_schema = self._resolve_nested_schema(nested_node, schema, type_name)
             if nested_schema:
-                try:
-                    self.generate_nested(nested_schema)
-                except Exception as e:
-                    logger.debug(f"Failed generating nested node {nested_node.name}: {e}")
+                # Don't catch exceptions - let them propagate for debugging
+                self.generate_nested(nested_schema)
 
     def _process_slot_field(
         self,
@@ -1600,19 +1603,19 @@ class Writer:
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
     ) -> None:
-        """Generate Reader class nested inside the main struct class.
+        """Generate Reader Protocol nested inside the main struct Protocol.
 
         Args:
             context: The generation context
             fields_collection: The processed fields collection
         """
-        # Build the class declaration WITHOUT Generic parameters (nested classes don't repeat them)
-        reader_class_declaration = helper.new_class_declaration("Reader", parameters=[])
+        # Build the Protocol declaration WITHOUT Generic parameters (nested Protocols don't repeat them)
+        reader_protocol_declaration = helper.new_class_declaration("Reader", parameters=["Protocol"])
 
-        # Add the class declaration to the current scope (the struct scope)
-        self.scope.add(reader_class_declaration)
+        # Add the Protocol declaration to the current scope (the struct scope)
+        self.scope.add(reader_protocol_declaration)
 
-        # Create a new scope for the Reader class, explicitly using current scope as parent
+        # Create a new scope for the Reader Protocol, explicitly using current scope as parent
         self.new_scope("Reader", context.schema.node, register=False, parent_scope=self.scope)
 
         self._gen_struct_reader_class(
@@ -1628,19 +1631,19 @@ class Writer:
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
     ) -> None:
-        """Generate Builder class nested inside the main struct class.
+        """Generate Builder Protocol nested inside the main struct Protocol.
 
         Args:
             context: The generation context
             fields_collection: The processed fields collection
         """
-        # Build the class declaration WITHOUT Generic parameters (nested classes don't repeat them)
-        builder_class_declaration = helper.new_class_declaration("Builder", parameters=[])
+        # Build the Protocol declaration WITHOUT Generic parameters (nested Protocols don't repeat them)
+        builder_protocol_declaration = helper.new_class_declaration("Builder", parameters=["Protocol"])
 
-        # Add the class declaration to the current scope (the struct scope)
-        self.scope.add(builder_class_declaration)
+        # Add the Protocol declaration to the current scope (the struct scope)
+        self.scope.add(builder_protocol_declaration)
 
-        # Create a new scope for the Builder class, explicitly using current scope as parent
+        # Create a new scope for the Builder Protocol, explicitly using current scope as parent
         self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
 
         self._gen_struct_builder_class(
@@ -1658,33 +1661,35 @@ class Writer:
         self,
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
-        class_declaration: str,
+        protocol_declaration: str,
     ) -> None:
-        """Generate base class with nested Reader and Builder classes for the struct.
+        """Generate Protocol with nested Reader and Builder Protocols, plus TypeAlias declarations.
 
+        This generates:
+        1. The _<Name>Module Protocol class with Reader and Builder nested Protocols
+        2. TypeAlias declarations for <Name>Reader and <Name>Builder
+        3. For top-level structs: TypeAlias for <Name> pointing to the Protocol
+        4. For nested structs: attribute annotation linking to the Protocol
+        
         Args:
             context: Generation context with names and metadata
             fields_collection: Processed fields and init choices
-            class_declaration: The class declaration string
+            protocol_declaration: The Protocol class declaration string
         """
-        # Add TypeAlias declarations at the same level as the class
-        # These allow using InnerBuilder instead of Inner.Builder for convenience
+        protocol_class_name = f"_{context.type_name}Module"
+        is_nested = self.scope.parent and not self.scope.parent.is_root
+        
+        # Add Protocol class declaration to parent scope
         if self.scope.parent:
-            self._add_typing_import("TypeAlias")
-            self.scope.parent.add(f"{context.builder_type_name}: TypeAlias = {context.type_name}.Builder")
-            self.scope.parent.add(f"{context.reader_type_name}: TypeAlias = {context.type_name}.Reader")
+            self.scope.parent.add(protocol_declaration)
 
-        # Add class declaration after nested types are generated
-        if self.scope.parent:
-            self.scope.parent.add(class_declaration)
-
-        # Generate nested Reader class first (inside the main struct class)
+        # Generate nested Reader Protocol first (inside the main struct Protocol)
         self._generate_nested_reader_class(context, fields_collection)
 
-        # Generate nested Builder class (inside the main struct class)
+        # Generate nested Builder Protocol (inside the main struct Protocol)
         self._generate_nested_builder_class(context, fields_collection)
 
-        # Generate base class methods (static methods, to_dict, etc.)
+        # Generate base Protocol methods (static methods, to_dict, etc.)
         self._gen_struct_base_class(
             fields_collection.slot_fields,
             fields_collection.init_choices,
@@ -1694,6 +1699,22 @@ class Writer:
         )
 
         self.return_from_scope()
+        
+        # After the Protocol is complete and we've returned to the parent scope,
+        # add TypeAlias declarations at this level (self.scope is now the parent)
+        self._add_typing_import("TypeAlias")
+        # Add aliases for Reader and Builder
+        self.scope.add(f"{context.reader_type_name}: TypeAlias = {protocol_class_name}.Reader")
+        self.scope.add(f"{context.builder_type_name}: TypeAlias = {protocol_class_name}.Builder")
+        
+        # For top-level structs, add a TypeAlias for the module type
+        # For nested structs, add an attribute annotation instead
+        if is_nested and not self.scope.is_root:
+            # Nested struct: add attribute annotation to link the nested Protocol
+            self.scope.add(f"{context.type_name}: {protocol_class_name}")
+        else:
+            # Top-level struct: add TypeAlias for convenient access
+            self.scope.add(f"{context.type_name}: TypeAlias = {protocol_class_name}")
 
     def gen_struct(self, schema: _StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
         """Generate a `struct` object.
@@ -1710,7 +1731,7 @@ class Writer:
         assert schema.node.which() == capnp_types.CapnpElementType.STRUCT
 
         # Phase 1: Setup and initialization
-        context, class_declaration = self._setup_struct_generation(schema, type_name)
+        context, protocol_declaration = self._setup_struct_generation(schema, type_name)
         if context is None:
             # Already imported or skipped due to missing parent scope
             # Try to return the already registered type if available
@@ -1728,8 +1749,8 @@ class Writer:
         # Phase 3: Process all struct fields
         fields_collection = self._process_struct_fields(schema, context)
 
-        # Phase 4: Generate the three class variants
-        self._generate_struct_classes(context, fields_collection, class_declaration)
+        # Phase 4: Generate the Protocol with nested Protocols and TypeAliases
+        self._generate_struct_classes(context, fields_collection, protocol_declaration)
 
         return context.new_type
 
@@ -1789,7 +1810,13 @@ class Writer:
             for s in self.scope.trace:
                 if s.is_root:
                     continue
-                runtime_iface = getattr(runtime_iface, s.name)
+                # Map Protocol scope names back to runtime names
+                # E.g., "_MetadataModule" -> "Metadata"
+                runtime_name = s.name
+                if runtime_name.endswith("Module"):
+                    # Strip "_" prefix and "Module" suffix for struct Protocols
+                    runtime_name = runtime_name[1:-6]  # Remove leading "_" and trailing "Module"
+                runtime_iface = getattr(runtime_iface, runtime_name)
 
             method_items = runtime_iface.schema.methods.items()
 
@@ -2763,7 +2790,21 @@ class Writer:
         self.return_from_scope()
 
         # Phase 5: Generate separate Client Protocol class at saved parent scope level
-        if server_collection.has_methods() or server_base_classes or client_method_collection:
+        # Always generate Client class if there are methods or inheritance
+        should_generate_client = (
+            server_collection.has_methods() or server_base_classes or client_method_collection or methods
+        )
+        
+        if not should_generate_client:
+            logger.warning(
+                f"Skipping Client generation for {context.name}: "
+                f"has_server_methods={server_collection.has_methods()}, "
+                f"has_base_classes={bool(server_base_classes)}, "
+                f"has_client_methods={bool(client_method_collection)}, "
+                f"has_methods={bool(methods)}"
+            )
+        
+        if should_generate_client:
             # Temporarily set scope to parent, generate client, then restore
             current_scope = self.scope
             self.scope = parent_scope
@@ -2943,8 +2984,23 @@ class Writer:
         if "." in definition_name:
             # Get the root parent (e.g., "Params" from "Params.Irrigation.Parameters")
             root_name = definition_name.split(".")[0]
-            # Import only the root parent
-            self._add_import(f"from {python_import_path} import {root_name}")
+            
+            # For structs, import the Protocol class for type references
+            node_type = schema.node.which()
+            if node_type not in (capnp_types.CapnpElementType.ENUM, capnp_types.CapnpElementType.INTERFACE):
+                protocol_root_name = f"_{root_name}Module"
+                self._add_import(f"from {python_import_path} import {protocol_root_name}")
+                # Register with Protocol-based path: replace ALL struct names with Protocol names
+                # E.g., "Params.OrganicFertilization.OrganicMatterParameters" 
+                # becomes "_ParamsModule._OrganicFertilizationModule._OrganicMatterParametersModule"
+                parts = definition_name.split(".")
+                protocol_parts = [f"_{part}Module" for part in parts]
+                protocol_definition_name = ".".join(protocol_parts)
+                return self.register_type(schema.node.id, schema, name=protocol_definition_name, scope=self.scope.root)
+            else:
+                # Import only the root parent for enums/interfaces
+                self._add_import(f"from {python_import_path} import {root_name}")
+                return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
         else:
             # Regular non-nested import
             node_type = schema.node.which()
@@ -2960,8 +3016,12 @@ class Writer:
                     # Enums just need the enum itself
                     self._add_import(f"from {python_import_path} import {definition_name}")
             else:
-                # Structs now have nested Reader/Builder classes, so just import the struct
-                self._add_import(f"from {python_import_path} import {definition_name}")
+                # Structs: import the Protocol class (_<Name>Module) for internal type references
+                # The TypeAlias can be accessed if needed, but internal references use the Protocol
+                protocol_name = f"_{definition_name}Module"
+                self._add_import(f"from {python_import_path} import {protocol_name}")
+                # Register the type with the Protocol name so scoped_name returns the Protocol name
+                return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
 
         return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
 
@@ -3319,7 +3379,13 @@ class Writer:
 
         for scope in self.scopes_by_id.values():
             if scope.parent is not None and scope.parent.is_root:
-                out.append(f"{scope.name} = capnp.load(module_file, imports=import_path).{scope.name}")
+                # For the .py runtime binding, use the original name, not the Protocol name
+                # Convert "_<Name>Module" back to "<Name>" for structs
+                runtime_name = scope.name
+                if runtime_name.startswith("_") and runtime_name.endswith("Module"):
+                    # This is a struct Protocol, extract the original name
+                    runtime_name = runtime_name[1:-6]  # Remove leading "_" and trailing "Module"
+                out.append(f"{runtime_name} = capnp.load(module_file, imports=import_path).{runtime_name}")
 
         # Add Server.InfoResult NamedTuples for interfaces
         if self._all_server_namedtuples:

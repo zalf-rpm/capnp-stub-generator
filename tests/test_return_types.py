@@ -47,26 +47,27 @@ class TestStructReturnTypes:
         """Reader class properties should return Reader types."""
         content = dummy_stub_file.read_text()
 
-        # With nested structure, check for TestAllTypes.Reader return type
-        assert "def structField(self) -> TestAllTypes.Reader:" in content, (
-            "Reader class should return TestAllTypes.Reader type"
+        # With nested structure, check for _TestAllTypesModule.Reader return type
+        assert "def structField(self) -> _TestAllTypesModule.Reader:" in content, (
+            "Reader class should return _TestAllTypesModule.Reader type"
         )
 
     def test_builder_class_returns_builder_type(self, dummy_stub_file):
         """Builder class properties should return Builder types."""
         content = dummy_stub_file.read_text()
 
-        # With nested structure, check for TestAllTypes.Builder return type
-        assert "def structField(self) -> TestAllTypes.Builder:" in content, (
-            "Builder class getter should return TestAllTypes.Builder type"
+        # With nested structure, check for _TestAllTypesModule.Builder return type
+        assert "def structField(self) -> _TestAllTypesModule.Builder:" in content, (
+            "Builder class getter should return _TestAllTypesModule.Builder type"
         )
 
     def test_builder_setter_accepts_union(self, dummy_stub_file):
         """Builder class setters should accept Builder, Reader, or dict types (not base)."""
         content = dummy_stub_file.read_text()
 
-        # Builder setter should accept Builder/Reader + dict with nested class syntax
-        assert "def structField(self, value: TestAllTypes.Builder | TestAllTypes.Reader | dict[str, Any])" in content, (
+        # Builder setter should accept Builder/Reader + dict (may be formatted across multiple lines)
+        assert "@structField.setter" in content
+        assert "value: _TestAllTypesModule.Builder | _TestAllTypesModule.Reader | dict[str, Any]" in content, (
             "Builder setter should accept union of Builder, Reader, and dict types (not base)"
         )
 
@@ -74,9 +75,9 @@ class TestStructReturnTypes:
         """List fields should follow the same narrowing pattern."""
         content = dummy_stub_file.read_text()
 
-        # With nested structure, check for Sequence[TestAllTypes.Reader]
-        assert "def structList(self) -> Sequence[TestAllTypes.Reader]:" in content, (
-            "Reader class list should be Sequence[TestAllTypes.Reader]"
+        # With nested structure, check for Sequence[_TestAllTypesModule.Reader]
+        assert "def structList(self) -> Sequence[_TestAllTypesModule.Reader]:" in content, (
+            "Reader class list should be Sequence[_TestAllTypesModule.Reader]"
         )
 
 
@@ -120,22 +121,22 @@ class TestStaticMethodReturnTypes:
 
         # Find new_message in base class - with nested structure
         assert "def new_message(" in content
-        assert ") -> TestAllTypes.Builder:" in content, "new_message should return TestAllTypes.Builder type"
+        assert ") -> _TestAllTypesModule.Builder:" in content, "new_message should return _TestAllTypesModule.Builder type"
 
     def test_from_bytes_returns_reader(self, dummy_stub_file):
         """from_bytes should return Reader type (read-only)."""
         content = dummy_stub_file.read_text()
 
         assert "def from_bytes(" in content
-        assert "-> Iterator[TestAllTypes.Reader]:" in content, (
-            "from_bytes should return TestAllTypes.Reader type in Iterator"
+        assert "-> Iterator[_TestAllTypesModule.Reader]:" in content, (
+            "from_bytes should return _TestAllTypesModule.Reader type in Iterator"
         )
 
     def test_read_returns_reader(self, dummy_stub_file):
         """read methods should return Reader type (read-only)."""
         content = dummy_stub_file.read_text()
 
-        assert ") -> TestAllTypes.Reader:" in content, "read should return TestAllTypes.Reader type"
+        assert ") -> _TestAllTypesModule.Reader:" in content, "read should return _TestAllTypesModule.Reader type"
         assert "def read_packed(" in content
 
     def test_reader_does_not_have_new_message(self, dummy_stub_file):
@@ -163,7 +164,7 @@ class TestRuntimeAccuracy:
     """Test that type annotations match actual runtime behavior."""
 
     def test_base_type_matches_runtime_struct_module(self, dummy_stub_file):
-        """Base class types should match the _StructModule at runtime.
+        """Base Protocol types should match the _StructModule at runtime.
 
         At runtime, the base class is a _StructModule which provides
         static factory methods like new_message(), from_bytes(), etc.
@@ -171,8 +172,8 @@ class TestRuntimeAccuracy:
         """
         content = dummy_stub_file.read_text()
 
-        # Base class should have factory methods but no field properties
-        assert "class TestAllTypes:" in content
+        # Protocol should have factory methods but no field properties
+        assert "class _TestAllTypesModule(Protocol):" in content
         assert "def new_message(" in content
         assert "def from_bytes(" in content
 
@@ -184,17 +185,19 @@ class TestRuntimeAccuracy:
         - Reader is _DynamicStructReader (field properties, read-only)
         - Builder is _DynamicStructBuilder (field properties with setters)
 
-        With nested structure, Reader and Builder are nested inside the base class.
+        With Protocol structure, Reader and Builder are nested inside the Protocol.
+        TypeAliases provide user-facing names.
         """
         content = dummy_stub_file.read_text()
 
-        # Base and nested Reader, Builder classes
-        assert "class TestAllTypes:" in content
-        assert "TestAllTypesReader: TypeAlias = TestAllTypes.Reader" in content
-        assert "TestAllTypesBuilder: TypeAlias = TestAllTypes.Builder" in content
+        # Protocol and TypeAliases
+        assert "class _TestAllTypesModule(Protocol):" in content
+        assert "TestAllTypesReader: TypeAlias = _TestAllTypesModule.Reader" in content
+        assert "TestAllTypesBuilder: TypeAlias = _TestAllTypesModule.Builder" in content
+        assert "TestAllTypes: TypeAlias = _TestAllTypesModule" in content
         # Nested classes exist
-        assert "class Reader:" in content
-        assert "class Builder:" in content
+        assert "class Reader(Protocol):" in content
+        assert "class Builder(Protocol):" in content
 
 
 def test_return_types_summary():
