@@ -1,6 +1,5 @@
 """Unit tests for Builder/Reader variant type generation."""
 
-
 from capnp_stub_generator.helper import _build_variant_type, new_builder, new_builder_flat, new_reader, new_reader_flat
 
 

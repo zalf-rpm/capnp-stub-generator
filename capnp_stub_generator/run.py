@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
@@ -33,6 +34,52 @@ class PyrightValidationError(Exception):
     """Raised when pyright validation finds type errors in generated stubs."""
 
     pass
+
+
+@dataclass
+class InterfaceNode:
+    """Represents an interface in the inheritance hierarchy."""
+
+    name: str
+    client_name: str
+    base_client_names: list[str]
+
+    def compute_depth(
+        self,
+        registry: dict[str, InterfaceNode],
+        client_to_interface: dict[str, str],
+        visited: set[str] | None = None,
+    ) -> int:
+        """Compute inheritance depth for this interface.
+
+        Returns:
+            Depth value where 0 = root interface (no bases),
+            1+ = derived interfaces
+        """
+        if visited is None:
+            visited = set()
+
+        if self.name in visited:
+            # Circular dependency - shouldn't happen but handle gracefully
+            return 0
+
+        visited.add(self.name)
+
+        if not self.base_client_names:
+            # No bases - this is a root
+            return 0
+
+        # Depth is 1 + max depth of any base
+        max_base_depth = 0
+        for base_client_name in self.base_client_names:
+            # Convert client name back to interface name
+            base_interface_name = client_to_interface.get(base_client_name)
+            if base_interface_name and base_interface_name in registry:
+                base_node = registry[base_interface_name]
+                base_depth = base_node.compute_depth(registry, client_to_interface, visited.copy())
+                max_base_depth = max(max_base_depth, base_depth)
+
+        return 1 + max_base_depth
 
 
 def find_capnp_stubs_package() -> str | None:
@@ -76,53 +123,23 @@ def _sort_interfaces_by_inheritance(interfaces: dict[str, tuple[str, list[str]]]
     Returns:
         Sorted list of (interface_name, client_name) tuples, most derived first
     """
-    # Build a mapping of client_name -> interface_name for reverse lookup
-    client_to_interface = {}
-    for iface_name, (client_name, _) in interfaces.items():
-        client_to_interface[client_name] = iface_name
+    if not interfaces:
+        return []
 
-    # Compute depth for each interface (number of ancestors)
-    def compute_depth(interface_name: str, visited: set[str] | None = None) -> int:
-        if visited is None:
-            visited = set()
+    # Build registry of InterfaceNode objects
+    nodes = {name: InterfaceNode(name, client, bases) for name, (client, bases) in interfaces.items()}
 
-        if interface_name in visited:
-            # Circular dependency - shouldn't happen but handle gracefully
-            return 0
-
-        visited.add(interface_name)
-
-        if interface_name not in interfaces:
-            # Base interface not in our set
-            return 0
-
-        _, base_client_names = interfaces[interface_name]
-        if not base_client_names:
-            # No bases - this is a root
-            return 0
-
-        # Depth is 1 + max depth of any base
-        max_base_depth = 0
-        for base_client_name in base_client_names:
-            # Convert client name back to interface name
-            base_interface_name = client_to_interface.get(base_client_name)
-            if base_interface_name:
-                base_depth = compute_depth(base_interface_name, visited.copy())
-                max_base_depth = max(max_base_depth, base_depth)
-
-        return 1 + max_base_depth
+    # Build reverse lookup: client_name -> interface_name
+    client_to_interface = {client: name for name, (client, _) in interfaces.items()}
 
     # Compute depths for all interfaces
-    interface_depths = []
-    for interface_name, (client_name, _) in interfaces.items():
-        depth = compute_depth(interface_name)
-        interface_depths.append((depth, interface_name, client_name))
+    depths = [(node.compute_depth(nodes, client_to_interface), name, node.client_name) for name, node in nodes.items()]
 
     # Sort by depth (descending) then by name (ascending for stability)
-    interface_depths.sort(key=lambda x: (-x[0], x[1]))
+    depths.sort(key=lambda x: (-x[0], x[1]))
 
     # Return just the (interface_name, client_name) tuples
-    return [(iface_name, client_name) for _, iface_name, client_name in interface_depths]
+    return [(iface_name, client_name) for _, iface_name, client_name in depths]
 
 
 def augment_capnp_stubs_with_overloads(

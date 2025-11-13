@@ -363,15 +363,91 @@ class Writer:
         # Add the function definition
         self.scope.add(helper.new_function(name, parameters, return_type))
 
+    def _get_reader_property_type(self, field: helper.TypeHintedVariable) -> str:
+        """Determine the property type for Reader class fields.
+
+        Args:
+            field: The field to get the type for
+
+        Returns:
+            Type string appropriate for Reader property getter
+        """
+        if field.has_type_hint_with_reader_affix:
+            # Get the narrowed Reader-only type for this field
+            return field.get_type_with_affixes([helper.READER_NAME])
+        else:
+            # Primitive and other fields with their primary type
+            return field.primary_type_nested
+
+    def _get_builder_property_types(self, field: helper.TypeHintedVariable) -> tuple[str, str | None]:
+        """Determine getter and setter types for Builder class fields.
+
+        Args:
+            field: The field to get the types for
+
+        Returns:
+            Tuple of (getter_type, setter_type). setter_type is None if same as getter.
+        """
+        if field.has_type_hint_with_builder_affix:
+            # For lists, use Sequence[ElementBuilder] for compatibility
+            if field.nesting_depth == 1:
+                getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
+                # Setter accepts Builder/Reader types + dict, but NOT the base type
+                setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
+                setter_type = field.get_type_with_affixes(setter_types) + " | Sequence[dict[str, Any]]"
+                self._add_typing_import("Sequence")
+                self._add_typing_import("Any")
+            else:
+                # For non-list structs: setter accepts Builder/Reader + dict
+                getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
+                setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
+                setter_type = field.get_type_with_affixes(setter_types) + " | dict[str, Any]"
+                self._add_typing_import("Any")
+        # For interface fields: getter returns Protocol, setter accepts Protocol | Server
+        elif len(field.type_hints) > 1 and any(".Server" in str(h) for h in field.type_hints):
+            getter_type = field.primary_type_nested  # Protocol only
+            setter_type = field.full_type_nested  # Protocol | Server
+        else:
+            # Primitive and enum fields
+            getter_type = field.primary_type_nested
+            setter_type = field.full_type_nested if field.full_type_nested != getter_type else None
+
+        return getter_type, setter_type
+
+    def _add_properties(self, slot_fields: list[helper.TypeHintedVariable], mode: Literal["base", "reader", "builder"]):
+        """Add properties to current scope based on mode.
+
+        Args:
+            slot_fields: Fields to add as properties
+            mode: "base" (none), "reader" (read-only), or "builder" (with setters)
+        """
+        if mode == "base":
+            # Base class (StructModule) does not have field properties
+            # Properties are only on Reader and Builder classes
+            return
+
+        for slot_field in slot_fields:
+            field_copy = copy(slot_field)
+
+            if mode == "reader":
+                field_type = self._get_reader_property_type(field_copy)
+                for line in helper.new_property(slot_field.name, field_type):
+                    self.scope.add(line)
+
+            elif mode == "builder":
+                getter_type, setter_type = self._get_builder_property_types(field_copy)
+                for line in helper.new_property(
+                    slot_field.name, getter_type, with_setter=True, setter_type=setter_type
+                ):
+                    self.scope.add(line)
+
     def _add_base_properties(self, slot_fields: list[helper.TypeHintedVariable]):
         """Add read-only properties to base struct class.
 
         Args:
             slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
         """
-        # Base class (StructModule) does not have field properties
-        # Properties are only on Reader and Builder classes
-        pass
+        self._add_properties(slot_fields, "base")
 
     def _add_reader_properties(self, slot_fields: list[helper.TypeHintedVariable]):
         """Add read-only properties to Reader class.
@@ -379,19 +455,7 @@ class Writer:
         Args:
             slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
         """
-        # Reader class needs all properties, not just those with Reader affix
-        for slot_field in slot_fields:
-            if slot_field.has_type_hint_with_reader_affix:
-                field_copy = copy(slot_field)
-                # Get the narrowed Reader-only type for this field
-                reader_type = field_copy.get_type_with_affixes([helper.READER_NAME])
-                for line in helper.new_property(slot_field.name, reader_type):
-                    self.scope.add(line)
-            else:
-                # Add primitive and other fields with their primary type
-                field_type = slot_field.primary_type_nested
-                for line in helper.new_property(slot_field.name, field_type):
-                    self.scope.add(line)
+        self._add_properties(slot_fields, "reader")
 
     def _add_builder_properties(self, slot_fields: list[helper.TypeHintedVariable]):
         """Add mutable properties with setters to Builder class.
@@ -399,35 +463,7 @@ class Writer:
         Args:
             slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
         """
-        for slot_field in slot_fields:
-            field_copy = copy(slot_field)
-            # Determine getter and setter types based on field characteristics
-            if slot_field.has_type_hint_with_builder_affix:
-                # For lists, use Sequence[ElementBuilder] for compatibility
-                if slot_field.nesting_depth == 1:
-                    getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
-                    # Setter accepts Builder/Reader types + dict, but NOT the base type
-                    setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
-                    setter_type = field_copy.get_type_with_affixes(setter_types) + " | Sequence[dict[str, Any]]"
-                    self._add_typing_import("Sequence")
-                    self._add_typing_import("Any")
-                else:
-                    # For non-list structs: setter accepts Builder/Reader + dict, but NOT the base type
-                    getter_type = field_copy.get_type_with_affixes([helper.BUILDER_NAME])
-                    setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
-                    setter_type = field_copy.get_type_with_affixes(setter_types) + " | dict[str, Any]"
-                    self._add_typing_import("Any")
-            # For interface fields: getter returns Protocol, setter accepts Protocol | Server
-            elif len(slot_field.type_hints) > 1 and any(".Server" in str(h) for h in slot_field.type_hints):
-                getter_type = field_copy.primary_type_nested  # Protocol only
-                setter_type = field_copy.full_type_nested  # Protocol | Server
-            else:
-                # Primitive and enum fields
-                getter_type = field_copy.primary_type_nested
-                setter_type = field_copy.full_type_nested if field_copy.full_type_nested != getter_type else None
-
-            for line in helper.new_property(slot_field.name, getter_type, with_setter=True, setter_type=setter_type):
-                self.scope.add(line)
+        self._add_properties(slot_fields, "builder")
 
     def _add_base_init_overloads(self, init_choices: list[InitChoice]):
         """Add init method overloads to base struct class.
