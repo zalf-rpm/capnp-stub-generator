@@ -3356,8 +3356,6 @@ class Writer:
         for scope in self.scopes_by_id.values():
             if scope.parent is not None and scope.parent.is_root:
                 out.append(f"{scope.name} = capnp.load(module_file, imports=import_path).{scope.name}")
-                out.append(f"{helper.new_builder(scope.name)} = {scope.name}")
-                out.append(f"{helper.new_reader(scope.name)} = {scope.name}")
 
         # Add Server.InfoResult NamedTuples for interfaces
         if self._all_server_namedtuples:
