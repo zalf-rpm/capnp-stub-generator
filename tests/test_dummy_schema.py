@@ -18,10 +18,13 @@ class TestDummyEnumsAndTypes:
 
     def test_enum_definition_and_imports(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
-        assert any(line.strip().startswith("class TestEnum(Enum):") for line in lines)
+        assert any(
+            line.startswith("from typing import") and "Protocol" in line and "TypeAlias" in line for line in lines
+        )
+        assert any(line.strip().startswith("class _TestEnumModule(Protocol):") for line in lines)
+        assert any(line.strip() == "TestEnum: TypeAlias = _TestEnumModule" for line in lines)
         for name in ["foo", "bar", "baz", "qux"]:
-            assert any(line.strip() == f'{name} = "{name}"' for line in lines)
+            assert any(line.strip() == f"{name}: int" for line in lines)
 
     def test_testalltypes_field_presence_and_collections_import(self, dummy_stub_lines):
         lines = dummy_stub_lines
@@ -117,8 +120,10 @@ class TestDummyGroupsAndNested:
 
     def test_nested_types_enums_and_lists(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any(re.match(r"^\s*class NestedEnum1\(Enum\):", line) for line in lines)
-        assert any(re.match(r"^\s*class NestedEnum2\(Enum\):", line) for line in lines)
+        assert any(re.match(r"^\s*class _NestedEnum1Module\(Protocol\):", line) for line in lines)
+        assert any(re.match(r"^\s*class _NestedEnum2Module\(Protocol\):", line) for line in lines)
+        assert any("NestedEnum1: TypeAlias = _NestedEnum1Module" in line for line in lines)
+        assert any("NestedEnum2: TypeAlias = _NestedEnum2Module" in line for line in lines)
         assert any("class _TestUsingModule(Protocol):" in line for line in lines)
         # Fields are now properties
         assert any(
@@ -194,7 +199,8 @@ class TestDummyConstantsAndVersioning:
     def test_name_annotations_renamed_struct_enum_fields(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class _TestNameAnnotationModule(Protocol):" in line for line in lines)
-        assert any("class BadlyNamedEnum" in line for line in lines)
+        assert any("class _BadlyNamedEnumModule(Protocol):" in line for line in lines)
+        assert any("BadlyNamedEnum: TypeAlias = _BadlyNamedEnumModule" in line for line in lines)
         assert any("badFieldName" in line or "bar" in line for line in lines)
 
     def test_empty_struct_representation(self, dummy_stub_lines):

@@ -39,10 +39,11 @@ def test_primitives_and_lists_imports_and_types():
 def test_nested_enum_and_literal_and_overload():
     stub_path = _get_stub_path("nested.capnp")
     lines = _read(stub_path)
-    # Enum should now be a real Enum subclass, not a Literal alias
-    assert any(re.match(r"^\s*class Kind\(Enum\):", line) for line in lines)
-    # Ensure Enum import present
-    assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
+    # Enum should now be a Protocol with TypeAlias, not an Enum subclass
+    assert any(re.match(r"^\s*class _KindModule\(Protocol\):", line) for line in lines)
+    assert any("Kind: TypeAlias = _KindModule" in line for line in lines)
+    # Ensure Protocol and TypeAlias import present
+    assert any(line.startswith("from typing import") and "Protocol" in line and "TypeAlias" in line for line in lines)
     # Sequence import still expected for list fields
     assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
     # Now overload is expected (for list init overloads)
@@ -88,5 +89,5 @@ def test_imports_cross_module_reference():
     assert any("def shared(self) -> _SharedModule.Builder:" in line for line in user_lines), (
         "Builder class should return Shared.Builder"
     )
-    # Ensure import statement for base module types exists (only imports Shared, not Builder/Reader)
-    assert any(line.startswith("from ") and "import Shared" in line for line in user_lines)
+    # Ensure import statement for base module types exists (imports Protocol module, not user-facing name)
+    assert any(line.startswith("from ") and "import _SharedModule" in line for line in user_lines)

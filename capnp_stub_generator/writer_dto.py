@@ -205,6 +205,51 @@ class StructFieldsCollection:
 
 
 @dataclass
+class EnumGenerationContext:
+    """Context object containing all metadata needed for enum generation.
+
+    This object groups together enum-specific metadata for Protocol-based generation.
+
+    Attributes:
+        schema: The Cap'n Proto enum schema being processed
+        type_name: The user-facing type name (e.g., "TestEnum")
+        protocol_class_name: The Protocol class name (e.g., "_TestEnumModule")
+        new_type: The registered CapnpType object
+    """
+
+    schema: _StructSchema
+    type_name: str
+    protocol_class_name: str
+    new_type: CapnpType
+
+    @classmethod
+    def create(
+        cls,
+        schema: _StructSchema,
+        type_name: str,
+        new_type: CapnpType,
+    ) -> EnumGenerationContext:
+        """Factory method to create enum context with Protocol-based naming.
+
+        Args:
+            schema: The Cap'n Proto enum schema
+            type_name: The user-facing type name
+            new_type: The registered type object
+
+        Returns:
+            A fully initialized EnumGenerationContext
+        """
+        protocol_class_name = f"_{type_name}Module"
+
+        return cls(
+            schema=schema,
+            type_name=type_name,
+            protocol_class_name=protocol_class_name,
+            new_type=new_type,
+        )
+
+
+@dataclass
 class InterfaceGenerationContext:
     """Context object containing all metadata needed for interface generation.
 

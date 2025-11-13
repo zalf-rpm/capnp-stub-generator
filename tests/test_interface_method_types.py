@@ -191,8 +191,9 @@ class TestInterfaceMethodComplexTypes:
         # getOperator takes an Operator enum
         assert "op: Calculator.Operator" in stub_content
 
-        # Verify the Operator enum exists
-        assert "class Operator(Enum):" in stub_content
+        # Verify the Operator enum exists as Protocol with TypeAlias
+        assert "class _OperatorModule(Protocol):" in stub_content
+        assert "Operator: TypeAlias = _OperatorModule" in stub_content
 
     def test_list_parameter_types(self, generate_calculator_stubs):
         """Test that list parameters use Sequence with proper element types."""

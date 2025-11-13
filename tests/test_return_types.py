@@ -121,7 +121,9 @@ class TestStaticMethodReturnTypes:
 
         # Find new_message in base class - with nested structure
         assert "def new_message(" in content
-        assert ") -> _TestAllTypesModule.Builder:" in content, "new_message should return _TestAllTypesModule.Builder type"
+        assert ") -> _TestAllTypesModule.Builder:" in content, (
+            "new_message should return _TestAllTypesModule.Builder type"
+        )
 
     def test_from_bytes_returns_reader(self, dummy_stub_file):
         """from_bytes should return Reader type (read-only)."""

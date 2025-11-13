@@ -19,6 +19,7 @@ from capnp.lib.capnp import _DynamicStructReader, _StructSchema
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
 from capnp_stub_generator.writer_dto import (
+    EnumGenerationContext,
     InterfaceGenerationContext,
     MethodInfo,
     MethodSignatureCollection,
@@ -901,9 +902,7 @@ class Writer:
         # Restore interface scope after generating nested types
         self.scope = interface_scope
 
-    def _add_new_client_method(
-        self, name: str, schema: _StructSchema, client_return_type: str | None = None
-    ):
+    def _add_new_client_method(self, name: str, schema: _StructSchema, client_return_type: str | None = None):
         """Add _new_client() class method to create capability client from Server.
 
         Args:
@@ -1345,9 +1344,14 @@ class Writer:
             pass
 
     def gen_enum(self, schema: _StructSchema) -> CapnpType | None:
-        """Generate an `enum` object.
+        """Generate an `enum` object using Protocol pattern.
 
-        An enum object is translated into an ``Enum`` subclass instead of a ``Literal`` alias.
+        At runtime, enums are _EnumModule objects with integer attributes.
+        We generate a Protocol class _<Name>Module with class attributes,
+        then create a TypeAlias <Name> pointing to it.
+
+        The type is registered with the user-facing name (e.g., TestEnum)
+        so that fields correctly reference it.
 
         Args:
             schema (_StructSchema): The schema to generate the `enum` object out of.
@@ -1359,19 +1363,58 @@ class Writer:
         if imported is not None:
             return imported
 
+        # Get the user-facing enum name
         name = helper.get_display_name(schema)
-        self.register_type(schema.node.id, schema, name=name, scope=self.scope)
 
-        # Import Enum (only once) and emit a class with one attribute per enumerant.
-        self._add_enum_import()
-        lines = [helper.new_class_declaration(name, ["Enum"])]
+        # Create Protocol class name (e.g., _TestEnumModule)
+        protocol_class_name = f"_{name}Module"
+
+        # Add Protocol import
+        self._add_typing_import("Protocol")
+        self._add_typing_import("TypeAlias")
+
+        # Generate the Protocol class declaration
+        protocol_declaration = helper.new_class_declaration(protocol_class_name, ["Protocol"])
+
+        # Find the parent scope for the enum (where it should be declared)
+        try:
+            enum_parent_scope = self.scopes_by_id.get(schema.node.scopeId, self.scope.root)
+        except KeyError:
+            enum_parent_scope = self.scope
+
+        # Create new scope for the Protocol
+        self.new_scope(
+            protocol_class_name, schema.node, scope_heading=protocol_declaration, parent_scope=enum_parent_scope
+        )
+
+        # Register type with the user-facing name (not protocol name)
+        # This ensures fields reference "TestEnum" not "_TestEnumModule"
+        new_type = self.register_type(schema.node.id, schema, name=name, scope=self.scope.parent or self.scope.root)
+
+        # Create context
+        context = EnumGenerationContext.create(
+            schema=schema,
+            type_name=name,
+            new_type=new_type,
+        )
+
+        # Generate enum values as class attributes within the Protocol
         for enumerant in schema.node.enum.enumerants:
-            # Use enumerant name as attribute, value as its string name for stability.
-            lines.append(f'    {enumerant.name} = "{enumerant.name}"')
-        # Add generated enum class lines to current scope.
-        for line in lines:
-            self.scope.add(line)
-        return None
+            # At runtime, enum values are integers
+            self.scope.add(f"{enumerant.name}: int")
+
+        # Add schema attribute
+        self.scope.add("schema: type")
+
+        # Return to parent scope
+        self.return_from_scope()
+
+        # Add TypeAlias at the enum's parent scope level (not the current execution scope)
+        # This is important when generating nested types - the TypeAlias should be added
+        # to the parent struct's Protocol, not to a sibling struct's Protocol
+        enum_parent_scope.add(f"{context.type_name}: TypeAlias = {protocol_class_name}")
+
+        return new_type
 
     def gen_generic(self, schema: _StructSchema) -> list[str]:
         """Generate a `generic` type variable.
@@ -1446,7 +1489,7 @@ class Writer:
         # Create Protocol class declaration with underscore prefix
         protocol_class_name = f"_{type_name}Module"
         self._add_typing_import("Protocol")
-        
+
         if registered_params:
             parameter = helper.new_type_group("Generic", registered_params)
             protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=[parameter, "Protocol"])
@@ -1467,7 +1510,9 @@ class Writer:
 
         # Create context with auto-generated names
         # Pass the original type_name for TypeAlias generation
-        context = StructGenerationContext.create_with_protocol(schema, type_name, protocol_class_name, new_type, registered_params)
+        context = StructGenerationContext.create_with_protocol(
+            schema, type_name, protocol_class_name, new_type, registered_params
+        )
 
         return context, protocol_declaration
 
@@ -1670,7 +1715,7 @@ class Writer:
         2. TypeAlias declarations for <Name>Reader and <Name>Builder
         3. For top-level structs: TypeAlias for <Name> pointing to the Protocol
         4. For nested structs: attribute annotation linking to the Protocol
-        
+
         Args:
             context: Generation context with names and metadata
             fields_collection: Processed fields and init choices
@@ -1678,7 +1723,7 @@ class Writer:
         """
         protocol_class_name = f"_{context.type_name}Module"
         is_nested = self.scope.parent and not self.scope.parent.is_root
-        
+
         # Add Protocol class declaration to parent scope
         if self.scope.parent:
             self.scope.parent.add(protocol_declaration)
@@ -1699,14 +1744,14 @@ class Writer:
         )
 
         self.return_from_scope()
-        
+
         # After the Protocol is complete and we've returned to the parent scope,
         # add TypeAlias declarations at this level (self.scope is now the parent)
         self._add_typing_import("TypeAlias")
         # Add aliases for Reader and Builder
         self.scope.add(f"{context.reader_type_name}: TypeAlias = {protocol_class_name}.Reader")
         self.scope.add(f"{context.builder_type_name}: TypeAlias = {protocol_class_name}.Builder")
-        
+
         # For top-level structs, add a TypeAlias for the module type
         # For nested structs, add an attribute annotation instead
         if is_nested and not self.scope.is_root:
@@ -2594,9 +2639,7 @@ class Writer:
         collection.set_request_helper(helper_lines)
 
         # Generate server method signature
-        server_sig = self._generate_server_method_signature(
-            method_info, parameters, result_type
-        )
+        server_sig = self._generate_server_method_signature(method_info, parameters, result_type)
         collection.set_server_method(server_sig)
         server_collection.add_server_method(server_sig)
 
@@ -2755,9 +2798,7 @@ class Writer:
         if server_collection.has_methods() or server_base_classes:
             # _new_client returns Client class
             client_class_name = f"{context.name}Client"
-            self._add_new_client_method(
-                context.name, context.schema, client_return_type=client_class_name
-            )
+            self._add_new_client_method(context.name, context.schema, client_return_type=client_class_name)
 
         # Phase 4: Generate Server class
         self._generate_server_class(context, server_collection)
@@ -2794,7 +2835,7 @@ class Writer:
         should_generate_client = (
             server_collection.has_methods() or server_base_classes or client_method_collection or methods
         )
-        
+
         if not should_generate_client:
             logger.warning(
                 f"Skipping Client generation for {context.name}: "
@@ -2803,7 +2844,7 @@ class Writer:
                 f"has_client_methods={bool(client_method_collection)}, "
                 f"has_methods={bool(methods)}"
             )
-        
+
         if should_generate_client:
             # Temporarily set scope to parent, generate client, then restore
             current_scope = self.scope
@@ -2984,14 +3025,14 @@ class Writer:
         if "." in definition_name:
             # Get the root parent (e.g., "Params" from "Params.Irrigation.Parameters")
             root_name = definition_name.split(".")[0]
-            
+
             # For structs, import the Protocol class for type references
             node_type = schema.node.which()
             if node_type not in (capnp_types.CapnpElementType.ENUM, capnp_types.CapnpElementType.INTERFACE):
                 protocol_root_name = f"_{root_name}Module"
                 self._add_import(f"from {python_import_path} import {protocol_root_name}")
                 # Register with Protocol-based path: replace ALL struct names with Protocol names
-                # E.g., "Params.OrganicFertilization.OrganicMatterParameters" 
+                # E.g., "Params.OrganicFertilization.OrganicMatterParameters"
                 # becomes "_ParamsModule._OrganicFertilizationModule._OrganicMatterParametersModule"
                 parts = definition_name.split(".")
                 protocol_parts = [f"_{part}Module" for part in parts]

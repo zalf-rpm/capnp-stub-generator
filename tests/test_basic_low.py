@@ -15,8 +15,9 @@ def basic_low_stub_lines(basic_stubs):
 
 def test_enum_color_defined(basic_low_stub_lines):
     lines = basic_low_stub_lines
-    assert any(line.startswith("from enum import") for line in lines)
-    assert any("class Color(Enum):" in line for line in lines)
+    assert any(line.startswith("from typing import") and "Protocol" in line for line in lines)
+    assert any("class _ColorModule(Protocol):" in line for line in lines)
+    assert any("Color: TypeAlias = _ColorModule" in line for line in lines)
 
 
 def test_basiclow_struct_and_fields(basic_low_stub_lines):

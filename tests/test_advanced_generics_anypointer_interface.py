@@ -10,7 +10,7 @@ def test_generics_anypointer_interface(basic_stubs):
 
     content = stub.read_text()
 
-    # Check for GenericBox struct Protocol  
+    # Check for GenericBox struct Protocol
     assert "class _GenericBoxModule(Protocol):" in content, "GenericBox Protocol should exist"
     assert "def value(self) -> Any:" in content, "GenericBox.value should be typed as Any (from AnyPointer)"
     # Check for TypeAlias
