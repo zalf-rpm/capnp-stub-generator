@@ -703,9 +703,6 @@ class Writer:
     def _gen_struct_reader_class(
         self,
         slot_fields: list[helper.TypeHintedVariable],
-        new_type: CapnpType,
-        registered_params: list[str],
-        reader_type_name: str,
         scoped_builder_type: str,
         schema: _StructSchema,
     ):
@@ -713,9 +710,6 @@ class Writer:
 
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
-            new_type (CapnpType): The registered type.
-            registered_params (list[str]): Generic type parameters.
-            reader_type_name (str): The Reader class name (unused, kept for compatibility).
             scoped_builder_type (str): Fully qualified Builder type name.
             schema (_StructSchema): The struct schema.
         """
@@ -749,9 +743,6 @@ class Writer:
         slot_fields: list[helper.TypeHintedVariable],
         init_choices: list[InitChoice],
         list_init_choices: list[tuple[str, str, bool]],
-        new_type: CapnpType,
-        registered_params: list[str],
-        builder_type_name: str,
         scoped_builder_type: str,
         scoped_reader_type: str,
         schema: _StructSchema,
@@ -762,9 +753,6 @@ class Writer:
             slot_fields (list[TypeHintedVariable]): The struct fields.
             init_choices (list[InitChoice]): Init method overload choices for structs.
             list_init_choices (list[tuple[str, str, bool]]): Init method overload choices for lists.
-            new_type (CapnpType): The registered type.
-            registered_params (list[str]): Generic type parameters.
-            builder_type_name (str): The Builder class name (unused, kept for compatibility).
             scoped_builder_type (str): Fully qualified Builder type name.
             scoped_reader_type (str): Fully qualified Reader type name.
             schema (_StructSchema): The struct schema.
@@ -881,12 +869,11 @@ class Writer:
 
         return base_classes
 
-    def _generate_nested_types_for_interface(self, schema: _StructSchema, name: str):
+    def _generate_nested_types_for_interface(self, schema: _StructSchema):
         """Generate all nested types for an interface.
 
         Args:
             schema (_StructSchema): The interface schema.
-            name (str): The interface name.
         """
         # Build runtime path for this interface (handles nested interfaces)
         # Use self.scope.trace to get the full path including current interface
@@ -915,13 +902,12 @@ class Writer:
         self.scope = interface_scope
 
     def _add_new_client_method(
-        self, name: str, base_classes: list[str], schema: _StructSchema, client_return_type: str | None = None
+        self, name: str, schema: _StructSchema, client_return_type: str | None = None
     ):
         """Add _new_client() class method to create capability client from Server.
 
         Args:
             name (str): The interface name.
-            base_classes (list[str]): The interface base classes.
             schema (_StructSchema): The interface schema.
             client_return_type (str | None): Optional client class name to return (default: interface name).
         """
@@ -1631,9 +1617,6 @@ class Writer:
 
         self._gen_struct_reader_class(
             fields_collection.slot_fields,
-            context.new_type,
-            context.registered_params,
-            "Reader",  # Use simple name since it's nested
             context.scoped_builder_type_name,
             context.schema,
         )
@@ -1664,9 +1647,6 @@ class Writer:
             fields_collection.slot_fields,
             fields_collection.init_choices,
             fields_collection.list_init_choices,
-            context.new_type,
-            context.registered_params,
-            "Builder",  # Use simple name since it's nested
             context.scoped_builder_type_name,
             context.scoped_reader_type_name,
             context.schema,
@@ -1689,9 +1669,6 @@ class Writer:
 
         self._gen_struct_reader_class(
             fields_collection.slot_fields,
-            context.new_type,
-            context.registered_params,
-            context.reader_type_name,
             context.scoped_builder_type_name,
             context.schema,
         )
@@ -1715,9 +1692,6 @@ class Writer:
             fields_collection.slot_fields,
             fields_collection.init_choices,
             fields_collection.list_init_choices,
-            context.new_type,
-            context.registered_params,
-            context.builder_type_name,
             context.scoped_builder_type_name,
             context.scoped_reader_type_name,
             context.schema,
@@ -2414,7 +2388,6 @@ class Writer:
         method_info: MethodInfo,
         parameters: list[ParameterInfo],
         result_type: str,
-        is_direct_struct_return: bool,
     ) -> str:
         """Generate server method signature for Server class.
 
@@ -2426,7 +2399,6 @@ class Writer:
             method_info: Information about the method
             parameters: List of processed parameters
             result_type: The result type (Result Protocol name)
-            is_direct_struct_return: Whether this is a direct struct return
 
         Returns:
             Single-line server method signature
@@ -2748,7 +2720,7 @@ class Writer:
 
         # Generate server method signature
         server_sig = self._generate_server_method_signature(
-            method_info, parameters, result_type, is_direct_struct_return
+            method_info, parameters, result_type
         )
         collection.set_server_method(server_sig)
         server_collection.add_server_method(server_sig)
@@ -2867,7 +2839,7 @@ class Writer:
         )
 
         # Phase 2: Generate nested types
-        self._generate_nested_types_for_interface(context.schema, context.name)
+        self._generate_nested_types_for_interface(context.schema)
 
         # Phase 3: Enumerate and process methods
         methods = self._enumerate_interface_methods(context)
@@ -2909,7 +2881,7 @@ class Writer:
             # _new_client returns Client class
             client_class_name = f"{context.name}Client"
             self._add_new_client_method(
-                context.name, context.base_classes, context.schema, client_return_type=client_class_name
+                context.name, context.schema, client_return_type=client_class_name
             )
 
         # Phase 4: Generate Server class
