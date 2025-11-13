@@ -45,11 +45,11 @@ class TestStructGenerationContext:
         assert context.new_type == mock_new_type
         assert context.registered_params == ["T"]
 
-        # Verify generated names
+        # Verify generated names - with nested structure
         assert context.reader_type_name == "PersonReader"
         assert context.builder_type_name == "PersonBuilder"
-        assert context.scoped_reader_type_name == "Company.PersonReader"
-        assert context.scoped_builder_type_name == "Company.PersonBuilder"
+        assert context.scoped_reader_type_name == "Company.Person.Reader"
+        assert context.scoped_builder_type_name == "Company.Person.Builder"
 
     def test_create_with_empty_generic_params(self):
         """Test context creation with no generic parameters."""
@@ -76,8 +76,9 @@ class TestStructGenerationContext:
             schema=mock_schema, type_name="Inner", new_type=mock_new_type, registered_params=[]
         )
 
-        assert context.scoped_reader_type_name == "Outer.Middle.InnerReader"
-        assert context.scoped_builder_type_name == "Outer.Middle.InnerBuilder"
+        # With nested structure
+        assert context.scoped_reader_type_name == "Outer.Middle.Inner.Reader"
+        assert context.scoped_builder_type_name == "Outer.Middle.Inner.Builder"
 
 
 class TestStructFieldsCollection:

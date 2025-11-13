@@ -30,11 +30,11 @@ class TestStructReturnTypes:
         for i, line in enumerate(lines):
             if "class TestAllTypes:" in line:
                 in_base_class = True
-            elif in_base_class and "class TestAllTypesReader" in line:
-                # We've reached the Reader class, stop
+            elif in_base_class and "class Reader:" in line:
+                # We've reached the nested Reader class, stop
                 break
-            elif in_base_class and "class TestAllTypesBuilder" in line:
-                # We've reached the Builder class, stop
+            elif in_base_class and "class Builder:" in line:
+                # We've reached the nested Builder class, stop
                 break
 
             if in_base_class and "def structField(self) ->" in line:
@@ -46,83 +46,38 @@ class TestStructReturnTypes:
     def test_reader_class_returns_reader_type(self, dummy_stub_file):
         """Reader class properties should return Reader types."""
         content = dummy_stub_file.read_text()
-        lines = content.split("\n")
 
-        # Find the Reader class - no longer inherits
-        in_reader_class = False
-        found_struct_field = False
-
-        for i, line in enumerate(lines):
-            if "class TestAllTypesReader:" in line:
-                in_reader_class = True
-            elif in_reader_class and line.startswith("class ") and "TestAllTypesReader" not in line:
-                # We've left the Reader class
-                break
-
-            if in_reader_class and "def structField(self) ->" in line:
-                # Should return TestAllTypesReader only
-                assert "TestAllTypesReader" in line, "Reader class should return Reader type"
-                assert "TestAllTypesBuilder" not in line, "Reader should not return Builder type"
-                found_struct_field = True
-                break
-
-        assert found_struct_field, "Should find structField in Reader class"
+        # With nested structure, check for TestAllTypes.Reader return type
+        assert "def structField(self) -> TestAllTypes.Reader:" in content, (
+            "Reader class should return TestAllTypes.Reader type"
+        )
 
     def test_builder_class_returns_builder_type(self, dummy_stub_file):
         """Builder class properties should return Builder types."""
         content = dummy_stub_file.read_text()
-        lines = content.split("\n")
 
-        # Find the Builder class - no longer inherits
-        in_builder_class = False
-        found_struct_field_getter = False
-
-        for i, line in enumerate(lines):
-            if "class TestAllTypesBuilder:" in line:
-                in_builder_class = True
-            elif in_builder_class and line.startswith("class ") and "TestAllTypesBuilder" not in line:
-                # We've left the Builder class
-                break
-
-            if in_builder_class and "def structField(self) ->" in line:
-                # Should return TestAllTypesBuilder only (getter)
-                assert "TestAllTypesBuilder" in line, "Builder class getter should return Builder type"
-                assert "TestAllTypesReader" not in line, "Builder getter should not return Reader type"
-                found_struct_field_getter = True
-                break
-
-        assert found_struct_field_getter, "Should find structField getter in Builder class"
+        # With nested structure, check for TestAllTypes.Builder return type
+        assert "def structField(self) -> TestAllTypes.Builder:" in content, (
+            "Builder class getter should return TestAllTypes.Builder type"
+        )
 
     def test_builder_setter_accepts_union(self, dummy_stub_file):
         """Builder class setters should accept Builder, Reader, or dict types (not base)."""
         content = dummy_stub_file.read_text()
 
-        # Builder setter should accept Builder/Reader + dict, but NOT base type
-        # Base type (_StructModule) doesn't make sense as a setter value
-        assert "def structField(self, value: TestAllTypesBuilder | TestAllTypesReader | dict[str, Any])" in content, (
+        # Builder setter should accept Builder/Reader + dict with nested class syntax
+        assert "def structField(self, value: TestAllTypes.Builder | TestAllTypes.Reader | dict[str, Any])" in content, (
             "Builder setter should accept union of Builder, Reader, and dict types (not base)"
         )
 
     def test_list_fields_follow_same_pattern(self, dummy_stub_file):
         """List fields should follow the same narrowing pattern."""
         content = dummy_stub_file.read_text()
-        lines = content.split("\n")
 
-        # Base class no longer has field properties
-        # Check Reader class list field
-        in_reader = False
-        found_reader_list = False
-        for line in lines:
-            if "class TestAllTypesReader" in line:
-                in_reader = True
-            elif in_reader and "class TestAllTypesBuilder" in line:
-                break
-            if in_reader and "def structList(self) ->" in line:
-                assert "Sequence[TestAllTypesReader]" in line, "Reader class list should be Sequence[ReaderType]"
-                found_reader_list = True
-                break
-
-        assert found_reader_list, "Should find structList in Reader class"
+        # With nested structure, check for Sequence[TestAllTypes.Reader]
+        assert "def structList(self) -> Sequence[TestAllTypes.Reader]:" in content, (
+            "Reader class list should be Sequence[TestAllTypes.Reader]"
+        )
 
 
 class TestInterfaceReturnTypes:
@@ -163,22 +118,22 @@ class TestStaticMethodReturnTypes:
         """new_message should return Builder type (for mutation)."""
         content = dummy_stub_file.read_text()
 
-        # Find new_message in base class
+        # Find new_message in base class - with nested structure
         assert "def new_message(" in content
-        assert ") -> TestAllTypesBuilder:" in content, "new_message should return Builder type"
+        assert ") -> TestAllTypes.Builder:" in content, "new_message should return TestAllTypes.Builder type"
 
     def test_from_bytes_returns_reader(self, dummy_stub_file):
         """from_bytes should return Reader type (read-only)."""
         content = dummy_stub_file.read_text()
 
         assert "def from_bytes(" in content
-        assert "-> Iterator[TestAllTypesReader]:" in content, "from_bytes should return Reader type in Iterator"
+        assert "-> Iterator[TestAllTypes.Reader]:" in content, "from_bytes should return TestAllTypes.Reader type in Iterator"
 
     def test_read_returns_reader(self, dummy_stub_file):
         """read methods should return Reader type (read-only)."""
         content = dummy_stub_file.read_text()
 
-        assert ") -> TestAllTypesReader:" in content, "read should return Reader type"
+        assert ") -> TestAllTypes.Reader:" in content, "read should return TestAllTypes.Reader type"
         assert "def read_packed(" in content
 
     def test_reader_does_not_have_new_message(self, dummy_stub_file):
@@ -186,13 +141,13 @@ class TestStaticMethodReturnTypes:
         content = dummy_stub_file.read_text()
         lines = content.split("\n")
 
-        # Find Reader class - no longer inherits
+        # Find nested Reader class
         in_reader = False
         reader_content = []
         for line in lines:
-            if "class TestAllTypesReader:" in line:
+            if line.strip() == "class Reader:":
                 in_reader = True
-            elif in_reader and line.startswith("class ") and "TestAllTypesReader" not in line:
+            elif in_reader and line.strip().startswith("class ") and "Reader" not in line:
                 break
             if in_reader:
                 reader_content.append(line)
@@ -227,15 +182,17 @@ class TestRuntimeAccuracy:
         - Reader is _DynamicStructReader (field properties, read-only)
         - Builder is _DynamicStructBuilder (field properties with setters)
 
-        None of these classes inherit from each other.
+        With nested structure, Reader and Builder are nested inside the base class.
         """
         content = dummy_stub_file.read_text()
 
-        # Base, Reader, and Builder are separate classes
+        # Base and nested Reader, Builder classes
         assert "class TestAllTypes:" in content
-        assert "class TestAllTypesReader:" in content
-        assert "class TestAllTypesBuilder:" in content
-        # They don't inherit from each other
+        assert "TestAllTypesReader: TypeAlias = TestAllTypes.Reader" in content
+        assert "TestAllTypesBuilder: TypeAlias = TestAllTypes.Builder" in content
+        # Nested classes exist
+        assert "class Reader:" in content
+        assert "class Builder:" in content
 
 
 def test_return_types_summary():

@@ -28,8 +28,8 @@ def sanitize_name(name: str) -> str:
     return name
 
 
-def new_builder(type_name: str) -> str:
-    """Converts a type name to its builder variant.
+def new_builder_flat(type_name: str) -> str:
+    """Converts a type name to its builder variant using flat naming (for TypeAlias names).
 
     E.g. `MyClass` becomes `MyClassBuilder`.
     For generic types like `MyClass[T]`, becomes `MyClassBuilder[T]`.
@@ -47,8 +47,8 @@ def new_builder(type_name: str) -> str:
     return f"{type_name}{BUILDER_NAME}"
 
 
-def new_reader(type_name: str) -> str:
-    """Converts a type name to its reader variant.
+def new_reader_flat(type_name: str) -> str:
+    """Converts a type name to its reader variant using flat naming (for TypeAlias names).
 
     E.g. `MyClass` becomes `MyClassReader`.
     For generic types like `MyClass[T]`, becomes `MyClassReader[T]`.
@@ -66,6 +66,42 @@ def new_reader(type_name: str) -> str:
     return f"{type_name}{READER_NAME}"
 
 
+def new_builder(type_name: str) -> str:
+    """Converts a type name to its builder variant using nested class syntax.
+
+    E.g. `MyClass` becomes `MyClass.Builder`.
+    E.g. `Outer.Inner` becomes `Outer.Inner.Builder`.
+    For generic types like `MyClass[T]`, becomes `MyClass[T].Builder`.
+
+    Args:
+        type_name (str): The original type name.
+
+    Returns:
+        str: The builder variant.
+    """
+    # For generic types, Builder is nested: MyClass[T, U] -> MyClass[T, U].Builder
+    # The bracket part stays with the parent class
+    return f"{type_name}.Builder"
+
+
+def new_reader(type_name: str) -> str:
+    """Converts a type name to its reader variant using nested class syntax.
+
+    E.g. `MyClass` becomes `MyClass.Reader`.
+    E.g. `Outer.Inner` becomes `Outer.Inner.Reader`.
+    For generic types like `MyClass[T]`, becomes `MyClass[T].Reader`.
+
+    Args:
+        type_name (str): The original type name.
+
+    Returns:
+        str: The reader variant.
+    """
+    # For generic types, Reader is nested: MyClass[T, U] -> MyClass[T, U].Reader
+    # The bracket part stays with the parent class
+    return f"{type_name}.Reader"
+
+
 @dataclass
 class TypeHint:
     """A class that captures a type hint."""
@@ -80,13 +116,16 @@ class TypeHint:
 
         This is composed of the scopes (if any), the name of the hint, and the affix (if any).
         For generic types like `MyClass[T]`, the affix is inserted before the brackets.
+        Affixes are treated as nested classes (e.g., MyClass.Builder instead of MyClassBuilder).
         """
-        # Handle affixes for generic types: MyClass[T] + Builder -> MyClassBuilder[T]
+        # Handle affixes for generic types: MyClass[T] + Builder -> MyClass.Builder[T]
         if self.affix and "[" in self.name:
             base_name, generic_part = self.name.split("[", 1)
-            full_name = f"{base_name}{self.affix}[{generic_part}"
+            full_name = f"{base_name}.{self.affix}[{generic_part}"
+        elif self.affix:
+            full_name = f"{self.name}.{self.affix}"
         else:
-            full_name = f"{self.name}{self.affix}"
+            full_name = self.name
 
         if not self.scopes:
             return full_name

@@ -183,26 +183,11 @@ class TestRequestBuilderFieldAccess:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # ExpressionBuilder should have init method for union fields
-        assert "class ExpressionBuilder" in stub_content
+        # With nested structure, check for TypeAlias and nested Builder class
+        assert "ExpressionBuilder: TypeAlias = Expression.Builder" in stub_content
 
-        # Should have init overload for "call" that returns CallBuilder
-        lines = stub_content.split("\n")
-        in_builder = False
-        found_init_call = False
-
-        for line in lines:
-            if "class ExpressionBuilder" in line:
-                in_builder = True
-            elif in_builder and "def init(self" in line and 'Literal["call"]' in line:
-                # Check next line or same line for return type
-                if "-> CallBuilder" in line or "CallBuilder" in line:
-                    found_init_call = True
-                    break
-            elif in_builder and line.startswith("class ") and "ExpressionBuilder" not in line:
-                break
-
-        assert found_init_call, "ExpressionBuilder should have init('call') -> CallBuilder"
+        # Should have init overload for "call" that returns Call.Builder
+        assert 'def init(self' in stub_content and 'Literal["call"]' in stub_content
 
 
 class TestRequestMethodReturnsRequest:

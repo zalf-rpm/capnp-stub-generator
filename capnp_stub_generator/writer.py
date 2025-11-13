@@ -55,6 +55,7 @@ class Writer:
         "Awaitable",
         "NamedTuple",
         "Self",
+        "TypeAlias",
     ]
 
     def __init__(
@@ -104,6 +105,28 @@ class Writer:
         self._all_interfaces: dict[str, tuple[str, list[str]]] = {}
 
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
+
+    def _build_nested_builder_type(self, base_type: str) -> str:
+        """Convert a type name to its Builder form using nested class syntax.
+        
+        Args:
+            base_type: The base type name (e.g., "Outer.Inner")
+            
+        Returns:
+            The Builder type name (e.g., "Outer.Inner.Builder")
+        """
+        return f"{base_type}.Builder"
+    
+    def _build_nested_reader_type(self, base_type: str) -> str:
+        """Convert a type name to its Reader form using nested class syntax.
+        
+        Args:
+            base_type: The base type name (e.g., "Outer.Inner")
+            
+        Returns:
+            The Reader type name (e.g., "Outer.Inner.Reader")
+        """
+        return f"{base_type}.Reader"
 
     def _add_typing_import(self, module_name: Writer.VALID_TYPING_IMPORTS):
         """Add an import for a module from the 'typing' package.
@@ -190,28 +213,15 @@ class Writer:
     # ===== Helper Methods for Type Name Manipulation =====
 
     def _build_scoped_builder_type(self, field_type: str) -> str:
-        """Build Builder type name respecting scoped names and generics.
+        """Build Builder type name using nested class syntax.
 
         Args:
             field_type (str): The base field type (e.g., "MyStruct", "Outer.Inner", or "Env[T]").
 
         Returns:
-            str: The Builder type name (e.g., "MyStructBuilder", "Outer.InnerBuilder", or "EnvBuilder[T]").
+            str: The Builder type name (e.g., "MyStruct.Builder", "Outer.Inner.Builder", or "Env.Builder[T]").
         """
-        # Check if there's a generic parameter
-        if "[" in field_type:
-            base_name, generic_part = field_type.split("[", 1)
-            # Now handle scoping in the base name
-            if "." in base_name:
-                parts = base_name.rsplit(".", 1)
-                return f"{parts[0]}.{parts[1]}Builder[{generic_part}"
-            else:
-                return f"{base_name}Builder[{generic_part}"
-        elif "." in field_type:
-            parts = field_type.rsplit(".", 1)
-            return f"{parts[0]}.{parts[1]}Builder"
-        else:
-            return f"{field_type}Builder"
+        return helper.new_builder(field_type)
 
     def _get_scope_path(self, scope: Scope | None = None) -> str:
         """Get the scope path as a dotted string.
@@ -669,7 +679,7 @@ class Writer:
             slot_fields (list[TypeHintedVariable]): The struct fields.
             new_type (CapnpType): The registered type.
             registered_params (list[str]): Generic type parameters.
-            reader_type_name (str): The Reader class name.
+            reader_type_name (str): The Reader class name (unused, kept for compatibility).
             scoped_builder_type (str): Fully qualified Builder type name.
             schema (_StructSchema): The struct schema.
         """
@@ -685,17 +695,6 @@ class Writer:
             return_type = helper.new_type_group("Literal", field_names)
             self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
 
-        # Build Reader class declaration - no longer inherits from base class
-        reader_params = []
-        if registered_params:
-            generic_param = helper.new_type_group("Generic", registered_params)
-            reader_params.append(generic_param)
-        reader_class_declaration = helper.new_class_declaration(reader_type_name, parameters=reader_params)
-
-        # Add the class declaration to parent scope
-        if self.scope.parent:
-            self.scope.parent.add(reader_class_declaration)
-
         # Add as_builder method
         self.scope.add(
             helper.new_function(
@@ -704,6 +703,10 @@ class Writer:
                 return_type=scoped_builder_type,
             )
         )
+        
+        # If scope is empty, add pass statement
+        if not self.scope.lines:
+            self.scope.add("pass")
 
     def _gen_struct_builder_class(
         self,
@@ -725,7 +728,7 @@ class Writer:
             list_init_choices (list[tuple[str, str, bool]]): Init method overload choices for lists.
             new_type (CapnpType): The registered type.
             registered_params (list[str]): Generic type parameters.
-            builder_type_name (str): The Builder class name.
+            builder_type_name (str): The Builder class name (unused, kept for compatibility).
             scoped_builder_type (str): Fully qualified Builder type name.
             scoped_reader_type (str): Fully qualified Reader type name.
             schema (_StructSchema): The struct schema.
@@ -768,17 +771,6 @@ class Writer:
             )
         )
 
-        # Build Builder class declaration - no longer inherits from base class
-        builder_params = []
-        if registered_params:
-            generic_param = helper.new_type_group("Generic", registered_params)
-            builder_params.append(generic_param)
-        builder_class_declaration = helper.new_class_declaration(builder_type_name, parameters=builder_params)
-
-        # Add the class declaration to parent scope
-        if self.scope.parent:
-            self.scope.parent.add(builder_class_declaration)
-
         # Add as_reader method
         self.scope.add(
             helper.new_function(
@@ -790,6 +782,10 @@ class Writer:
 
         # Add write methods
         self._add_write_methods()
+        
+        # If scope is empty, add pass statement
+        if not self.scope.lines:
+            self.scope.add("pass")
 
     # ===== Interface Generation Helper Methods =====
 
@@ -1580,6 +1576,71 @@ class Writer:
 
         return fields_collection
 
+    def _generate_nested_reader_class(
+        self,
+        context: StructGenerationContext,
+        fields_collection: StructFieldsCollection,
+    ) -> None:
+        """Generate Reader class nested inside the main struct class.
+
+        Args:
+            context: The generation context
+            fields_collection: The processed fields collection
+        """
+        # Build the class declaration WITHOUT Generic parameters (nested classes don't repeat them)
+        reader_class_declaration = helper.new_class_declaration("Reader", parameters=[])
+        
+        # Add the class declaration to the current scope (the struct scope)
+        self.scope.add(reader_class_declaration)
+        
+        # Create a new scope for the Reader class, explicitly using current scope as parent
+        self.new_scope("Reader", context.schema.node, register=False, parent_scope=self.scope)
+
+        self._gen_struct_reader_class(
+            fields_collection.slot_fields,
+            context.new_type,
+            context.registered_params,
+            "Reader",  # Use simple name since it's nested
+            context.scoped_builder_type_name,
+            context.schema,
+        )
+
+        self.return_from_scope()
+
+    def _generate_nested_builder_class(
+        self,
+        context: StructGenerationContext,
+        fields_collection: StructFieldsCollection,
+    ) -> None:
+        """Generate Builder class nested inside the main struct class.
+
+        Args:
+            context: The generation context
+            fields_collection: The processed fields collection
+        """
+        # Build the class declaration WITHOUT Generic parameters (nested classes don't repeat them)
+        builder_class_declaration = helper.new_class_declaration("Builder", parameters=[])
+        
+        # Add the class declaration to the current scope (the struct scope)
+        self.scope.add(builder_class_declaration)
+        
+        # Create a new scope for the Builder class, explicitly using current scope as parent
+        self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
+
+        self._gen_struct_builder_class(
+            fields_collection.slot_fields,
+            fields_collection.init_choices,
+            fields_collection.list_init_choices,
+            context.new_type,
+            context.registered_params,
+            "Builder",  # Use simple name since it's nested
+            context.scoped_builder_type_name,
+            context.scoped_reader_type_name,
+            context.schema,
+        )
+
+        self.return_from_scope()
+
     def _generate_reader_class_with_scope(
         self,
         context: StructGenerationContext,
@@ -1637,18 +1698,31 @@ class Writer:
         fields_collection: StructFieldsCollection,
         class_declaration: str,
     ) -> None:
-        """Generate base, reader, and builder classes for the struct.
+        """Generate base class with nested Reader and Builder classes for the struct.
 
         Args:
             context: Generation context with names and metadata
             fields_collection: Processed fields and init choices
             class_declaration: The class declaration string
         """
+        # Add TypeAlias declarations at the same level as the class
+        # These allow using InnerBuilder instead of Inner.Builder for convenience
+        if self.scope.parent:
+            self._add_typing_import("TypeAlias")
+            self.scope.parent.add(f"{context.builder_type_name}: TypeAlias = {context.type_name}.Builder")
+            self.scope.parent.add(f"{context.reader_type_name}: TypeAlias = {context.type_name}.Reader")
+            
         # Add class declaration after nested types are generated
         if self.scope.parent:
             self.scope.parent.add(class_declaration)
 
-        # Generate base class
+        # Generate nested Reader class first (inside the main struct class)
+        self._generate_nested_reader_class(context, fields_collection)
+
+        # Generate nested Builder class (inside the main struct class)
+        self._generate_nested_builder_class(context, fields_collection)
+
+        # Generate base class methods (static methods, to_dict, etc.)
         self._gen_struct_base_class(
             fields_collection.slot_fields,
             fields_collection.init_choices,
@@ -1658,12 +1732,6 @@ class Writer:
         )
 
         self.return_from_scope()
-
-        # Generate reader class
-        self._generate_reader_class_with_scope(context, fields_collection)
-
-        # Generate builder class
-        self._generate_builder_class_with_scope(context, fields_collection)
 
     def gen_struct(self, schema: _StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
         """Generate a `struct` object.
@@ -1828,8 +1896,8 @@ class Writer:
 
             # Handle STRUCT: add dict union for client, Reader for server, Builder for request
             elif field_type == capnp_types.CapnpElementType.STRUCT:
-                reader_type = helper.new_reader(base_type)
-                builder_type = helper.new_builder(base_type)
+                reader_type = self._build_nested_reader_type(base_type)
+                builder_type = self._build_nested_builder_type(base_type)
                 client_type = f"{base_type} | dict[str, Any]"
                 server_type = reader_type
                 request_type = builder_type  # Request fields use Builder type
@@ -1841,7 +1909,7 @@ class Writer:
                 if element_type == capnp_types.CapnpElementType.STRUCT:
                     # Get element type name
                     elem_type_name = self.get_type_name(field_obj.slot.type.list.elementType)
-                    elem_reader_type = helper.new_reader(elem_type_name)
+                    elem_reader_type = self._build_nested_reader_type(elem_type_name)
                     client_type = f"Sequence[{elem_type_name}] | Sequence[dict[str, Any]]"
                     server_type = f"Sequence[{elem_reader_type}]"
                     request_type = client_type
@@ -2102,8 +2170,8 @@ class Writer:
                         # For struct types, accept both Builder and Reader in Result Protocol
                         field_type_enum = field_obj.slot.type.which()
                         if field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                            builder_type = helper.new_builder(field_type)
-                            reader_type = helper.new_reader(field_type)
+                            builder_type = self._build_nested_builder_type(field_type)
+                            reader_type = self._build_nested_reader_type(field_type)
                             field_type = f"{builder_type} | {reader_type}"
                         elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                             # For interface types, use the Client class (capabilities are always clients)
@@ -2113,8 +2181,8 @@ class Writer:
                             element_type_obj = field_obj.slot.type.list.elementType
                             if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
                                 element_type_name = self.get_type_name(element_type_obj)
-                                element_builder = helper.new_builder(element_type_name)
-                                element_reader = helper.new_reader(element_type_name)
+                                element_builder = self._build_nested_builder_type(element_type_name)
+                                element_reader = self._build_nested_reader_type(element_type_name)
                                 field_type = field_type.replace(
                                     element_type_name, f"{element_builder} | {element_reader}"
                                 )
@@ -2154,8 +2222,8 @@ class Writer:
                     # For struct types, accept both Builder and Reader in Result Protocol
                     field_type_enum = field_obj.slot.type.which()
                     if field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                        builder_type = helper.new_builder(field_type)
-                        reader_type = helper.new_reader(field_type)
+                        builder_type = self._build_nested_builder_type(field_type)
+                        reader_type = self._build_nested_reader_type(field_type)
                         field_type = f"{builder_type} | {reader_type}"
                     elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                         # For interface types, use the Client class (capabilities are always clients)
@@ -2165,8 +2233,8 @@ class Writer:
                         element_type_obj = field_obj.slot.type.list.elementType
                         if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
                             element_type_name = self.get_type_name(element_type_obj)
-                            element_builder = helper.new_builder(element_type_name)
-                            element_reader = helper.new_reader(element_type_name)
+                            element_builder = self._build_nested_builder_type(element_type_name)
+                            element_reader = self._build_nested_reader_type(element_type_name)
                             field_type = field_type.replace(element_type_name, f"{element_builder} | {element_reader}")
 
                     lines.append(f"    {rf}: {field_type}")
@@ -2291,8 +2359,8 @@ class Writer:
                 # For structs, accept both Builder and Reader
                 field_type_enum = field_obj.slot.type.which()
                 if field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                    builder_type = helper.new_builder(field_type)
-                    reader_type = helper.new_reader(field_type)
+                    builder_type = self._build_nested_builder_type(field_type)
+                    reader_type = self._build_nested_reader_type(field_type)
                     field_type = f"{builder_type} | {reader_type}"
                 # For interfaces in NamedTuples, server returns Interface.Server
                 elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
@@ -2504,8 +2572,8 @@ class Writer:
 
                 # For structs, accept both Builder and Reader
                 if field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                    builder_type = helper.new_builder(field_type)
-                    reader_type = helper.new_reader(field_type)
+                    builder_type = self._build_nested_builder_type(field_type)
+                    reader_type = self._build_nested_reader_type(field_type)
                     result_type = f"{builder_type} | {reader_type}"
 
                 # For lists of structs, accept both Builder and Reader for elements
@@ -2513,8 +2581,8 @@ class Writer:
                     element_type_obj = field_obj.slot.type.list.elementType
                     if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
                         element_type_name = self.get_type_name(element_type_obj)
-                        element_builder = helper.new_builder(element_type_name)
-                        element_reader = helper.new_reader(element_type_name)
+                        element_builder = self._build_nested_builder_type(element_type_name)
+                        element_reader = self._build_nested_reader_type(element_type_name)
                         # Replace element type with Builder | Reader union
                         result_type = result_type.replace(element_type_name, f"{element_builder} | {element_reader}")
 
@@ -2999,11 +3067,8 @@ class Writer:
                     # Enums just need the enum itself
                     self._add_import(f"from {python_import_path} import {definition_name}")
             else:
-                # Structs have Builder/Reader variants
-                self._add_import(
-                    f"from {python_import_path} import "
-                    f"{definition_name}, {helper.new_builder(definition_name)}, {helper.new_reader(definition_name)}"
-                )
+                # Structs now have nested Reader/Builder classes, so just import the struct
+                self._add_import(f"from {python_import_path} import {definition_name}")
 
         return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
 
@@ -3080,7 +3145,7 @@ class Writer:
         else:
             raise KeyError(f"The type ID '{type_id} was not found in the type registry.'")
 
-    def new_scope(self, name: str, node: Any, scope_heading: str = "", register: bool = True) -> Scope:
+    def new_scope(self, name: str, node: Any, scope_heading: str = "", register: bool = True, parent_scope: Scope | None = None) -> Scope:
         """Creates a new scope below the scope of the provided node.
 
         Args:
@@ -3088,15 +3153,17 @@ class Writer:
             node (Any): The node whose scope is the parent scope of the new scope.
             scope_heading (str): The line of code that starts this new scope.
             register (bool): Whether to register this scope.
+            parent_scope (Scope | None): Optional explicit parent scope. If provided, uses this instead of looking up by node.scopeId.
 
         Returns:
             Scope: The parent of this scope.
         """
-        try:
-            parent_scope = self.scopes_by_id[node.scopeId]
+        if parent_scope is None:
+            try:
+                parent_scope = self.scopes_by_id[node.scopeId]
 
-        except KeyError as e:
-            raise NoParentError(f"The scope with name '{name}' has no parent.") from e
+            except KeyError as e:
+                raise NoParentError(f"The scope with name '{name}' has no parent.") from e
 
         # Add the heading of the scope to the parent scope.
         if scope_heading:
@@ -3124,9 +3191,11 @@ class Writer:
         # or manually added (for structs/enums)
         # We need to insert the child scope lines RIGHT AFTER the heading
         # Use word boundary to avoid matching "class TestSturdyRef" when looking for "class TestSturdyRefHostId"
+        # Search from the END to find the most recently added class with this name
         scope_heading_pattern = f"class {self.scope.name}"
         heading_index = None
-        for i, line in enumerate(self.scope.parent.lines):
+        for i in range(len(self.scope.parent.lines) - 1, -1, -1):
+            line = self.scope.parent.lines[i]
             if scope_heading_pattern in line:
                 # Ensure it's an exact match by checking what follows the class name
                 # Should be either ':', '(' or whitespace

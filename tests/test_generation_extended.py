@@ -79,14 +79,14 @@ def test_imports_cross_module_reference():
     # Both import_base and import_user should already be generated together
     user_stub = generated_dir / "import_user_capnp.pyi"
     user_lines = _read(user_stub)
-    # Base class no longer has field properties - only Reader/Builder do
-    # Reader class should narrow to SharedReader
-    assert any("def shared(self) -> SharedReader:" in line for line in user_lines), (
-        "Reader class should return SharedReader"
+    # With nested structure, Shared.Reader and Shared.Builder are used
+    # Reader class should return Shared.Reader
+    assert any("def shared(self) -> Shared.Reader:" in line for line in user_lines), (
+        "Reader class should return Shared.Reader"
     )
-    # Builder class should narrow to SharedBuilder
-    assert any("def shared(self) -> SharedBuilder:" in line for line in user_lines), (
-        "Builder class should return SharedBuilder"
+    # Builder class should narrow to Shared.Builder
+    assert any("def shared(self) -> Shared.Builder:" in line for line in user_lines), (
+        "Builder class should return Shared.Builder"
     )
-    # Ensure import statement for base module types exists
-    assert any(line.startswith("from ") and "import Shared, SharedBuilder, SharedReader" in line for line in user_lines)
+    # Ensure import statement for base module types exists (only imports Shared, not Builder/Reader)
+    assert any(line.startswith("from ") and "import Shared" in line for line in user_lines)
