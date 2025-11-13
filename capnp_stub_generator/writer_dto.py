@@ -74,7 +74,7 @@ class StructGenerationContext:
         # For TypeAlias names, use flat naming (e.g., "IdInformationBuilder")
         reader_type_name = helper.new_reader_flat(new_type.name)
         builder_type_name = helper.new_builder_flat(new_type.name)
-        
+
         # For scoped names, use nested class syntax (e.g., "Outer.Inner.Reader" not "Outer.InnerReader")
         scoped_reader_type_name = f"{new_type.scoped_name}.Reader"
         scoped_builder_type_name = f"{new_type.scoped_name}.Builder"

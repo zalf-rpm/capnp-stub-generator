@@ -187,7 +187,7 @@ class TestRequestBuilderFieldAccess:
         assert "ExpressionBuilder: TypeAlias = Expression.Builder" in stub_content
 
         # Should have init overload for "call" that returns Call.Builder
-        assert 'def init(self' in stub_content and 'Literal["call"]' in stub_content
+        assert "def init(self" in stub_content and 'Literal["call"]' in stub_content
 
 
 class TestRequestMethodReturnsRequest:

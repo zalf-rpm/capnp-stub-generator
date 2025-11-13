@@ -108,21 +108,21 @@ class Writer:
 
     def _build_nested_builder_type(self, base_type: str) -> str:
         """Convert a type name to its Builder form using nested class syntax.
-        
+
         Args:
             base_type: The base type name (e.g., "Outer.Inner")
-            
+
         Returns:
             The Builder type name (e.g., "Outer.Inner.Builder")
         """
         return f"{base_type}.Builder"
-    
+
     def _build_nested_reader_type(self, base_type: str) -> str:
         """Convert a type name to its Reader form using nested class syntax.
-        
+
         Args:
             base_type: The base type name (e.g., "Outer.Inner")
-            
+
         Returns:
             The Reader type name (e.g., "Outer.Inner.Reader")
         """
@@ -703,7 +703,7 @@ class Writer:
                 return_type=scoped_builder_type,
             )
         )
-        
+
         # If scope is empty, add pass statement
         if not self.scope.lines:
             self.scope.add("pass")
@@ -782,7 +782,7 @@ class Writer:
 
         # Add write methods
         self._add_write_methods()
-        
+
         # If scope is empty, add pass statement
         if not self.scope.lines:
             self.scope.add("pass")
@@ -962,14 +962,14 @@ class Writer:
         if client_return_type:
             # For nested interfaces: Calculator.Value -> Calculator.ValueClient
             # For top-level: Greeter -> GreeterClient
-            # Use quoted string for forward reference since Client class comes after
+            # Use unquoted forward reference
             if scope_path and "." in scope_path:
                 # Nested interface - replace last component with client name
                 parts = scope_path.rsplit(".", 1)
-                return_type = f'"{parts[0]}.{client_return_type}"'
+                return_type = f"{parts[0]}.{client_return_type}"
             else:
                 # Top-level interface
-                return_type = f'"{client_return_type}"'
+                return_type = client_return_type
         else:
             return_type = fully_qualified_interface
 
@@ -1589,10 +1589,10 @@ class Writer:
         """
         # Build the class declaration WITHOUT Generic parameters (nested classes don't repeat them)
         reader_class_declaration = helper.new_class_declaration("Reader", parameters=[])
-        
+
         # Add the class declaration to the current scope (the struct scope)
         self.scope.add(reader_class_declaration)
-        
+
         # Create a new scope for the Reader class, explicitly using current scope as parent
         self.new_scope("Reader", context.schema.node, register=False, parent_scope=self.scope)
 
@@ -1620,10 +1620,10 @@ class Writer:
         """
         # Build the class declaration WITHOUT Generic parameters (nested classes don't repeat them)
         builder_class_declaration = helper.new_class_declaration("Builder", parameters=[])
-        
+
         # Add the class declaration to the current scope (the struct scope)
         self.scope.add(builder_class_declaration)
-        
+
         # Create a new scope for the Builder class, explicitly using current scope as parent
         self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
 
@@ -1711,7 +1711,7 @@ class Writer:
             self._add_typing_import("TypeAlias")
             self.scope.parent.add(f"{context.builder_type_name}: TypeAlias = {context.type_name}.Builder")
             self.scope.parent.add(f"{context.reader_type_name}: TypeAlias = {context.type_name}.Reader")
-            
+
         # Add class declaration after nested types are generated
         if self.scope.parent:
             self.scope.parent.add(class_declaration)
@@ -2756,11 +2756,6 @@ class Writer:
             # Empty server class (inherits everything from superclasses)
             self.scope.add("    ...")
 
-        # Add context manager methods
-        self._add_typing_import("Self")
-        self.scope.add("    def __enter__(self) -> Self: ...")
-        self.scope.add("    def __exit__(self, *args: Any) -> None: ...")
-
     def gen_interface(self, schema: _StructSchema) -> CapnpType | None:
         """Generate an `interface` definition.
 
@@ -3145,7 +3140,9 @@ class Writer:
         else:
             raise KeyError(f"The type ID '{type_id} was not found in the type registry.'")
 
-    def new_scope(self, name: str, node: Any, scope_heading: str = "", register: bool = True, parent_scope: Scope | None = None) -> Scope:
+    def new_scope(
+        self, name: str, node: Any, scope_heading: str = "", register: bool = True, parent_scope: Scope | None = None
+    ) -> Scope:
         """Creates a new scope below the scope of the provided node.
 
         Args:

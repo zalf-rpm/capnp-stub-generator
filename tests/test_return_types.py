@@ -127,7 +127,9 @@ class TestStaticMethodReturnTypes:
         content = dummy_stub_file.read_text()
 
         assert "def from_bytes(" in content
-        assert "-> Iterator[TestAllTypes.Reader]:" in content, "from_bytes should return TestAllTypes.Reader type in Iterator"
+        assert "-> Iterator[TestAllTypes.Reader]:" in content, (
+            "from_bytes should return TestAllTypes.Reader type in Iterator"
+        )
 
     def test_read_returns_reader(self, dummy_stub_file):
         """read methods should return Reader type (read-only)."""
