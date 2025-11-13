@@ -57,10 +57,13 @@ def test_server_methods_accept_context(calculator_stub_lines):
         # Find all method definitions in this Server class
         methods = re.findall(r"def \w+\([^)]*(?:\).*?)?(?=\n|$)", server_section, re.DOTALL)
         for method in methods:
-            # Skip dunder methods like __enter__ and __exit__
+            # Skip dunder methods
             if "def __" in method:
                 continue
-            # Each RPC method should have **kwargs
+            # Skip _context variant methods (they don't have **kwargs)
+            if "_context(" in method:
+                continue
+            # Each regular RPC method should have **kwargs
             assert "**kwargs" in method, f"Server method should have **kwargs: {method}"
             # Should have explicit _context parameter with type annotation
             assert "_context:" in method, f"Server method should have _context parameter: {method}"

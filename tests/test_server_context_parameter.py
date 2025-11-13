@@ -35,17 +35,24 @@ class TestServerContextParameter:
         assert server_methods, "No Server classes found in stubs"
 
         for server_class in server_methods:
-            # Find all method definitions (skip __enter__ and __exit__)
+            # Find all method definitions
             methods = re.findall(r"def (\w+)\(", server_class)
             for method_name in methods:
-                if method_name in ("__enter__", "__exit__"):
+                # Skip dunder methods
+                if method_name.startswith("__"):
                     continue
                 match = re.search(rf"def {method_name}\([^)]+\)", server_class)
                 if match:
                     method_sig = match.group(0)
-                    assert "_context:" in method_sig, f"Method {method_name} should have _context parameter"
-                    assert "CallContext" in method_sig, f"Method {method_name} _context should be typed"
-                    assert "**kwargs" in method_sig, f"Method {method_name} should have **kwargs"
+                    # _context variant methods only have context parameter
+                    if method_name.endswith("_context"):
+                        assert "context:" in method_sig, f"Method {method_name} should have context parameter"
+                        assert "CallContext" in method_sig, f"Method {method_name} context should be typed"
+                    else:
+                        # Regular server methods have _context and **kwargs
+                        assert "_context:" in method_sig, f"Method {method_name} should have _context parameter"
+                        assert "CallContext" in method_sig, f"Method {method_name} _context should be typed"
+                        assert "**kwargs" in method_sig, f"Method {method_name} should have **kwargs"
 
     def test_context_parameter_position(self, generate_calculator_stubs):
         """Test that _context comes after regular parameters, before **kwargs."""

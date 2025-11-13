@@ -2478,6 +2478,41 @@ class Writer:
 
         return f"    def {method_name}({param_str}) -> {return_type_str}: ..."
 
+    def _generate_server_context_method_signature(
+        self,
+        method_info: MethodInfo,
+    ) -> str:
+        """Generate server method signature with _context suffix.
+
+        This is the alternative server method pattern where the method name ends in _context
+        and receives only a context parameter (no individual params).
+
+        Args:
+            method_info: Information about the method
+
+        Returns:
+            Single-line server method signature with _context suffix
+        """
+        method_name = helper.sanitize_name(method_info.method_name)
+
+        # Generate CallContext type name - it's inside Server class
+        scope_path = self._get_scope_path()
+        context_class_name = f"{method_name.title()}CallContext"
+        if scope_path:
+            # CallContext is now under Server, not at interface level
+            context_type = f"{scope_path}.Server.{context_class_name}"
+        else:
+            context_type = f"Server.{context_class_name}"
+
+        # _context variant only takes context parameter
+        param_str = f"self, context: {context_type}"
+
+        # _context methods can return promises but not direct values (other than None)
+        self._add_typing_import("Awaitable")
+        return_type_str = "Awaitable[None]"
+
+        return f"    def {method_name}_context({param_str}) -> {return_type_str}: ..."
+
     def _generate_results_builder_protocol(
         self,
         method_info: MethodInfo,
@@ -2523,10 +2558,18 @@ class Writer:
 
         lines = [helper.new_class_declaration(context_name, ["Protocol"])]
 
-        if has_results:
-            scope_path = self._get_scope_path()
+        scope_path = self._get_scope_path()
 
-            # CallContext.results always points to the Result Protocol at interface level
+        # CallContext.params points to the Request Protocol at interface level
+        request_type = f"{method_name.title()}Request"
+        if scope_path:
+            fully_qualified_params = f"{scope_path}.{request_type}"
+        else:
+            fully_qualified_params = request_type
+        lines.append(f"    params: {fully_qualified_params}")
+
+        # CallContext.results points to the Result Protocol at interface level (only if method has results)
+        if has_results:
             if result_type_for_context:
                 if scope_path:
                     # Use interface-level Result Protocol
@@ -2538,9 +2581,7 @@ class Writer:
                 fully_qualified_results = "Any"
 
             lines.append(f"    results: {fully_qualified_results}")
-        else:
-            # Empty CallContext for void methods
-            lines.append("    ...")
+        # Void methods have no results field in CallContext
 
         return lines
 
@@ -2678,6 +2719,10 @@ class Writer:
         )
         collection.set_server_method(server_sig)
         server_collection.add_server_method(server_sig)
+
+        # Generate server _context variant method signature
+        server_context_sig = self._generate_server_context_method_signature(method_info)
+        server_collection.add_server_method(server_context_sig)
 
         # Collect NamedTuple definition for server results with "Tuple" suffix
         if method_info.result_fields:
