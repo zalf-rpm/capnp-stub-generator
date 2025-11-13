@@ -129,6 +129,33 @@ class Writer:
         """
         return f"{base_type}.Reader"
 
+    def _protocol_path_to_runtime_path(self, path: str) -> str:
+        """Convert Protocol module path to runtime-accessible path.
+        
+        This handles nested interfaces where the scoped name uses Protocol module names
+        but the runtime uses user-facing names.
+        
+        Args:
+            path: Protocol-based path (e.g., "_HostPortResolverModule.Registrar")
+            
+        Returns:
+            Runtime-accessible path (e.g., "HostPortResolver.Registrar")
+            
+        Examples:
+            "_HostPortResolverModule.Registrar" -> "HostPortResolver.Registrar"
+            "_PersistentModule.ReleaseSturdyRef" -> "Persistent.ReleaseSturdyRef"
+            "Gateway" -> "Gateway"
+        """
+        parts = path.split(".")
+        runtime_parts = []
+        for part in parts:
+            if part.startswith("_") and part.endswith("Module"):
+                # Strip "_" prefix and "Module" suffix to get user-facing name
+                runtime_parts.append(part[1:-6])
+            else:
+                runtime_parts.append(part)
+        return ".".join(runtime_parts)
+
     def _add_typing_import(self, module_name: Writer.VALID_TYPING_IMPORTS):
         """Add an import for a module from the 'typing' package.
 
@@ -812,13 +839,13 @@ class Writer:
     # ===== Interface Generation Helper Methods =====
 
     def _collect_interface_base_classes(self, schema: _StructSchema) -> list[str]:
-        """Collect base classes for an interface (superclasses + Protocol).
+        """Collect base Protocol classes for an interface (superclasses + Protocol).
 
         Args:
             schema (_StructSchema): The interface schema.
 
         Returns:
-            list[str]: List of base class names.
+            list[str]: List of base Protocol class names (e.g., ["_IdentifiableModule", "Protocol"]).
         """
         base_classes = []
 
@@ -829,7 +856,15 @@ class Writer:
                 try:
                     # Get the superclass type
                     superclass_type = self.get_type_by_id(superclass.id)
-                    base_classes.append(superclass_type.scoped_name)
+                    # For interfaces, always construct Protocol module name from user-facing name
+                    # User-facing name is registered (e.g., "Identifiable"), and we need "_IdentifiableModule"
+                    protocol_name = f"_{superclass_type.name}Module"
+                    # Build scoped Protocol name
+                    if superclass_type.scope and not superclass_type.scope.is_root:
+                        base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
+                    else:
+                        base_protocol = protocol_name
+                    base_classes.append(base_protocol)
                 except KeyError:
                     # Superclass not yet registered - try to generate it first
                     try:
@@ -839,7 +874,13 @@ class Writer:
                                 # Found the superclass module, generate it
                                 self.generate_nested(module.schema)
                                 superclass_type = self.get_type_by_id(superclass.id)
-                                base_classes.append(superclass_type.scoped_name)
+                                # For interfaces, always construct Protocol module name
+                                protocol_name = f"_{superclass_type.name}Module"
+                                if superclass_type.scope and not superclass_type.scope.is_root:
+                                    base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
+                                else:
+                                    base_protocol = protocol_name
+                                base_classes.append(base_protocol)
                                 break
 
                             # Check if it's a nested type in the module
@@ -860,7 +901,13 @@ class Writer:
                             if found_schema:
                                 self.generate_nested(found_schema)
                                 superclass_type = self.get_type_by_id(superclass.id)
-                                base_classes.append(superclass_type.scoped_name)
+                                # For interfaces, construct Protocol module name
+                                protocol_name = f"_{superclass_type.name}Module"
+                                if superclass_type.scope and not superclass_type.scope.is_root:
+                                    base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
+                                else:
+                                    base_protocol = protocol_name
+                                base_classes.append(base_protocol)
                                 break
                     except Exception as e:
                         logger.debug(f"Could not resolve superclass {superclass.id}: {e}")
@@ -882,7 +929,13 @@ class Writer:
         for s in self.scope.trace:
             if s.is_root:
                 continue
-            runtime_path.append(s.name)
+            # Convert Protocol name back to runtime name
+            # e.g., "_CalculatorModule" -> "Calculator"
+            runtime_name = s.name
+            if runtime_name.startswith("_") and runtime_name.endswith("Module"):
+                # Strip underscore prefix and Module suffix to get user-facing name
+                runtime_name = runtime_name[1:-6]  # Remove "_" and "Module"
+            runtime_path.append(runtime_name)
 
         # Save current interface scope before generating nested types
         interface_scope = self.scope
@@ -1061,12 +1114,24 @@ class Writer:
             except Exception:
                 type_name = "Any"
                 self._add_typing_import("Union")
+            # For interfaces, convert user-facing name to Protocol module name for internal use
+            # E.g., "Heartbeat" -> "_HeartbeatModule"
+            # But for nested interfaces, type_name might already be scoped like "Calculator.Function"
+            if type_name != "Any":
+                # Check if last component already has Module format
+                parts = type_name.split(".")
+                last_part = parts[-1]
+                if not (last_part.startswith("_") and last_part.endswith("Module")):
+                    parts[-1] = f"_{last_part}Module"
+                protocol_type_name = ".".join(parts)
+            else:
+                protocol_type_name = type_name
             # For reading: return the Client type (capabilities are always clients at runtime)
             # For writing (in Builder): accept Client | Server
             client_type = f"{type_name}Client"
             hints = [helper.TypeHint(client_type, primary=True)]
-            # Add Server as a non-primary hint for Builder setter
-            hints.append(helper.TypeHint(f"{type_name}.Server"))
+            # Add Server as a non-primary hint for Builder setter (using Protocol name)
+            hints.append(helper.TypeHint(f"{protocol_type_name}.Server"))
             hinted_variable = helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
 
         else:
@@ -1295,7 +1360,14 @@ class Writer:
         # If this is an interface type, also allow passing its Server implementation
         try:
             if field.slot.type.which() == capnp_types.CapnpElementType.INTERFACE:
-                hints.append(helper.TypeHint(f"{type_name}.Server"))
+                # Use Protocol module name for internal Server type reference
+                # Handle both top-level and nested interfaces
+                parts = type_name.split(".")
+                last_part = parts[-1]
+                if not (last_part.startswith("_") and last_part.endswith("Module")):
+                    parts[-1] = f"_{last_part}Module"
+                protocol_type_name = ".".join(parts)
+                hints.append(helper.TypeHint(f"{protocol_type_name}.Server"))
         except Exception:
             pass
         return helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
@@ -1835,7 +1907,7 @@ class Writer:
         # Create and return context
         return InterfaceGenerationContext.create(
             schema=schema,
-            name=name,
+            type_name=name,
             registered_type=registered_type,
             base_classes=base_classes,
             parent_scope=parent_scope,
@@ -1867,7 +1939,7 @@ class Writer:
 
             return [MethodInfo.from_runtime_method(method_name, method) for method_name, method in method_items]
         except Exception as e:
-            logger.debug(f"Could not enumerate methods for {context.name}: {e}")
+            logger.debug(f"Could not enumerate methods for {context.type_name}: {e}")
             return []
 
     def _add_enum_literal_union(self, field_obj, base_type: str) -> str:
@@ -2674,7 +2746,13 @@ class Writer:
             for superclass in interface_node.superclasses:
                 try:
                     superclass_type = self.get_type_by_id(superclass.id)
-                    server_base_classes.append(f"{superclass_type.scoped_name}.Server")
+                    # For interfaces, always construct Protocol module name from user-facing name
+                    protocol_name = f"_{superclass_type.name}Module"
+                    if superclass_type.scope and not superclass_type.scope.is_root:
+                        server_base = f"{superclass_type.scope.scoped_name}.{protocol_name}.Server"
+                    else:
+                        server_base = f"{protocol_name}.Server"
+                    server_base_classes.append(server_base)
                 except KeyError:
                     logger.debug(f"Could not resolve superclass {superclass.id} for Server inheritance")
 
@@ -2725,14 +2803,18 @@ class Writer:
             self.scope.add("    ...")
 
     def gen_interface(self, schema: _StructSchema) -> CapnpType | None:
-        """Generate an `interface` definition.
+        """Generate an `interface` definition using Protocol pattern.
 
-        This orchestrator delegates to specialized methods for clarity and testability.
+        At runtime, interfaces are _InterfaceModule objects with integer attributes.
+        We generate a Protocol class _<Name>Module with nested components,
+        then create TypeAliases <Name> and <Name>Client pointing to it.
+
         Each interface generates:
-        - Interface module with nested types and factory methods
-        - Separate Client Protocol class with client methods
+        - _<Name>Module Protocol with nested types
+        - Nested Client Protocol class with client methods
         - Request/Result Protocol classes for each method
-        - Server class with server method signatures
+        - Server Protocol class with server method signatures
+        - TypeAliases at parent scope for user-facing names
 
         Args:
             schema: The interface schema to generate
@@ -2749,11 +2831,29 @@ class Writer:
             imported_type = self.register_import(schema)
             return imported_type
 
-        # Open interface scope (no Protocol - this is _InterfaceModule)
+        # Track the interface's parent scope (may differ from current scope when generated lazily)
+        type_alias_scope = context.parent_scope or self.scope
+
+        # Add TypeAlias import
+        self._add_typing_import("TypeAlias")
+
+        # Create Protocol class declaration with inheritance
+        if context.base_classes:
+            # Add Protocol to base classes if not already there
+            if "Protocol" not in context.base_classes:
+                protocol_declaration = helper.new_class_declaration(
+                    context.protocol_class_name, context.base_classes + ["Protocol"]
+                )
+            else:
+                protocol_declaration = helper.new_class_declaration(context.protocol_class_name, context.base_classes)
+        else:
+            protocol_declaration = helper.new_class_declaration(context.protocol_class_name, ["Protocol"])
+
+        # Open interface Protocol scope
         self.new_scope(
-            context.name,
+            context.protocol_class_name,
             context.schema.node,
-            scope_heading=f"class {context.name}:",
+            scope_heading=protocol_declaration,
         )
 
         # Phase 2: Generate nested types
@@ -2762,112 +2862,178 @@ class Writer:
         # Phase 3: Enumerate and process methods
         methods = self._enumerate_interface_methods(context)
         server_collection = ServerMethodsCollection()
-        client_method_collection = []  # Collect client methods for separate Client class
+        client_method_collection = []  # Collect client methods for nested Client class
         request_helper_collection = []  # Collect request helpers for Client class
 
         for method_info in methods:
             method_collection = self._process_interface_method(method_info, server_collection)
 
-            # Collect client methods and request helpers for Client class (don't add to interface)
+            # Collect client methods and request helpers for Client class
             client_method_collection.extend(method_collection.client_method_lines)
             request_helper_collection.extend(method_collection.request_helper_lines)
 
-            # Add Request/Result classes to interface module
+            # Add Request/Result classes to interface Protocol
             for line in method_collection.request_class_lines:
                 self.scope.add(line)
 
             for line in method_collection.result_class_lines:
                 self.scope.add(line)
 
-            # Store context lines for Server class (not at interface level)
+            # Store context lines for Server class
             server_collection.add_context_lines(method_collection.server_context_lines)
 
-        # Phase 3.5: Add _new_client class method to interface module
+        # Phase 3.5: Add _new_client class method to interface Protocol
         # Only add if Server class will be generated (has methods or inheritance)
-        server_base_classes = []
-        if context.schema.node.which() == "interface":
-            interface_node = context.schema.node.interface
-            for superclass in interface_node.superclasses:
-                try:
-                    superclass_type = self.get_type_by_id(superclass.id)
-                    server_base_classes.append(f"{superclass_type.scoped_name}.Server")
-                except KeyError:
-                    logger.debug(f"Could not resolve superclass {superclass.id} for _new_client check")
+        server_base_classes = self._collect_server_base_classes(context.schema)
 
         # Only add _new_client if Server class will exist
         if server_collection.has_methods() or server_base_classes:
-            # _new_client returns Client class
-            client_class_name = f"{context.name}Client"
-            self._add_new_client_method(context.name, context.schema, client_return_type=client_class_name)
+            # _new_client returns nested Client class
+            nested_client_name = f"{context.protocol_class_name}.{context.client_type_name}"
+            self._add_new_client_method(context.type_name, context.schema, client_return_type=nested_client_name)
 
-        # Phase 4: Generate Server class
+        # Phase 4: Generate Server class inside interface Protocol
         self._generate_server_class(context, server_collection)
+
+        # Phase 5: Generate Client Protocol class INSIDE interface Protocol (not at parent level)
+        should_generate_client = (
+            server_collection.has_methods() or server_base_classes or client_method_collection or methods
+        )
+
+        if should_generate_client:
+            self._generate_client_class_nested(
+                context, client_method_collection, request_helper_collection, server_base_classes
+            )
+
+            # Track this interface for cast_as overloads with inheritance info
+            # For cast_as, we use TypeAlias names (user-facing names) for both interface and client
+            # Convert Protocol module names in scoped_name to user-facing names
+            # E.g., "_ClusterModule.AdminMaster" -> "Cluster.AdminMaster"
+            interface_full_name = self._protocol_path_to_runtime_path(context.registered_type.scoped_name)
+            
+            # For client name, just add "Client" suffix to the interface name (last component)
+            # E.g., "Calculator" -> "CalculatorClient", "Calculator.Value" -> "Calculator.ValueClient"
+            if "." in interface_full_name:
+                parts = interface_full_name.rsplit(".", 1)
+                client_full_name = f"{parts[0]}.{parts[1]}Client"
+            else:
+                client_full_name = f"{interface_full_name}Client"
+
+            # Build list of base client names using TypeAlias names
+            base_client_names = []
+            for server_base in server_base_classes:
+                if ".Server" in server_base:
+                    # Extract protocol name: _IdentifiableModule.Server -> _IdentifiableModule
+                    protocol_name = server_base.replace(".Server", "")
+                    # Get user-facing interface name from protocol name
+                    interface_name = protocol_name.split(".")[-1].replace("_", "").replace("Module", "")
+                    # Use TypeAlias name for client
+                    base_client_names.append(f"{interface_name}Client")
+
+            self._all_interfaces[interface_full_name] = (client_full_name, base_client_names)
 
         # Track NamedTuples globally for .py file export
         if server_collection.namedtuples:
-            # Use scoped name to handle nested interfaces correctly
             interface_full_name = context.registered_type.scoped_name
             if interface_full_name not in self._all_server_namedtuples:
                 self._all_server_namedtuples[interface_full_name] = {}
 
             for namedtuple_name, fields in server_collection.namedtuples.items():
-                # Extract method name from namedtuple name (remove "Tuple" suffix and convert to method name)
-                # e.g., "SaveResultTuple" -> "save"
                 method_name = namedtuple_name.replace("ResultTuple", "Result").replace("Result", "").lower()
                 if not method_name:
-                    # Fallback: use the namedtuple name without Tuple
                     method_name = namedtuple_name.replace("Tuple", "").lower()
 
                 self._all_server_namedtuples[interface_full_name][method_name] = (namedtuple_name, fields)
 
-        # Save parent scope BEFORE closing interface scope
-        parent_scope = self.scope.parent if self.scope.parent else self.scope
-
-        # Ensure interface has some content (even if methods failed to generate)
+        # Ensure interface Protocol has some content
         if not self.scope.lines:
             self.scope.add("...")
 
-        # Close interface scope
+        # Close interface Protocol scope
         self.return_from_scope()
 
-        # Phase 5: Generate separate Client Protocol class at saved parent scope level
-        # Always generate Client class if there are methods or inheritance
-        should_generate_client = (
-            server_collection.has_methods() or server_base_classes or client_method_collection or methods
-        )
+        # Phase 6: Add TypeAliases at the recorded parent scope
+        # TypeAlias for the interface module
+        type_alias_scope.add(f"{context.type_name}: TypeAlias = {context.protocol_class_name}")
 
-        if not should_generate_client:
-            logger.warning(
-                f"Skipping Client generation for {context.name}: "
-                f"has_server_methods={server_collection.has_methods()}, "
-                f"has_base_classes={bool(server_base_classes)}, "
-                f"has_client_methods={bool(client_method_collection)}, "
-                f"has_methods={bool(methods)}"
-            )
-
+        # TypeAlias for the Client class (for convenience)
         if should_generate_client:
-            # Temporarily set scope to parent, generate client, then restore
-            current_scope = self.scope
-            self.scope = parent_scope
-            self._generate_client_class(
-                context, client_method_collection, request_helper_collection, server_base_classes
+            type_alias_scope.add(
+                f"{context.client_type_name}: TypeAlias = {context.protocol_class_name}.{context.client_type_name}"
             )
-            self.scope = current_scope
-
-            # Track this interface for cast_as overloads with inheritance info
-            interface_full_name = context.registered_type.scoped_name
-            client_full_name = f"{interface_full_name}Client"
-
-            # Build list of base client names from server_base_classes
-            base_client_names = []
-            for server_base in server_base_classes:
-                if ".Server" in server_base:
-                    interface_name = server_base.replace(".Server", "")
-                    base_client_names.append(f"{interface_name}Client")
-
-            self._all_interfaces[interface_full_name] = (client_full_name, base_client_names)
 
         return context.registered_type
+
+    def _collect_server_base_classes(self, schema: _StructSchema) -> list[str]:
+        """Collect Server base classes for an interface's Server class.
+
+        Args:
+            schema: The interface schema
+
+        Returns:
+            List of Server base class names (e.g., ["_IdentifiableModule.Server"])
+        """
+        server_base_classes = []
+        if schema.node.which() == "interface":
+            interface_node = schema.node.interface
+            for superclass in interface_node.superclasses:
+                try:
+                    superclass_type = self.get_type_by_id(superclass.id)
+                    # For interfaces, always construct Protocol module name from user-facing name
+                    protocol_name = f"_{superclass_type.name}Module"
+                    if superclass_type.scope and not superclass_type.scope.is_root:
+                        server_base = f"{superclass_type.scope.scoped_name}.{protocol_name}.Server"
+                    else:
+                        server_base = f"{protocol_name}.Server"
+                    server_base_classes.append(server_base)
+                except KeyError:
+                    logger.debug(f"Could not resolve superclass {superclass.id} for Server inheritance")
+        return server_base_classes
+
+    def _generate_client_class_nested(
+        self,
+        context: InterfaceGenerationContext,
+        client_method_lines: list[str],
+        request_helper_lines: list[str],
+        server_base_classes: list[str],
+    ) -> None:
+        """Generate the Client Protocol class NESTED inside the interface Protocol.
+
+        Args:
+            context: The interface generation context
+            client_method_lines: List of client method lines to add
+            request_helper_lines: List of request helper method lines to add
+            server_base_classes: List of server base classes for inheritance resolution
+        """
+        # Build client base classes - inherit from superclass Clients
+        client_base_classes = []
+        has_parent_clients = False
+        for server_base in server_base_classes:
+            # Extract protocol name from Server type and build Client type
+            # e.g., "_IdentifiableModule.Server" -> "_IdentifiableModule.IdentifiableClient"
+            if ".Server" in server_base:
+                protocol_name = server_base.replace(".Server", "")
+                # Extract interface name from protocol name: _IdentifiableModule -> Identifiable
+                interface_name = protocol_name.split(".")[-1].replace("_", "").replace("Module", "")
+                client_base_classes.append(f"{protocol_name}.{interface_name}Client")
+                has_parent_clients = True
+
+        # Only add Protocol if there are no parent Client classes
+        if not has_parent_clients:
+            client_base_classes.insert(0, "Protocol")
+
+        # Generate Client class declaration
+        self.scope.add(helper.new_class_declaration(context.client_type_name, client_base_classes))
+
+        # Add client methods and request helpers with proper indentation
+        all_method_lines = client_method_lines + request_helper_lines
+        if all_method_lines:
+            for line in all_method_lines:
+                # Methods come without indentation, add class-level indentation
+                self.scope.add(f"    {line}")
+        else:
+            # Empty client class (inherits everything from superclasses)
+            self.scope.add("    ...")
 
     def _generate_client_class(
         self,
@@ -2884,7 +3050,7 @@ class Writer:
             request_helper_lines: List of request helper method lines to add
             server_base_classes: List of server base classes for inheritance resolution
         """
-        client_class_name = f"{context.name}Client"
+        client_class_name = context.client_type_name
 
         # Build client base classes - inherit from superclass Clients
         client_base_classes = []
@@ -3050,9 +3216,12 @@ class Writer:
                 capnp_types.CapnpElementType.INTERFACE,
             ):
                 if node_type == capnp_types.CapnpElementType.INTERFACE:
-                    # For interfaces, import both the interface module and the Client class
+                    # For interfaces, import the Protocol class, the TypeAlias, and the Client alias
+                    protocol_name = f"_{definition_name}Module"
                     client_name = f"{definition_name}Client"
-                    self._add_import(f"from {python_import_path} import {definition_name}, {client_name}")
+                    self._add_import(
+                        f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}"
+                    )
                 else:
                     # Enums just need the enum itself
                     self._add_import(f"from {python_import_path} import {definition_name}")
@@ -3433,12 +3602,16 @@ class Writer:
             out.append("")
             for interface_name, namedtuples_dict in sorted(self._all_server_namedtuples.items()):
                 for method_name, (namedtuple_name, fields) in sorted(namedtuples_dict.items()):
+                    # Convert Protocol path to runtime path
+                    # E.g., "_HostPortResolverModule.Registrar" -> "HostPortResolver.Registrar"
+                    runtime_interface_name = self._protocol_path_to_runtime_path(interface_name)
+                    
                     # Create NamedTuple and attach to Server class
                     # Use object as type for all fields to avoid import issues in .py file
                     # Type information is in the .pyi file for static type checkers
                     field_list = [f'("{field_name}", object)' for field_name, _ in fields]
                     out.append(
-                        f"{interface_name}.Server.{namedtuple_name} = "
+                        f"{runtime_interface_name}.Server.{namedtuple_name} = "
                         f"NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])"
                     )
 

@@ -61,17 +61,17 @@ class TestServerContextParameter:
 
         import re
 
-        # Test Calculator.Function.call
+        # Test _CalculatorModule._FunctionModule.call
         # Function is now an interface module, not Protocol
-        function_section = re.search(r"class Function:.*?(?=\nclass [A-Z])", content, re.DOTALL)
-        assert function_section, "Calculator.Function not found"
+        function_section = re.search(r"class _FunctionModule(Protocol):.*?(?=\nclass [A-Z])", content, re.DOTALL)
+        assert function_section, "_CalculatorModule._FunctionModule not found"
 
         server_call = re.search(
             r"class Server\(Protocol\):.*?def call\(([^)]+)\)",
             function_section.group(0),
             re.DOTALL,
         )
-        assert server_call, "Calculator.Function.Server.call not found"
+        assert server_call, "_CalculatorModule._FunctionModule.Server.call not found"
 
         call_sig = server_call.group(1)
         # Verify order: self, params, _context, **kwargs
@@ -104,7 +104,7 @@ class TestContextTypeHints:
 
         context_type = match.group(1)
         assert "CallContext" in context_type, f"_context should have CallContext type, got: {context_type}"
-        assert "Calculator.Value" in context_type, f"CallContext should be scoped, got: {context_type}"
+        assert "_CalculatorModule._ValueModule" in context_type, f"CallContext should be scoped, got: {context_type}"
 
 
 def test_server_context_parameter_summary(generate_calculator_stubs):

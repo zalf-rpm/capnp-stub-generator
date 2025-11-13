@@ -32,7 +32,7 @@ class TestRequestBuilderStructure:
             if "class EvaluateRequest(Protocol):" in line:
                 in_evaluate_request = True
             elif in_evaluate_request and "expression:" in line:
-                assert "Calculator._ExpressionModule" in line, f"Expected Expression type, got: {line}"
+                assert "_CalculatorModule._ExpressionModule" in line, f"Expected Expression type, got: {line}"
                 found_expression_field = True
                 break
             elif in_evaluate_request and (line.startswith("    def ") or line.startswith("class ")):
@@ -61,7 +61,7 @@ class TestRequestBuilderStructure:
                 assert "int" in line
                 found_param_count = True
             elif in_deffunction_request and "body:" in line:
-                assert "Calculator._ExpressionModule" in line, f"Expected Expression type, got: {line}"
+                assert "_CalculatorModule._ExpressionModule" in line, f"Expected Expression type, got: {line}"
                 found_body = True
                 break  # Found both fields, exit
             elif in_deffunction_request and line.startswith("class "):
@@ -194,26 +194,26 @@ class TestRequestMethodReturnsRequest:
     """Test that *_request() methods return proper request types."""
 
     def test_evaluate_request_method_returns_evaluate_request(self, generate_calculator_stubs):
-        """Test that evaluate_request() returns Calculator.EvaluateRequest."""
+        """Test that evaluate_request() returns _CalculatorModule.EvaluateRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
         # Check for method name and return type (allowing for kwargs parameters)
-        assert "def evaluate_request(" in stub_content and ") -> Calculator.EvaluateRequest:" in stub_content
+        assert "def evaluate_request(" in stub_content and ") -> _CalculatorModule.EvaluateRequest:" in stub_content
 
     def test_deffunction_request_method_returns_deffunction_request(self, generate_calculator_stubs):
-        """Test that defFunction_request() returns Calculator.DeffunctionRequest."""
+        """Test that defFunction_request() returns _CalculatorModule.DeffunctionRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def defFunction_request(" in stub_content and ") -> Calculator.DeffunctionRequest:" in stub_content
+        assert "def defFunction_request(" in stub_content and ") -> _CalculatorModule.DeffunctionRequest:" in stub_content
 
     def test_getoperator_request_method_returns_getoperator_request(self, generate_calculator_stubs):
-        """Test that getOperator_request() returns Calculator.GetoperatorRequest."""
+        """Test that getOperator_request() returns _CalculatorModule.GetoperatorRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def getOperator_request(" in stub_content and ") -> Calculator.GetoperatorRequest:" in stub_content
+        assert "def getOperator_request(" in stub_content and ") -> _CalculatorModule.GetoperatorRequest:" in stub_content
 
 
 def test_request_builder_types_summary():

@@ -133,13 +133,17 @@ def _sort_interfaces_by_inheritance(interfaces: dict[str, tuple[str, list[str]]]
     client_to_interface = {client: name for name, (client, _) in interfaces.items()}
 
     # Compute depths for all interfaces
-    depths = [(node.compute_depth(nodes, client_to_interface), name, node.client_name) for name, node in nodes.items()]
+    depths = [
+        (node.compute_depth(nodes, client_to_interface), len(node.base_client_names), name, node.client_name)
+        for name, node in nodes.items()
+    ]
 
-    # Sort by depth (descending) then by name (ascending for stability)
-    depths.sort(key=lambda x: (-x[0], x[1]))
+    # Sort by depth (descending), then by number of bases (descending), then by name (ascending for stability)
+    # This ensures most derived/specific interfaces come first
+    depths.sort(key=lambda x: (-x[0], -x[1], x[2]))
 
     # Return just the (interface_name, client_name) tuples
-    return [(iface_name, client_name) for _, iface_name, client_name in depths]
+    return [(iface_name, client_name) for _, _, iface_name, client_name in depths]
 
 
 def augment_capnp_stubs_with_overloads(
@@ -345,7 +349,7 @@ def augment_capnp_stubs_with_overloads(
 
         overload_lines.append("    @overload")
         overload_lines.append(
-            f"    def cast_as(self, interface: type[{qualified_interface}]) -> {qualified_client}: ..."
+            f"    def cast_as(self, interface: {qualified_interface}) -> {qualified_client}: ..."
         )
 
     # Add a catchall overload that matches the original function definition

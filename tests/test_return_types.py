@@ -89,7 +89,7 @@ class TestInterfaceReturnTypes:
         content = interface_stub_file.read_text()
 
         # Should have the interface module (not Protocol anymore)
-        assert "class Greeter:" in content, "Should have interface module"
+        assert "class _GreeterModule(Protocol):" in content, "Should have interface module"
 
         # Should have the Client Protocol class
         assert "class GreeterClient(Protocol):" in content, "Should have Client Protocol"
@@ -103,7 +103,7 @@ class TestInterfaceReturnTypes:
         content = interface_stub_file.read_text()
 
         # Should have interface module and Client class
-        assert "class Greeter:" in content
+        assert "class _GreeterModule(Protocol):" in content
         assert "class GreeterClient(Protocol):" in content
 
         # Client methods should not reference non-existent Builder/Reader types

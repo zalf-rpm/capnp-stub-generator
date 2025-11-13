@@ -17,14 +17,14 @@ class TestCalculatorInterfaceMethodTypes:
     """Test that Calculator interface methods have proper types."""
 
     def test_evaluate_has_expression_parameter(self, generate_calculator_stubs):
-        """Test that evaluate() has Calculator._ExpressionModule parameter type."""
+        """Test that evaluate() has _CalculatorModule._ExpressionModule parameter type."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
         # Should have evaluate with Expression parameter (optional) and EvaluateResult return type
         assert "def evaluate(" in stub_content
-        assert "expression: Calculator._ExpressionModule | dict[str, Any] | None = None" in stub_content
-        assert ") -> Calculator.EvaluateResult:" in stub_content
+        assert "expression: _CalculatorModule._ExpressionModule | dict[str, Any] | None = None" in stub_content
+        assert ") -> _CalculatorModule.EvaluateResult:" in stub_content
 
         # Should NOT have Any for the expression parameter
         assert "def evaluate(self, expression: Any)" not in stub_content
@@ -37,7 +37,7 @@ class TestCalculatorInterfaceMethodTypes:
         # Should have defFunction with int and Expression parameters (both optional) and DeffunctionResult return
         assert "def defFunction(" in stub_content
         assert "paramCount: int | None = None" in stub_content
-        assert "body: Calculator._ExpressionModule | dict[str, Any] | None = None" in stub_content
+        assert "body: _CalculatorModule._ExpressionModule | dict[str, Any] | None = None" in stub_content
         assert "DeffunctionResult:" in stub_content
 
         # Should NOT have Any for the body parameter
@@ -51,7 +51,7 @@ class TestCalculatorInterfaceMethodTypes:
         # Should have getOperator with Operator parameter (including string literals, optional)
         # Note: Now accepts Operator | Literal[...] | None = None and returns GetoperatorResult
         assert "def getOperator(" in stub_content
-        assert "Calculator.Operator" in stub_content
+        assert "_CalculatorModule.Operator" in stub_content
         assert "GetoperatorResult" in stub_content
 
         # Should NOT have Any for the op parameter
@@ -65,7 +65,7 @@ class TestCalculatorInterfaceMethodTypes:
         # Should have call with Sequence[float] parameter (optional) and CallResult return type
         assert "def call(" in stub_content
         assert "params: Sequence[float] | None = None" in stub_content
-        assert ") -> Calculator.Function.CallResult:" in stub_content
+        assert ") -> _CalculatorModule._FunctionModule.CallResult:" in stub_content
 
         # Should NOT have Any for the params parameter
         assert "def call(self, params: Any)" not in stub_content
@@ -76,7 +76,7 @@ class TestCalculatorInterfaceMethodTypes:
         stub_content = stub_file.read_text()
 
         # Should have read returning ReadResult
-        assert "def read(self) -> Calculator.Value.ReadResult:" in stub_content
+        assert "def read(self) -> _CalculatorModule._ValueModule.ReadResult:" in stub_content
 
         # ReadResult should have float value field
         assert "class ReadResult" in stub_content
@@ -98,11 +98,11 @@ class TestCalculatorInterfaceMethodTypes:
 
         # All main methods should have _request variants with proper return types
         # Check for method name and return type (allowing for kwargs parameters)
-        assert "def evaluate_request(" in stub_content and ") -> Calculator.EvaluateRequest:" in stub_content
-        assert "def defFunction_request(" in stub_content and ") -> Calculator.DeffunctionRequest:" in stub_content
-        assert "def getOperator_request(" in stub_content and ") -> Calculator.GetoperatorRequest:" in stub_content
-        assert "def read_request(" in stub_content and ") -> Calculator.Value.ReadRequest:" in stub_content
-        assert "def call_request(" in stub_content and ") -> Calculator.Function.CallRequest:" in stub_content
+        assert "def evaluate_request(" in stub_content and ") -> _CalculatorModule.EvaluateRequest:" in stub_content
+        assert "def defFunction_request(" in stub_content and ") -> _CalculatorModule.DeffunctionRequest:" in stub_content
+        assert "def getOperator_request(" in stub_content and ") -> _CalculatorModule.GetoperatorRequest:" in stub_content
+        assert "def read_request(" in stub_content and ") -> _CalculatorModule._ValueModule.ReadRequest:" in stub_content
+        assert "def call_request(" in stub_content and ") -> _CalculatorModule._FunctionModule.CallRequest:" in stub_content
 
 
 class TestInterfaceMethodTypeRegression:
@@ -143,18 +143,18 @@ class TestInterfaceMethodTypeRegression:
         stub_content = stub_file.read_text()
 
         # Function.call should have Sequence[float] (optional), not Any
-        # Function is now an interface module, FunctionClient has the methods
-        assert "class Function:" in stub_content
+        # Function is now an interface Protocol module
+        assert "class _FunctionModule(Protocol):" in stub_content
         assert "class FunctionClient(Protocol):" in stub_content
         assert "def call(" in stub_content
         assert "params: Sequence[float] | None = None" in stub_content
-        assert ") -> Calculator.Function.CallResult:" in stub_content
+        assert ") -> _CalculatorModule._FunctionModule.CallResult:" in stub_content
 
         # Value.read should return ReadResult with float field, not Any
-        # Value is now an interface module, ValueClient has the methods
-        assert "class Value:" in stub_content
+        # Value is now an interface Protocol module
+        assert "class _ValueModule(Protocol):" in stub_content
         assert "class ValueClient(Protocol):" in stub_content
-        assert "def read(self) -> Calculator.Value.ReadResult:" in stub_content
+        assert "def read(self) -> _CalculatorModule._ValueModule.ReadResult:" in stub_content
 
 
 class TestInterfaceMethodComplexTypes:
@@ -165,23 +165,23 @@ class TestInterfaceMethodComplexTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Expression is a struct, should be typed as Calculator._ExpressionModule (Protocol name)
-        assert "expression: Calculator._ExpressionModule" in stub_content
-        assert "body: Calculator._ExpressionModule" in stub_content
+        # Expression is a struct, should be typed as _CalculatorModule._ExpressionModule (Protocol name)
+        assert "expression: _CalculatorModule._ExpressionModule" in stub_content
+        assert "body: _CalculatorModule._ExpressionModule" in stub_content
 
     def test_interface_return_types(self, generate_calculator_stubs):
         """Test that interface return types are resolved correctly."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # evaluate returns EvaluateResult which has a .value field of type Calculator.Value
-        assert "-> Calculator.EvaluateResult:" in stub_content
+        # evaluate returns EvaluateResult which has a .value field of type ValueClient (capability)
+        assert "-> _CalculatorModule.EvaluateResult:" in stub_content
         assert "class EvaluateResult" in stub_content
-        assert "value: Calculator.Value" in stub_content
+        assert "value: _CalculatorModule.ValueClient" in stub_content
 
-        # defFunction and getOperator return results which have .func field of type Calculator.Function
-        assert "-> Calculator.DeffunctionResult:" in stub_content
-        assert "func: Calculator.Function" in stub_content
+        # defFunction and getOperator return results which have .func field of type FunctionClient (capability)
+        assert "-> _CalculatorModule.DeffunctionResult:" in stub_content
+        assert "func: _CalculatorModule.FunctionClient" in stub_content
 
     def test_enum_parameter_types(self, generate_calculator_stubs):
         """Test that enum parameters are typed correctly."""
@@ -189,7 +189,7 @@ class TestInterfaceMethodComplexTypes:
         stub_content = stub_file.read_text()
 
         # getOperator takes an Operator enum
-        assert "op: Calculator.Operator" in stub_content
+        assert "op: _CalculatorModule.Operator" in stub_content
 
         # Verify the Operator enum exists as Protocol with TypeAlias
         assert "class _OperatorModule(Protocol):" in stub_content

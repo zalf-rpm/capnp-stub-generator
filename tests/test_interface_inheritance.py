@@ -66,31 +66,33 @@ def test_simple_interface_inheritance(generated_dir):
 
     content = stub_file.read_text()
 
-    # Check that ClimateInstance interface exists (no longer inherits)
-    assert "class ClimateInstance:" in content, "ClimateInstance interface module should exist"
+    # Check that ClimateInstance interface exists as Protocol
+    assert "class _ClimateInstanceModule(" in content, "ClimateInstance Protocol module should exist"
+    assert "ClimateInstance: TypeAlias = _ClimateInstanceModule" in content, "ClimateInstance TypeAlias should exist"
 
-    # Check that ClimateInstanceClient extends IdentifiableClient
-    assert "class ClimateInstanceClient(IdentifiableClient):" in content, (
-        "ClimateInstanceClient should extend IdentifiableClient"
+    # Check that ClimateInstanceClient extends IdentifiableClient (nested in Protocol)
+    # The Client inherits from the full Protocol path
+    assert "class ClimateInstanceClient(_IdentifiableModule.IdentifiableClient)" in content, (
+        "ClimateInstanceClient should extend _IdentifiableModule.IdentifiableClient"
     )
 
-    # Check that ClimateInstance.Server extends Identifiable.Server
-    # The Server class should be nested, so we need to find it in context
+    # Check that _ClimateInstanceModule.Server extends _IdentifiableModule.Server
+    # The Server class should be nested inside _ClimateInstanceModule
     lines = content.split("\n")
     in_climate_instance = False
     found_server_inheritance = False
 
     for i, line in enumerate(lines):
-        if "class ClimateInstance:" in line:
+        if "class _ClimateInstanceModule(" in line:
             in_climate_instance = True
-        elif in_climate_instance and "class Server(" in line and "Identifiable.Server" in line:
+        elif in_climate_instance and "class Server(" in line and "_IdentifiableModule.Server" in line:
             found_server_inheritance = True
             break
-        elif in_climate_instance and line.startswith("class ") and "ClimateInstance" not in line:
+        elif in_climate_instance and line.startswith("class _") and "ClimateInstanceModule" not in line:
             # We've moved to a different top-level class
             break
 
-    assert found_server_inheritance, "ClimateInstance.Server should extend Identifiable.Server"
+    assert found_server_inheritance, "_ClimateInstanceModule.Server should extend _IdentifiableModule.Server"
 
 
 def test_multiple_interface_inheritance(generated_dir):
@@ -110,12 +112,13 @@ def test_multiple_interface_inheritance(generated_dir):
 
     content = stub_file.read_text()
 
-    # Check that IdentifiableHolder extends both Identifiable and Holder
-    assert "class IdentifiableHolder:" in content, "IdentifiableHolder interface module should exist"
+    # Check that IdentifiableHolder exists as Protocol
+    assert "class _IdentifiableHolderModule(" in content, "IdentifiableHolder Protocol module should exist"
+    assert "IdentifiableHolder: TypeAlias = _IdentifiableHolderModule" in content, "IdentifiableHolder TypeAlias should exist"
 
     # Check that IdentifiableHolderClient extends both IdentifiableClient and HolderClient
-    assert "class IdentifiableHolderClient(IdentifiableClient, HolderClient):" in content, (
-        "IdentifiableHolderClient should extend both IdentifiableClient and HolderClient"
+    assert "class IdentifiableHolderClient(_IdentifiableModule.IdentifiableClient, _HolderModule.HolderClient)" in content, (
+        "IdentifiableHolderClient should extend both _IdentifiableModule.IdentifiableClient and _HolderModule.HolderClient"
     )
 
     # Check that IdentifiableHolder.Server extends both base Servers
@@ -124,16 +127,16 @@ def test_multiple_interface_inheritance(generated_dir):
     found_server_inheritance = False
 
     for i, line in enumerate(lines):
-        if "class IdentifiableHolder:" in line:
+        if "class _IdentifiableHolderModule(" in line:
             in_identifiable_holder = True
-        elif in_identifiable_holder and "class Server(Identifiable.Server, Holder.Server):" in line:
+        elif in_identifiable_holder and "class Server(_IdentifiableModule.Server, _HolderModule.Server)" in line:
             found_server_inheritance = True
             break
-        elif in_identifiable_holder and line.startswith("class ") and "IdentifiableHolder" not in line:
+        elif in_identifiable_holder and line.startswith("class _") and "IdentifiableHolderModule" not in line:
             break
 
     assert found_server_inheritance, (
-        "IdentifiableHolder.Server should extend both Identifiable.Server and Holder.Server"
+        "_IdentifiableHolderModule.Server should extend both _IdentifiableModule.Server and _HolderModule.Server"
     )
 
 
@@ -160,8 +163,8 @@ def test_interface_with_persistent_inheritance(generated_dir):
 
     content = stub_file.read_text()
 
-    # Check that Service extends both Identifiable and Persistent
-    assert "class Service:" in content, "Service should extend both Identifiable and Persistent"
+    # Check that Service extends both Identifiable and Persistent (via Protocol inheritance)
+    assert "class _ServiceModule(_IdentifiableModule, _PersistentModule, Protocol):" in content, "Service Protocol should extend both Identifiable and Persistent"
 
     # Check Server class inheritance - Service.Server should extend both base Servers
     lines = content.split("\n")
@@ -169,15 +172,15 @@ def test_interface_with_persistent_inheritance(generated_dir):
     found_server_inheritance = False
 
     for i, line in enumerate(lines):
-        if "class Service:" in line:
+        if "class _ServiceModule(" in line:
             in_service = True
-        elif in_service and "class Server(Identifiable.Server, Persistent.Server):" in line:
+        elif in_service and "class Server(_IdentifiableModule.Server, _PersistentModule.Server)" in line:
             found_server_inheritance = True
             break
-        elif in_service and line.startswith("class ") and "Service" not in line and "Server" not in line:
+        elif in_service and line.startswith("class _") and "ServiceModule" not in line and "Server" not in line:
             break
 
-    assert found_server_inheritance, "Service.Server should extend both Identifiable.Server and Persistent.Server"
+    assert found_server_inheritance, "_ServiceModule.Server should extend both _IdentifiableModule.Server and _PersistentModule.Server"
 
 
 def test_interface_inheritance_in_nested_interfaces(generated_dir):
@@ -200,20 +203,19 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir):
 
     content = stub_file.read_text()
 
-    # Check nested interfaces extend Identifiable
-    assert "class AdminMaster:" in content, "AdminMaster should extend Identifiable"
-    assert "class UserMaster:" in content, "UserMaster should extend Identifiable"
-    assert "class Runtime:" in content, "Runtime should extend Identifiable"
+    # Check nested interfaces extend Identifiable (now as Protocol modules)
+    assert "class _AdminMasterModule(_IdentifiableModule, Protocol):" in content, "AdminMaster Protocol should extend Identifiable"
+    assert "class _UserMasterModule(_IdentifiableModule, Protocol):" in content, "UserMaster Protocol should extend Identifiable"
+    assert "class _RuntimeModule(_IdentifiableModule, Protocol):" in content, "Runtime Protocol should extend Identifiable"
 
-    # Check that all Server classes extend Identifiable.Server
-    # Count how many times we see "class Server(Identifiable.Server):"
-    # within the context of AdminMaster, UserMaster, or Runtime
-    server_inheritance_count = content.count("class Server(Identifiable.Server):")
+    # Check that all Server classes extend _IdentifiableModule.Server
+    # Count how many times we see "class Server(_IdentifiableModule.Server"
+    server_inheritance_count = content.count("class Server(_IdentifiableModule.Server")
 
-    # We should find at least 3 Server classes extending Identifiable.Server
+    # We should find at least 3 Server classes extending _IdentifiableModule.Server
     # (one for each of AdminMaster, UserMaster, and Runtime)
     assert server_inheritance_count >= 3, (
-        f"Should have at least 3 Server classes extending Identifiable.Server, found {server_inheritance_count}"
+        f"Should have at least 3 Server classes extending _IdentifiableModule.Server, found {server_inheritance_count}"
     )
 
 
@@ -253,9 +255,9 @@ def test_interface_method_inheritance_visibility(generated_dir):
     assert "def info(self)" in common_stub, "Identifiable should have info() method"
 
     # Verify ClimateInstance interface exists and ClimateInstanceClient extends IdentifiableClient
-    assert "class ClimateInstance:" in model_stub, "ClimateInstance interface should exist"
-    assert "class ClimateInstanceClient(IdentifiableClient):" in model_stub, (
-        "ClimateInstanceClient should extend IdentifiableClient"
+    assert "class _ClimateInstanceModule(" in model_stub, "ClimateInstance Protocol should exist"
+    assert "class ClimateInstanceClient(_IdentifiableModule.IdentifiableClient)" in model_stub, (
+        "ClimateInstanceClient should extend _IdentifiableModule.IdentifiableClient"
     )
 
     # The actual info() method will be inherited from IdentifiableClient via inheritance
@@ -276,23 +278,23 @@ def test_empty_interface_with_inheritance(generated_dir):
 
     content = stub_file.read_text()
 
-    # Find IdentifiableHolder class
+    # Find _IdentifiableHolderModule class
     lines = content.split("\n")
     in_identifiable_holder = False
     holder_content = []
 
     for line in lines:
-        if "class IdentifiableHolder:" in line:
+        if "class _IdentifiableHolderModule(" in line:
             in_identifiable_holder = True
             holder_content.append(line)
         elif in_identifiable_holder:
-            if line.startswith("class ") and "Server" not in line:
+            if line.startswith("class _") and "Server" not in line and "IdentifiableHolderModule" not in line:
                 break
             holder_content.append(line)
 
     holder_text = "\n".join(holder_content)
 
     # Should have inheritance but minimal body
-    assert "class IdentifiableHolder:" in holder_text
+    assert "class _IdentifiableHolderModule(" in holder_text
     assert "..." in holder_text  # Should have ellipsis for empty body
-    assert "class Server(Identifiable.Server, Holder.Server):" in holder_text
+    assert "class Server(_IdentifiableModule.Server, _HolderModule.Server)" in holder_text

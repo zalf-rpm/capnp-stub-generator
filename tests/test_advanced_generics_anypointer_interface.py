@@ -41,9 +41,10 @@ def test_generics_anypointer_interface(basic_stubs):
     assert found_enum_box, "enumBox should be typed as GenericBox"
     assert found_inner_box, "innerBox should be typed as GenericBox"
 
-    # Check for interface (interfaces remain as classes, not Protocols)
-    assert "class TestIface:" in content, "TestIface interface module should exist"
-    assert "class TestIfaceClient(Protocol):" in content, "TestIfaceClient should be a Protocol"
+    # Check for interface (now uses Protocol pattern)
+    assert "class _TestIfaceModule(Protocol):" in content, "TestIface Protocol module should exist"
+    assert "TestIface: TypeAlias = _TestIfaceModule" in content, "TestIface TypeAlias should exist"
+    assert "class TestIfaceClient(Protocol):" in content, "TestIfaceClient should be a Protocol nested in _TestIfaceModule"
 
     # Check interface client methods
     assert "def ping(" in content, "TestIfaceClient should have ping method"

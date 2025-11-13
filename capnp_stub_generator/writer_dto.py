@@ -258,14 +258,18 @@ class InterfaceGenerationContext:
 
     Attributes:
         schema: The Cap'n Proto interface schema being processed
-        name: The interface name
+        type_name: The user-facing interface name (e.g., "Calculator")
+        protocol_class_name: The Protocol class name (e.g., "_CalculatorModule")
+        client_type_name: The Client class name (e.g., "CalculatorClient")
         registered_type: The registered CapnpType object
-        base_classes: List of base class names (superclasses + Protocol)
+        base_classes: List of base Protocol class names for inheritance
         parent_scope: The parent scope for this interface
     """
 
     schema: _StructSchema
-    name: str
+    type_name: str
+    protocol_class_name: str
+    client_type_name: str
     registered_type: CapnpType
     base_classes: list[str]
     parent_scope: Any  # Scope type
@@ -274,16 +278,16 @@ class InterfaceGenerationContext:
     def create(
         cls,
         schema: _StructSchema,
-        name: str,
+        type_name: str,
         registered_type: CapnpType,
         base_classes: list[str],
         parent_scope: Any,
     ) -> InterfaceGenerationContext:
-        """Factory method to create interface context.
+        """Factory method to create interface context with Protocol-based naming.
 
         Args:
             schema: The Cap'n Proto interface schema
-            name: The interface name
+            type_name: The user-facing interface name
             registered_type: The registered type object
             base_classes: List of base class names
             parent_scope: The parent scope
@@ -291,9 +295,14 @@ class InterfaceGenerationContext:
         Returns:
             A fully initialized InterfaceGenerationContext
         """
+        protocol_class_name = f"_{type_name}Module"
+        client_type_name = f"{type_name}Client"
+
         return cls(
             schema=schema,
-            name=name,
+            type_name=type_name,
+            protocol_class_name=protocol_class_name,
+            client_type_name=client_type_name,
             registered_type=registered_type,
             base_classes=base_classes,
             parent_scope=parent_scope,

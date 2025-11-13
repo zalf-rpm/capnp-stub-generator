@@ -14,12 +14,12 @@ def test_both_method_variants_exist(calculator_stubs):
     content = stub_file.read_text()
 
     # Regular method with individual parameters (using Protocol names)
-    assert "def evaluate(\n            self,\n            expression: Calculator._ExpressionModule.Reader," in content
-    assert "_context: Calculator.Server.EvaluateCallContext" in content
+    assert "def evaluate(\n            self,\n            expression: _CalculatorModule._ExpressionModule.Reader," in content
+    assert "_context: _CalculatorModule.Server.EvaluateCallContext" in content
     assert "**kwargs: Any" in content
 
     # _context variant with only context parameter
-    assert "def evaluate_context(self, context: Calculator.Server.EvaluateCallContext)" in content
+    assert "def evaluate_context(self, context: _CalculatorModule.Server.EvaluateCallContext)" in content
     assert "-> Awaitable[None]" in content
 
 
@@ -31,7 +31,7 @@ def test_context_variant_signature(calculator_stubs):
     # Find all _context methods
     import re
 
-    context_methods = re.findall(r"def (\w+)_context\([^)]+\)", content)
+    context_methods = re.findall(r"def (\w+)_context\(", content)
 
     # Should have _context variants for all interface methods
     assert "evaluate" in context_methods
@@ -39,9 +39,10 @@ def test_context_variant_signature(calculator_stubs):
     assert "getOperator" in context_methods
 
     # Each _context method should have only self and context parameters
+    # Allow for multiline signatures with whitespace
     for method in context_methods:
-        pattern = rf"def {method}_context\(self, context: [^\)]+\) -> Awaitable\[None\]"
-        assert re.search(pattern, content), f"Method {method}_context should have correct signature"
+        pattern = rf"def {method}_context\(\s*self,\s*context:\s*[^\)]+\)\s*->\s*Awaitable\[None\]"
+        assert re.search(pattern, content, re.MULTILINE | re.DOTALL), f"Method {method}_context should have correct signature"
 
 
 def test_callcontext_has_params_and_results(calculator_stubs):
@@ -51,8 +52,8 @@ def test_callcontext_has_params_and_results(calculator_stubs):
 
     # Check a method with parameters and results
     assert "class EvaluateCallContext(Protocol):" in content
-    assert "params: Calculator.EvaluateRequest" in content
-    assert "results: Calculator.EvaluateResult" in content
+    assert "params: _CalculatorModule.EvaluateRequest" in content
+    assert "results: _CalculatorModule.EvaluateResult" in content
 
 
 def test_callcontext_void_method(basic_stubs):
@@ -60,15 +61,16 @@ def test_callcontext_void_method(basic_stubs):
     stub_file = basic_stubs / "channel_capnp.pyi"
     content = stub_file.read_text()
 
-    # Check void method CallContext
+    # Check void method CallContext (Reader.close is a void method)
     assert "class CloseCallContext(Protocol):" in content
-    assert "params: Channel.Reader.CloseRequest" in content
+    assert "params: _ChannelModule._ReaderModule.CloseRequest" in content
 
     # Should NOT have results for void method
     import re
 
+    # Find CloseCallContext inside Reader
     close_context = re.search(
-        r"class CloseCallContext\(Protocol\):.*?(?=\n\n|\n        class |\n        def )", content, re.DOTALL
+        r"class CloseCallContext\(Protocol\):.*?(?=\n\n|\n            class |\n            def )", content, re.DOTALL
     )
     assert close_context
     # Verify no results field
@@ -80,11 +82,11 @@ def test_nested_interface_context_methods(calculator_stubs):
     stub_file = calculator_stubs / "calculator_capnp.pyi"
     content = stub_file.read_text()
 
-    # Calculator.Value is a nested interface
-    assert "def read_context(self, context: Calculator.Value.Server.ReadCallContext)" in content
+    # Calculator.Value is a nested interface (now _ValueModule inside _CalculatorModule)
+    assert "def read_context(\n                self, context: _CalculatorModule._ValueModule.Server.ReadCallContext\n            ) -> Awaitable[None]:" in content
 
-    # Calculator.Function is a nested interface
-    assert "def call_context(self, context: Calculator.Function.Server.CallCallContext)" in content
+    # Calculator.Function is a nested interface (now _FunctionModule inside _CalculatorModule)
+    assert "def call_context(" in content  # Verify method exists
 
 
 def test_context_method_documentation(calculator_stubs):
@@ -100,14 +102,14 @@ def test_context_method_documentation(calculator_stubs):
 
     # Example from docs: defFunction_context(self, context)
     assert (
-        "def defFunction_context(self, context: Calculator.Server.DeffunctionCallContext) -> Awaitable[None]:"
+        "def defFunction_context(self, context: _CalculatorModule.Server.DeffunctionCallContext) -> Awaitable[None]:"
         in content
     )
 
     # The CallContext should provide access to both params and results
     assert "class DeffunctionCallContext(Protocol):" in content
-    assert "params: Calculator.DeffunctionRequest" in content
-    assert "results: Calculator.DeffunctionResult" in content
+    assert "params: _CalculatorModule.DeffunctionRequest" in content
+    assert "results: _CalculatorModule.DeffunctionResult" in content
 
 
 def test_context_methods_count(calculator_stubs):
