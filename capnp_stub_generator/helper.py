@@ -28,6 +28,42 @@ def sanitize_name(name: str) -> str:
     return name
 
 
+def _build_variant_type(type_name: str, variant: str, flat: bool = False) -> str:
+    """Build Builder or Reader variant of a type name.
+
+    Handles both flat naming (MyClassBuilder) and nested naming (MyClass.Builder).
+    Properly handles generic types by preserving type parameters.
+
+    Args:
+        type_name: The base type name (e.g., "MyClass", "Outer.Inner", "Env[T]")
+        variant: Either "Builder" or "Reader"
+        flat: If True, use flat naming (MyClassBuilder), else nested (MyClass.Builder)
+
+    Returns:
+        The variant type name with proper syntax
+
+    Examples:
+        >>> _build_variant_type("MyStruct", "Builder", flat=False)
+        'MyStruct.Builder'
+        >>> _build_variant_type("MyStruct[T]", "Builder", flat=False)
+        'MyStruct[T].Builder'
+        >>> _build_variant_type("MyStruct", "Builder", flat=True)
+        'MyStructBuilder'
+        >>> _build_variant_type("MyStruct[T]", "Builder", flat=True)
+        'MyStructBuilder[T]'
+    """
+    if flat:
+        # Flat naming: MyClass -> MyClassBuilder, MyClass[T] -> MyClassBuilder[T]
+        if "[" in type_name:
+            base_name, generic_part = type_name.split("[", 1)
+            return f"{base_name}{variant}[{generic_part}"
+        return f"{type_name}{variant}"
+    else:
+        # Nested naming: MyClass -> MyClass.Builder, MyClass[T] -> MyClass[T].Builder
+        # Generic parameters stay with the parent: MyClass[T].Builder, not MyClass.Builder[T]
+        return f"{type_name}.{variant}"
+
+
 def new_builder_flat(type_name: str) -> str:
     """Converts a type name to its builder variant using flat naming (for TypeAlias names).
 
@@ -40,11 +76,7 @@ def new_builder_flat(type_name: str) -> str:
     Returns:
         str: The builder variant.
     """
-    # Handle generic types: MyClass[T, U] -> MyClassBuilder[T, U]
-    if "[" in type_name:
-        base_name, generic_part = type_name.split("[", 1)
-        return f"{base_name}{BUILDER_NAME}[{generic_part}"
-    return f"{type_name}{BUILDER_NAME}"
+    return _build_variant_type(type_name, BUILDER_NAME, flat=True)
 
 
 def new_reader_flat(type_name: str) -> str:
@@ -59,11 +91,7 @@ def new_reader_flat(type_name: str) -> str:
     Returns:
         str: The reader variant.
     """
-    # Handle generic types: MyClass[T, U] -> MyClassReader[T, U]
-    if "[" in type_name:
-        base_name, generic_part = type_name.split("[", 1)
-        return f"{base_name}{READER_NAME}[{generic_part}"
-    return f"{type_name}{READER_NAME}"
+    return _build_variant_type(type_name, READER_NAME, flat=True)
 
 
 def new_builder(type_name: str) -> str:
@@ -79,9 +107,7 @@ def new_builder(type_name: str) -> str:
     Returns:
         str: The builder variant.
     """
-    # For generic types, Builder is nested: MyClass[T, U] -> MyClass[T, U].Builder
-    # The bracket part stays with the parent class
-    return f"{type_name}.Builder"
+    return _build_variant_type(type_name, BUILDER_NAME, flat=False)
 
 
 def new_reader(type_name: str) -> str:
@@ -97,9 +123,7 @@ def new_reader(type_name: str) -> str:
     Returns:
         str: The reader variant.
     """
-    # For generic types, Reader is nested: MyClass[T, U] -> MyClass[T, U].Reader
-    # The bracket part stays with the parent class
-    return f"{type_name}.Reader"
+    return _build_variant_type(type_name, READER_NAME, flat=False)
 
 
 @dataclass

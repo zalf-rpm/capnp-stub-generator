@@ -631,105 +631,13 @@ def run(args: argparse.Namespace, root_directory: str):
         module = parser.load(path, imports=absolute_import_paths)
         module_registry[module.schema.node.id] = (path, module)
 
-    # If output_dir is specified, determine the common base path from the search patterns
-    # to preserve directory structure
-    common_base = None
-    if output_dir and len(paths) > 0:
-        # Extract base directories from all search patterns
-        # Use relative paths if possible to accurately measure depth
-        original_pattern_bases = []
-        relative_pattern_bases = []
-        for path in paths:
-            # Get base from the path as-is
-            base = extract_base_from_pattern(path)
-            if base:
-                original_pattern_bases.append(base)
-                # Also track relative version for depth calculation
-                if os.path.isabs(path):
-                    # Convert to relative if possible
-                    try:
-                        rel_path = os.path.relpath(path, root_directory)
-                        # Only use relative path if it doesn't go outside root_directory
-                        # (i.e., doesn't start with '..')
-                        if not rel_path.startswith(".."):
-                            rel_base = extract_base_from_pattern(rel_path)
-                            if rel_base:
-                                relative_pattern_bases.append(rel_base)
-                        # else: path is outside root_directory, don't add to relative_pattern_bases
-                    except ValueError:
-                        # Paths on different drives on Windows
-                        pass  # Don't add to relative_pattern_bases
-                else:
-                    relative_pattern_bases.append(base)
-
-        # Now get absolute pattern bases
-        pattern_bases = []
-        for path in paths:
-            # Convert to absolute path relative to root_directory
-            if not os.path.isabs(path):
-                path = os.path.join(root_directory, path)
-            base = extract_base_from_pattern(path)
-            if base:
-                # Convert to absolute path
-                if not os.path.isabs(base):
-                    base = os.path.join(root_directory, base)
-                pattern_bases.append(base)
-
-        # Find common base from all pattern bases
-        if len(pattern_bases) == 1:
-            common_base = pattern_bases[0]
-            # For single pattern: only preserve subdirectory structure if it's a recursive glob
-            # or if the pattern explicitly shows subdirectory structure with wildcards
-            if relative_pattern_bases and len(paths) > 0:
-                original_pattern = paths[0]
-                # Check if pattern has ** (recursive glob) - these should preserve structure
-                if "**" in original_pattern:
-                    sample_relative = relative_pattern_bases[0]
-                    depth = sample_relative.count(os.sep)
-                    if depth >= 2:
-                        # Verify all files are in this directory
-                        all_files_direct = True
-                        for path in list(valid_paths)[:10]:
-                            abs_path = os.path.abspath(path)
-                            file_dir = os.path.dirname(abs_path)
-                            if file_dir != common_base:
-                                all_files_direct = False
-                                break
-                        if all_files_direct:
-                            common_base = os.path.dirname(common_base)
-        elif len(pattern_bases) > 1:
-            common_base = os.path.commonpath(pattern_bases)
-
-            # If all pattern bases are identical (files from same directory),
-            # check if we should go up to preserve the subdirectory name.
-            # Only do this if the bases are actually different paths (multiple subdirs involved)
-            if all(base == pattern_bases[0] for base in pattern_bases):
-                # Check if files are directly in common_base
-                all_files_direct = True
-                for path in list(valid_paths)[:10]:
-                    abs_path = os.path.abspath(path)
-                    file_dir = os.path.dirname(abs_path)
-                    if file_dir != common_base:
-                        all_files_direct = False
-                        break
-
-                # Go up if all files are direct AND depth >= 2 (subdirectory to preserve)
-                if all_files_direct and relative_pattern_bases:
-                    sample_relative = relative_pattern_bases[0]
-                    depth = sample_relative.count(os.sep)
-                    if depth >= 2:
-                        common_base = os.path.dirname(common_base)
-            # If bases are different, the commonpath already gives us the right level
-
-        # If no pattern bases were found, use the common path of all found files
-        if not common_base and len(valid_paths) > 0:
-            abs_paths = [os.path.abspath(p) for p in valid_paths]
-            if len(abs_paths) == 1:
-                common_base = os.path.dirname(abs_paths[0])
-            else:
-                common_base = os.path.commonpath(abs_paths)
-                if os.path.isfile(common_base):
-                    common_base = os.path.dirname(common_base)
+    # Determine the common base path for preserving directory structure
+    common_base = _determine_output_directory_structure(
+        output_dir,
+        paths,
+        valid_paths,
+        root_directory,
+    )
 
     # Track output directories for py.typed marker
     output_directories_used = set()
@@ -834,3 +742,278 @@ def run(args: argparse.Namespace, root_directory: str):
     # Validate generated stubs with pyright (unless disabled)
     if not skip_pyright:
         validate_with_pyright(output_directories_used)
+
+
+# ===== Directory Structure Helper Functions =====
+
+
+def _all_files_in_directory(valid_paths: set[str], directory: str) -> bool:
+    """Check if all files are directly in the given directory.
+
+    Args:
+        valid_paths: Set of file paths to check
+        directory: Directory to check against
+
+    Returns:
+        True if all files (sampled) are in the directory, False otherwise
+    """
+    # Sample check (avoid checking thousands of files)
+    for path in list(valid_paths)[:10]:
+        abs_path = os.path.abspath(path)
+        file_dir = os.path.dirname(abs_path)
+        if file_dir != directory:
+            return False
+    return True
+
+
+def _should_preserve_parent_directory(
+    common_base: str,
+    relative_bases: list[str],
+    valid_paths: set[str],
+) -> bool:
+    """Determine if parent directory name should be preserved in output.
+
+    Args:
+        common_base: The common base directory
+        relative_bases: Relative path bases for depth calculation
+        valid_paths: Set of valid file paths
+
+    Returns:
+        True if parent directory should be preserved
+    """
+    if not relative_bases:
+        return False
+
+    # Check depth - only preserve if depth >= 2
+    sample_relative = relative_bases[0]
+    depth = sample_relative.count(os.sep)
+
+    if depth < 2:
+        return False
+
+    # Verify files are in the base directory
+    return _all_files_in_directory(valid_paths, common_base)
+
+
+def _fallback_common_base(valid_paths: set[str]) -> str | None:
+    """Calculate common base from file paths when no pattern bases found.
+
+    Args:
+        valid_paths: Set of valid file paths
+
+    Returns:
+        Common base directory or None
+    """
+    if not valid_paths:
+        return None
+
+    abs_paths = [os.path.abspath(p) for p in valid_paths]
+    if len(abs_paths) == 1:
+        return os.path.dirname(abs_paths[0])
+
+    common = os.path.commonpath(abs_paths)
+    return os.path.dirname(common) if os.path.isfile(common) else common
+
+
+def _handle_single_pattern_base(
+    base: str,
+    relative_bases: list[str],
+    paths: list[str],
+    valid_paths: set[str],
+) -> str:
+    """Handle case where there's only one pattern base directory.
+
+    Args:
+        base: The single pattern base directory
+        relative_bases: Relative path bases
+        paths: Original search patterns
+        valid_paths: Set of valid file paths
+
+    Returns:
+        The base directory to use
+    """
+    # Check if we should preserve subdirectory structure
+    if not relative_bases or not paths:
+        return base
+
+    original_pattern = paths[0]
+
+    # Only preserve structure for recursive globs (**) with depth >= 2
+    if "**" not in original_pattern:
+        return base
+
+    sample_relative = relative_bases[0]
+    depth = sample_relative.count(os.sep)
+
+    if depth < 2:
+        return base
+
+    # Verify files are actually in this directory
+    if _all_files_in_directory(valid_paths, base):
+        return os.path.dirname(base)
+
+    return base
+
+
+def _handle_multiple_pattern_bases(
+    absolute_bases: list[str],
+    relative_bases: list[str],
+    valid_paths: set[str],
+) -> str:
+    """Handle case where there are multiple pattern base directories.
+
+    Args:
+        absolute_bases: Absolute pattern base directories
+        relative_bases: Relative path bases
+        valid_paths: Set of valid file paths
+
+    Returns:
+        The common base directory to use
+    """
+    common_base = os.path.commonpath(absolute_bases)
+
+    # If all bases are identical, check if we should go up one level
+    if all(base == absolute_bases[0] for base in absolute_bases):
+        if _should_preserve_parent_directory(
+            common_base,
+            relative_bases,
+            valid_paths,
+        ):
+            return os.path.dirname(common_base)
+
+    return common_base
+
+
+def _calculate_common_base(
+    absolute_bases: list[str],
+    relative_bases: list[str],
+    paths: list[str],
+    valid_paths: set[str],
+) -> str | None:
+    """Calculate common base directory from pattern bases.
+
+    Args:
+        absolute_bases: Absolute paths to pattern base directories
+        relative_bases: Relative paths (for depth calculation)
+        paths: Original search patterns
+        valid_paths: Set of valid file paths found
+
+    Returns:
+        Common base directory path, or None if not applicable
+    """
+    if not absolute_bases:
+        return _fallback_common_base(valid_paths)
+
+    if len(absolute_bases) == 1:
+        return _handle_single_pattern_base(
+            absolute_bases[0],
+            relative_bases,
+            paths,
+            valid_paths,
+        )
+
+    return _handle_multiple_pattern_bases(
+        absolute_bases,
+        relative_bases,
+        valid_paths,
+    )
+
+
+def _extract_pattern_bases(
+    paths: list[str],
+    root_directory: str,
+) -> tuple[list[str], list[str]]:
+    """Extract base directories from search patterns.
+
+    Args:
+        paths: List of search patterns (may be absolute or relative)
+        root_directory: The root directory for resolving relative paths
+
+    Returns:
+        Tuple of (absolute_bases, relative_bases)
+        - absolute_bases: Absolute path to each pattern's base directory
+        - relative_bases: Relative path (for depth calculation)
+    """
+    absolute_bases = []
+    relative_bases = []
+
+    for pattern in paths:
+        # Extract base from pattern (the directory before wildcards)
+        base = extract_base_from_pattern(pattern)
+        if not base:
+            continue
+
+        # Convert to absolute path
+        if not os.path.isabs(pattern):
+            abs_pattern = os.path.join(root_directory, pattern)
+        else:
+            abs_pattern = pattern
+
+        abs_base = extract_base_from_pattern(abs_pattern)
+        if not os.path.isabs(abs_base):
+            abs_base = os.path.join(root_directory, abs_base)
+        absolute_bases.append(abs_base)
+
+        # Track relative version for depth calculation
+        try:
+            if os.path.isabs(pattern):
+                rel_pattern = os.path.relpath(pattern, root_directory)
+                if not rel_pattern.startswith(".."):
+                    rel_base = extract_base_from_pattern(rel_pattern)
+                    if rel_base:
+                        relative_bases.append(rel_base)
+            else:
+                relative_bases.append(base)
+        except ValueError:
+            # Paths on different drives (Windows)
+            pass
+
+    return absolute_bases, relative_bases
+
+
+def _determine_output_directory_structure(
+    output_dir: str,
+    paths: list[str],
+    valid_paths: set[str],
+    root_directory: str,
+) -> str | None:
+    """Determine the base path for preserving directory structure in output.
+
+    This function analyzes the input patterns and found files to decide
+    how to preserve directory structure when writing to output_dir.
+
+    Args:
+        output_dir: The output directory specified by user
+        paths: List of search patterns
+        valid_paths: Set of valid .capnp files found
+        root_directory: The root directory for resolving relative paths
+
+    Returns:
+        Common base directory to use for calculating relative paths,
+        or None if directory structure should not be preserved.
+
+    Examples:
+        # Single pattern: tests/schemas/basic/*.capnp
+        # Output: tests/schemas/basic/ (preserve "basic" in output)
+
+        # Multiple patterns from different subdirs
+        # Output: tests/schemas/ (common parent)
+
+        # Recursive glob: tests/schemas/**/*.capnp
+        # Output: tests/schemas/ (preserve full structure)
+    """
+    if not output_dir or not paths:
+        return None
+
+    # Step 1: Extract base directories from patterns
+    absolute_bases, relative_bases = _extract_pattern_bases(paths, root_directory)
+
+    # Step 2: Calculate common base directory
+    common_base = _calculate_common_base(
+        absolute_bases,
+        relative_bases,
+        paths,
+        valid_paths,
+    )
+
+    return common_base

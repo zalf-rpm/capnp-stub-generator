@@ -238,6 +238,28 @@ class Writer:
 
     # ===== Static Method Generators =====
 
+    def _create_capnp_limit_params(self) -> list[helper.TypeHintedVariable]:
+        """Create standard Cap'n Proto traversal and nesting limit parameters.
+
+        These parameters are used in all deserialization methods (from_bytes,
+        from_bytes_packed, read, read_packed) to control security limits.
+
+        Returns:
+            List containing traversal_limit_in_words and nesting_limit parameters.
+        """
+        return [
+            helper.TypeHintedVariable(
+                "traversal_limit_in_words",
+                [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                default="...",
+            ),
+            helper.TypeHintedVariable(
+                "nesting_limit",
+                [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                default="...",
+            ),
+        ]
+
     def _add_from_bytes_methods(self, scoped_reader_type: str):
         """Add from_bytes and from_bytes_packed static methods to current scope.
 
@@ -247,47 +269,20 @@ class Writer:
         self._add_typing_import("Iterator")
         self._add_import("from contextlib import contextmanager")
 
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(helper.new_decorator("contextmanager"))
-        self.scope.add(
-            helper.new_function(
-                "from_bytes",
-                parameters=[
-                    helper.TypeHintedVariable("data", [helper.TypeHint("bytes", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "traversal_limit_in_words",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                    helper.TypeHintedVariable(
-                        "nesting_limit",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                ],
-                return_type=helper.new_type_group("Iterator", [scoped_reader_type]),
-            )
+        # from_bytes method (returns Iterator for context manager usage)
+        data_param = helper.TypeHintedVariable("data", [helper.TypeHint("bytes", primary=True)])
+        self._add_static_method(
+            "from_bytes",
+            parameters=[data_param] + self._create_capnp_limit_params(),
+            return_type=helper.new_type_group("Iterator", [scoped_reader_type]),
+            decorators=["contextmanager"],
         )
 
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "from_bytes_packed",
-                parameters=[
-                    helper.TypeHintedVariable("data", [helper.TypeHint("bytes", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "traversal_limit_in_words",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                    helper.TypeHintedVariable(
-                        "nesting_limit",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                ],
-                return_type=scoped_reader_type,
-            )
+        # from_bytes_packed method
+        self._add_static_method(
+            "from_bytes_packed",
+            parameters=[data_param] + self._create_capnp_limit_params(),
+            return_type=scoped_reader_type,
         )
 
     def _add_read_methods(self, scoped_reader_type: str):
@@ -298,67 +293,75 @@ class Writer:
         """
         self._add_typing_import("BinaryIO")
 
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "read",
-                parameters=[
-                    helper.TypeHintedVariable("file", [helper.TypeHint("BinaryIO", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "traversal_limit_in_words",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                    helper.TypeHintedVariable(
-                        "nesting_limit",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                ],
-                return_type=scoped_reader_type,
-            )
+        file_param = helper.TypeHintedVariable("file", [helper.TypeHint("BinaryIO", primary=True)])
+
+        # read method
+        self._add_static_method(
+            "read",
+            parameters=[file_param] + self._create_capnp_limit_params(),
+            return_type=scoped_reader_type,
         )
 
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "read_packed",
-                parameters=[
-                    helper.TypeHintedVariable("file", [helper.TypeHint("BinaryIO", primary=True)]),
-                    helper.TypeHintedVariable(
-                        "traversal_limit_in_words",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                    helper.TypeHintedVariable(
-                        "nesting_limit",
-                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                        default="...",
-                    ),
-                ],
-                return_type=scoped_reader_type,
-            )
+        # read_packed method
+        self._add_static_method(
+            "read_packed",
+            parameters=[file_param] + self._create_capnp_limit_params(),
+            return_type=scoped_reader_type,
         )
 
     def _add_write_methods(self):
         """Add write and write_packed static methods to current scope."""
         self._add_import("from io import BufferedWriter")
 
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "write",
-                parameters=[helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])],
-            )
-        )
+        file_param = helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])
 
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "write_packed",
-                parameters=[helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])],
+        self._add_static_method("write", [file_param])
+        self._add_static_method("write_packed", [file_param])
+
+    def _add_static_method(
+        self,
+        name: str,
+        parameters: list[helper.TypeHintedVariable] | list[str] | None = None,
+        return_type: str | None = None,
+        decorators: list[str] | None = None,
+    ) -> None:
+        """Add a static method to the current scope.
+
+        This is a convenience method that combines decorator and function generation.
+        Always adds @staticmethod, plus any additional decorators specified.
+
+        Args:
+            name: The method name
+            parameters: Method parameters (TypeHintedVariable list or string list)
+            return_type: Method return type (None if no return type)
+            decorators: Additional decorators to add before @staticmethod
+                       (e.g., ["contextmanager"] for from_bytes)
+
+        Examples:
+            # Simple static method
+            self._add_static_method("write", [file_param])
+
+            # Static method with return type
+            self._add_static_method("new_message", params, "MyStruct.Builder")
+
+            # Static method with additional decorator
+            self._add_static_method(
+                "from_bytes",
+                [data_param, ...],
+                "Iterator[MyStruct.Reader]",
+                decorators=["contextmanager"]
             )
-        )
+        """
+        # Add any additional decorators first (they go above @staticmethod)
+        if decorators:
+            for decorator in decorators:
+                self.scope.add(helper.new_decorator(decorator))
+
+        # Add @staticmethod decorator
+        self.scope.add(helper.new_decorator("staticmethod"))
+
+        # Add the function definition
+        self.scope.add(helper.new_function(name, parameters, return_type))
 
     def _add_base_properties(self, slot_fields: list[helper.TypeHintedVariable]):
         """Add read-only properties to base struct class.
@@ -613,13 +616,10 @@ class Writer:
             )
             new_message_params.append(field_param)
 
-        self.scope.add(helper.new_decorator("staticmethod"))
-        self.scope.add(
-            helper.new_function(
-                "new_message",
-                parameters=new_message_params,
-                return_type=scoped_builder_type,
-            )
+        self._add_static_method(
+            "new_message",
+            new_message_params,
+            scoped_builder_type,
         )
 
     def _gen_struct_base_class(
@@ -746,14 +746,11 @@ class Writer:
             self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
 
         # Add from_dict method
-        self.scope.add(helper.new_decorator("staticmethod"))
         self._add_typing_import("Any")
-        self.scope.add(
-            helper.new_function(
-                "from_dict",
-                parameters=[helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict[str, Any]", primary=True)])],
-                return_type=scoped_builder_type,
-            )
+        self._add_static_method(
+            "from_dict",
+            [helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict[str, Any]", primary=True)])],
+            scoped_builder_type,
         )
 
         # Add init method overloads
