@@ -1654,51 +1654,6 @@ class Writer:
 
         self.return_from_scope()
 
-    def _generate_reader_class_with_scope(
-        self,
-        context: StructGenerationContext,
-        fields_collection: StructFieldsCollection,
-    ) -> None:
-        """Generate reader class with automatic scope management.
-
-        Args:
-            context: The generation context
-            fields_collection: The processed fields collection
-        """
-        self.new_scope(context.reader_type_name, context.schema.node, register=False)
-
-        self._gen_struct_reader_class(
-            fields_collection.slot_fields,
-            context.scoped_builder_type_name,
-            context.schema,
-        )
-
-        self.return_from_scope()
-
-    def _generate_builder_class_with_scope(
-        self,
-        context: StructGenerationContext,
-        fields_collection: StructFieldsCollection,
-    ) -> None:
-        """Generate builder class with automatic scope management.
-
-        Args:
-            context: The generation context
-            fields_collection: The processed fields collection
-        """
-        self.new_scope(context.builder_type_name, context.schema.node, register=False)
-
-        self._gen_struct_builder_class(
-            fields_collection.slot_fields,
-            fields_collection.init_choices,
-            fields_collection.list_init_choices,
-            context.scoped_builder_type_name,
-            context.scoped_reader_type_name,
-            context.schema,
-        )
-
-        self.return_from_scope()
-
     def _generate_struct_classes(
         self,
         context: StructGenerationContext,
@@ -2283,39 +2238,6 @@ class Writer:
 
         return lines
 
-    def _get_server_method_return_type(
-        self,
-        method_info: MethodInfo,
-    ) -> str:
-        """Get the return type for a server method (base type for single field).
-
-        For single-field results, returns the field type (base type, not Builder).
-        For multi-field results, returns empty string (must use _context.results).
-
-        Args:
-            method_info: Information about the method
-
-        Returns:
-            The field type for single-field results, empty string otherwise
-        """
-        if not method_info.result_fields or len(method_info.result_fields) != 1:
-            return ""
-
-        if method_info.result_schema is None:
-            return ""
-
-        field_name = method_info.result_fields[0]
-        try:
-            field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == field_name)
-
-            # Get base type (not Builder, not Reader)
-            field_type = self.get_type_name(field_obj.slot.type)
-            return field_type
-
-        except Exception as e:
-            logger.debug(f"Could not get server return type for {field_name}: {e}")
-            return ""
-
     @staticmethod
     def _sanitize_namedtuple_field_name(field_name: str) -> str:
         """Sanitize field name to avoid conflicts with NamedTuple/tuple methods.
@@ -2518,30 +2440,6 @@ class Writer:
 
         return f"    def {method_name}_context({param_str}) -> {return_type_str}: ..."
 
-    def _generate_results_builder_protocol(
-        self,
-        method_info: MethodInfo,
-        result_fields_info: list[tuple[str, str]],
-    ) -> list[str]:
-        """Generate ResultsBuilder Protocol for server context.results.
-
-        Args:
-            method_info: Information about the method
-            result_fields_info: List of (field_name, builder_type) tuples
-
-        Returns:
-            List of lines for ResultsBuilder Protocol
-        """
-        method_name = helper.sanitize_name(method_info.method_name)
-        results_builder_name = f"{method_name.title()}ResultsBuilder"
-
-        lines = [helper.new_class_declaration(results_builder_name, ["Protocol"])]
-
-        for field_name, builder_type in result_fields_info:
-            lines.append(f"    {field_name}: {builder_type}")
-
-        return lines
-
     def _generate_callcontext_protocol(
         self,
         method_info: MethodInfo,
@@ -2589,56 +2487,6 @@ class Writer:
         # Void methods have no results field in CallContext
 
         return lines
-
-    def _process_result_fields_for_server(
-        self,
-        method_info: MethodInfo,
-    ) -> list[tuple[str, str]]:
-        """Process result fields to get Builder|Reader types for server.
-
-        Args:
-            method_info: Information about the method
-
-        Returns:
-            List of (field_name, type) tuples where type can be Builder | Reader for structs
-        """
-        result_fields_info = []
-
-        if not method_info.result_fields or method_info.result_schema is None:
-            return result_fields_info
-
-        for field_name in method_info.result_fields:
-            try:
-                field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == field_name)
-
-                field_type = self.get_type_name(field_obj.slot.type)
-                result_type = field_type
-
-                field_type_enum = field_obj.slot.type.which()
-
-                # For structs, accept both Builder and Reader
-                if field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                    builder_type = self._build_nested_builder_type(field_type)
-                    reader_type = self._build_nested_reader_type(field_type)
-                    result_type = f"{builder_type} | {reader_type}"
-
-                # For lists of structs, accept both Builder and Reader for elements
-                elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                    element_type_obj = field_obj.slot.type.list.elementType
-                    if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
-                        element_type_name = self.get_type_name(element_type_obj)
-                        element_builder = self._build_nested_builder_type(element_type_name)
-                        element_reader = self._build_nested_reader_type(element_type_name)
-                        # Replace element type with Builder | Reader union
-                        result_type = result_type.replace(element_type_name, f"{element_builder} | {element_reader}")
-
-                result_fields_info.append((field_name, result_type))
-
-            except Exception as e:
-                logger.debug(f"Could not process result field {field_name}: {e}")
-                result_fields_info.append((field_name, "Any"))
-
-        return result_fields_info
 
     def _process_interface_method(
         self,
