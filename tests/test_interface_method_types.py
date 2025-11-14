@@ -99,10 +99,19 @@ class TestCalculatorInterfaceMethodTypes:
         # All main methods should have _request variants with proper return types
         # Check for method name and return type (allowing for kwargs parameters)
         assert "def evaluate_request(" in stub_content and ") -> _CalculatorModule.EvaluateRequest:" in stub_content
-        assert "def defFunction_request(" in stub_content and ") -> _CalculatorModule.DeffunctionRequest:" in stub_content
-        assert "def getOperator_request(" in stub_content and ") -> _CalculatorModule.GetoperatorRequest:" in stub_content
-        assert "def read_request(" in stub_content and ") -> _CalculatorModule._ValueModule.ReadRequest:" in stub_content
-        assert "def call_request(" in stub_content and ") -> _CalculatorModule._FunctionModule.CallRequest:" in stub_content
+        assert (
+            "def defFunction_request(" in stub_content and ") -> _CalculatorModule.DeffunctionRequest:" in stub_content
+        )
+        assert (
+            "def getOperator_request(" in stub_content and ") -> _CalculatorModule.GetoperatorRequest:" in stub_content
+        )
+        assert (
+            "def read_request(" in stub_content and ") -> _CalculatorModule._ValueModule.ReadRequest:" in stub_content
+        )
+        assert (
+            "def call_request(" in stub_content
+            and ") -> _CalculatorModule._FunctionModule.CallRequest:" in stub_content
+        )
 
 
 class TestInterfaceMethodTypeRegression:

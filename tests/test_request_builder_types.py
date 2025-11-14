@@ -206,14 +206,18 @@ class TestRequestMethodReturnsRequest:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def defFunction_request(" in stub_content and ") -> _CalculatorModule.DeffunctionRequest:" in stub_content
+        assert (
+            "def defFunction_request(" in stub_content and ") -> _CalculatorModule.DeffunctionRequest:" in stub_content
+        )
 
     def test_getoperator_request_method_returns_getoperator_request(self, generate_calculator_stubs):
         """Test that getOperator_request() returns _CalculatorModule.GetoperatorRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        assert "def getOperator_request(" in stub_content and ") -> _CalculatorModule.GetoperatorRequest:" in stub_content
+        assert (
+            "def getOperator_request(" in stub_content and ") -> _CalculatorModule.GetoperatorRequest:" in stub_content
+        )
 
 
 def test_request_builder_types_summary():

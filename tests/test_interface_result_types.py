@@ -137,7 +137,10 @@ class TestEnumParametersAcceptLiterals:
 
         # getOperator should accept _CalculatorModule._OperatorModule | Literal[...] | None (optional)
         assert "def getOperator(" in stub_content
-        assert '_CalculatorModule._OperatorModule | Literal["add", "subtract", "multiply", "divide"] | None = None' in stub_content
+        assert (
+            '_CalculatorModule._OperatorModule | Literal["add", "subtract", "multiply", "divide"] | None = None'
+            in stub_content
+        )
 
     def test_enum_literals_match_enum_values(self, generate_calculator_stubs):
         """Test that the enum literal values match the actual enum."""
@@ -173,7 +176,9 @@ class TestRPCResultFieldTypes:
             if "class EvaluateResult" in line:
                 in_evaluate_result = True
             elif in_evaluate_result and "value:" in line:
-                assert "_CalculatorModule._ValueModule.ValueClient" in line, f"Expected _CalculatorModule._ValueModule.ValueClient, got: {line}"
+                assert "_CalculatorModule._ValueModule.ValueClient" in line, (
+                    f"Expected _CalculatorModule._ValueModule.ValueClient, got: {line}"
+                )
                 break
             elif in_evaluate_result and line.startswith("    def "):
                 break

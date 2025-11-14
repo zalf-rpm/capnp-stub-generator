@@ -18,12 +18,8 @@ class TestDummyEnumsAndTypes:
 
     def test_enum_definition_and_imports(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any(
-            line.startswith("from enum import") and "Enum" in line for line in lines
-        )
-        assert any(
-            line.startswith("from typing import") and "TypeAlias" in line for line in lines
-        )
+        assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
+        assert any(line.startswith("from typing import") and "TypeAlias" in line for line in lines)
         assert any(line.strip().startswith("class _TestEnumModule(Enum):") for line in lines)
         assert any(line.strip() == "TestEnum: TypeAlias = _TestEnumModule" for line in lines)
         for name in ["foo", "bar", "baz", "qux"]:
@@ -134,7 +130,8 @@ class TestDummyGroupsAndNested:
             for line in lines
         )
         assert any(
-            "def innerNestedEnum(self)" in line and "_TestNestedTypesModule._NestedStructModule._NestedEnum2Module" in line
+            "def innerNestedEnum(self)" in line
+            and "_TestNestedTypesModule._NestedStructModule._NestedEnum2Module" in line
             for line in lines
         )
 

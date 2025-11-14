@@ -40,7 +40,8 @@ def test_nested_types_enums_and_lists(dummy_stub_lines):
         "def outerNestedEnum(self)" in line and "_TestNestedTypesModule._NestedEnum1Module" in line for line in lines
     )
     assert any(
-        "def innerNestedEnum(self)" in line and "_TestNestedTypesModule._NestedStructModule._NestedEnum2Module" in line for line in lines
+        "def innerNestedEnum(self)" in line and "_TestNestedTypesModule._NestedStructModule._NestedEnum2Module" in line
+        for line in lines
     )
 
 

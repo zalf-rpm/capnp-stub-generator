@@ -109,6 +109,9 @@ class Writer:
         # Format: {flat_name: (protocol_path, type_kind)} where type_kind is "Reader", "Builder", or "Client"
         self._all_type_aliases: dict[str, tuple[str, str]] = {}
 
+        # Track if we need _DynamicObjectReader augmentation (for AnyPointer in interface returns)
+        self._needs_dynamic_object_reader_augmentation = False
+
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
     def _build_nested_builder_type(self, base_type: str) -> str:
@@ -135,16 +138,16 @@ class Writer:
 
     def _protocol_path_to_runtime_path(self, path: str) -> str:
         """Convert Protocol module path to runtime-accessible path.
-        
+
         This handles nested interfaces where the scoped name uses Protocol module names
         but the runtime uses user-facing names.
-        
+
         Args:
             path: Protocol-based path (e.g., "_HostPortResolverModule.Registrar")
-            
+
         Returns:
             Runtime-accessible path (e.g., "HostPortResolver.Registrar")
-            
+
         Examples:
             "_HostPortResolverModule.Registrar" -> "HostPortResolver.Registrar"
             "_PersistentModule.ReleaseSturdyRef" -> "Persistent.ReleaseSturdyRef"
@@ -1136,7 +1139,7 @@ class Writer:
             if type_name != "Any":
                 # Protocol name is already in _<Name>Module format
                 protocol_type_name = type_name
-                
+
                 # Extract user-facing name and build nested Client reference
                 # E.g., "_HeartbeatModule" -> "_HeartbeatModule.HeartbeatClient"
                 # E.g., "Calculator._FunctionModule" -> "Calculator._FunctionModule.FunctionClient"
@@ -1474,13 +1477,13 @@ class Writer:
             enum_parent_scope = self.scope
 
         # Create new scope for the Enum
-        self.new_scope(
-            enum_class_name, schema.node, scope_heading=enum_declaration, parent_scope=enum_parent_scope
-        )
+        self.new_scope(enum_class_name, schema.node, scope_heading=enum_declaration, parent_scope=enum_parent_scope)
 
         # Register type with the Enum class name (not user-facing name)
         # This ensures fields reference "_TestEnumModule" not "TestEnum"
-        new_type = self.register_type(schema.node.id, schema, name=enum_class_name, scope=self.scope.parent or self.scope.root)
+        new_type = self.register_type(
+            schema.node.id, schema, name=enum_class_name, scope=self.scope.parent or self.scope.root
+        )
 
         # Create context
         context = EnumGenerationContext.create(
@@ -2947,7 +2950,7 @@ class Writer:
             # Store Protocol path (for parameter type) and Client TypeAlias (for return type)
             # Protocol path: e.g., "_CalculatorModule" or "_CalculatorModule._FunctionModule"
             protocol_path = context.registered_type.scoped_name
-            
+
             # Client TypeAlias: Use flat name (e.g., "FunctionClient" not "Calculator.FunctionClient")
             # The flat TypeAlias is available at module level for all interfaces
             # E.g., "CalculatorClient", "FunctionClient", "ValueClient"
@@ -2997,7 +3000,7 @@ class Writer:
         if should_generate_client:
             # Check if this is a nested interface
             is_nested_interface = context.registered_type.scope and not context.registered_type.scope.is_root
-            
+
             # Build full client path
             if is_nested_interface:
                 # Use scoped name for nested interfaces (e.g., "_CalculatorModule._ValueModule.ValueClient")
@@ -3005,11 +3008,9 @@ class Writer:
             else:
                 # Top-level interface
                 client_alias_path = f"{context.protocol_class_name}.{context.client_type_name}"
-            
-            type_alias_scope.add(
-                f"{context.client_type_name}: TypeAlias = {client_alias_path}"
-            )
-            
+
+            type_alias_scope.add(f"{context.client_type_name}: TypeAlias = {client_alias_path}")
+
             # Track for top-level TypeAlias ONLY if nested
             # (Top-level interfaces already have their Client TypeAlias in the root scope)
             if is_nested_interface:
@@ -3268,7 +3269,9 @@ class Writer:
                     parts[-1] = f"_{last_part}Module"
                     protocol_definition_name = ".".join(parts)
                     self._add_import(f"from {python_import_path} import {root_name}")
-                    return self.register_type(schema.node.id, schema, name=protocol_definition_name, scope=self.scope.root)
+                    return self.register_type(
+                        schema.node.id, schema, name=protocol_definition_name, scope=self.scope.root
+                    )
                 else:
                     self._add_import(f"from {python_import_path} import {root_name}")
                     return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
@@ -3540,9 +3543,10 @@ class Writer:
                 type_name += type_reader.list.elementType.which()
 
         elif type_reader_type == capnp_types.CapnpElementType.ANY_POINTER:
-            # AnyPointer is represented as Any in Python typing
-            self._add_typing_import("Any")
-            type_name = "Any"
+            # AnyPointer becomes _DynamicObjectReader for better type safety
+            # Track that we need augmentation for this module
+            self._needs_dynamic_object_reader_augmentation = True
+            type_name = "_DynamicObjectReader"
             element_type = None
 
         else:
@@ -3553,6 +3557,186 @@ class Writer:
 
         else:
             return type_name
+
+    def _generate_dynamic_object_reader_protocol(self) -> list[str]:
+        """Generate _DynamicObjectReader Protocol with overloads for casting methods.
+
+        Creates a Protocol class with overloaded as_struct() and as_interface() methods
+        for all struct and interface types in the current module's type registry.
+
+        Returns:
+            List of lines for the _DynamicObjectReader Protocol class.
+        """
+        lines = []
+
+        # Collect all struct and interface types from the type registry
+        struct_types: list[tuple[str, str]] = []  # (protocol_name, reader_type)
+        interface_types: list[tuple[str, str]] = []  # (protocol_name, client_type)
+
+        for type_id, capnp_type in self.type_map.items():
+            if capnp_type.schema is None:
+                continue
+
+            node_type = capnp_type.schema.node.which()
+
+            if node_type == capnp_types.CapnpElementType.STRUCT:
+                # For structs: protocol name -> Reader type
+                protocol_name = capnp_type.name
+                if capnp_type.scope and not capnp_type.scope.is_root:
+                    scope_path = capnp_type.scope.trace_as_str(".")
+                    full_protocol = f"{scope_path}.{protocol_name}"
+                else:
+                    full_protocol = protocol_name
+
+                reader_type = f"{full_protocol}.Reader"
+                struct_types.append((full_protocol, reader_type))
+
+            elif node_type == capnp_types.CapnpElementType.INTERFACE:
+                # For interfaces: protocol name -> Client type
+                protocol_name = capnp_type.name
+                if capnp_type.scope and not capnp_type.scope.is_root:
+                    scope_path = capnp_type.scope.trace_as_str(".")
+                    full_protocol = f"{scope_path}.{protocol_name}"
+                else:
+                    full_protocol = protocol_name
+
+                # Extract user-facing name from Protocol name
+                # e.g., "_GenericGetterModule" -> "GenericGetter"
+                if protocol_name.startswith("_") and protocol_name.endswith("Module"):
+                    user_facing = protocol_name[1:-6]
+                    client_type = f"{full_protocol}.{user_facing}Client"
+                else:
+                    client_type = f"{full_protocol}Client"
+
+                interface_types.append((full_protocol, client_type))
+
+        # Sort for deterministic output
+        struct_types.sort(key=lambda x: x[0])
+        interface_types.sort(key=lambda x: x[0])
+
+        # Start Protocol class
+        lines.append("class _DynamicObjectReader(Protocol):")
+        lines.append('    """Protocol for AnyPointer return values with type-safe casting methods."""')
+        lines.append("")
+
+        # Generate as_struct() overloads
+        has_struct_overloads = len(struct_types) > 0
+        if has_struct_overloads:
+            for protocol_name, reader_type in struct_types:
+                lines.append("    @overload")
+                lines.append(f"    def as_struct(self, type: {protocol_name}) -> {reader_type}: ...")
+
+        # Add catch-all as_struct overload
+        lines.append("    @overload")
+        lines.append("    def as_struct(self, type: Any) -> Any: ...")
+        lines.append("")
+
+        # Generate as_interface() overloads
+        has_interface_overloads = len(interface_types) > 0
+        if has_interface_overloads:
+            for protocol_name, client_type in interface_types:
+                lines.append("    @overload")
+                lines.append(f"    def as_interface(self, type: {protocol_name}) -> {client_type}: ...")
+
+        # Add catch-all as_interface overload
+        lines.append("    @overload")
+        lines.append("    def as_interface(self, type: Any) -> _DynamicCapabilityClient: ...")
+        lines.append("")
+
+        # Add as_list() and as_text() methods
+        lines.append("    def as_list(self, element_type: Any) -> Sequence[Any]: ...")
+        lines.append("    def as_text(self) -> str: ...")
+        lines.append("")
+
+        return lines
+
+    def get_dynamic_object_reader_types(self) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+        """Get struct and interface types for _DynamicObjectReader augmentation.
+
+        Only returns types that are DEFINED in this module, not imported from other modules.
+
+        Returns:
+            Tuple of (struct_types, interface_types) where each is a list of (protocol_name, target_type) tuples.
+            struct_types: list of (protocol_name, reader_type)
+            interface_types: list of (protocol_name, client_type)
+        """
+        if not self._needs_dynamic_object_reader_augmentation:
+            return ([], [])
+
+        struct_types: list[tuple[str, str]] = []
+        interface_types: list[tuple[str, str]] = []
+
+        # Get the set of type IDs that are actually DEFINED (not just imported) in this module
+        # by checking the nested nodes of the root schema
+        defined_type_ids = set()
+        if self._module and hasattr(self._module, "schema"):
+            module_schema = self._module.schema
+
+            # Recursively collect all nested type IDs defined in this module
+            def collect_nested_ids(schema):
+                """Recursively collect all nested type IDs from a schema."""
+                ids = {schema.node.id}
+                for nested in schema.node.nestedNodes:
+                    try:
+                        nested_schema = schema.get_nested(nested.name)
+                        ids.update(collect_nested_ids(nested_schema))
+                    except Exception:
+                        # If we can't get the nested schema, skip it
+                        pass
+                return ids
+
+            try:
+                defined_type_ids = collect_nested_ids(module_schema)
+            except Exception:
+                # If collection fails, fall back to including all types
+                pass
+
+        for type_id, capnp_type in self.type_map.items():
+            if capnp_type.schema is None:
+                continue
+
+            # Skip types that are not defined in this module (imported from elsewhere)
+            if defined_type_ids and type_id not in defined_type_ids:
+                continue
+
+            node_type = capnp_type.schema.node.which()
+
+            if node_type == capnp_types.CapnpElementType.STRUCT:
+                # For structs: protocol name -> Reader type
+                protocol_name = capnp_type.name
+                if capnp_type.scope and not capnp_type.scope.is_root:
+                    scope_path = capnp_type.scope.trace_as_str(".")
+                    full_protocol = f"{scope_path}.{protocol_name}"
+                else:
+                    full_protocol = protocol_name
+
+                reader_type = f"{full_protocol}.Reader"
+                struct_types.append((full_protocol, reader_type))
+
+            elif node_type == capnp_types.CapnpElementType.INTERFACE:
+                # For interfaces: protocol name -> Client type
+                protocol_name = capnp_type.name
+                if capnp_type.scope and not capnp_type.scope.is_root:
+                    scope_path = capnp_type.scope.trace_as_str(".")
+                    full_protocol = f"{scope_path}.{protocol_name}"
+                else:
+                    full_protocol = protocol_name
+
+                # Extract user-facing name from Protocol name
+                # e.g., "_GenericGetterModule" -> "GenericGetter"
+                if protocol_name.startswith("_") and protocol_name.endswith("Module"):
+                    user_facing = protocol_name[1:-6]
+                    client_type = f"{full_protocol}.{user_facing}Client"
+                else:
+                    client_type = f"{full_protocol}Client"
+
+                interface_types.append((full_protocol, client_type))
+
+        # Sort for deterministic output
+        struct_types.sort(key=lambda x: x[0])
+        interface_types.sort(key=lambda x: x[0])
+
+        return (struct_types, interface_types)
 
     def dumps_pyi(self) -> str:
         """Generates string output for the *.pyi stub file that provides type hinting.
@@ -3565,6 +3749,11 @@ class Writer:
         out = []
         out.append(self.docstring)
         out.extend(self.imports)
+
+        # Add _DynamicObjectReader import if needed (for AnyPointer types)
+        if self._needs_dynamic_object_reader_augmentation:
+            out.append("from capnp.lib.capnp import _DynamicObjectReader")
+
         out.append("")
 
         if self.type_vars:
@@ -3573,7 +3762,7 @@ class Writer:
             out.append("")
 
         out.extend(self.scope.lines)
-        
+
         # Add top-level TypeAliases for all Reader/Builder/Client types
         # This allows using these types in type annotations even though module types are now variables
         if self._all_type_aliases:
@@ -3582,7 +3771,7 @@ class Writer:
             for alias_name in sorted(self._all_type_aliases.keys()):
                 full_path, _ = self._all_type_aliases[alias_name]
                 out.append(f"{alias_name}: TypeAlias = {full_path}")
-        
+
         return "\n".join(out)
 
     def dumps_py(self) -> str:
@@ -3683,7 +3872,7 @@ class Writer:
                     # Convert Protocol path to runtime path
                     # E.g., "_HostPortResolverModule.Registrar" -> "HostPortResolver.Registrar"
                     runtime_interface_name = self._protocol_path_to_runtime_path(interface_name)
-                    
+
                     # Create NamedTuple and attach to Server class
                     # Use object as type for all fields to avoid import issues in .py file
                     # Type information is in the .pyi file for static type checkers

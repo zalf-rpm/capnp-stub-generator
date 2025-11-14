@@ -44,7 +44,9 @@ def test_generics_anypointer_interface(basic_stubs):
     # Check for interface (now uses Protocol pattern)
     assert "class _TestIfaceModule(Protocol):" in content, "TestIface Protocol module should exist"
     assert "TestIface: _TestIfaceModule" in content, "TestIface annotation should exist"
-    assert "class TestIfaceClient(Protocol):" in content, "TestIfaceClient should be a Protocol nested in _TestIfaceModule"
+    assert "class TestIfaceClient(Protocol):" in content, (
+        "TestIfaceClient should be a Protocol nested in _TestIfaceModule"
+    )
 
     # Check interface client methods
     assert "def ping(" in content, "TestIfaceClient should have ping method"

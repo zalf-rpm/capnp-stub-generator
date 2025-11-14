@@ -117,7 +117,9 @@ def test_multiple_interface_inheritance(generated_dir):
     assert "IdentifiableHolder: _IdentifiableHolderModule" in content, "IdentifiableHolder annotation should exist"
 
     # Check that IdentifiableHolderClient extends both IdentifiableClient and HolderClient
-    assert "class IdentifiableHolderClient(_IdentifiableModule.IdentifiableClient, _HolderModule.HolderClient)" in content, (
+    assert (
+        "class IdentifiableHolderClient(_IdentifiableModule.IdentifiableClient, _HolderModule.HolderClient)" in content
+    ), (
         "IdentifiableHolderClient should extend both _IdentifiableModule.IdentifiableClient and _HolderModule.HolderClient"
     )
 
@@ -164,7 +166,9 @@ def test_interface_with_persistent_inheritance(generated_dir):
     content = stub_file.read_text()
 
     # Check that Service extends both Identifiable and Persistent (via Protocol inheritance)
-    assert "class _ServiceModule(_IdentifiableModule, _PersistentModule, Protocol):" in content, "Service Protocol should extend both Identifiable and Persistent"
+    assert "class _ServiceModule(_IdentifiableModule, _PersistentModule, Protocol):" in content, (
+        "Service Protocol should extend both Identifiable and Persistent"
+    )
 
     # Check Server class inheritance - Service.Server should extend both base Servers
     lines = content.split("\n")
@@ -180,7 +184,9 @@ def test_interface_with_persistent_inheritance(generated_dir):
         elif in_service and line.startswith("class _") and "ServiceModule" not in line and "Server" not in line:
             break
 
-    assert found_server_inheritance, "_ServiceModule.Server should extend both _IdentifiableModule.Server and _PersistentModule.Server"
+    assert found_server_inheritance, (
+        "_ServiceModule.Server should extend both _IdentifiableModule.Server and _PersistentModule.Server"
+    )
 
 
 def test_interface_inheritance_in_nested_interfaces(generated_dir):
@@ -204,9 +210,15 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir):
     content = stub_file.read_text()
 
     # Check nested interfaces extend Identifiable (now as Protocol modules)
-    assert "class _AdminMasterModule(_IdentifiableModule, Protocol):" in content, "AdminMaster Protocol should extend Identifiable"
-    assert "class _UserMasterModule(_IdentifiableModule, Protocol):" in content, "UserMaster Protocol should extend Identifiable"
-    assert "class _RuntimeModule(_IdentifiableModule, Protocol):" in content, "Runtime Protocol should extend Identifiable"
+    assert "class _AdminMasterModule(_IdentifiableModule, Protocol):" in content, (
+        "AdminMaster Protocol should extend Identifiable"
+    )
+    assert "class _UserMasterModule(_IdentifiableModule, Protocol):" in content, (
+        "UserMaster Protocol should extend Identifiable"
+    )
+    assert "class _RuntimeModule(_IdentifiableModule, Protocol):" in content, (
+        "Runtime Protocol should extend Identifiable"
+    )
 
     # Check that all Server classes extend _IdentifiableModule.Server
     # Count how many times we see "class Server(_IdentifiableModule.Server"

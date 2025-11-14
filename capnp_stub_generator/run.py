@@ -151,20 +151,23 @@ def augment_capnp_stubs_with_overloads(
     augmented_stubs_dir: str,
     output_dir: str,
     interfaces: dict[str, tuple[str, list[str]]],
+    dynamic_object_types: dict[str, list[tuple[str, str]]],
 ) -> None:
-    """Copy capnp-stubs package and augment with cast_as overloads.
+    """Copy capnp-stubs package and augment with cast_as and _DynamicObjectReader overloads.
 
     This copies the entire capnp-stubs package to a separate directory
-    and augments lib/capnp.pyi with overloaded cast_as methods for generated interfaces.
+    and augments lib/capnp.pyi with overloaded cast_as methods for generated interfaces
+    and overloaded as_struct/as_interface methods for _DynamicObjectReader.
 
     Args:
         source_stubs_path: Path to the source capnp-stubs package.
         augmented_stubs_dir: Directory where the augmented capnp-stubs should be placed (beside output).
         output_dir: The output directory where generated stubs are located (for relative import calculation).
         interfaces: Dictionary mapping interface names to (client_name, base_client_names) tuples.
+        dynamic_object_types: Dictionary with "structs" and "interfaces" keys containing type tuples.
     """
-    if not interfaces:
-        logger.info("No interfaces found, skipping capnp-stubs augmentation.")
+    if not interfaces and not dynamic_object_types.get("structs") and not dynamic_object_types.get("interfaces"):
+        logger.info("No interfaces or _DynamicObjectReader types found, skipping capnp-stubs augmentation.")
         return
 
     # Create destination path for augmented stubs
@@ -207,8 +210,46 @@ def augment_capnp_stubs_with_overloads(
         typing_line = typing_line.replace("from typing import ", "from typing import overload, ")
         lines[typing_import_idx] = typing_line
 
+    # Build module imports for both cast_as and _DynamicObjectReader augmentation
+    module_imports = _build_module_imports(interfaces, dynamic_object_types, output_dir, lines, typing_import_idx)
+
+    # Write back the lines with imports added
+    with open(capnp_pyi_path, "w", encoding="utf8") as f:
+        f.write("\n".join(lines))
+
+    # Augment cast_as if we have interfaces
+    if interfaces:
+        _augment_capnp_pyi(capnp_pyi_path, output_dir, interfaces, module_imports)
+
+    # Augment _DynamicObjectReader if we have types
+    struct_types = dynamic_object_types.get("structs", [])
+    interface_types = dynamic_object_types.get("interfaces", [])
+    if struct_types or interface_types:
+        _augment_dynamic_object_reader(
+            capnp_pyi_path, output_dir, struct_types, interface_types, module_imports, interfaces
+        )
+
+
+def _build_module_imports(
+    interfaces: dict[str, tuple[str, list[str]]],
+    dynamic_object_types: dict[str, list[tuple[str, str]]],
+    output_dir: str,
+    lines: list[str],
+    typing_import_idx: int,
+) -> dict[str, str]:
+    """Build module imports section for augmented capnp.pyi.
+
+    Args:
+        interfaces: Dictionary of interfaces for cast_as overloads.
+        dynamic_object_types: Dictionary with struct/interface types for _DynamicObjectReader.
+        output_dir: Output directory for calculating relative imports.
+        lines: Current lines of capnp.pyi (will be modified in place).
+        typing_import_idx: Index of the typing import line.
+
+    Returns:
+        Dictionary mapping module names to import paths.
+    """
     # Find the end of ALL imports (including multi-line imports)
-    # We need to skip past all import statements and multi-line parenthesized imports
     import_end_idx = typing_import_idx + 1
     in_multiline_import = False
 
@@ -238,16 +279,25 @@ def augment_capnp_stubs_with_overloads(
         import_end_idx = i
         break
 
-    # Build the module imports section
-    # Extract unique modules from interface names and build import paths relative to output
-    # Map: module_capnp_name -> (from_path, module_name)
-    module_imports = {}
+    # Collect all module names from interfaces and dynamic object types
+    all_qualified_names = set()
 
+    # From interfaces
     for interface_name in interfaces.keys():
-        # interface_name is like "calculator.calculator_capnp.Calculator" or
-        # "models.monica.monica_management_capnp.MonicaManagement"
-        # We need to extract the module path (ends with _capnp)
-        parts = interface_name.split(".")
+        all_qualified_names.add(interface_name)
+
+    # From struct types
+    for protocol_name, _ in dynamic_object_types.get("structs", []):
+        all_qualified_names.add(protocol_name)
+
+    # From interface types
+    for protocol_name, _ in dynamic_object_types.get("interfaces", []):
+        all_qualified_names.add(protocol_name)
+
+    # Build module imports
+    module_imports = {}
+    for qualified_name in all_qualified_names:
+        parts = qualified_name.split(".")
 
         # Find the part that ends with _capnp
         capnp_module_idx = None
@@ -257,31 +307,24 @@ def augment_capnp_stubs_with_overloads(
                 break
 
         if capnp_module_idx is None:
-            # Couldn't find a capnp module, skip
             continue
 
-        # Get the capnp module name
         capnp_module_name = parts[capnp_module_idx]
-
-        # Get the base name of the output directory to use as the root module
         output_base_name = os.path.basename(os.path.abspath(output_dir))
 
         # Build the from path
         if capnp_module_idx == 0:
-            # Top-level module: from <output_base> import calculator_capnp
             from_path = output_base_name
         else:
-            # Nested module: from <output_base>.models.monica import monica_management_capnp
             subpath = ".".join(parts[:capnp_module_idx])
             from_path = f"{output_base_name}.{subpath}"
 
-        # Store unique import (from_path, module_name)
         module_imports[capnp_module_name] = from_path
 
     # Build import lines
     import_lines = [
         "",
-        "# Generated imports for project-specific interfaces",
+        "# Generated imports for project-specific types",
     ]
     for capnp_module_name in sorted(module_imports.keys()):
         from_path = module_imports[capnp_module_name]
@@ -289,6 +332,29 @@ def augment_capnp_stubs_with_overloads(
 
     # Insert the imports after the existing imports
     lines[import_end_idx:import_end_idx] = import_lines
+
+    return module_imports
+
+
+def _augment_capnp_pyi(
+    capnp_pyi_path: str,
+    output_dir: str,
+    interfaces: dict[str, tuple[str, list[str]]],
+    module_imports: dict[str, str],
+) -> None:
+    """Augment _CastableBootstrap.cast_as method with interface-specific overloads.
+
+    Args:
+        capnp_pyi_path: Path to the lib/capnp.pyi file.
+        output_dir: Output directory for calculating relative imports.
+        interfaces: Dictionary mapping interface names to (client_name, base_client_names).
+        module_imports: Dictionary mapping module names to import paths.
+    """
+    # Read the file again (after imports were added)
+    with open(capnp_pyi_path, encoding="utf8") as f:
+        original_content = f.read()
+
+    lines = original_content.split("\n")
 
     # Now find _CastableBootstrap class and its cast_as method
     cast_as_line_idx = None
@@ -363,6 +429,251 @@ def augment_capnp_stubs_with_overloads(
         f.write(augmented_content)
 
     logger.info(f"Augmented {capnp_pyi_path} with {len(interfaces)} cast_as overload(s).")
+
+    # Format the augmented file with ruff
+    try:
+        subprocess.run(
+            ["ruff", "format", capnp_pyi_path],
+            capture_output=True,
+            check=True,
+        )
+        logger.info(f"Formatted augmented file: {capnp_pyi_path}")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to format augmented file: {e}")
+    except FileNotFoundError:
+        logger.warning("ruff not found, skipping formatting of augmented file")
+
+
+def _augment_dynamic_object_reader(
+    capnp_pyi_path: str,
+    output_dir: str,
+    struct_types: list[tuple[str, str]],
+    interface_types: list[tuple[str, str]],
+    module_imports: dict[str, str],
+    interfaces: dict[str, tuple[str, list[str]]],
+) -> None:
+    """Augment _DynamicObjectReader class in lib/capnp.pyi with as_struct/as_interface overloads.
+
+    Args:
+        capnp_pyi_path: Path to the lib/capnp.pyi file to augment.
+        output_dir: Output directory for calculating relative imports.
+        struct_types: List of (protocol_name, reader_type) tuples.
+        interface_types: List of (protocol_name, client_type) tuples.
+        module_imports: Dictionary mapping module names to import paths.
+        interfaces: Full interfaces dict for inheritance-based sorting.
+    """
+    if not struct_types and not interface_types:
+        logger.info("No _DynamicObjectReader types to augment.")
+        return
+
+    # Read the file
+    with open(capnp_pyi_path, encoding="utf8") as f:
+        original_content = f.read()
+
+    lines = original_content.split("\n")
+
+    # Find the _DynamicObjectReader class and its as_struct/as_interface methods
+    # We need to find the ORIGINAL method definitions (not any existing overloads)
+    # And we need to insert BEFORE the method definition, accounting for decorators
+    dynamic_reader_idx = None
+    as_struct_insert_idx = None
+    as_interface_insert_idx = None
+
+    in_dynamic_reader = False
+    for i, line in enumerate(lines):
+        if "class _DynamicObjectReader" in line:
+            dynamic_reader_idx = i
+            in_dynamic_reader = True
+        elif in_dynamic_reader:
+            # Skip @overload decorators - we want the actual implementation
+            if line.strip().startswith("@overload"):
+                continue
+            # Look for the actual method definitions (not overloads)
+            if "def as_interface" in line and as_interface_insert_idx is None and "schema:" in line:
+                # This is the original implementation (has schema parameter)
+                # Find the start of this method definition (skip back over any decorators/empty lines)
+                insert_at = i
+                # Look backwards to find where to insert (before any decorators)
+                for j in range(i - 1, dynamic_reader_idx, -1):
+                    prev_line = lines[j].strip()
+                    if prev_line.startswith("@") or prev_line == "":
+                        insert_at = j
+                    else:
+                        break
+                as_interface_insert_idx = insert_at
+            elif "def as_struct" in line and as_struct_insert_idx is None and "schema:" in line:
+                # This is the original implementation (has schema parameter)
+                insert_at = i
+                # Look backwards to find where to insert (before any decorators)
+                for j in range(i - 1, dynamic_reader_idx, -1):
+                    prev_line = lines[j].strip()
+                    if prev_line.startswith("@") or prev_line == "":
+                        insert_at = j
+                    else:
+                        break
+                as_struct_insert_idx = insert_at
+            elif line.strip().startswith("class ") and "_DynamicObjectReader" not in line:
+                # Found another class, stop looking
+                break
+
+    if dynamic_reader_idx is None:
+        logger.warning("Could not find _DynamicObjectReader class in lib/capnp.pyi, skipping augmentation.")
+        return
+
+    if as_struct_insert_idx is None or as_interface_insert_idx is None:
+        logger.warning(
+            f"Could not find as_struct/as_interface methods in _DynamicObjectReader (as_struct={as_struct_insert_idx}, as_interface={as_interface_insert_idx}), skipping augmentation."
+        )
+        return
+
+    # Build overloads for as_struct (insert before the existing as_struct method)
+    # Sort struct types by inheritance/specificity (same heuristic as interfaces)
+    # Build a pseudo-inheritance structure based on nesting
+    # More dots = more nested = more specific = higher "depth"
+    struct_overloads = []
+
+    # Sort structs: prioritize by depth (more nested first), then alphabetically
+    # This matches the interface sorting pattern where more specific types come first
+    sorted_struct_types = sorted(
+        struct_types,
+        key=lambda x: (-x[0].count("."), x[0]),  # Most dots first, then alphabetical
+    )
+
+    for protocol_name, reader_type in sorted_struct_types:
+        # Extract module-relative names (remove extra path prefixes)
+        # From "test_augment.generic_interface_capnp._MyStructModule"
+        # Get "generic_interface_capnp._MyStructModule"
+        param_parts = protocol_name.split(".")
+        # Find the _capnp module
+        capnp_idx = None
+        for i, part in enumerate(param_parts):
+            if part.endswith("_capnp"):
+                capnp_idx = i
+                break
+        if capnp_idx is not None:
+            clean_param = ".".join(param_parts[capnp_idx:])
+        else:
+            clean_param = protocol_name
+
+        # For return type, use the type alias pattern
+        # From "_MyStructModule.Reader" build "MyStructReader"
+        # From "generic_interface_capnp._MyStructModule.Reader" build "generic_interface_capnp.MyStructReader"
+        return_parts = reader_type.split(".")
+        capnp_idx = None
+        for i, part in enumerate(return_parts):
+            if part.endswith("_capnp"):
+                capnp_idx = i
+                break
+        if capnp_idx is not None and len(return_parts) >= capnp_idx + 3:
+            # return_parts = ["generic_interface_capnp", "_MyStructModule", "Reader"]
+            module_name = return_parts[capnp_idx]  # "generic_interface_capnp"
+            struct_module = return_parts[capnp_idx + 1]  # "_MyStructModule"
+            reader_builder = return_parts[-1]  # "Reader" or "Builder"
+
+            # Build alias name: "_MyStructModule" -> "MyStruct", then add "Reader"
+            if struct_module.startswith("_") and struct_module.endswith("Module"):
+                struct_base_name = struct_module[1:-6]  # Remove "_" and "Module"
+                alias_name = f"{struct_base_name}{reader_builder}"  # "MyStructReader"
+                clean_return = f"{module_name}.{alias_name}"
+            else:
+                # Fallback to full path
+                clean_return = ".".join(return_parts[capnp_idx:])
+        else:
+            clean_return = reader_type
+
+        struct_overloads.append("    @overload")
+        struct_overloads.append(f"    def as_struct(self, type: {clean_param}) -> {clean_return}: ...")
+
+    # Add catchall overload for as_struct
+    struct_overloads.append("    @overload")
+    struct_overloads.append("    def as_struct(self, schema: Any) -> Any: ...")
+
+    # Build overloads for as_interface (insert before the existing as_interface method)
+    # Sort interface types by inheritance depth (most derived first) - same as cast_as
+    # Build a mapping from protocol_name to full interface data
+    interface_map = {}
+    for protocol_name, client_type in interface_types:
+        # Find matching entry in interfaces dict
+        # protocol_name might be like "persistent_capnp._PersistentModule"
+        # interfaces keys are like "persistent_capnp._PersistentModule"
+        if protocol_name in interfaces:
+            interface_map[protocol_name] = interfaces[protocol_name]
+
+    # Sort using the same function as cast_as
+    if interface_map:
+        sorted_interface_names = _sort_interfaces_by_inheritance(interface_map)
+        # Build the sorted list
+        sorted_interface_types = []
+        for iface_name, _ in sorted_interface_names:
+            # Find the corresponding entry in interface_types
+            for proto, client in interface_types:
+                if proto == iface_name:
+                    sorted_interface_types.append((proto, client))
+                    break
+    else:
+        # Fallback to path depth sorting if no inheritance info
+        sorted_interface_types = sorted(interface_types, key=lambda x: (-x[0].count("."), x[0]))
+
+    interface_overloads = []
+    for protocol_name, client_type in sorted_interface_types:
+        # Extract module-relative names
+        param_parts = protocol_name.split(".")
+        capnp_idx = None
+        for i, part in enumerate(param_parts):
+            if part.endswith("_capnp"):
+                capnp_idx = i
+                break
+        if capnp_idx is not None:
+            clean_param = ".".join(param_parts[capnp_idx:])
+        else:
+            clean_param = protocol_name
+
+        # For return type, use the type alias pattern
+        # From "_GenericGetterModule.GenericGetterClient" build "GenericGetterClient"
+        # From "generic_interface_capnp._GenericGetterModule.GenericGetterClient" build "generic_interface_capnp.GenericGetterClient"
+        return_parts = client_type.split(".")
+        capnp_idx = None
+        for i, part in enumerate(return_parts):
+            if part.endswith("_capnp"):
+                capnp_idx = i
+                break
+        if capnp_idx is not None and len(return_parts) >= capnp_idx + 2:
+            module_name = return_parts[capnp_idx]  # "generic_interface_capnp"
+            client_name = return_parts[-1]  # "GenericGetterClient"
+            # The type alias is just the client name at module level
+            clean_return = f"{module_name}.{client_name}"
+        else:
+            clean_return = client_type
+
+        interface_overloads.append("    @overload")
+        interface_overloads.append(f"    def as_interface(self, type: {clean_param}) -> {clean_return}: ...")
+
+    # Add catchall overload for as_interface
+    interface_overloads.append("    @overload")
+    interface_overloads.append("    def as_interface(self, schema: Any) -> Any: ...")
+
+    # Insert overloads - ensure proper ordering
+    # We want: interface overloads before as_interface, struct overloads before as_struct
+    # Since as_interface comes before as_struct in the file, insert as_interface first
+
+    # Insert interface overloads BEFORE the def as_interface line
+    if interface_overloads and as_interface_insert_idx is not None:
+        lines[as_interface_insert_idx:as_interface_insert_idx] = interface_overloads
+        # Adjust as_struct_insert_idx since we inserted lines before it
+        if as_struct_insert_idx is not None and as_struct_insert_idx > as_interface_insert_idx:
+            as_struct_insert_idx += len(interface_overloads)
+
+    # Insert struct overloads BEFORE the def as_struct line
+    if struct_overloads and as_struct_insert_idx is not None:
+        lines[as_struct_insert_idx:as_struct_insert_idx] = struct_overloads
+
+    # Write back
+    augmented_content = "\n".join(lines)
+    with open(capnp_pyi_path, "w", encoding="utf8") as f:
+        f.write(augmented_content)
+
+    total_overloads = len(struct_overloads) + len(interface_overloads)
+    logger.info(f"Augmented _DynamicObjectReader in {capnp_pyi_path} with {total_overloads // 2} overload(s).")
 
     # Format the augmented file with ruff
     try:
@@ -531,7 +842,18 @@ def generate_stubs(
 
         interfaces_with_module[qualified_interface] = (qualified_client, qualified_base_clients)
 
-    return interfaces_with_module
+    # Get _DynamicObjectReader types for augmentation
+    struct_types, interface_types = writer.get_dynamic_object_reader_types()
+
+    # Qualify the types with module prefix
+    qualified_struct_types = [
+        (f"{full_module_name}.{proto}", f"{full_module_name}.{reader}") for proto, reader in struct_types
+    ]
+    qualified_interface_types = [
+        (f"{full_module_name}.{proto}", f"{full_module_name}.{client}") for proto, client in interface_types
+    ]
+
+    return interfaces_with_module, (qualified_struct_types, qualified_interface_types)
 
 
 def extract_base_from_pattern(pattern: str) -> str:
@@ -665,6 +987,9 @@ def run(args: argparse.Namespace, root_directory: str):
     # Map of output_dir -> {interface_name: (client_name, base_client_names)}
     all_interfaces_by_dir: dict[str, dict[str, tuple[str, list[str]]]] = {}
 
+    # Track all _DynamicObjectReader types by output directory
+    all_dynamic_object_types_by_dir: dict[str, dict[str, list[tuple[str, str]]]] = {}
+
     for path, module in module_registry.values():
         if output_dir:
             abs_path = os.path.abspath(path)
@@ -704,7 +1029,7 @@ def run(args: argparse.Namespace, root_directory: str):
         schema_directory = os.path.dirname(path)
         output_dir_to_pass = output_directory if output_directory != schema_directory else None
 
-        module_interfaces = generate_stubs(
+        module_interfaces, dynamic_object_types = generate_stubs(
             module,
             module_registry,
             os.path.join(output_directory, output_file_name),
@@ -718,6 +1043,14 @@ def run(args: argparse.Namespace, root_directory: str):
             if output_directory not in all_interfaces_by_dir:
                 all_interfaces_by_dir[output_directory] = {}
             all_interfaces_by_dir[output_directory].update(module_interfaces)
+
+        # Collect _DynamicObjectReader types for this output directory
+        struct_types, interface_types = dynamic_object_types
+        if struct_types or interface_types:
+            if output_directory not in all_dynamic_object_types_by_dir:
+                all_dynamic_object_types_by_dir[output_directory] = {"structs": [], "interfaces": []}
+            all_dynamic_object_types_by_dir[output_directory]["structs"].extend(struct_types)
+            all_dynamic_object_types_by_dir[output_directory]["interfaces"].extend(interface_types)
 
     # Create py.typed marker in each output directory to mark the package as typed (PEP 561)
     for output_directory in output_directories_used:
@@ -736,6 +1069,12 @@ def run(args: argparse.Namespace, root_directory: str):
             for interfaces in all_interfaces_by_dir.values():
                 all_interfaces.update(interfaces)
 
+            # Combine all _DynamicObjectReader types from all directories
+            all_dynamic_object_types = {"structs": [], "interfaces": []}
+            for types_dict in all_dynamic_object_types_by_dir.values():
+                all_dynamic_object_types["structs"].extend(types_dict["structs"])
+                all_dynamic_object_types["interfaces"].extend(types_dict["interfaces"])
+
             # Determine where to place augmented stubs (beside output directories, not inside)
             # If output_dir is specified, place augmented stubs beside it
             # Otherwise, pick a common parent directory of all output directories
@@ -753,7 +1092,7 @@ def run(args: argparse.Namespace, root_directory: str):
             # Use the absolute path to output_dir for import path calculation
             actual_output_dir = os.path.abspath(output_dir) if output_dir else list(output_directories_used)[0]
             augment_capnp_stubs_with_overloads(
-                source_stubs_path, augmented_stubs_dir, actual_output_dir, all_interfaces
+                source_stubs_path, augmented_stubs_dir, actual_output_dir, all_interfaces, all_dynamic_object_types
             )
         else:
             logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found in sys.path")

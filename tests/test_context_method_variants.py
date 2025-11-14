@@ -14,7 +14,10 @@ def test_both_method_variants_exist(calculator_stubs):
     content = stub_file.read_text()
 
     # Regular method with individual parameters (using Protocol names)
-    assert "def evaluate(\n            self,\n            expression: _CalculatorModule._ExpressionModule.Reader," in content
+    assert (
+        "def evaluate(\n            self,\n            expression: _CalculatorModule._ExpressionModule.Reader,"
+        in content
+    )
     assert "_context: _CalculatorModule.Server.EvaluateCallContext" in content
     assert "**kwargs: Any" in content
 
@@ -42,7 +45,9 @@ def test_context_variant_signature(calculator_stubs):
     # Allow for multiline signatures with whitespace
     for method in context_methods:
         pattern = rf"def {method}_context\(\s*self,\s*context:\s*[^\)]+\)\s*->\s*Awaitable\[None\]"
-        assert re.search(pattern, content, re.MULTILINE | re.DOTALL), f"Method {method}_context should have correct signature"
+        assert re.search(pattern, content, re.MULTILINE | re.DOTALL), (
+            f"Method {method}_context should have correct signature"
+        )
 
 
 def test_callcontext_has_params_and_results(calculator_stubs):
@@ -83,7 +88,10 @@ def test_nested_interface_context_methods(calculator_stubs):
     content = stub_file.read_text()
 
     # Calculator.Value is a nested interface (now _ValueModule inside _CalculatorModule)
-    assert "def read_context(\n                self, context: _CalculatorModule._ValueModule.Server.ReadCallContext\n            ) -> Awaitable[None]:" in content
+    assert (
+        "def read_context(\n                self, context: _CalculatorModule._ValueModule.Server.ReadCallContext\n            ) -> Awaitable[None]:"
+        in content
+    )
 
     # Calculator.Function is a nested interface (now _FunctionModule inside _CalculatorModule)
     assert "def call_context(" in content  # Verify method exists
