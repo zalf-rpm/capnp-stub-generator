@@ -105,6 +105,10 @@ class Writer:
         # Track all interfaces for cast_as overloads (interface_name -> (client_name, base_client_names))
         self._all_interfaces: dict[str, tuple[str, list[str]]] = {}
 
+        # Track all generated types for top-level TypeAliases
+        # Format: {flat_name: (protocol_path, type_kind)} where type_kind is "Reader", "Builder", or "Client"
+        self._all_type_aliases: dict[str, tuple[str, str]] = {}
+
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
     def _build_nested_builder_type(self, base_type: str) -> str:
@@ -1831,9 +1835,16 @@ class Writer:
         # After the Protocol is complete and we've returned to the parent scope,
         # add TypeAlias declarations at this level (self.scope is now the parent)
         self._add_typing_import("TypeAlias")
-        # Add aliases for Reader and Builder
+        # Add aliases for Reader and Builder at current scope
         self.scope.add(f"{context.reader_type_name}: TypeAlias = {protocol_class_name}.Reader")
         self.scope.add(f"{context.builder_type_name}: TypeAlias = {protocol_class_name}.Builder")
+
+        # Track for top-level TypeAliases ONLY if this is a nested type
+        # (Top-level types already have their TypeAliases in the root scope)
+        if is_nested:
+            # Use scoped names which include the full path (e.g., "_PersonModule._PhoneNumberModule.Reader")
+            self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
+            self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
 
         # Add annotation for the module type (both nested and top-level)
         # This better matches runtime behavior and separates types from variables
@@ -2933,20 +2944,16 @@ class Writer:
             )
 
             # Track this interface for cast_as overloads with inheritance info
-            # For cast_as, we use TypeAlias names (user-facing names) for both interface and client
-            # Convert Protocol module names in scoped_name to user-facing names
-            # E.g., "_ClusterModule.AdminMaster" -> "Cluster.AdminMaster"
-            interface_full_name = self._protocol_path_to_runtime_path(context.registered_type.scoped_name)
+            # Store Protocol path (for parameter type) and Client TypeAlias (for return type)
+            # Protocol path: e.g., "_CalculatorModule" or "_CalculatorModule._FunctionModule"
+            protocol_path = context.registered_type.scoped_name
             
-            # For client name, just add "Client" suffix to the interface name (last component)
-            # E.g., "Calculator" -> "CalculatorClient", "Calculator.Value" -> "Calculator.ValueClient"
-            if "." in interface_full_name:
-                parts = interface_full_name.rsplit(".", 1)
-                client_full_name = f"{parts[0]}.{parts[1]}Client"
-            else:
-                client_full_name = f"{interface_full_name}Client"
+            # Client TypeAlias: Use flat name (e.g., "FunctionClient" not "Calculator.FunctionClient")
+            # The flat TypeAlias is available at module level for all interfaces
+            # E.g., "CalculatorClient", "FunctionClient", "ValueClient"
+            client_full_name = context.client_type_name  # This is already the flat name like "FunctionClient"
 
-            # Build list of base client names using TypeAlias names
+            # Build list of base client TypeAlias names (also flat)
             base_client_names = []
             for server_base in server_base_classes:
                 if ".Server" in server_base:
@@ -2954,10 +2961,13 @@ class Writer:
                     protocol_name = server_base.replace(".Server", "")
                     # Get user-facing interface name from protocol name
                     interface_name = protocol_name.split(".")[-1].replace("_", "").replace("Module", "")
-                    # Use TypeAlias name for client
+                    # Use flat Client TypeAlias name
                     base_client_names.append(f"{interface_name}Client")
 
-            self._all_interfaces[interface_full_name] = (client_full_name, base_client_names)
+            # Store: protocol_path -> (client_alias, base_clients)
+            # e.g., "_CalculatorModule._FunctionModule" -> ("FunctionClient", [])
+            self._all_interfaces[protocol_path] = (client_full_name, base_client_names)
+            self._all_interfaces[protocol_path] = (client_full_name, base_client_names)
 
         # Track NamedTuples globally for .py file export
         if server_collection.namedtuples:
@@ -2985,9 +2995,25 @@ class Writer:
 
         # TypeAlias for the Client class (for convenience)
         if should_generate_client:
+            # Check if this is a nested interface
+            is_nested_interface = context.registered_type.scope and not context.registered_type.scope.is_root
+            
+            # Build full client path
+            if is_nested_interface:
+                # Use scoped name for nested interfaces (e.g., "_CalculatorModule._ValueModule.ValueClient")
+                client_alias_path = f"{context.registered_type.scoped_name}.{context.client_type_name}"
+            else:
+                # Top-level interface
+                client_alias_path = f"{context.protocol_class_name}.{context.client_type_name}"
+            
             type_alias_scope.add(
-                f"{context.client_type_name}: TypeAlias = {context.protocol_class_name}.{context.client_type_name}"
+                f"{context.client_type_name}: TypeAlias = {client_alias_path}"
             )
+            
+            # Track for top-level TypeAlias ONLY if nested
+            # (Top-level interfaces already have their Client TypeAlias in the root scope)
+            if is_nested_interface:
+                self._all_type_aliases[context.client_type_name] = (client_alias_path, "Client")
 
         return context.registered_type
 
@@ -3547,6 +3573,16 @@ class Writer:
             out.append("")
 
         out.extend(self.scope.lines)
+        
+        # Add top-level TypeAliases for all Reader/Builder/Client types
+        # This allows using these types in type annotations even though module types are now variables
+        if self._all_type_aliases:
+            out.append("")
+            out.append("# Top-level type aliases for use in type annotations")
+            for alias_name in sorted(self._all_type_aliases.keys()):
+                full_path, _ = self._all_type_aliases[alias_name]
+                out.append(f"{alias_name}: TypeAlias = {full_path}")
+        
         return "\n".join(out)
 
     def dumps_py(self) -> str:

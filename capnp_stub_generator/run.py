@@ -348,9 +348,7 @@ def augment_capnp_stubs_with_overloads(
         qualified_client = client_suffix
 
         overload_lines.append("    @overload")
-        overload_lines.append(
-            f"    def cast_as(self, interface: {qualified_interface}) -> {qualified_client}: ..."
-        )
+        overload_lines.append(f"    def cast_as(self, interface: {qualified_interface}) -> {qualified_client}: ...")
 
     # Add a catchall overload that matches the original function definition
     overload_lines.append("    @overload")
