@@ -5,13 +5,15 @@ from __future__ import annotations
 
 def test_enum_definition_and_imports(dummy_stub_lines):
     lines = dummy_stub_lines
-    # Protocol import present and TestEnum defined as Protocol with TypeAlias
-    assert any(line.startswith("from typing import") and "Protocol" in line and "TypeAlias" in line for line in lines)
-    assert any(line.strip().startswith("class _TestEnumModule(Protocol):") for line in lines)
+    # Enum import present and TestEnum defined as Enum with TypeAlias
+    assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
+    assert any(line.startswith("from typing import") and "TypeAlias" in line for line in lines)
+    assert any(line.strip().startswith("class _TestEnumModule(Enum):") for line in lines)
     assert any(line.strip() == "TestEnum: TypeAlias = _TestEnumModule" for line in lines)
-    # Enum values are now int attributes
+    # Enum values are now Enum members with integer values
     for name in ["foo", "bar", "baz", "qux"]:
-        assert any(line.strip() == f"{name}: int" for line in lines)
+        # Check for enum member assignments (e.g., "foo = 0")
+        assert any(f"{name} =" in line for line in lines)
 
 
 def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):

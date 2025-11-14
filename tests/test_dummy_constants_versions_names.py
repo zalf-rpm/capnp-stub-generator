@@ -47,7 +47,7 @@ def test_name_annotations_renamed_struct_enum_fields(dummy_stub_lines):
     # The structs use their schema names, not the C++ annotation names
     assert any("class _TestNameAnnotationModule(Protocol):" in line for line in lines)
     # Original names are used since annotations aren't processed - now using Protocol pattern
-    assert any("class _BadlyNamedEnumModule(Protocol):" in line for line in lines)
+    assert any("class _BadlyNamedEnumModule(Enum):" in line for line in lines)
     assert any("BadlyNamedEnum: TypeAlias = _BadlyNamedEnumModule" in line for line in lines)
     assert any("badFieldName" in line or "bar" in line for line in lines)
     # Renamed names would appear if annotation support is added:

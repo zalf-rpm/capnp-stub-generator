@@ -1431,14 +1431,14 @@ class Writer:
             pass
 
     def gen_enum(self, schema: _StructSchema) -> CapnpType | None:
-        """Generate an `enum` object using Protocol pattern.
+        """Generate an `enum` object as a real Python Enum class.
 
         At runtime, enums are _EnumModule objects with integer attributes.
-        We generate a Protocol class _<Name>Module with class attributes,
-        then create a TypeAlias <Name> pointing to it.
+        We generate a real Enum class _<Name>Module with integer values,
+        then create a TypeAlias <Name> pointing to it for backwards compatibility.
 
-        The type is registered with the user-facing name (e.g., TestEnum)
-        so that fields correctly reference it.
+        The type is registered with the Protocol module name (e.g., _TestEnumModule)
+        so that fields correctly reference it with the module prefix.
 
         Args:
             schema (_StructSchema): The schema to generate the `enum` object out of.
@@ -1453,15 +1453,15 @@ class Writer:
         # Get the user-facing enum name
         name = helper.get_display_name(schema)
 
-        # Create Protocol class name (e.g., _TestEnumModule)
-        protocol_class_name = f"_{name}Module"
+        # Create Enum class name (e.g., _TestEnumModule)
+        enum_class_name = f"_{name}Module"
 
-        # Add Protocol import
-        self._add_typing_import("Protocol")
+        # Add Enum import
+        self._add_enum_import()
         self._add_typing_import("TypeAlias")
 
-        # Generate the Protocol class declaration
-        protocol_declaration = helper.new_class_declaration(protocol_class_name, ["Protocol"])
+        # Generate the Enum class declaration
+        enum_declaration = helper.new_class_declaration(enum_class_name, ["Enum"])
 
         # Find the parent scope for the enum (where it should be declared)
         try:
@@ -1469,14 +1469,14 @@ class Writer:
         except KeyError:
             enum_parent_scope = self.scope
 
-        # Create new scope for the Protocol
+        # Create new scope for the Enum
         self.new_scope(
-            protocol_class_name, schema.node, scope_heading=protocol_declaration, parent_scope=enum_parent_scope
+            enum_class_name, schema.node, scope_heading=enum_declaration, parent_scope=enum_parent_scope
         )
 
-        # Register type with the user-facing name (not protocol name)
-        # This ensures fields reference "TestEnum" not "_TestEnumModule"
-        new_type = self.register_type(schema.node.id, schema, name=name, scope=self.scope.parent or self.scope.root)
+        # Register type with the Enum class name (not user-facing name)
+        # This ensures fields reference "_TestEnumModule" not "TestEnum"
+        new_type = self.register_type(schema.node.id, schema, name=enum_class_name, scope=self.scope.parent or self.scope.root)
 
         # Create context
         context = EnumGenerationContext.create(
@@ -1485,21 +1485,17 @@ class Writer:
             new_type=new_type,
         )
 
-        # Generate enum values as class attributes within the Protocol
+        # Generate enum values as Enum members
         for enumerant in schema.node.enum.enumerants:
-            # At runtime, enum values are integers
-            self.scope.add(f"{enumerant.name}: int")
-
-        # Add schema attribute
-        self.scope.add("schema: type")
+            # Python Enum syntax: NAME = value
+            self.scope.add(f"{enumerant.name} = {enumerant.codeOrder}")
 
         # Return to parent scope
         self.return_from_scope()
 
-        # Add TypeAlias at the enum's parent scope level (not the current execution scope)
-        # This is important when generating nested types - the TypeAlias should be added
-        # to the parent struct's Protocol, not to a sibling struct's Protocol
-        enum_parent_scope.add(f"{context.type_name}: TypeAlias = {protocol_class_name}")
+        # Add TypeAlias at the enum's parent scope level for backwards compatibility
+        # This allows users to reference the enum by its short name
+        enum_parent_scope.add(f"{context.type_name}: TypeAlias = {enum_class_name}")
 
         return new_type
 

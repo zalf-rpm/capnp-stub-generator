@@ -39,11 +39,13 @@ def test_primitives_and_lists_imports_and_types():
 def test_nested_enum_and_literal_and_overload():
     stub_path = _get_stub_path("nested.capnp")
     lines = _read(stub_path)
-    # Enum should now be a Protocol with TypeAlias, not an Enum subclass
-    assert any(re.match(r"^\s*class _KindModule\(Protocol\):", line) for line in lines)
+    # Enum should now be a real Enum class with TypeAlias, not a Protocol
+    assert any(re.match(r"^\s*class _KindModule\(Enum\):", line) for line in lines)
     assert any("Kind: TypeAlias = _KindModule" in line for line in lines)
-    # Ensure Protocol and TypeAlias import present
-    assert any(line.startswith("from typing import") and "Protocol" in line and "TypeAlias" in line for line in lines)
+    # Ensure Enum import present
+    assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
+    # Ensure TypeAlias import present
+    assert any(line.startswith("from typing import") and "TypeAlias" in line for line in lines)
     # Sequence import still expected for list fields
     assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
     # Now overload is expected (for list init overloads)

@@ -48,10 +48,10 @@ class TestCalculatorInterfaceMethodTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have getOperator with Operator parameter (including string literals, optional)
-        # Note: Now accepts Operator | Literal[...] | None = None and returns GetoperatorResult
+        # Should have getOperator with _OperatorModule enum parameter (including string literals, optional)
+        # Note: Now accepts _OperatorModule | Literal[...] | None = None and returns GetoperatorResult
         assert "def getOperator(" in stub_content
-        assert "_CalculatorModule.Operator" in stub_content
+        assert "_CalculatorModule._OperatorModule" in stub_content
         assert "GetoperatorResult" in stub_content
 
         # Should NOT have Any for the op parameter
@@ -188,11 +188,11 @@ class TestInterfaceMethodComplexTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # getOperator takes an Operator enum
-        assert "op: _CalculatorModule.Operator" in stub_content
+        # getOperator takes an _OperatorModule enum (module alias, not type alias)
+        assert "op: _CalculatorModule._OperatorModule" in stub_content
 
-        # Verify the Operator enum exists as Protocol with TypeAlias
-        assert "class _OperatorModule(Protocol):" in stub_content
+        # Verify the Operator enum exists as Enum class with TypeAlias
+        assert "class _OperatorModule(Enum):" in stub_content
         assert "Operator: TypeAlias = _OperatorModule" in stub_content
 
     def test_list_parameter_types(self, generate_calculator_stubs):
