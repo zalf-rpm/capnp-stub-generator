@@ -68,7 +68,7 @@ def test_simple_interface_inheritance(generated_dir):
 
     # Check that ClimateInstance interface exists as Protocol
     assert "class _ClimateInstanceModule(" in content, "ClimateInstance Protocol module should exist"
-    assert "ClimateInstance: TypeAlias = _ClimateInstanceModule" in content, "ClimateInstance TypeAlias should exist"
+    assert "ClimateInstance: _ClimateInstanceModule" in content, "ClimateInstance annotation should exist"
 
     # Check that ClimateInstanceClient extends IdentifiableClient (nested in Protocol)
     # The Client inherits from the full Protocol path
@@ -114,7 +114,7 @@ def test_multiple_interface_inheritance(generated_dir):
 
     # Check that IdentifiableHolder exists as Protocol
     assert "class _IdentifiableHolderModule(" in content, "IdentifiableHolder Protocol module should exist"
-    assert "IdentifiableHolder: TypeAlias = _IdentifiableHolderModule" in content, "IdentifiableHolder TypeAlias should exist"
+    assert "IdentifiableHolder: _IdentifiableHolderModule" in content, "IdentifiableHolder annotation should exist"
 
     # Check that IdentifiableHolderClient extends both IdentifiableClient and HolderClient
     assert "class IdentifiableHolderClient(_IdentifiableModule.IdentifiableClient, _HolderModule.HolderClient)" in content, (

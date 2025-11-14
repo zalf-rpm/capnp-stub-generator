@@ -13,8 +13,8 @@ def test_generics_anypointer_interface(basic_stubs):
     # Check for GenericBox struct Protocol
     assert "class _GenericBoxModule(Protocol):" in content, "GenericBox Protocol should exist"
     assert "def value(self) -> Any:" in content, "GenericBox.value should be typed as Any (from AnyPointer)"
-    # Check for TypeAlias
-    assert "GenericBox: TypeAlias = _GenericBoxModule" in content, "GenericBox TypeAlias should exist"
+    # Check for module annotation (not TypeAlias)
+    assert "GenericBox: _GenericBoxModule" in content, "GenericBox annotation should exist"
 
     # Check for generic instantiations in AdvancedContainer
     assert "def enumBox(self)" in content, "enumBox field should exist"
@@ -43,7 +43,7 @@ def test_generics_anypointer_interface(basic_stubs):
 
     # Check for interface (now uses Protocol pattern)
     assert "class _TestIfaceModule(Protocol):" in content, "TestIface Protocol module should exist"
-    assert "TestIface: TypeAlias = _TestIfaceModule" in content, "TestIface TypeAlias should exist"
+    assert "TestIface: _TestIfaceModule" in content, "TestIface annotation should exist"
     assert "class TestIfaceClient(Protocol):" in content, "TestIfaceClient should be a Protocol nested in _TestIfaceModule"
 
     # Check interface client methods

@@ -174,14 +174,14 @@ class TestInterfaceMethodComplexTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # evaluate returns EvaluateResult which has a .value field of type ValueClient (capability)
+        # evaluate returns EvaluateResult which has a .value field of type ValueClient (nested capability)
         assert "-> _CalculatorModule.EvaluateResult:" in stub_content
         assert "class EvaluateResult" in stub_content
-        assert "value: _CalculatorModule.ValueClient" in stub_content
+        assert "value: _CalculatorModule._ValueModule.ValueClient" in stub_content
 
-        # defFunction and getOperator return results which have .func field of type FunctionClient (capability)
+        # defFunction and getOperator return results which have .func field of type FunctionClient (nested capability)
         assert "-> _CalculatorModule.DeffunctionResult:" in stub_content
-        assert "func: _CalculatorModule.FunctionClient" in stub_content
+        assert "func: _CalculatorModule._FunctionModule.FunctionClient" in stub_content
 
     def test_enum_parameter_types(self, generate_calculator_stubs):
         """Test that enum parameters are typed correctly."""

@@ -12,9 +12,9 @@ def test_name_annotations(basic_stubs):
     content = stub.read_text()
 
     # The Python API uses the original names from the schema, not the C++ annotations
-    # With Protocol structure, check for the Protocol and TypeAlias
+    # With Protocol structure, check for the Protocol and annotation
     assert "class _BadNameModule(Protocol):" in content, "BadName Protocol should use original name"
-    assert "BadName: TypeAlias = _BadNameModule" in content, "BadName TypeAlias should exist"
+    assert "BadName: _BadNameModule" in content, "BadName annotation should exist"
 
     # Check that the struct has the expected fields (using original names)
     assert "union {" in content or "def badField(self)" in content or "def alt(self)" in content, (

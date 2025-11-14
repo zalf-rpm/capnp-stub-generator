@@ -24,8 +24,8 @@ class TestRPCResultTypes:
         # Should have EvaluateResult class
         assert "class EvaluateResult" in stub_content
 
-        # Should have value field (using Protocol naming)
-        assert "value: _CalculatorModule.ValueClient" in stub_content
+        # Should have value field (using nested Protocol naming)
+        assert "value: _CalculatorModule._ValueModule.ValueClient" in stub_content
 
         # evaluate should return _CalculatorModule.EvaluateResult (which is Awaitable)
         assert "def evaluate(" in stub_content
@@ -39,8 +39,8 @@ class TestRPCResultTypes:
         # Should have DeffunctionResult class
         assert "class DeffunctionResult" in stub_content
 
-        # Should have func field (using Protocol naming)
-        assert "func: _CalculatorModule.FunctionClient" in stub_content
+        # Should have func field (using nested Protocol naming)
+        assert "func: _CalculatorModule._FunctionModule.FunctionClient" in stub_content
 
         # defFunction should return _CalculatorModule.DeffunctionResult (which is Awaitable)
         assert "def defFunction(" in stub_content
@@ -56,8 +56,8 @@ class TestRPCResultTypes:
         # Should have GetoperatorResult class
         assert "class GetoperatorResult" in stub_content
 
-        # Should have func field (using Protocol naming)
-        assert "func: _CalculatorModule.FunctionClient" in stub_content
+        # Should have func field (using nested Protocol naming)
+        assert "func: _CalculatorModule._FunctionModule.FunctionClient" in stub_content
 
     def test_nested_interface_read_returns_result(self, generate_calculator_stubs):
         """Test that nested interface Value.read() returns result with .value."""
@@ -165,7 +165,7 @@ class TestRPCResultFieldTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # EvaluateResult.value should be _CalculatorModule.ValueClient (interface type)
+        # EvaluateResult.value should be _CalculatorModule._ValueModule.ValueClient (nested interface type)
         lines = stub_content.split("\n")
         in_evaluate_result = False
 
@@ -173,7 +173,7 @@ class TestRPCResultFieldTypes:
             if "class EvaluateResult" in line:
                 in_evaluate_result = True
             elif in_evaluate_result and "value:" in line:
-                assert "_CalculatorModule.ValueClient" in line, f"Expected _CalculatorModule.ValueClient, got: {line}"
+                assert "_CalculatorModule._ValueModule.ValueClient" in line, f"Expected _CalculatorModule._ValueModule.ValueClient, got: {line}"
                 break
             elif in_evaluate_result and line.startswith("    def "):
                 break

@@ -192,11 +192,11 @@ class TestRuntimeAccuracy:
         """
         content = dummy_stub_file.read_text()
 
-        # Protocol and TypeAliases
+        # Protocol and annotations/TypeAliases
         assert "class _TestAllTypesModule(Protocol):" in content
         assert "TestAllTypesReader: TypeAlias = _TestAllTypesModule.Reader" in content
         assert "TestAllTypesBuilder: TypeAlias = _TestAllTypesModule.Builder" in content
-        assert "TestAllTypes: TypeAlias = _TestAllTypesModule" in content
+        assert "TestAllTypes: _TestAllTypesModule" in content
         # Nested classes exist
         assert "class Reader(Protocol):" in content
         assert "class Builder(Protocol):" in content

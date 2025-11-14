@@ -37,7 +37,7 @@ def test_server_methods_have_signatures(calculator_stub_lines):
     # Calculator.Server should have evaluate method with Reader type and return NamedTuple with "Tuple" suffix
     assert "def evaluate(" in content
     assert "expression: _CalculatorModule._ExpressionModule.Reader" in content
-    assert "Awaitable[_CalculatorModule.Value.Server | _CalculatorModule.Server.EvaluateResultTuple | None]" in content
+    assert "Awaitable[_CalculatorModule._ValueModule.Server | _CalculatorModule.Server.EvaluateResultTuple | None]" in content
 
 
 def test_server_methods_accept_context(calculator_stub_lines):
@@ -81,9 +81,9 @@ def test_server_methods_return_interface_or_implementation(calculator_stub_lines
 
     # Server methods returning interfaces return Interface.Server types
     # (not Interface | Interface.Server because servers work with Server implementations)
-    # With Protocol naming, these are referenced via TypeAlias
-    assert "_CalculatorModule.Value.Server" in content
-    assert "_CalculatorModule.Function.Server" in content
+    # With nested Protocol naming, these are referenced via the full path
+    assert "_CalculatorModule._ValueModule.Server" in content
+    assert "_CalculatorModule._FunctionModule.Server" in content
 
 
 def test_server_method_parameters_match_protocol(calculator_stub_lines):
