@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-async def evaluate_impl(expression: calculator_capnp.Calculator.ExpressionReader, params=None):
+async def evaluate_impl(expression: calculator_capnp.ExpressionReader, params=None):
     """Implementation of CalculatorImpl::evaluate(), also shared by
     FunctionImpl::call().  In the latter case, `params` are the parameter
     values passed to the function; in the former case, `params` is just an

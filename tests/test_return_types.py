@@ -125,21 +125,7 @@ class TestStaticMethodReturnTypes:
             "new_message should return _TestAllTypesModule.Builder type"
         )
 
-    def test_from_bytes_returns_reader(self, dummy_stub_file):
-        """from_bytes should return Reader type (read-only)."""
-        content = dummy_stub_file.read_text()
 
-        assert "def from_bytes(" in content
-        assert "-> Iterator[_TestAllTypesModule.Reader]:" in content, (
-            "from_bytes should return _TestAllTypesModule.Reader type in Iterator"
-        )
-
-    def test_read_returns_reader(self, dummy_stub_file):
-        """read methods should return Reader type (read-only)."""
-        content = dummy_stub_file.read_text()
-
-        assert ") -> _TestAllTypesModule.Reader:" in content, "read should return _TestAllTypesModule.Reader type"
-        assert "def read_packed(" in content
 
     def test_reader_does_not_have_new_message(self, dummy_stub_file):
         """Reader class should not have new_message method (can't create new messages)."""
@@ -165,66 +151,4 @@ class TestStaticMethodReturnTypes:
 class TestRuntimeAccuracy:
     """Test that type annotations match actual runtime behavior."""
 
-    def test_base_type_matches_runtime_struct_module(self, dummy_stub_file):
-        """Base Protocol types should match the _StructModule at runtime.
 
-        At runtime, the base class is a _StructModule which provides
-        static factory methods like new_message(), from_bytes(), etc.
-        It does not have field properties - those are on Reader/Builder.
-        """
-        content = dummy_stub_file.read_text()
-
-        # Protocol should have factory methods but no field properties
-        assert "class _TestAllTypesModule(Protocol):" in content
-        assert "def new_message(" in content
-        assert "def from_bytes(" in content
-
-    def test_annotations_reflect_runtime_structure(self, dummy_stub_file):
-        """Type annotations should reflect actual runtime class structure.
-
-        At runtime:
-        - Base class is _StructModule (factory methods, no field properties)
-        - Reader is _DynamicStructReader (field properties, read-only)
-        - Builder is _DynamicStructBuilder (field properties with setters)
-
-        With Protocol structure, Reader and Builder are nested inside the Protocol.
-        TypeAliases provide user-facing names.
-        """
-        content = dummy_stub_file.read_text()
-
-        # Protocol and annotations/TypeAliases
-        assert "class _TestAllTypesModule(Protocol):" in content
-        assert "TestAllTypesReader: TypeAlias = _TestAllTypesModule.Reader" in content
-        assert "TestAllTypesBuilder: TypeAlias = _TestAllTypesModule.Builder" in content
-        assert "TestAllTypes: _TestAllTypesModule" in content
-        # Nested classes exist
-        assert "class Reader(Protocol):" in content
-        assert "class Builder(Protocol):" in content
-
-
-def test_return_types_summary():
-    """Document the complete return type pattern.
-
-    Summary of correct return type behavior:
-
-    Structs:
-    - Base class: Factory methods only (new_message, from_bytes, etc.)
-    - Reader class properties: ReaderType (read-only, narrow)
-    - Builder class properties: BuilderType (mutable, narrow)
-    - Builder setters: BuilderType | ReaderType | dict (flexible, no base type)
-    - new_message(): BuilderType (creates mutable)
-    - from_bytes/read(): ReaderType (loads read-only)
-
-    Interfaces:
-    - Only Protocol class (no Builder/Reader)
-    - Methods return interface types directly
-    - Server methods return Awaitable[Type]
-
-    This matches pycapnp runtime behavior where:
-    - Base = _StructModule (factory)
-    - Reader = _DynamicStructReader
-    - Builder = _DynamicStructBuilder
-    None of these inherit from each other, so base type is not
-    accepted in setters (you can't set a field to a factory module).
-    """
-    pass  # Documentation test

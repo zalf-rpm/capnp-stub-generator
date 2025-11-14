@@ -443,6 +443,8 @@ def new_decorator(name: str, parameters: list[TypeHintedVariable] | list[str] | 
 def new_property(name: str, return_type: str, with_setter: bool = False, setter_type: str | None = None) -> list[str]:
     """Create a property declaration.
 
+    Includes special handling for reserved pycapnp runtime introspection names.
+
     Args:
         name (str): The property name.
         return_type (str): The property's return type.
@@ -452,11 +454,22 @@ def new_property(name: str, return_type: str, with_setter: bool = False, setter_
     Returns:
         list[str]: Lines to be added (decorator + function, and optionally setter).
     """
-    lines = ["@property", f"def {name}(self) -> {return_type}: ..."]
+    # Reserved names in pycapnp's _DynamicStructReader/_DynamicStructBuilder that conflict
+    # These are runtime introspection attributes exposed in pycapnp-stubs that shouldn't
+    # conflict with actual Cap'n Proto field names, but pyright treats them as conflicts
+    PYCAPNP_RESERVED_NAMES = {"struct", "list", "enum", "interface", "slot", "name", "schema"}
+    
+    lines = []
+    
+    # Add pyright ignore comment after the ellipsis for reserved names
+    # This is the only place that works reliably, even when code formatters split the function across lines
+    ignore_comment = "  # pyright: ignore[reportIncompatibleVariableOverride,reportIncompatibleMethodOverride]" if name in PYCAPNP_RESERVED_NAMES else ""
+    
+    lines.extend(["@property", f"def {name}(self) -> {return_type}: ...{ignore_comment}"])
 
     if with_setter:
         param_type = setter_type if setter_type is not None else return_type
-        lines.extend([f"@{name}.setter", f"def {name}(self, value: {param_type}) -> None: ..."])
+        lines.extend([f"@{name}.setter", f"def {name}(self, value: {param_type}) -> None: ...{ignore_comment}"])
 
     return lines
 

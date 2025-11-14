@@ -18,10 +18,8 @@ def test_enum_definition_and_imports(dummy_stub_lines):
 
 def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):
     lines = dummy_stub_lines
-    # collections.abc import for Iterator, Sequence
-    assert any(
-        line.startswith("from collections.abc import") and "Sequence" in line and "Iterator" in line for line in lines
-    )
+    # collections.abc import for Sequence (Iterator no longer needed since static methods inherited)
+    assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
     # Basic scalar fields (now as properties)
     for field in ["voidField", "boolField", "int8Field", "float64Field", "textField", "dataField"]:
         assert any(f"def {field}(self)" in line for line in lines)
@@ -38,9 +36,7 @@ def test_builder_reader_classes_for_all_types(dummy_stub_lines):
     assert any("TestAllTypesReader: TypeAlias = _TestAllTypesModule.Reader" in line for line in lines)
     assert any("TestAllTypesBuilder: TypeAlias = _TestAllTypesModule.Builder" in line for line in lines)
     # Reader and Builder are now nested inside TestAllTypes as Protocols
-    assert any(line.strip().startswith("class Reader(Protocol):") for line in lines)
-    assert any(line.strip().startswith("class Builder(Protocol):") for line in lines)
-    # from_bytes contextmanager present
-    assert any(line.strip().startswith("def from_bytes(") for line in lines) or any(
-        "@contextmanager" in line for line in lines
-    )
+    assert any(line.strip().startswith("class Reader(_DynamicStructReader):") for line in lines)
+    assert any(line.strip().startswith("class Builder(_DynamicStructBuilder):") for line in lines)
+    # Static methods like from_bytes are inherited from _StructModule
+    assert any("from capnp.lib.capnp import _DynamicStructBuilder, _DynamicStructReader, _StructModule" in line for line in lines)

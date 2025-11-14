@@ -765,9 +765,10 @@ def format_outputs(raw_input: str, is_pyi: bool) -> str:
                 check=False,  # Don't raise on non-zero exit
             )
 
-            # Run ruff format to format the code
+            # Run ruff format with very large line length (320 is max) to prevent wrapping
+            # This keeps pyright ignore comments on the correct lines
             subprocess.run(
-                ["ruff", "format", str(temp_path)],
+                ["ruff", "format", "--line-length", "320", str(temp_path)],
                 capture_output=True,
                 check=True,
             )
@@ -842,7 +843,7 @@ def generate_stubs(
 
         interfaces_with_module[qualified_interface] = (qualified_client, qualified_base_clients)
 
-    # Get _DynamicObjectReader types for augmentation
+    # Get _DynamicObjectReader types for augmentation tracking
     struct_types, interface_types = writer.get_dynamic_object_reader_types()
 
     # Qualify the types with module prefix

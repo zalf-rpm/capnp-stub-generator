@@ -15,7 +15,7 @@ def test_global_constants_and_derived_constant_present(dummy_stub_lines):
 
 def test_struct_constants_section(dummy_stub_lines):
     lines = dummy_stub_lines
-    assert any("class _TestConstantsModule(Protocol):" in line for line in lines)
+    assert any("class _TestConstantsModule(_StructModule):" in line for line in lines)
     # Struct-level constants are not currently generated in stub files
     # This is acceptable as stubs are for type checking, not runtime values
     # for name in [
@@ -31,8 +31,8 @@ def test_struct_constants_section(dummy_stub_lines):
 
 def test_versioned_structs_fields_and_defaults(dummy_stub_lines):
     lines = dummy_stub_lines
-    assert any("class _TestOldVersionModule(Protocol):" in line for line in lines)
-    assert any("class _TestNewVersionModule(Protocol):" in line for line in lines)
+    assert any("class _TestOldVersionModule(_StructModule):" in line for line in lines)
+    assert any("class _TestNewVersionModule(_StructModule):" in line for line in lines)
     # Fields should be present (now as properties)
     assert any("def new1(self)" in line and "int" in line for line in lines)
     assert any("def new2(self)" in line and "str" in line for line in lines)
@@ -45,7 +45,7 @@ def test_name_annotations_renamed_struct_enum_fields(dummy_stub_lines):
     lines = dummy_stub_lines
     # Name annotations ($Cxx.name) are not currently processed by the generator
     # The structs use their schema names, not the C++ annotation names
-    assert any("class _TestNameAnnotationModule(Protocol):" in line for line in lines)
+    assert any("class _TestNameAnnotationModule(_StructModule):" in line for line in lines)
     # Original names are used since annotations aren't processed - now using Protocol pattern
     assert any("class _BadlyNamedEnumModule(Enum):" in line for line in lines)
     assert any("BadlyNamedEnum: TypeAlias = _BadlyNamedEnumModule" in line for line in lines)
@@ -58,4 +58,4 @@ def test_name_annotations_renamed_struct_enum_fields(dummy_stub_lines):
 def test_empty_struct_representation(dummy_stub_lines):
     lines = dummy_stub_lines
     # TestEmptyStruct should still produce a class
-    assert any("class _TestEmptyStructModule(Protocol):" in line for line in lines)
+    assert any("class _TestEmptyStructModule(_StructModule):" in line for line in lines)

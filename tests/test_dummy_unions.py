@@ -16,7 +16,7 @@ def test_union_which_methods_and_literal_import(dummy_stub_lines):
 def test_unnamed_union_fields_present(dummy_stub_lines):
     lines = dummy_stub_lines
     # TestUnnamedUnion field annotations should include foo/bar discriminant usage (now as properties)
-    assert any("class _TestUnnamedUnionModule(Protocol):" in line for line in lines)
+    assert any("class _TestUnnamedUnionModule(_StructModule):" in line for line in lines)
     assert any("def foo(self)" in line and "int" in line for line in lines) or any(
         "def foo(self)" in line and "Optional" in line for line in lines
     )
@@ -37,7 +37,7 @@ def test_interleaved_union_discriminants_sorted(dummy_stub_lines):
 def test_union_defaults_struct_initializers_present(dummy_stub_lines):
     lines = dummy_stub_lines
     # Defaults referencing unions should generate inline initializers in TestUnionDefaults (now as properties)
-    assert any("class _TestUnionDefaultsModule(Protocol):" in line for line in lines)
+    assert any("class _TestUnionDefaultsModule(_StructModule):" in line for line in lines)
     assert any("def s16s8s64s8Set(self)" in line for line in lines)
     assert any("def s0sps1s32Set(self)" in line for line in lines)
     # Unnamed union defaults

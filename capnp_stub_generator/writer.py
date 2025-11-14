@@ -14,7 +14,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, Literal
 
 import capnp
-from capnp.lib.capnp import _DynamicStructReader, _StructSchema
+from capnp.lib.capnp import _DynamicStructBuilder, _DynamicStructReader, _StructModule, _StructSchema
 
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
@@ -57,6 +57,7 @@ class Writer:
         "NamedTuple",
         "Self",
         "TypeAlias",
+        "override",
     ]
 
     def __init__(
@@ -90,6 +91,7 @@ class Writer:
 
         self._imports: list[str] = []
         self._add_import("from __future__ import annotations")
+        self._add_import("from capnp.lib.capnp import _DynamicStructBuilder, _DynamicStructReader, _StructModule")
 
         self._typing_imports: set[Writer.VALID_TYPING_IMPORTS] = set()
 
@@ -223,6 +225,7 @@ class Writer:
                 "Literal",
                 "Sequence",
                 "overload",
+                "override",
                 "Generic",
                 "TypeVar",
                 "Union",
@@ -359,6 +362,7 @@ class Writer:
         parameters: list[helper.TypeHintedVariable] | list[str] | None = None,
         return_type: str | None = None,
         decorators: list[str] | None = None,
+        add_override: bool = False,
     ) -> None:
         """Add a static method to the current scope.
 
@@ -371,6 +375,7 @@ class Writer:
             return_type: Method return type (None if no return type)
             decorators: Additional decorators to add before @staticmethod
                        (e.g., ["contextmanager"] for from_bytes)
+            add_override: Whether to add @override decorator
 
         Examples:
             # Simple static method
@@ -387,6 +392,10 @@ class Writer:
                 decorators=["contextmanager"]
             )
         """
+        # Add @override if requested (goes before other decorators)
+        if add_override:
+            self.scope.add(helper.new_decorator("override"))
+        
         # Add any additional decorators first (they go above @staticmethod)
         if decorators:
             for decorator in decorators:
@@ -559,6 +568,9 @@ class Writer:
             self._add_typing_import("overload")
         if init_choices or list_init_choices:
             self._add_typing_import("Literal")
+        
+        # Note: The init() method parameter is now LiteralString in pycapnp stubs
+        # This allows our Literal["fieldname"] overloads to be compatible
 
         # Add init method overloads for union/group fields (return their Builder type)
         for field_name, field_type in init_choices:
@@ -567,17 +579,12 @@ class Writer:
             # Build builder type name (respect scoped names)
             builder_type = self._build_scoped_builder_type(field_type)
 
-            # Use self: Any only when using overloads (for compatibility with catch-all)
-            if use_overload:
-                init_params = [
-                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                    helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                ]
-            else:
-                init_params = [
-                    "self",
-                    f'name: Literal["{field_name}"]',
-                ]
+            # Parameter must be named "field" to match base class
+            init_params = [
+                "self",
+                helper.TypeHintedVariable("field", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
+                helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"),
+            ]
 
             self.scope.add(
                 helper.new_function(
@@ -593,40 +600,18 @@ class Writer:
                 self.scope.add(helper.new_decorator("overload"))
             element_type_for_list = self._build_scoped_builder_type(element_type) if needs_builder else element_type
 
-            # Use self: Any only when using overloads
-            if use_overload:
-                init_params_list = [
-                    helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                    helper.TypeHintedVariable("name", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                    helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
-                ]
-            else:
-                init_params_list = [
-                    "self",
-                    f'name: Literal["{field_name}"]',
-                    "size: int = ...",
-                ]
+            # Parameter must be named "field" to match base class
+            init_params_list = [
+                "self",
+                helper.TypeHintedVariable("field", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
+                helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"),
+            ]
 
             self.scope.add(
                 helper.new_function(
                     "init",
                     parameters=init_params_list,
                     return_type=f"Sequence[{element_type_for_list}]",
-                )
-            )
-
-        # Add generic init method for other cases (catch-all)
-        if use_overload:
-            self._add_typing_import("Any")
-            self.scope.add(
-                helper.new_function(
-                    "init",
-                    parameters=[
-                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                        helper.TypeHintedVariable("name", [helper.TypeHint("str", primary=True)]),
-                        helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
-                    ],
-                    return_type="Any",
                 )
             )
 
@@ -637,14 +622,15 @@ class Writer:
         slot_fields: list[helper.TypeHintedVariable],
         scoped_builder_type: str,
     ):
-        """Add new_message static method with field parameters as kwargs.
+        """Add new_message instance method override with field parameters as kwargs.
 
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields to add as parameters.
             scoped_builder_type (str): The fully qualified Builder type name to return.
         """
         self._add_typing_import("Any")
-        new_message_params: list[helper.TypeHintedVariable] = [
+        new_message_params: list[helper.TypeHintedVariable | str] = [
+            "self",
             helper.TypeHintedVariable(
                 "num_first_segment_words",
                 [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
@@ -687,11 +673,9 @@ class Writer:
             )
             new_message_params.append(field_param)
 
-        self._add_static_method(
-            "new_message",
-            new_message_params,
-            scoped_builder_type,
-        )
+        # Add as instance method with @override decorator
+        self.scope.add("@override")
+        self.scope.add(helper.new_function("new_message", new_message_params, scoped_builder_type))
 
     def _gen_struct_base_class(
         self,
@@ -701,7 +685,10 @@ class Writer:
         scoped_reader_type: str,
         scoped_builder_type: str,
     ):
-        """Generate the base struct class with properties and methods.
+        """Generate the base struct class with minimal overrides.
+
+        Now inherits from _StructModule, so we only need to add:
+        - new_message with field parameters (overriding base)
 
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
@@ -710,30 +697,9 @@ class Writer:
             scoped_reader_type (str): Fully qualified Reader type name.
             scoped_builder_type (str): Fully qualified Builder type name.
         """
-        # Add the slot fields as properties
-        if slot_fields:
-            self._add_base_properties(slot_fields)
-
-        # Add the `which` function for unions
-        if schema.node.struct.discriminantCount:
-            self._add_typing_import("Literal")
-            field_names = [
-                f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
-            ]
-            return_type = helper.new_type_group("Literal", field_names)
-            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
-
-        # Add init method overloads
-        self._add_base_init_overloads(init_choices)
-
-        # Add static methods
-        self._add_from_bytes_methods(scoped_reader_type)
+        # Add new_message method override with field parameters
+        self._add_typing_import("override")
         self._add_new_message_method(slot_fields, scoped_builder_type)
-        self._add_read_methods(scoped_reader_type)
-
-        # Add to_dict method
-        self._add_typing_import("Any")
-        self.scope.add(helper.new_function("to_dict", parameters=["self"], return_type="dict[str, Any]"))
 
     def _gen_struct_reader_class(
         self,
@@ -743,6 +709,11 @@ class Writer:
     ):
         """Generate the Reader class for a struct.
 
+        Now inherits from _DynamicStructReader, so we only need to add:
+        - Field properties (read-only getters)
+        - as_builder method override (with proper signature)
+        - which() method override for unions (with specific Literal return type)
+
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
             scoped_builder_type (str): Fully qualified Builder type name.
@@ -751,27 +722,40 @@ class Writer:
         # Add the reader slot fields as properties
         self._add_reader_properties(slot_fields)
 
-        # Add the `which` function for unions
+        # Add which() method override for unions with specific Literal return type
         if schema.node.struct.discriminantCount:
             self._add_typing_import("Literal")
+            self._add_typing_import("override")
             field_names = [
                 f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
             ]
             return_type = helper.new_type_group("Literal", field_names)
+            self.scope.add("@override")
             self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
 
-        # Add as_builder method
+        # Add as_builder method with override decorator and proper signature
+        self._add_typing_import("override")
+        self._add_typing_import("Any")
+        self.scope.add("@override")
         self.scope.add(
             helper.new_function(
                 "as_builder",
-                parameters=["self"],
+                parameters=[
+                    "self",
+                    helper.TypeHintedVariable(
+                        "num_first_segment_words",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                        default="None",
+                    ),
+                    helper.TypeHintedVariable(
+                        "allocate_seg_callable",
+                        [helper.TypeHint("Any", primary=True)],
+                        default="None",
+                    ),
+                ],
                 return_type=scoped_builder_type,
             )
         )
-
-        # If scope is empty, add pass statement
-        if not self.scope.lines:
-            self.scope.add("pass")
 
     def _gen_struct_builder_class(
         self,
@@ -784,6 +768,11 @@ class Writer:
     ):
         """Generate the Builder class for a struct.
 
+        Now inherits from _DynamicStructBuilder, so we only need to add:
+        - Field properties (getters and setters)
+        - as_reader method override
+        - which() method override for unions (with specific Literal return type)
+
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
             init_choices (list[InitChoice]): Init method overload choices for structs.
@@ -795,39 +784,24 @@ class Writer:
         # Add all builder slot fields with setters
         self._add_builder_properties(slot_fields)
 
-        # Add the `which` function for unions
+        # Add which() method override for unions with specific Literal return type
         if schema.node.struct.discriminantCount:
             self._add_typing_import("Literal")
+            self._add_typing_import("override")
             field_names = [
                 f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
             ]
             return_type = helper.new_type_group("Literal", field_names)
+            self.scope.add("@override")
             self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
 
-        # Add from_dict method
-        self._add_typing_import("Any")
-        self._add_static_method(
-            "from_dict",
-            [helper.TypeHintedVariable("dictionary", [helper.TypeHint("dict[str, Any]", primary=True)])],
-            scoped_builder_type,
-        )
-
-        # Add init method overloads
+        # Add init method overloads for struct and list fields
+        # These are needed to properly initialize list fields with the right size
         self._add_builder_init_overloads(init_choices, list_init_choices)
 
-        # Add utility methods
-        self.scope.add(helper.new_function("copy", parameters=["self"], return_type=scoped_builder_type))
-        self.scope.add(helper.new_function("to_bytes", parameters=["self"], return_type="bytes"))
-        self.scope.add(helper.new_function("to_bytes_packed", parameters=["self"], return_type="bytes"))
-        self.scope.add(
-            helper.new_function(
-                "to_segments",
-                parameters=["self"],
-                return_type=helper.new_type_group("list", ["bytes"]),
-            )
-        )
-
-        # Add as_reader method
+        # Add as_reader method with override decorator
+        self._add_typing_import("override")
+        self.scope.add("@override")
         self.scope.add(
             helper.new_function(
                 "as_reader",
@@ -835,13 +809,6 @@ class Writer:
                 return_type=scoped_reader_type,
             )
         )
-
-        # Add write methods
-        self._add_write_methods()
-
-        # If scope is empty, add pass statement
-        if not self.scope.lines:
-            self.scope.add("pass")
 
     # ===== Interface Generation Helper Methods =====
 
@@ -1576,15 +1543,14 @@ class Writer:
         if schema.node.isGeneric:
             registered_params = self.gen_generic(schema)
 
-        # Create Protocol class declaration with underscore prefix
+        # Create _StructModule class declaration (no longer Protocol)
         protocol_class_name = f"_{type_name}Module"
-        self._add_typing_import("Protocol")
 
         if registered_params:
             parameter = helper.new_type_group("Generic", registered_params)
-            protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=[parameter, "Protocol"])
+            protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=[parameter, "_StructModule"])
         else:
-            protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=["Protocol"])
+            protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=["_StructModule"])
 
         # Create scope using the Protocol class name
         try:
@@ -1738,17 +1704,17 @@ class Writer:
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
     ) -> None:
-        """Generate Reader Protocol nested inside the main struct Protocol.
+        """Generate Reader class nested inside the main struct Module.
 
         Args:
             context: The generation context
             fields_collection: The processed fields collection
         """
-        # Build the Protocol declaration WITHOUT Generic parameters (nested Protocols don't repeat them)
-        reader_protocol_declaration = helper.new_class_declaration("Reader", parameters=["Protocol"])
+        # Build the Reader class declaration inheriting from _DynamicStructReader
+        reader_class_declaration = helper.new_class_declaration("Reader", parameters=["_DynamicStructReader"])
 
-        # Add the Protocol declaration to the current scope (the struct scope)
-        self.scope.add(reader_protocol_declaration)
+        # Add the class declaration to the current scope (the struct scope)
+        self.scope.add(reader_class_declaration)
 
         # Create a new scope for the Reader Protocol, explicitly using current scope as parent
         self.new_scope("Reader", context.schema.node, register=False, parent_scope=self.scope)
@@ -1766,17 +1732,17 @@ class Writer:
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
     ) -> None:
-        """Generate Builder Protocol nested inside the main struct Protocol.
+        """Generate Builder class nested inside the main struct Module.
 
         Args:
             context: The generation context
             fields_collection: The processed fields collection
         """
-        # Build the Protocol declaration WITHOUT Generic parameters (nested Protocols don't repeat them)
-        builder_protocol_declaration = helper.new_class_declaration("Builder", parameters=["Protocol"])
+        # Build the Builder class declaration inheriting from _DynamicStructBuilder
+        builder_class_declaration = helper.new_class_declaration("Builder", parameters=["_DynamicStructBuilder"])
 
-        # Add the Protocol declaration to the current scope (the struct scope)
-        self.scope.add(builder_protocol_declaration)
+        # Add the class declaration to the current scope (the struct scope)
+        self.scope.add(builder_class_declaration)
 
         # Create a new scope for the Builder Protocol, explicitly using current scope as parent
         self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
@@ -1798,18 +1764,18 @@ class Writer:
         fields_collection: StructFieldsCollection,
         protocol_declaration: str,
     ) -> None:
-        """Generate Protocol with nested Reader and Builder Protocols, plus TypeAlias declarations.
+        """Generate _StructModule with nested Reader and Builder classes, plus TypeAlias declarations.
 
         This generates:
-        1. The _<Name>Module Protocol class with Reader and Builder nested Protocols
+        1. The _<Name>Module class (inheriting from _StructModule) with nested Reader and Builder classes
         2. TypeAlias declarations for <Name>Reader and <Name>Builder
-        3. For top-level structs: TypeAlias for <Name> pointing to the Protocol
-        4. For nested structs: attribute annotation linking to the Protocol
+        3. For top-level structs: TypeAlias for <Name> pointing to the Module
+        4. For nested structs: attribute annotation linking to the Module
 
         Args:
             context: Generation context with names and metadata
             fields_collection: Processed fields and init choices
-            protocol_declaration: The Protocol class declaration string
+            protocol_declaration: The Module class declaration string
         """
         protocol_class_name = f"_{context.type_name}Module"
         is_nested = self.scope.parent and not self.scope.parent.is_root
@@ -3558,102 +3524,11 @@ class Writer:
         else:
             return type_name
 
-    def _generate_dynamic_object_reader_protocol(self) -> list[str]:
-        """Generate _DynamicObjectReader Protocol with overloads for casting methods.
-
-        Creates a Protocol class with overloaded as_struct() and as_interface() methods
-        for all struct and interface types in the current module's type registry.
-
-        Returns:
-            List of lines for the _DynamicObjectReader Protocol class.
-        """
-        lines = []
-
-        # Collect all struct and interface types from the type registry
-        struct_types: list[tuple[str, str]] = []  # (protocol_name, reader_type)
-        interface_types: list[tuple[str, str]] = []  # (protocol_name, client_type)
-
-        for type_id, capnp_type in self.type_map.items():
-            if capnp_type.schema is None:
-                continue
-
-            node_type = capnp_type.schema.node.which()
-
-            if node_type == capnp_types.CapnpElementType.STRUCT:
-                # For structs: protocol name -> Reader type
-                protocol_name = capnp_type.name
-                if capnp_type.scope and not capnp_type.scope.is_root:
-                    scope_path = capnp_type.scope.trace_as_str(".")
-                    full_protocol = f"{scope_path}.{protocol_name}"
-                else:
-                    full_protocol = protocol_name
-
-                reader_type = f"{full_protocol}.Reader"
-                struct_types.append((full_protocol, reader_type))
-
-            elif node_type == capnp_types.CapnpElementType.INTERFACE:
-                # For interfaces: protocol name -> Client type
-                protocol_name = capnp_type.name
-                if capnp_type.scope and not capnp_type.scope.is_root:
-                    scope_path = capnp_type.scope.trace_as_str(".")
-                    full_protocol = f"{scope_path}.{protocol_name}"
-                else:
-                    full_protocol = protocol_name
-
-                # Extract user-facing name from Protocol name
-                # e.g., "_GenericGetterModule" -> "GenericGetter"
-                if protocol_name.startswith("_") and protocol_name.endswith("Module"):
-                    user_facing = protocol_name[1:-6]
-                    client_type = f"{full_protocol}.{user_facing}Client"
-                else:
-                    client_type = f"{full_protocol}Client"
-
-                interface_types.append((full_protocol, client_type))
-
-        # Sort for deterministic output
-        struct_types.sort(key=lambda x: x[0])
-        interface_types.sort(key=lambda x: x[0])
-
-        # Start Protocol class
-        lines.append("class _DynamicObjectReader(Protocol):")
-        lines.append('    """Protocol for AnyPointer return values with type-safe casting methods."""')
-        lines.append("")
-
-        # Generate as_struct() overloads
-        has_struct_overloads = len(struct_types) > 0
-        if has_struct_overloads:
-            for protocol_name, reader_type in struct_types:
-                lines.append("    @overload")
-                lines.append(f"    def as_struct(self, type: {protocol_name}) -> {reader_type}: ...")
-
-        # Add catch-all as_struct overload
-        lines.append("    @overload")
-        lines.append("    def as_struct(self, type: Any) -> Any: ...")
-        lines.append("")
-
-        # Generate as_interface() overloads
-        has_interface_overloads = len(interface_types) > 0
-        if has_interface_overloads:
-            for protocol_name, client_type in interface_types:
-                lines.append("    @overload")
-                lines.append(f"    def as_interface(self, type: {protocol_name}) -> {client_type}: ...")
-
-        # Add catch-all as_interface overload
-        lines.append("    @overload")
-        lines.append("    def as_interface(self, type: Any) -> _DynamicCapabilityClient: ...")
-        lines.append("")
-
-        # Add as_list() and as_text() methods
-        lines.append("    def as_list(self, element_type: Any) -> Sequence[Any]: ...")
-        lines.append("    def as_text(self) -> str: ...")
-        lines.append("")
-
-        return lines
-
     def get_dynamic_object_reader_types(self) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
         """Get struct and interface types for _DynamicObjectReader augmentation.
 
         Only returns types that are DEFINED in this module, not imported from other modules.
+        This is used by run.py to track types across modules for documentation purposes.
 
         Returns:
             Tuple of (struct_types, interface_types) where each is a list of (protocol_name, target_type) tuples.
@@ -3751,6 +3626,7 @@ class Writer:
         out.extend(self.imports)
 
         # Add _DynamicObjectReader import if needed (for AnyPointer types)
+        # We import the actual class from capnp.lib.capnp rather than generating a Protocol
         if self._needs_dynamic_object_reader_augmentation:
             out.append("from capnp.lib.capnp import _DynamicObjectReader")
 

@@ -28,7 +28,7 @@ class TestDummyEnumsAndTypes:
     def test_testalltypes_field_presence_and_collections_import(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any(
-            line.startswith("from collections.abc import") and "Sequence" in line and "Iterator" in line
+            line.startswith("from collections.abc import") and "Sequence" in line
             for line in lines
         )
         # Fields are now properties
@@ -50,7 +50,7 @@ class TestDummyListsAndDefaults:
 
     def test_lists_small_struct_and_listlist_fields(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestListsModule(Protocol):" in line for line in lines)
+        assert any("class _TestListsModule(_StructModule):" in line for line in lines)
         # Fields are now properties - check for def fieldname(self)
         for field in [
             "list0",
@@ -82,14 +82,14 @@ class TestDummyListsAndDefaults:
 
     def test_list_defaults_struct_and_scalar_lists_present(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestListDefaultsModule(Protocol):" in line for line in lines)
+        assert any("class _TestListDefaultsModule(_StructModule):" in line for line in lines)
         # Fields are now properties
         for field in ["list0", "list1", "list8"]:
             assert any(f"def {field}(self)" in line for line in lines), f"Missing field {field}"
 
     def test_field_zero_bit_and_defaults(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestFieldZeroIsBitModule(Protocol):" in line for line in lines)
+        assert any("class _TestFieldZeroIsBitModule(_StructModule):" in line for line in lines)
         # Fields are now properties
         assert any("def bit(self)" in line and "bool" in line for line in lines)
         assert any("def secondBit(self)" in line and "bool" in line for line in lines)
@@ -101,14 +101,14 @@ class TestDummyGroupsAndNested:
 
     def test_group_field_members_materialized(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestGroupsModule(Protocol):" in line for line in lines)
+        assert any("class _TestGroupsModule(_StructModule):" in line for line in lines)
         # Fields are now properties
         count_corge = sum(1 for line in lines if "def corge(self)" in line)
         assert count_corge >= 3  # across foo/bar/baz groups
 
     def test_interleaved_groups_union_and_nested_group_fields(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestInterleavedGroupsModule(Protocol):" in line for line in lines)
+        assert any("class _TestInterleavedGroupsModule(_StructModule):" in line for line in lines)
         # Fields are now properties
         found = {name: False for name in ["plugh", "xyzzy", "fred", "waldo"]}
         for line in lines:
@@ -123,7 +123,7 @@ class TestDummyGroupsAndNested:
         assert any(re.match(r"^\s*class _NestedEnum2Module\(Enum\):", line) for line in lines)
         assert any("NestedEnum1: TypeAlias = _NestedEnum1Module" in line for line in lines)
         assert any("NestedEnum2: TypeAlias = _NestedEnum2Module" in line for line in lines)
-        assert any("class _TestUsingModule(Protocol):" in line for line in lines)
+        assert any("class _TestUsingModule(_StructModule):" in line for line in lines)
         # Fields are now properties using module aliases
         assert any(
             "def outerNestedEnum(self)" in line and "_TestNestedTypesModule._NestedEnum1Module" in line
@@ -138,7 +138,7 @@ class TestDummyGroupsAndNested:
     def test_using_type_aliases_resolved(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("OuterNestedEnum" in line and "Literal" not in line for line in lines)
-        assert any("class _TestUsingModule(Protocol):" in line for line in lines)
+        assert any("class _TestUsingModule(_StructModule):" in line for line in lines)
 
 
 class TestDummyUnions:
@@ -151,7 +151,7 @@ class TestDummyUnions:
 
     def test_unnamed_union_fields_present(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestUnnamedUnionModule(Protocol):" in line for line in lines)
+        assert any("class _TestUnnamedUnionModule(_StructModule):" in line for line in lines)
         # Fields are now properties
         assert any("def foo(self)" in line and "int" in line for line in lines) or any(
             "def foo(self)" in line and "Optional" in line for line in lines
@@ -167,7 +167,7 @@ class TestDummyUnions:
 
     def test_union_defaults_struct_initializers_present(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestUnionDefaultsModule(Protocol):" in line for line in lines)
+        assert any("class _TestUnionDefaultsModule(_StructModule):" in line for line in lines)
         # Fields are now properties
         assert any("def s16s8s64s8Set(self)" in line for line in lines)
         assert any("def s0sps1s32Set(self)" in line for line in lines)
@@ -186,23 +186,23 @@ class TestDummyConstantsAndVersioning:
 
     def test_struct_constants_section(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestConstantsModule(Protocol):" in line for line in lines)
+        assert any("class _TestConstantsModule(_StructModule):" in line for line in lines)
 
     def test_versioned_structs_fields_and_defaults(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestOldVersionModule(Protocol):" in line for line in lines)
-        assert any("class _TestNewVersionModule(Protocol):" in line for line in lines)
+        assert any("class _TestOldVersionModule(_StructModule):" in line for line in lines)
+        assert any("class _TestNewVersionModule(_StructModule):" in line for line in lines)
         # Fields are now properties
         assert any("def new1(self)" in line and "int" in line for line in lines)
         assert any("def new2(self)" in line and "str" in line for line in lines)
 
     def test_name_annotations_renamed_struct_enum_fields(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestNameAnnotationModule(Protocol):" in line for line in lines)
+        assert any("class _TestNameAnnotationModule(_StructModule):" in line for line in lines)
         assert any("class _BadlyNamedEnumModule(Enum):" in line for line in lines)
         assert any("BadlyNamedEnum: TypeAlias = _BadlyNamedEnumModule" in line for line in lines)
         assert any("badFieldName" in line or "bar" in line for line in lines)
 
     def test_empty_struct_representation(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any("class _TestEmptyStructModule(Protocol):" in line for line in lines)
+        assert any("class _TestEmptyStructModule(_StructModule):" in line for line in lines)
