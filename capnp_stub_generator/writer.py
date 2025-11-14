@@ -856,9 +856,8 @@ class Writer:
                 try:
                     # Get the superclass type
                     superclass_type = self.get_type_by_id(superclass.id)
-                    # For interfaces, always construct Protocol module name from user-facing name
-                    # User-facing name is registered (e.g., "Identifiable"), and we need "_IdentifiableModule"
-                    protocol_name = f"_{superclass_type.name}Module"
+                    # superclass_type.name is now the Protocol name (e.g., "_IdentifiableModule")
+                    protocol_name = superclass_type.name
                     # Build scoped Protocol name
                     if superclass_type.scope and not superclass_type.scope.is_root:
                         base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
@@ -874,8 +873,8 @@ class Writer:
                                 # Found the superclass module, generate it
                                 self.generate_nested(module.schema)
                                 superclass_type = self.get_type_by_id(superclass.id)
-                                # For interfaces, always construct Protocol module name
-                                protocol_name = f"_{superclass_type.name}Module"
+                                # superclass_type.name is now the Protocol name
+                                protocol_name = superclass_type.name
                                 if superclass_type.scope and not superclass_type.scope.is_root:
                                     base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
                                 else:
@@ -901,8 +900,8 @@ class Writer:
                             if found_schema:
                                 self.generate_nested(found_schema)
                                 superclass_type = self.get_type_by_id(superclass.id)
-                                # For interfaces, construct Protocol module name
-                                protocol_name = f"_{superclass_type.name}Module"
+                                # superclass_type.name is now the Protocol name
+                                protocol_name = superclass_type.name
                                 if superclass_type.scope and not superclass_type.scope.is_root:
                                     base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
                                 else:
@@ -1014,9 +1013,8 @@ class Writer:
                 for superclass in schema_node.interface.superclasses:
                     try:
                         superclass_type = self.get_type_by_id(superclass.id)
-                        # Build Protocol module name for the ancestor Server type
-                        # Use the same pattern as _get_interface_base_classes
-                        protocol_name = f"_{superclass_type.name}Module"
+                        # superclass_type.name is now the Protocol name
+                        protocol_name = superclass_type.name
                         if superclass_type.scope and not superclass_type.scope.is_root:
                             ancestor_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
                         else:
@@ -1129,21 +1127,29 @@ class Writer:
             except Exception:
                 type_name = "Any"
                 self._add_typing_import("Union")
-            # For interfaces, convert user-facing name to Protocol module name for internal use
-            # E.g., "Heartbeat" -> "_HeartbeatModule"
-            # But for nested interfaces, type_name might already be scoped like "Calculator.Function"
+            # For interfaces, type_name from get_type_name is now the Protocol name (_<Name>Module)
+            # E.g., "_HeartbeatModule" or "Calculator._FunctionModule"
             if type_name != "Any":
-                # Check if last component already has Module format
+                # Protocol name is already in _<Name>Module format
+                protocol_type_name = type_name
+                
+                # Extract user-facing name and build nested Client reference
+                # E.g., "_HeartbeatModule" -> "_HeartbeatModule.HeartbeatClient"
+                # E.g., "Calculator._FunctionModule" -> "Calculator._FunctionModule.FunctionClient"
                 parts = type_name.split(".")
-                last_part = parts[-1]
-                if not (last_part.startswith("_") and last_part.endswith("Module")):
-                    parts[-1] = f"_{last_part}Module"
-                protocol_type_name = ".".join(parts)
+                last_part = parts[-1]  # "_HeartbeatModule"
+                # Extract base name: "_HeartbeatModule" -> "Heartbeat"
+                if last_part.startswith("_") and last_part.endswith("Module"):
+                    user_facing_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+                    client_type = f"{protocol_type_name}.{user_facing_name}Client"
+                else:
+                    # Fallback for edge cases
+                    client_type = f"{protocol_type_name}Client"
             else:
                 protocol_type_name = type_name
+                client_type = type_name
             # For reading: return the Client type (capabilities are always clients at runtime)
             # For writing (in Builder): accept Client | Server
-            client_type = f"{type_name}Client"
             hints = [helper.TypeHint(client_type, primary=True)]
             # Add Server as a non-primary hint for Builder setter (using Protocol name)
             hints.append(helper.TypeHint(f"{protocol_type_name}.Server"))
@@ -1375,14 +1381,8 @@ class Writer:
         # If this is an interface type, also allow passing its Server implementation
         try:
             if field.slot.type.which() == capnp_types.CapnpElementType.INTERFACE:
-                # Use Protocol module name for internal Server type reference
-                # Handle both top-level and nested interfaces
-                parts = type_name.split(".")
-                last_part = parts[-1]
-                if not (last_part.startswith("_") and last_part.endswith("Module")):
-                    parts[-1] = f"_{last_part}Module"
-                protocol_type_name = ".".join(parts)
-                hints.append(helper.TypeHint(f"{protocol_type_name}.Server"))
+                # type_name is already the Protocol module name (e.g., "_GreeterModule")
+                hints.append(helper.TypeHint(f"{type_name}.Server"))
         except Exception:
             pass
         return helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
@@ -1835,14 +1835,9 @@ class Writer:
         self.scope.add(f"{context.reader_type_name}: TypeAlias = {protocol_class_name}.Reader")
         self.scope.add(f"{context.builder_type_name}: TypeAlias = {protocol_class_name}.Builder")
 
-        # For top-level structs, add a TypeAlias for the module type
-        # For nested structs, add an attribute annotation instead
-        if is_nested and not self.scope.is_root:
-            # Nested struct: add attribute annotation to link the nested Protocol
-            self.scope.add(f"{context.type_name}: {protocol_class_name}")
-        else:
-            # Top-level struct: add TypeAlias for convenient access
-            self.scope.add(f"{context.type_name}: TypeAlias = {protocol_class_name}")
+        # Add annotation for the module type (both nested and top-level)
+        # This better matches runtime behavior and separates types from variables
+        self.scope.add(f"{context.type_name}: {protocol_class_name}")
 
     def gen_struct(self, schema: _StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
         """Generate a `struct` object.
@@ -1903,9 +1898,11 @@ class Writer:
         # Get display name
         name = helper.get_display_name(schema)
 
-        # Register type
+        # Register type with Protocol name (_<Name>Module) for correct internal references
+        # This ensures get_type_name() returns the Protocol name, not the user-facing name
+        protocol_name = f"_{name}Module"
         parent_scope = self.scopes_by_id.get(schema.node.scopeId, self.scope.root)
-        registered_type = self.register_type(schema.node.id, schema, name=name, scope=parent_scope)
+        registered_type = self.register_type(schema.node.id, schema, name=protocol_name, scope=parent_scope)
 
         # Add typing imports
         self._add_typing_import("Protocol")
@@ -2291,8 +2288,17 @@ class Writer:
                             reader_type = self._build_nested_reader_type(field_type)
                             field_type = f"{builder_type} | {reader_type}"
                         elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-                            # For interface types, use the Client class (capabilities are always clients)
-                            field_type = f"{field_type}Client"
+                            # For interface types, use the nested Client class
+                            # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
+                            parts = field_type.split(".")
+                            last_part = parts[-1]
+                            if last_part.startswith("_") and last_part.endswith("Module"):
+                                # Extract user-facing name: "_ReaderModule" -> "Reader"
+                                user_facing_name = last_part[1:-6]
+                                field_type = f"{field_type}.{user_facing_name}Client"
+                            else:
+                                # Fallback
+                                field_type = f"{field_type}Client"
                         elif field_type_enum == capnp_types.CapnpElementType.LIST:
                             # For lists of structs, accept both Builder and Reader for elements
                             element_type_obj = field_obj.slot.type.list.elementType
@@ -2343,8 +2349,17 @@ class Writer:
                         reader_type = self._build_nested_reader_type(field_type)
                         field_type = f"{builder_type} | {reader_type}"
                     elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-                        # For interface types, use the Client class (capabilities are always clients)
-                        field_type = f"{field_type}Client"
+                        # For interface types, use the nested Client class
+                        # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
+                        parts = field_type.split(".")
+                        last_part = parts[-1]
+                        if last_part.startswith("_") and last_part.endswith("Module"):
+                            # Extract user-facing name: "_ReaderModule" -> "Reader"
+                            user_facing_name = last_part[1:-6]
+                            field_type = f"{field_type}.{user_facing_name}Client"
+                        else:
+                            # Fallback
+                            field_type = f"{field_type}Client"
                     elif field_type_enum == capnp_types.CapnpElementType.LIST:
                         # For lists of structs, accept both Builder and Reader for elements
                         element_type_obj = field_obj.slot.type.list.elementType
@@ -2757,8 +2772,9 @@ class Writer:
             for superclass in interface_node.superclasses:
                 try:
                     superclass_type = self.get_type_by_id(superclass.id)
-                    # For interfaces, always construct Protocol module name from user-facing name
-                    protocol_name = f"_{superclass_type.name}Module"
+                    # superclass_type.name is now the Protocol name (e.g., "_IdentifiableModule")
+                    # Use it directly instead of adding another Module suffix
+                    protocol_name = superclass_type.name
                     if superclass_type.scope and not superclass_type.scope.is_root:
                         server_base = f"{superclass_type.scope.scoped_name}.{protocol_name}.Server"
                     else:
@@ -2963,9 +2979,9 @@ class Writer:
         # Close interface Protocol scope
         self.return_from_scope()
 
-        # Phase 6: Add TypeAliases at the recorded parent scope
-        # TypeAlias for the interface module
-        type_alias_scope.add(f"{context.type_name}: TypeAlias = {context.protocol_class_name}")
+        # Phase 6: Add type annotations and aliases at the recorded parent scope
+        # Annotation for the interface module (better matches runtime behavior)
+        type_alias_scope.add(f"{context.type_name}: {context.protocol_class_name}")
 
         # TypeAlias for the Client class (for convenience)
         if should_generate_client:
@@ -2990,8 +3006,8 @@ class Writer:
             for superclass in interface_node.superclasses:
                 try:
                     superclass_type = self.get_type_by_id(superclass.id)
-                    # For interfaces, always construct Protocol module name from user-facing name
-                    protocol_name = f"_{superclass_type.name}Module"
+                    # superclass_type.name is now the Protocol name
+                    protocol_name = superclass_type.name
                     if superclass_type.scope and not superclass_type.scope.is_root:
                         server_base = f"{superclass_type.scope.scoped_name}.{protocol_name}.Server"
                     else:
@@ -3067,12 +3083,13 @@ class Writer:
         client_base_classes = []
         has_parent_clients = False
         for server_base in server_base_classes:
-            # Extract interface name from Server type and build Client type
-            # e.g., "Calculator.Server" -> "CalculatorClient"
-            # e.g., "Identifiable.Server" -> "IdentifiableClient"
+            # Extract protocol name from Server type and build nested Client type
+            # e.g., "_IdentifiableModule.Server" -> "_IdentifiableModule.IdentifiableClient"
             if ".Server" in server_base:
-                interface_name = server_base.replace(".Server", "")
-                client_base_classes.append(f"{interface_name}Client")
+                protocol_name = server_base.replace(".Server", "")
+                # Extract interface name from protocol name: _IdentifiableModule -> Identifiable
+                interface_name = protocol_name.split(".")[-1].replace("_", "").replace("Module", "")
+                client_base_classes.append(f"{protocol_name}.{interface_name}Client")
                 has_parent_clients = True
 
         # Only add Protocol if there are no parent Client classes
@@ -3217,8 +3234,18 @@ class Writer:
                 return self.register_type(schema.node.id, schema, name=protocol_definition_name, scope=self.scope.root)
             else:
                 # Import only the root parent for enums/interfaces
-                self._add_import(f"from {python_import_path} import {root_name}")
-                return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
+                if node_type == capnp_types.CapnpElementType.INTERFACE:
+                    # For nested interfaces, register with Protocol name
+                    # E.g., "Channel.Reader" -> "Channel._ReaderModule"
+                    parts = definition_name.split(".")
+                    last_part = parts[-1]
+                    parts[-1] = f"_{last_part}Module"
+                    protocol_definition_name = ".".join(parts)
+                    self._add_import(f"from {python_import_path} import {root_name}")
+                    return self.register_type(schema.node.id, schema, name=protocol_definition_name, scope=self.scope.root)
+                else:
+                    self._add_import(f"from {python_import_path} import {root_name}")
+                    return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
         else:
             # Regular non-nested import
             node_type = schema.node.which()
@@ -3233,9 +3260,12 @@ class Writer:
                     self._add_import(
                         f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}"
                     )
+                    # Register with Protocol name for internal type references
+                    return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
                 else:
                     # Enums just need the enum itself
                     self._add_import(f"from {python_import_path} import {definition_name}")
+                    return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
             else:
                 # Structs: import the Protocol class (_<Name>Module) for internal type references
                 # The TypeAlias can be accessed if needed, but internal references use the Protocol
@@ -3244,7 +3274,8 @@ class Writer:
                 # Register the type with the Protocol name so scoped_name returns the Protocol name
                 return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
 
-        return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
+        # This line should not be reached now since all branches return
+        raise RuntimeError(f"Unexpected code path for import {definition_name}")
 
     def register_type_var(self, name: str) -> str:
         """Find and register the full name of a type variable, which includes its scopes.
