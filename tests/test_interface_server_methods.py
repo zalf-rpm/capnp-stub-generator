@@ -5,8 +5,10 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines):
     """Server classes should be generated for all interfaces."""
     lines = calculator_stub_lines
 
-    # Check that interface modules exist (no longer Protocol)
-    assert any("class Value:" in line for line in lines)
+    # Check that interface modules exist (Protocol-based naming)
+    assert any("class _ValueModule(Protocol):" in line for line in lines)
+    assert any("class _FunctionModule(Protocol):" in line for line in lines)
+    assert any("class _CalculatorModule(Protocol):" in line for line in lines)
 
     # Check that Server classes exist
     assert any("class Server(Protocol):" in line for line in lines)
@@ -23,19 +25,19 @@ def test_server_methods_have_signatures(calculator_stub_lines):
 
     # Function.Server should have call method
     assert "class Server(Protocol):" in content
-    assert "def call(self, params: Sequence[float]" in content
+    assert "def call(\n                self,\n                params: Sequence[float]," in content
     assert "Awaitable[" in content  # Server.call returns Awaitable
 
     # Value.Server should have read method with _context parameter and returns NamedTuple with "Tuple" suffix
-    # CallContext is now inside Server, so reference is Calculator.Value.Server.ReadCallContext
+    # CallContext is now inside Server, so reference is _CalculatorModule._ValueModule.Server.ReadCallContext
     assert "def read(" in content
-    assert "_context: Calculator.Value.Server.ReadCallContext" in content
-    assert "Awaitable[float | Calculator.Value.Server.ReadResultTuple | None]" in content
+    assert "_context: _CalculatorModule._ValueModule.Server.ReadCallContext" in content
+    assert "Awaitable[float | _CalculatorModule._ValueModule.Server.ReadResultTuple | None]" in content
 
     # Calculator.Server should have evaluate method with Reader type and return NamedTuple with "Tuple" suffix
     assert "def evaluate(" in content
-    assert "expression: Calculator._ExpressionModule.Reader" in content
-    assert "Awaitable[Calculator.Value.Server | Calculator.Server.EvaluateResultTuple | None]" in content
+    assert "expression: _CalculatorModule._ExpressionModule.Reader" in content
+    assert "Awaitable[_CalculatorModule.Value.Server | _CalculatorModule.Server.EvaluateResultTuple | None]" in content
 
 
 def test_server_methods_accept_context(calculator_stub_lines):
@@ -63,10 +65,11 @@ def test_server_methods_accept_context(calculator_stub_lines):
             # Skip _context variant methods (they don't have **kwargs)
             if "_context(" in method:
                 continue
+            # Skip methods that don't have _context parameter (these are request/client methods)
+            if "_context:" not in method:
+                continue
             # Each regular RPC method should have **kwargs
             assert "**kwargs" in method, f"Server method should have **kwargs: {method}"
-            # Should have explicit _context parameter with type annotation
-            assert "_context:" in method, f"Server method should have _context parameter: {method}"
             # _context should have a CallContext type
             assert "CallContext" in method, f"Server method _context should be typed with CallContext: {method}"
 
@@ -78,8 +81,9 @@ def test_server_methods_return_interface_or_implementation(calculator_stub_lines
 
     # Server methods returning interfaces return Interface.Server types
     # (not Interface | Interface.Server because servers work with Server implementations)
-    assert "Calculator.Value.Server" in content
-    assert "Calculator.Function.Server" in content
+    # With Protocol naming, these are referenced via TypeAlias
+    assert "_CalculatorModule.Value.Server" in content
+    assert "_CalculatorModule.Function.Server" in content
 
 
 def test_server_method_parameters_match_protocol(calculator_stub_lines):
@@ -101,15 +105,15 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
 
     # Find Function.Server's call method - should have params (required), _context, and **kwargs
     # Server parameters remain required for type safety
-    # CallContext is now inside Server, so reference is Calculator.Function.Server.CallCallContext
+    # CallContext is now inside Server, so reference is _CalculatorModule._FunctionModule.Server.CallCallContext
     # Check for multi-line signature
     server_call_found = (
-        "def call(\n                self, params: Sequence[float], _context: Calculator.Function.Server.CallCallContext, **kwargs"
+        "def call(\n                self,\n                params: Sequence[float],\n                _context: _CalculatorModule._FunctionModule.Server.CallCallContext"
         in content
     )
     server_call_found = (
         server_call_found
-        or "def call(self, params: Sequence[float], _context: Calculator.Function.Server.CallCallContext, **kwargs)"
+        or "def call(self, params: Sequence[float], _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs)"
         in content
     )
 

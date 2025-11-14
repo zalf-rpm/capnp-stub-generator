@@ -238,7 +238,9 @@ class TestInterfaceGenerationContext:
         )
 
         assert context.schema == mock_schema
-        assert context.name == "_CalculatorModule"
+        assert context.type_name == "Calculator"
+        assert context.protocol_class_name == "_CalculatorModule"
+        assert context.client_type_name == "CalculatorClient"
         assert context.registered_type == mock_type
         assert context.base_classes == base_classes
         assert context.parent_scope == mock_scope
@@ -251,14 +253,15 @@ class TestInterfaceGenerationContext:
 
         context = InterfaceGenerationContext.create(
             schema=mock_schema,
-            name="SimpleInterface",
+            type_name="SimpleInterface",
             registered_type=mock_type,
             base_classes=[],
             parent_scope=mock_scope,
         )
 
         assert context.base_classes == []
-        assert context.name == "SimpleInterface"
+        assert context.type_name == "SimpleInterface"
+        assert context.protocol_class_name == "_SimpleInterfaceModule"
 
 
 class TestMethodInfo:
@@ -615,7 +618,8 @@ class TestInterfaceDTOIntegration:
         server_collection.add_server_method(method_collection.server_method_signature)
 
         # Verify everything works together
-        assert context.name == "_CalculatorModule"
+        assert context.type_name == "Calculator"
+        assert context.protocol_class_name == "_CalculatorModule"
         assert method_info.method_name == "add"
         assert "int | None = None" in method_collection.client_method_lines[0]
         assert server_collection.has_methods() is True

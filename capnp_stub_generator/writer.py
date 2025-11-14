@@ -1014,7 +1014,14 @@ class Writer:
                 for superclass in schema_node.interface.superclasses:
                     try:
                         superclass_type = self.get_type_by_id(superclass.id)
-                        ancestor_server_type = f"{superclass_type.scoped_name}.Server"
+                        # Build Protocol module name for the ancestor Server type
+                        # Use the same pattern as _get_interface_base_classes
+                        protocol_name = f"_{superclass_type.name}Module"
+                        if superclass_type.scope and not superclass_type.scope.is_root:
+                            ancestor_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
+                        else:
+                            ancestor_protocol = protocol_name
+                        ancestor_server_type = f"{ancestor_protocol}.Server"
                         ancestors.add(ancestor_server_type)
                         # Recursively collect ancestors of this superclass
                         ancestors.update(collect_all_ancestor_servers(superclass.id, visited))
@@ -1023,7 +1030,15 @@ class Writer:
 
             return ancestors
 
-        server_types = [f"{fully_qualified_interface}.Server"]
+        # Build the server type for the current interface (use module alias)
+        # scope_path already contains the Protocol module path (e.g., "_ChannelModule._ReaderModule")
+        # so we can use it directly
+        if scope_path:
+            current_interface_protocol = scope_path
+        else:
+            # Top-level interface - add _Module suffix
+            current_interface_protocol = f"_{name}Module"
+        server_types = [f"{current_interface_protocol}.Server"]
         ancestor_servers = collect_all_ancestor_servers(schema.node.id)
         server_types.extend(sorted(ancestor_servers))  # Sort for consistency
 

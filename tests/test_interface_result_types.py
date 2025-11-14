@@ -24,12 +24,12 @@ class TestRPCResultTypes:
         # Should have EvaluateResult class
         assert "class EvaluateResult" in stub_content
 
-        # Should have value field
-        assert "value: Calculator.Value" in stub_content
+        # Should have value field (using Protocol naming)
+        assert "value: _CalculatorModule.ValueClient" in stub_content
 
-        # evaluate should return Calculator.EvaluateResult (which is Awaitable)
+        # evaluate should return _CalculatorModule.EvaluateResult (which is Awaitable)
         assert "def evaluate(" in stub_content
-        assert "-> Calculator.EvaluateResult:" in stub_content
+        assert "-> _CalculatorModule.EvaluateResult:" in stub_content
 
     def test_deffunction_returns_result_with_func_field(self, generate_calculator_stubs):
         """Test that defFunction() returns a result with .func attribute."""
@@ -39,14 +39,14 @@ class TestRPCResultTypes:
         # Should have DeffunctionResult class
         assert "class DeffunctionResult" in stub_content
 
-        # Should have func field
-        assert "func: Calculator.Function" in stub_content
+        # Should have func field (using Protocol naming)
+        assert "func: _CalculatorModule.FunctionClient" in stub_content
 
-        # defFunction should return Calculator.DeffunctionResult (which is Awaitable)
+        # defFunction should return _CalculatorModule.DeffunctionResult (which is Awaitable)
         assert "def defFunction(" in stub_content
         assert "paramCount: int | None = None" in stub_content
-        assert "body: Calculator._ExpressionModule | dict[str, Any] | None = None" in stub_content
-        assert "-> Calculator.DeffunctionResult:" in stub_content
+        assert "body: _CalculatorModule._ExpressionModule | dict[str, Any] | None = None" in stub_content
+        assert "-> _CalculatorModule.DeffunctionResult:" in stub_content
 
     def test_getoperator_returns_result_with_func_field(self, generate_calculator_stubs):
         """Test that getOperator() returns a result with .func attribute."""
@@ -56,8 +56,8 @@ class TestRPCResultTypes:
         # Should have GetoperatorResult class
         assert "class GetoperatorResult" in stub_content
 
-        # Should have func field
-        assert "func: Calculator.Function" in stub_content
+        # Should have func field (using Protocol naming)
+        assert "func: _CalculatorModule.FunctionClient" in stub_content
 
     def test_nested_interface_read_returns_result(self, generate_calculator_stubs):
         """Test that nested interface Value.read() returns result with .value."""
@@ -91,9 +91,10 @@ class TestRPCResultTypes:
         # Should have CallResult class
         assert "class CallResult" in stub_content
 
-        # call should return Calculator.Function.CallResult (which is Awaitable)
+        # call should return _CalculatorModule._FunctionModule.CallResult (which is Awaitable)
         assert (
-            "def call(self, params: Sequence[float] | None = None) -> Calculator.Function.CallResult:" in stub_content
+            "def call(self, params: Sequence[float] | None = None) -> _CalculatorModule._FunctionModule.CallResult:"
+            in stub_content
         )
 
 
@@ -113,8 +114,8 @@ class TestRPCResultsAreAwaitable:
         assert "class CallResult(Awaitable[CallResult], Protocol):" in stub_content
 
         # Methods should return the Result directly (not wrapped in Awaitable)
-        assert "-> Calculator.EvaluateResult:" in stub_content
-        assert "-> Calculator.Value.ReadResult:" in stub_content
+        assert "-> _CalculatorModule.EvaluateResult:" in stub_content
+        assert "-> _CalculatorModule._ValueModule.ReadResult:" in stub_content
 
     def test_awaitable_imported(self, generate_calculator_stubs):
         """Test that Awaitable is imported from typing."""
@@ -134,9 +135,9 @@ class TestEnumParametersAcceptLiterals:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # getOperator should accept Operator | Literal[...] | None (optional)
+        # getOperator should accept _CalculatorModule.Operator | Literal[...] | None (optional)
         assert "def getOperator(" in stub_content
-        assert 'Calculator.Operator | Literal["add", "subtract", "multiply", "divide"] | None = None' in stub_content
+        assert '_CalculatorModule.Operator | Literal["add", "subtract", "multiply", "divide"] | None = None' in stub_content
 
     def test_enum_literals_match_enum_values(self, generate_calculator_stubs):
         """Test that the enum literal values match the actual enum."""
@@ -164,7 +165,7 @@ class TestRPCResultFieldTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # EvaluateResult.value should be Calculator.Value (interface type)
+        # EvaluateResult.value should be _CalculatorModule.ValueClient (interface type)
         lines = stub_content.split("\n")
         in_evaluate_result = False
 
@@ -172,7 +173,7 @@ class TestRPCResultFieldTypes:
             if "class EvaluateResult" in line:
                 in_evaluate_result = True
             elif in_evaluate_result and "value:" in line:
-                assert "Calculator.Value" in line, f"Expected Calculator.Value, got: {line}"
+                assert "_CalculatorModule.ValueClient" in line, f"Expected _CalculatorModule.ValueClient, got: {line}"
                 break
             elif in_evaluate_result and line.startswith("    def "):
                 break

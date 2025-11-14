@@ -48,9 +48,9 @@ def test_comparison_with_non_void_methods(tmp_path: Path):
     stub_path = generate_stub_from_schema("fbp_simple.capnp", tmp_path)
     content = stub_path.read_text()
 
-    # read() returns ReadResult (which is Awaitable)
+    # read() returns ReadResult (which is Awaitable) - using Protocol naming
     assert "def read(" in content
-    assert ") -> Channel.Reader.ReadResult:" in content
+    assert ") -> _ChannelModule._ReaderModule.ReadResult:" in content
 
     # close() returns None (fire-and-forget)
     assert "def close(self) -> None:" in content
