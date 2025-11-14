@@ -23,14 +23,16 @@ def _get_stub_path(schema: str) -> Path:
 def test_primitives_and_lists_imports_and_types():
     stub_path = _get_stub_path("primitives.capnp")
     lines = _read(stub_path)
-    header = "".join(lines[:15])
-    assert "from __future__ import annotations" in header
+    content = "".join(lines)
+    assert "from __future__ import annotations" in content
     # Iterator appears (for from_bytes) and Sequence appears (list fields) from collections.abc
-    assert any(
-        line.startswith("from collections.abc import") and "Iterator" in line and "Sequence" in line for line in lines
-    )
+    assert "from collections.abc import" in content
+    assert "Iterator" in content
+    assert "Sequence" in content
     # Literal now appears for list init overloads, overload appears for typed init methods
-    assert any(line.startswith("from typing import") and "Literal" in line and "overload" in line for line in lines)
+    assert "from typing import" in content
+    assert "Literal" in content
+    assert "overload" in content
     # Basic field annotations present (now as properties)
     assert any("def aBool(self) -> bool" in line for line in lines)
     assert any("def ints(self) -> Sequence[int]" in line for line in lines)

@@ -5,10 +5,10 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines):
     """Server classes should be generated for all interfaces."""
     lines = calculator_stub_lines
 
-    # Check that interface modules exist (Protocol-based naming)
-    assert any("class _ValueModule(Protocol):" in line for line in lines)
-    assert any("class _FunctionModule(Protocol):" in line for line in lines)
-    assert any("class _CalculatorModule(Protocol):" in line for line in lines)
+    # Check that interface modules exist (now inherit from _InterfaceModule)
+    assert any("class _ValueModule(_InterfaceModule):" in line for line in lines)
+    assert any("class _FunctionModule(_InterfaceModule):" in line for line in lines)
+    assert any("class _CalculatorModule(_InterfaceModule):" in line for line in lines)
 
     # Check that Server classes exist
     assert any("class Server(Protocol):" in line for line in lines)
@@ -25,7 +25,7 @@ def test_server_methods_have_signatures(calculator_stub_lines):
 
     # Function.Server should have call method
     assert "class Server(Protocol):" in content
-    assert "def call(\n                self,\n                params: Sequence[float]," in content
+    assert "def call(self, params: Sequence[float], _context:" in content
     assert "Awaitable[" in content  # Server.call returns Awaitable
 
     # Value.Server should have read method with _context parameter and returns NamedTuple with "Tuple" suffix
@@ -109,15 +109,8 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
     # Find Function.Server's call method - should have params (required), _context, and **kwargs
     # Server parameters remain required for type safety
     # CallContext is now inside Server, so reference is _CalculatorModule._FunctionModule.Server.CallCallContext
-    # Check for multi-line signature
     server_call_found = (
-        "def call(\n                self,\n                params: Sequence[float],\n                _context: _CalculatorModule._FunctionModule.Server.CallCallContext"
-        in content
-    )
-    server_call_found = (
-        server_call_found
-        or "def call(self, params: Sequence[float], _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs)"
-        in content
+        "def call(self, params: Sequence[float], _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs: Any)" in content
     )
 
     assert server_call_found, "Server call method should have same params as Protocol plus _context and **kwargs"

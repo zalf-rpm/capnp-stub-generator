@@ -39,4 +39,8 @@ def test_builder_reader_classes_for_all_types(dummy_stub_lines):
     assert any(line.strip().startswith("class Reader(_DynamicStructReader):") for line in lines)
     assert any(line.strip().startswith("class Builder(_DynamicStructBuilder):") for line in lines)
     # Static methods like from_bytes are inherited from _StructModule
-    assert any("from capnp.lib.capnp import _DynamicStructBuilder, _DynamicStructReader, _StructModule" in line for line in lines)
+    # Imports are now multiline, so check for individual imports
+    content = "".join(lines)
+    assert "_DynamicStructBuilder" in content
+    assert "_DynamicStructReader" in content
+    assert "_StructModule" in content

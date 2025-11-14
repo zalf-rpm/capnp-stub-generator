@@ -165,9 +165,9 @@ def test_interface_with_persistent_inheritance(generated_dir):
 
     content = stub_file.read_text()
 
-    # Check that Service extends both Identifiable and Persistent (via Protocol inheritance)
-    assert "class _ServiceModule(_IdentifiableModule, _PersistentModule, Protocol):" in content, (
-        "Service Protocol should extend both Identifiable and Persistent"
+    # Check that Service extends both Identifiable and Persistent (no longer needs Protocol suffix)
+    assert "class _ServiceModule(_IdentifiableModule, _PersistentModule):" in content, (
+        "Service Module should extend both Identifiable and Persistent"
     )
 
     # Check Server class inheritance - Service.Server should extend both base Servers
@@ -209,15 +209,15 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir):
 
     content = stub_file.read_text()
 
-    # Check nested interfaces extend Identifiable (now as Protocol modules)
-    assert "class _AdminMasterModule(_IdentifiableModule, Protocol):" in content, (
-        "AdminMaster Protocol should extend Identifiable"
+    # Check nested interfaces extend Identifiable (no longer needs Protocol suffix)
+    assert "class _AdminMasterModule(_IdentifiableModule):" in content, (
+        "AdminMaster Module should extend Identifiable"
     )
-    assert "class _UserMasterModule(_IdentifiableModule, Protocol):" in content, (
-        "UserMaster Protocol should extend Identifiable"
+    assert "class _UserMasterModule(_IdentifiableModule):" in content, (
+        "UserMaster Module should extend Identifiable"
     )
-    assert "class _RuntimeModule(_IdentifiableModule, Protocol):" in content, (
-        "Runtime Protocol should extend Identifiable"
+    assert "class _RuntimeModule(_IdentifiableModule):" in content, (
+        "Runtime Module should extend Identifiable"
     )
 
     # Check that all Server classes extend _IdentifiableModule.Server
@@ -263,11 +263,11 @@ def test_interface_method_inheritance_visibility(generated_dir):
 
     # Verify Identifiable has info() method
     # This should be in the IdentifiableClient class
-    assert "class IdentifiableClient(Protocol):" in common_stub, "Should have IdentifiableClient"
+    assert "class IdentifiableClient(_DynamicCapabilityClient):" in common_stub, "Should have IdentifiableClient"
     assert "def info(self)" in common_stub, "Identifiable should have info() method"
 
     # Verify ClimateInstance interface exists and ClimateInstanceClient extends IdentifiableClient
-    assert "class _ClimateInstanceModule(" in model_stub, "ClimateInstance Protocol should exist"
+    assert "class _ClimateInstanceModule(" in model_stub, "ClimateInstance Module should exist"
     assert "class ClimateInstanceClient(_IdentifiableModule.IdentifiableClient)" in model_stub, (
         "ClimateInstanceClient should extend _IdentifiableModule.IdentifiableClient"
     )

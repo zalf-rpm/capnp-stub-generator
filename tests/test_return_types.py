@@ -88,11 +88,11 @@ class TestInterfaceReturnTypes:
         """Interfaces now have an interface module and separate Client class."""
         content = interface_stub_file.read_text()
 
-        # Should have the interface module (not Protocol anymore)
-        assert "class _GreeterModule(Protocol):" in content, "Should have interface module"
+        # Should have the interface module inheriting from _InterfaceModule
+        assert "class _GreeterModule(_InterfaceModule):" in content, "Should have interface module"
 
-        # Should have the Client Protocol class
-        assert "class GreeterClient(Protocol):" in content, "Should have Client Protocol"
+        # Should have the Client class inheriting from _DynamicCapabilityClient
+        assert "class GreeterClient(_DynamicCapabilityClient):" in content, "Should have Client class"
 
         # Should NOT have Builder/Reader variants
         assert "class GreeterBuilder" not in content, "Interfaces should not have Builder class"
@@ -103,11 +103,11 @@ class TestInterfaceReturnTypes:
         content = interface_stub_file.read_text()
 
         # Should have interface module and Client class
-        assert "class _GreeterModule(Protocol):" in content
-        assert "class GreeterClient(Protocol):" in content
+        assert "class _GreeterModule(_InterfaceModule):" in content
+        assert "class GreeterClient(_DynamicCapabilityClient):" in content
 
         # Client methods should not reference non-existent Builder/Reader types
-        client_section = content.split("class GreeterClient(Protocol):")[1].split("\nclass ")[0]
+        client_section = content.split("class GreeterClient(_DynamicCapabilityClient):")[1].split("\nclass ")[0]
         assert "GreeterBuilder" not in client_section, "Interface methods should not reference Builder"
         assert "GreeterReader" not in client_section, "Interface methods should not reference Reader"
 

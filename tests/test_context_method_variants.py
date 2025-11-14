@@ -13,11 +13,8 @@ def test_both_method_variants_exist(calculator_stubs):
     stub_file = calculator_stubs / "calculator_capnp.pyi"
     content = stub_file.read_text()
 
-    # Regular method with individual parameters (using Protocol names)
-    assert (
-        "def evaluate(\n            self,\n            expression: _CalculatorModule._ExpressionModule.Reader,"
-        in content
-    )
+    # Regular method with individual parameters (single line signature)
+    assert "def evaluate(self, expression: _CalculatorModule._ExpressionModule.Reader, _context:" in content
     assert "_context: _CalculatorModule.Server.EvaluateCallContext" in content
     assert "**kwargs: Any" in content
 
@@ -88,10 +85,7 @@ def test_nested_interface_context_methods(calculator_stubs):
     content = stub_file.read_text()
 
     # Calculator.Value is a nested interface (now _ValueModule inside _CalculatorModule)
-    assert (
-        "def read_context(\n                self, context: _CalculatorModule._ValueModule.Server.ReadCallContext\n            ) -> Awaitable[None]:"
-        in content
-    )
+    assert "def read_context(self, context: _CalculatorModule._ValueModule.Server.ReadCallContext) -> Awaitable[None]:" in content
 
     # Calculator.Function is a nested interface (now _FunctionModule inside _CalculatorModule)
     assert "def call_context(" in content  # Verify method exists

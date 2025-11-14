@@ -91,7 +91,9 @@ class Writer:
 
         self._imports: list[str] = []
         self._add_import("from __future__ import annotations")
-        self._add_import("from capnp.lib.capnp import _DynamicStructBuilder, _DynamicStructReader, _StructModule")
+        self._add_import(
+            "from capnp.lib.capnp import _DynamicCapabilityClient, _DynamicStructBuilder, _DynamicStructReader, _InterfaceModule, _Request, _StructModule"
+        )
 
         self._typing_imports: set[Writer.VALID_TYPING_IMPORTS] = set()
 
@@ -615,6 +617,22 @@ class Writer:
                 )
             )
 
+        # Add catchall overload if we added any specific overloads
+        if use_overload:
+            self.scope.add(helper.new_decorator("overload"))
+            catchall_params = [
+                "self",
+                helper.TypeHintedVariable("field", [helper.TypeHint("str", primary=True)]),
+                helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"),
+            ]
+            self.scope.add(
+                helper.new_function(
+                    "init",
+                    parameters=catchall_params,
+                    return_type="Any",
+                )
+            )
+
     # ===== Struct Generation Helper Methods =====
 
     def _add_new_message_method(
@@ -813,13 +831,13 @@ class Writer:
     # ===== Interface Generation Helper Methods =====
 
     def _collect_interface_base_classes(self, schema: _StructSchema) -> list[str]:
-        """Collect base Protocol classes for an interface (superclasses + Protocol).
+        """Collect base classes for an interface (superclasses only).
 
         Args:
             schema (_StructSchema): The interface schema.
 
         Returns:
-            list[str]: List of base Protocol class names (e.g., ["_IdentifiableModule", "Protocol"]).
+            list[str]: List of base interface module class names (e.g., ["_IdentifiableModule"]).
         """
         base_classes = []
 
@@ -830,9 +848,9 @@ class Writer:
                 try:
                     # Get the superclass type
                     superclass_type = self.get_type_by_id(superclass.id)
-                    # superclass_type.name is now the Protocol name (e.g., "_IdentifiableModule")
+                    # superclass_type.name is now the interface module name (e.g., "_IdentifiableModule")
                     protocol_name = superclass_type.name
-                    # Build scoped Protocol name
+                    # Build scoped name
                     if superclass_type.scope and not superclass_type.scope.is_root:
                         base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
                     else:
@@ -847,7 +865,7 @@ class Writer:
                                 # Found the superclass module, generate it
                                 self.generate_nested(module.schema)
                                 superclass_type = self.get_type_by_id(superclass.id)
-                                # superclass_type.name is now the Protocol name
+                                # superclass_type.name is now the interface module name
                                 protocol_name = superclass_type.name
                                 if superclass_type.scope and not superclass_type.scope.is_root:
                                     base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
@@ -874,7 +892,7 @@ class Writer:
                             if found_schema:
                                 self.generate_nested(found_schema)
                                 superclass_type = self.get_type_by_id(superclass.id)
-                                # superclass_type.name is now the Protocol name
+                                # superclass_type.name is now the interface module name
                                 protocol_name = superclass_type.name
                                 if superclass_type.scope and not superclass_type.scope.is_root:
                                     base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
@@ -885,9 +903,7 @@ class Writer:
                     except Exception as e:
                         logger.debug(f"Could not resolve superclass {superclass.id}: {e}")
 
-        # Always add Protocol as the last base class
-        base_classes.append("Protocol")
-
+        # No longer add Protocol - interface modules inherit from _InterfaceModule
         return base_classes
 
     def _generate_nested_types_for_interface(self, schema: _StructSchema):
@@ -2844,17 +2860,16 @@ class Writer:
         # Add TypeAlias import
         self._add_typing_import("TypeAlias")
 
-        # Create Protocol class declaration with inheritance
+        # Create interface module class declaration - use regular class (not Protocol)
+        # Interface modules at runtime are _InterfaceModule instances, not Protocols
         if context.base_classes:
-            # Add Protocol to base classes if not already there
-            if "Protocol" not in context.base_classes:
-                protocol_declaration = helper.new_class_declaration(
-                    context.protocol_class_name, context.base_classes + ["Protocol"]
-                )
-            else:
-                protocol_declaration = helper.new_class_declaration(context.protocol_class_name, context.base_classes)
+            # Inherit from parent interface modules only (they already inherit from _InterfaceModule)
+            protocol_declaration = helper.new_class_declaration(
+                context.protocol_class_name, context.base_classes
+            )
         else:
-            protocol_declaration = helper.new_class_declaration(context.protocol_class_name, ["Protocol"])
+            # No parent interfaces - inherit directly from _InterfaceModule
+            protocol_declaration = helper.new_class_declaration(context.protocol_class_name, ["_InterfaceModule"])
 
         # Open interface Protocol scope
         self.new_scope(
@@ -3038,9 +3053,9 @@ class Writer:
                 client_base_classes.append(f"{protocol_name}.{interface_name}Client")
                 has_parent_clients = True
 
-        # Only add Protocol if there are no parent Client classes
+        # Always inherit from _DynamicCapabilityClient as the base
         if not has_parent_clients:
-            client_base_classes.insert(0, "Protocol")
+            client_base_classes.insert(0, "_DynamicCapabilityClient")
 
         # Generate Client class declaration
         self.scope.add(helper.new_class_declaration(context.client_type_name, client_base_classes))
@@ -3085,9 +3100,9 @@ class Writer:
                 client_base_classes.append(f"{protocol_name}.{interface_name}Client")
                 has_parent_clients = True
 
-        # Only add Protocol if there are no parent Client classes
+        # Always inherit from _DynamicCapabilityClient as the base
         if not has_parent_clients:
-            client_base_classes.insert(0, "Protocol")
+            client_base_classes.insert(0, "_DynamicCapabilityClient")
 
         # Generate Client class declaration
         self.scope.add(helper.new_class_declaration(client_class_name, client_base_classes))

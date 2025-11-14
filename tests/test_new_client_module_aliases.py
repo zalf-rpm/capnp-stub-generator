@@ -13,15 +13,15 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
     stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
     content = stub_file.read_text()
 
-    # Value._new_client should accept _ValueModule.Server, not Value.Server
-    assert "def _new_client(\n            cls, server: _CalculatorModule._ValueModule.Server\n        )" in content, (
+    # Value._new_client should accept _ValueModule.Server, not Value.Server (single line)
+    assert "def _new_client(cls, server: _CalculatorModule._ValueModule.Server)" in content, (
         "_new_client should use _ValueModule.Server"
     )
 
-    # Function._new_client should accept _FunctionModule.Server, not Function.Server
-    assert (
-        "def _new_client(\n            cls, server: _CalculatorModule._FunctionModule.Server\n        )" in content
-    ), "_new_client should use _FunctionModule.Server"
+    # Function._new_client should accept _FunctionModule.Server, not Function.Server (single line)
+    assert "def _new_client(cls, server: _CalculatorModule._FunctionModule.Server)" in content, (
+        "_new_client should use _FunctionModule.Server"
+    )
 
     # Calculator._new_client should accept _CalculatorModule.Server, not Calculator.Server
     assert "def _new_client(cls, server: _CalculatorModule.Server) -> _CalculatorModule.CalculatorClient:" in content, (
@@ -82,13 +82,13 @@ def test_new_client_nested_interface_uses_full_module_path(basic_stubs):
     content = stub_file.read_text()
 
     # Channel.Reader._new_client should use _ChannelModule._ReaderModule.Server
-    # NOT just _ReaderModule.Server (which would be undefined)
-    assert "def _new_client(\n            cls, server: _ChannelModule._ReaderModule.Server\n        )" in content, (
+    # NOT just _ReaderModule.Server (which would be undefined) (single line)
+    assert "def _new_client(cls, server: _ChannelModule._ReaderModule.Server)" in content, (
         "Nested interface _new_client should use full module path"
     )
 
-    # Channel.Writer._new_client should use _ChannelModule._WriterModule.Server
-    assert "def _new_client(\n            cls, server: _ChannelModule._WriterModule.Server\n        )" in content, (
+    # Channel.Writer._new_client should use _ChannelModule._WriterModule.Server (single line)
+    assert "def _new_client(cls, server: _ChannelModule._WriterModule.Server)" in content, (
         "Nested interface _new_client should use full module path"
     )
 

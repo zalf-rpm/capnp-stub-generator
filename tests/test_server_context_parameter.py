@@ -66,9 +66,9 @@ class TestServerContextParameter:
         import re
 
         # Test _CalculatorModule._FunctionModule.call
-        # Function is now an interface module, not Protocol
+        # Function is now an interface module inheriting from _InterfaceModule
         # Look for the _FunctionModule section (it's nested inside _CalculatorModule)
-        function_section = re.search(r"class _FunctionModule\(Protocol\):.*?(?=\n    Function:)", content, re.DOTALL)
+        function_section = re.search(r"class _FunctionModule\(_InterfaceModule\):.*?(?=\n    Function:)", content, re.DOTALL)
         assert function_section, "_CalculatorModule._FunctionModule not found"
 
         server_call = re.search(
