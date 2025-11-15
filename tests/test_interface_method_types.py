@@ -202,7 +202,7 @@ class TestInterfaceMethodComplexTypes:
 
         # Verify the Operator enum exists as Enum class with TypeAlias
         assert "class _OperatorModule(Enum):" in stub_content
-        assert "Operator: TypeAlias = _OperatorModule" in stub_content
+        assert "Operator = _OperatorModule" in stub_content
 
     def test_list_parameter_types(self, generate_calculator_stubs):
         """Test that list parameters use Sequence with proper element types."""

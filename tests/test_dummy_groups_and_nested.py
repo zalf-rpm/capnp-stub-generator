@@ -31,8 +31,8 @@ def test_nested_types_enums_and_lists(dummy_stub_lines):
     # Nested enums are now Enum classes under their parent struct with TypeAliases
     assert any(re.match(r"^\s*class _NestedEnum1Module\(Enum\):", line) for line in lines)
     assert any(re.match(r"^\s*class _NestedEnum2Module\(Enum\):", line) for line in lines)
-    assert any("NestedEnum1: TypeAlias = _NestedEnum1Module" in line for line in lines)
-    assert any("NestedEnum2: TypeAlias = _NestedEnum2Module" in line for line in lines)
+    assert any("NestedEnum1 = _NestedEnum1Module" in line for line in lines)
+    assert any("NestedEnum2 = _NestedEnum2Module" in line for line in lines)
     # Using declarations produce aliases or reexports
     assert any("class _TestUsingModule(_StructModule):" in line for line in lines)
     # Fields referencing nested enums use dotted names with module alias (not flattened, now as properties)

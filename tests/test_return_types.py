@@ -47,18 +47,18 @@ class TestStructReturnTypes:
         """Reader class properties should return Reader types."""
         content = dummy_stub_file.read_text()
 
-        # With nested structure, check for _TestAllTypesModule.Reader return type
-        assert "def structField(self) -> _TestAllTypesModule.Reader:" in content, (
-            "Reader class should return _TestAllTypesModule.Reader type"
+        # With flat type aliases, check for TestAllTypesReader return type
+        assert "def structField(self) -> TestAllTypesReader:" in content, (
+            "Reader class should return TestAllTypesReader type"
         )
 
     def test_builder_class_returns_builder_type(self, dummy_stub_file):
         """Builder class properties should return Builder types."""
         content = dummy_stub_file.read_text()
 
-        # With nested structure, check for _TestAllTypesModule.Builder return type
-        assert "def structField(self) -> _TestAllTypesModule.Builder:" in content, (
-            "Builder class getter should return _TestAllTypesModule.Builder type"
+        # With flat type aliases, check for TestAllTypesBuilder return type
+        assert "def structField(self) -> TestAllTypesBuilder:" in content, (
+            "Builder class getter should return TestAllTypesBuilder type"
         )
 
     def test_builder_setter_accepts_union(self, dummy_stub_file):
@@ -67,7 +67,7 @@ class TestStructReturnTypes:
 
         # Builder setter should accept Builder/Reader + dict (may be formatted across multiple lines)
         assert "@structField.setter" in content
-        assert "value: _TestAllTypesModule.Builder | _TestAllTypesModule.Reader | dict[str, Any]" in content, (
+        assert "value: TestAllTypesBuilder | TestAllTypesReader | dict[str, Any]" in content, (
             "Builder setter should accept union of Builder, Reader, and dict types (not base)"
         )
 
@@ -75,9 +75,9 @@ class TestStructReturnTypes:
         """List fields should follow the same narrowing pattern."""
         content = dummy_stub_file.read_text()
 
-        # With nested structure, check for Sequence[_TestAllTypesModule.Reader]
-        assert "def structList(self) -> Sequence[_TestAllTypesModule.Reader]:" in content, (
-            "Reader class list should be Sequence[_TestAllTypesModule.Reader]"
+        # With flat type aliases, check for Sequence[TestAllTypesReader]
+        assert "def structList(self) -> Sequence[TestAllTypesReader]:" in content, (
+            "Reader class list should be Sequence[TestAllTypesReader]"
         )
 
 

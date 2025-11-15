@@ -19,9 +19,9 @@ class TestDummyEnumsAndTypes:
     def test_enum_definition_and_imports(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
-        assert any(line.startswith("from typing import") and "TypeAlias" in line for line in lines)
+        # Note: 'type' is a PEP 695 built-in statement, not imported from typing
         assert any(line.strip().startswith("class _TestEnumModule(Enum):") for line in lines)
-        assert any(line.strip() == "TestEnum: TypeAlias = _TestEnumModule" for line in lines)
+        assert any(line.strip() == "type TestEnum = _TestEnumModule" for line in lines)
         for name in ["foo", "bar", "baz", "qux"]:
             assert any(f"{name} =" in line for line in lines)
 
@@ -121,8 +121,8 @@ class TestDummyGroupsAndNested:
         lines = dummy_stub_lines
         assert any(re.match(r"^\s*class _NestedEnum1Module\(Enum\):", line) for line in lines)
         assert any(re.match(r"^\s*class _NestedEnum2Module\(Enum\):", line) for line in lines)
-        assert any("NestedEnum1: TypeAlias = _NestedEnum1Module" in line for line in lines)
-        assert any("NestedEnum2: TypeAlias = _NestedEnum2Module" in line for line in lines)
+        assert any("NestedEnum1 = _NestedEnum1Module" in line for line in lines)
+        assert any("NestedEnum2 = _NestedEnum2Module" in line for line in lines)
         assert any("class _TestUsingModule(_StructModule):" in line for line in lines)
         # Fields are now properties using module aliases
         assert any(
@@ -200,7 +200,7 @@ class TestDummyConstantsAndVersioning:
         lines = dummy_stub_lines
         assert any("class _TestNameAnnotationModule(_StructModule):" in line for line in lines)
         assert any("class _BadlyNamedEnumModule(Enum):" in line for line in lines)
-        assert any("BadlyNamedEnum: TypeAlias = _BadlyNamedEnumModule" in line for line in lines)
+        assert any("BadlyNamedEnum = _BadlyNamedEnumModule" in line for line in lines)
         assert any("badFieldName" in line or "bar" in line for line in lines)
 
     def test_empty_struct_representation(self, dummy_stub_lines):

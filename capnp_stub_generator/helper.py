@@ -61,6 +61,7 @@ def _build_variant_type(type_name: str, variant: str, flat: bool = False) -> str
     else:
         # Nested naming: MyClass -> MyClass.Builder, MyClass[T] -> MyClass[T].Builder
         # Generic parameters stay with the parent: MyClass[T].Builder, not MyClass.Builder[T]
+        # This is the correct Python typing pattern for nested generic classes
         return f"{type_name}.{variant}"
 
 
@@ -134,18 +135,22 @@ class TypeHint:
     scopes: list[str] = field(default_factory=list)
     affix: str = ""
     primary: bool = False
+    flat_alias: bool = False  # If True, name is already a flat alias and affix is only for lookup
 
     def __str__(self) -> str:
         """The string representation of the type hint.
 
         This is composed of the scopes (if any), the name of the hint, and the affix (if any).
-        For generic types like `MyClass[T]`, the affix is inserted before the brackets.
+        For generic types like `MyClass[T]`, the affix comes after: `MyClass[T].Builder`.
         Affixes are treated as nested classes (e.g., MyClass.Builder instead of MyClassBuilder).
+        If flat_alias is True, the name already contains the full type and affix is not appended.
         """
-        # Handle affixes for generic types: MyClass[T] + Builder -> MyClass.Builder[T]
-        if self.affix and "[" in self.name:
-            base_name, generic_part = self.name.split("[", 1)
-            full_name = f"{base_name}.{self.affix}[{generic_part}"
+        # If using flat alias, don't append the affix
+        if self.flat_alias:
+            full_name = self.name
+        # Handle affixes for generic types: MyClass[T] + Builder -> MyClass[T].Builder
+        elif self.affix and "[" in self.name:
+            full_name = f"{self.name}.{self.affix}"
         elif self.affix:
             full_name = f"{self.name}.{self.affix}"
         else:
@@ -474,11 +479,13 @@ def new_property(name: str, return_type: str, with_setter: bool = False, setter_
     return lines
 
 
-def new_class_declaration(name: str, parameters: list[str] | None = None) -> str:
+def new_class_declaration(name: str, parameters: list[str] | None = None, generic_params: list[str] | None = None) -> str:
     """Creates a string for declaring a class.
 
     For example, for a name of 'SomeClass' and a list of parameters that is 'str, Type[str, int]', the output
     will be 'SomeClass (str, Type[str, int]):'.
+
+    If generic_params are provided (PEP 695 syntax), output will be 'class SomeClass[T, U](BaseClass):'.
 
     If no parameters are provided, the output is just 'SomeClass:'.
 
@@ -486,13 +493,19 @@ def new_class_declaration(name: str, parameters: list[str] | None = None) -> str
         name (str): The class name.
         parameters (list[str] | None, optional):
             A list of parameters that are part of the class declaration. Defaults to None.
+        generic_params (list[str] | None, optional):
+            A list of generic type parameters for PEP 695 syntax (e.g., ["T", "U"]). Defaults to None.
 
     Returns:
         str: The class declaration.
     """
+    # Build generic params part: [T] or [T, U]
+    generic_part = f"[{', '.join(generic_params)}]" if generic_params else ""
+    
     if parameters:
-        return f"class {name}({join_parameters(parameters)}):"
-
+        return f"class {name}{generic_part}({join_parameters(parameters)}):"
+    elif generic_params:
+        return f"class {name}{generic_part}:"
     else:
         return f"class {name}:"
 

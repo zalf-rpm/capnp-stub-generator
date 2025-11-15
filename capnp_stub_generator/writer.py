@@ -497,6 +497,15 @@ class Writer:
         Returns:
             Tuple of (getter_type, setter_type). setter_type is None if same as getter.
         """
+        # Handle generic parameters (AnyPointer with parameter)
+        if hasattr(field, '_is_generic_param') and field._is_generic_param:
+            # Getter returns _DynamicObjectReader
+            getter_type = field.primary_type_nested
+            # Setter accepts only pointer types (structs, lists, blobs, interfaces)
+            # Primitives (int, float, bool) are NOT allowed as Cap'n Proto generic parameters
+            setter_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+            return getter_type, setter_type
+        
         if field.has_type_hint_with_builder_affix:
             # For lists, use MutableSequence for Builder (lists are mutable)
             if field.nesting_depth == 1:
@@ -717,13 +726,13 @@ class Writer:
     def _add_new_message_method(
         self,
         slot_fields: list[helper.TypeHintedVariable],
-        scoped_builder_type: str,
+        builder_type_name: str,
     ):
         """Add new_message instance method override with field parameters as kwargs.
 
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields to add as parameters.
-            scoped_builder_type (str): The fully qualified Builder type name to return.
+            builder_type_name (str): The Builder type name to return (flat alias).
         """
         self._add_typing_import("Any")
         new_message_params: list[helper.TypeHintedVariable | str] = [
@@ -742,25 +751,35 @@ class Writer:
 
         # Add each field as an optional kwarg parameter
         for slot_field in slot_fields:
-            # Get the type suitable for initialization (Builder types for struct fields)
-            field_type = (
-                slot_field.get_type_with_affixes(["Builder"])
-                if slot_field.has_type_hint_with_builder_affix
-                else slot_field.full_type_nested
-            )
-            # For struct fields, also accept dict for initialization
-            type_hints = [helper.TypeHint(field_type, primary=True)]
-            if slot_field.has_type_hint_with_builder_affix:
-                if slot_field.nesting_depth == 0:
-                    # Non-list struct fields accept dict directly
-                    type_hints.append(helper.TypeHint("dict[str, Any]"))
-                    self._add_typing_import("Any")
-                elif slot_field.nesting_depth == 1:
-                    # List of struct fields accept Sequence[dict]
-                    type_hints.append(helper.TypeHint("Sequence[dict[str, Any]]"))
-                    self._add_typing_import("Sequence")
-                    self._add_typing_import("Any")
-            type_hints.append(helper.TypeHint("None"))
+            # Handle generic parameters specially
+            if hasattr(slot_field, '_is_generic_param') and slot_field._is_generic_param:
+                # Generic parameters accept only pointer types (structs, lists, blobs, interfaces)
+                # Primitives (int, float, bool) are NOT allowed per Cap'n Proto spec
+                field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+                type_hints = [
+                    helper.TypeHint(field_type, primary=True),
+                    helper.TypeHint("None")
+                ]
+            else:
+                # Get the type suitable for initialization (Builder types for struct fields)
+                field_type = (
+                    slot_field.get_type_with_affixes(["Builder"])
+                    if slot_field.has_type_hint_with_builder_affix
+                    else slot_field.full_type_nested
+                )
+                # For struct fields, also accept dict for initialization
+                type_hints = [helper.TypeHint(field_type, primary=True)]
+                if slot_field.has_type_hint_with_builder_affix:
+                    if slot_field.nesting_depth == 0:
+                        # Non-list struct fields accept dict directly
+                        type_hints.append(helper.TypeHint("dict[str, Any]"))
+                        self._add_typing_import("Any")
+                    elif slot_field.nesting_depth == 1:
+                        # List of struct fields accept Sequence[dict]
+                        type_hints.append(helper.TypeHint("Sequence[dict[str, Any]]"))
+                        self._add_typing_import("Sequence")
+                        self._add_typing_import("Any")
+                type_hints.append(helper.TypeHint("None"))
 
             # Make field optional since not all fields need to be set
             field_param = helper.TypeHintedVariable(
@@ -772,15 +791,15 @@ class Writer:
 
         # Add as instance method with @override decorator
         self.scope.add("@override")
-        self.scope.add(helper.new_function("new_message", new_message_params, scoped_builder_type))
+        self.scope.add(helper.new_function("new_message", new_message_params, builder_type_name))
 
     def _gen_struct_base_class(
         self,
         slot_fields: list[helper.TypeHintedVariable],
         init_choices: list[InitChoice],
         schema: _StructSchema,
-        scoped_reader_type: str,
-        scoped_builder_type: str,
+        reader_type_name: str,
+        builder_type_name: str,
     ):
         """Generate the base struct class with minimal overrides.
 
@@ -791,17 +810,17 @@ class Writer:
             slot_fields (list[TypeHintedVariable]): The struct fields.
             init_choices (list[InitChoice]): Init method overload choices.
             schema (_StructSchema): The struct schema.
-            scoped_reader_type (str): Fully qualified Reader type name.
-            scoped_builder_type (str): Fully qualified Builder type name.
+            reader_type_name (str): Reader type name (flat alias).
+            builder_type_name (str): Builder type name (flat alias).
         """
         # Add new_message method override with field parameters
         self._add_typing_import("override")
-        self._add_new_message_method(slot_fields, scoped_builder_type)
+        self._add_new_message_method(slot_fields, builder_type_name)
 
     def _gen_struct_reader_class(
         self,
         slot_fields: list[helper.TypeHintedVariable],
-        scoped_builder_type: str,
+        builder_type_name: str,
         schema: _StructSchema,
     ):
         """Generate the Reader class for a struct.
@@ -813,7 +832,7 @@ class Writer:
 
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
-            scoped_builder_type (str): Fully qualified Builder type name.
+            builder_type_name (str): Builder type name (flat alias).
             schema (_StructSchema): The struct schema.
         """
         # Add the reader slot fields as properties
@@ -850,7 +869,7 @@ class Writer:
                         default="None",
                     ),
                 ],
-                return_type=scoped_builder_type,
+                return_type=builder_type_name,
             )
         )
 
@@ -859,8 +878,8 @@ class Writer:
         slot_fields: list[helper.TypeHintedVariable],
         init_choices: list[InitChoice],
         list_init_choices: list[tuple[str, str, bool]],
-        scoped_builder_type: str,
-        scoped_reader_type: str,
+        builder_type_name: str,
+        reader_type_name: str,
         schema: _StructSchema,
     ):
         """Generate the Builder class for a struct.
@@ -874,8 +893,8 @@ class Writer:
             slot_fields (list[TypeHintedVariable]): The struct fields.
             init_choices (list[InitChoice]): Init method overload choices for structs.
             list_init_choices (list[tuple[str, str, bool]]): Init method overload choices for lists.
-            scoped_builder_type (str): Fully qualified Builder type name.
-            scoped_reader_type (str): Fully qualified Reader type name.
+            builder_type_name (str): Builder type name (flat alias).
+            reader_type_name (str): Reader type name (flat alias).
             schema (_StructSchema): The struct schema.
         """
         # Add all builder slot fields with setters
@@ -903,7 +922,7 @@ class Writer:
             helper.new_function(
                 "as_reader",
                 parameters=["self"],
-                return_type=scoped_reader_type,
+                return_type=reader_type_name,
             )
         )
 
@@ -1178,8 +1197,20 @@ class Writer:
 
         elif field_slot_type == capnp_types.CapnpElementType.STRUCT:
             hinted_variable = self.gen_struct_slot(field, raw_field.schema, init_choices)
-            hinted_variable.add_builder_from_primary_type()
-            hinted_variable.add_reader_from_primary_type()
+
+            # Try to use flat TypeAliases for Builder/Reader if available
+            type_name = hinted_variable.primary_type_hint.name
+            builder_alias = self._get_flat_builder_alias(type_name)
+            reader_alias = self._get_flat_reader_alias(type_name)
+
+            if builder_alias and reader_alias:
+                # Use flat aliases with affix only for lookup (flat_alias=True prevents appending affix)
+                hinted_variable.add_type_hint(helper.TypeHint(builder_alias, affix="Builder", flat_alias=True))
+                hinted_variable.add_type_hint(helper.TypeHint(reader_alias, affix="Reader", flat_alias=True))
+            else:
+                # Fall back to scoped names with affixes (old behavior)
+                hinted_variable.add_builder_from_primary_type()
+                hinted_variable.add_reader_from_primary_type()
 
         elif field_slot_type == capnp_types.CapnpElementType.ANY_POINTER:
             hinted_variable = self.gen_any_pointer_slot(field, new_type)
@@ -1363,8 +1394,18 @@ class Writer:
             pass
 
         if create_extended_types:
-            hinted_variable.add_builder_from_primary_type()
-            hinted_variable.add_reader_from_primary_type()
+            # Try to use flat TypeAliases for Builder/Reader if available
+            builder_alias = self._get_flat_builder_alias(type_name)
+            reader_alias = self._get_flat_reader_alias(type_name)
+
+            if builder_alias and reader_alias:
+                # Use flat aliases with affix only for lookup (flat_alias=True prevents appending affix)
+                hinted_variable.add_type_hint(helper.TypeHint(builder_alias, affix="Builder", flat_alias=True))
+                hinted_variable.add_type_hint(helper.TypeHint(reader_alias, affix="Reader", flat_alias=True))
+            else:
+                # Fall back to scoped names with affixes (old behavior)
+                hinted_variable.add_builder_from_primary_type()
+                hinted_variable.add_reader_from_primary_type()
 
         return hinted_variable
 
@@ -1471,10 +1512,26 @@ class Writer:
         try:
             # Check if this is a generic parameter
             param = field.slot.type.anyPointer.parameter
-            type_name = new_type.generic_params[param.parameterIndex]
-            return helper.TypeHintedVariable(
-                helper.sanitize_name(field.name), [helper.TypeHint(type_name, primary=True)]
+            # Generic parameters at runtime:
+            # - Reader properties return _DynamicObjectReader
+            # - Builder properties return _DynamicObjectReader (getter) 
+            # - Builder properties accept only pointer types (setter):
+            #   * Structs: _DynamicStructBuilder, _DynamicStructReader
+            #   * Blobs: str (Text), bytes (Data)
+            #   * Interfaces: _DynamicCapabilityClient, _DynamicCapabilityServer
+            #   * Lists: (also _DynamicStructBuilder/_DynamicStructReader)
+            # Primitives (int, float, bool) are NOT allowed per Cap'n Proto spec
+            # This matches the behavior of generic interface methods
+            self._needs_dynamic_object_reader_augmentation = True
+            
+            # Create TypeHintedVariable with primary type for getter and Any for setter
+            hinted_var = helper.TypeHintedVariable(
+                helper.sanitize_name(field.name), 
+                [helper.TypeHint("_DynamicObjectReader", primary=True)]
             )
+            # Mark that this field needs special setter handling in Builder
+            hinted_var._is_generic_param = True
+            return hinted_var
 
         except (capnp.KjException, AttributeError, IndexError):
             # Not a parameter, treat as a plain AnyPointer -> Any
@@ -1527,7 +1584,6 @@ class Writer:
 
         # Add Enum import
         self._add_enum_import()
-        self._add_typing_import("TypeAlias")
 
         # Generate the Enum class declaration
         enum_declaration = helper.new_class_declaration(enum_class_name, ["Enum"])
@@ -1562,23 +1618,33 @@ class Writer:
         # Return to parent scope
         self.return_from_scope()
 
-        # Add TypeAlias at the enum's parent scope level for backwards compatibility
+        # Add type alias at the enum's parent scope level for backwards compatibility
         # This allows users to reference the enum by its short name
-        enum_parent_scope.add(f"{context.type_name}: TypeAlias = {enum_class_name}")
+        # Only add if this is a nested type (top-level types get their aliases at module level)
+        is_nested = enum_parent_scope and not enum_parent_scope.is_root
+        if is_nested:
+            enum_parent_scope.add(f"type {context.type_name} = {enum_class_name}")
+
+        # Track for top-level TypeAliases (both nested and top-level)
+        # For enums, we use the full scoped enum class name
+        self._all_type_aliases[context.type_name] = (new_type.scoped_name, "Enum")
 
         return new_type
 
     def gen_generic(self, schema: _StructSchema) -> list[str]:
-        """Generate a `generic` type variable.
+        """Generate generic type parameter names for PEP 695 syntax.
+
+        With PEP 695, we don't need to register TypeVars explicitly.
+        We just return the parameter names to use in class[T, U] syntax.
 
         Args:
             schema (_StructSchema): The schema to generate the `generic` object out of.
 
         Returns:
-            list[str]: The list of registered generic type variables.
+            list[str]: The list of generic type parameter names.
         """
-        self._add_typing_import("TypeVar")
-        self._add_typing_import("Generic")
+        # No longer need to import TypeVar and Generic for PEP 695 syntax
+        # These imports are only added if needed elsewhere
 
         generic_params: list[str] = [param.name for param in schema.node.parameters]
         referenced_params: list[str] = []
@@ -1598,7 +1664,9 @@ class Writer:
                     # Type not yet registered, skip for now
                     pass
 
-        return [self.register_type_var(param) for param in generic_params + referenced_params]
+        # Return param names for PEP 695 (no underscore prefix needed - they're scoped)
+        # e.g., schema has "T" -> return "T" (not "_T")
+        return generic_params + referenced_params
 
     # ===== Struct Generation Helper Methods (Phase 2 Refactoring) =====
 
@@ -1642,9 +1710,9 @@ class Writer:
         protocol_class_name = f"_{type_name}Module"
 
         if registered_params:
-            parameter = helper.new_type_group("Generic", registered_params)
+            # Use PEP 695 syntax: class _BoxModule[_T](_StructModule):
             protocol_declaration = helper.new_class_declaration(
-                protocol_class_name, parameters=[parameter, "_StructModule"]
+                protocol_class_name, parameters=["_StructModule"], generic_params=registered_params
             )
         else:
             protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=["_StructModule"])
@@ -1765,8 +1833,19 @@ class Writer:
             helper.sanitize_name(field.name),
             [helper.TypeHint(group_scoped_name, primary=True)],
         )
-        hinted_variable.add_builder_from_primary_type()
-        hinted_variable.add_reader_from_primary_type()
+
+        # Try to use flat TypeAliases for Builder/Reader if available
+        builder_alias = self._get_flat_builder_alias(group_scoped_name)
+        reader_alias = self._get_flat_reader_alias(group_scoped_name)
+
+        if builder_alias and reader_alias:
+            # Use flat aliases with affix only for lookup (flat_alias=True prevents appending affix)
+            hinted_variable.add_type_hint(helper.TypeHint(builder_alias, affix="Builder", flat_alias=True))
+            hinted_variable.add_type_hint(helper.TypeHint(reader_alias, affix="Reader", flat_alias=True))
+        else:
+            # Fall back to scoped names with affixes (old behavior)
+            hinted_variable.add_builder_from_primary_type()
+            hinted_variable.add_reader_from_primary_type()
 
         # Add to collections
         fields_collection.add_slot_field(hinted_variable)
@@ -1808,6 +1887,7 @@ class Writer:
             fields_collection: The processed fields collection
         """
         # Build the Reader class declaration inheriting from _DynamicStructReader
+        # Nested classes should NOT be Generic - they use TypeVars from parent scope
         reader_class_declaration = helper.new_class_declaration("Reader", parameters=["_DynamicStructReader"])
 
         # Add the class declaration to the current scope (the struct scope)
@@ -1816,9 +1896,22 @@ class Writer:
         # Create a new scope for the Reader Protocol, explicitly using current scope as parent
         self.new_scope("Reader", context.schema.node, register=False, parent_scope=self.scope)
 
+        # For generic structs, use scoped type with generic params: _BoxModule[_T].Builder
+        # For non-generic structs, use flat alias: BoxBuilder
+        if context.registered_params:
+            # Build generic param list: [_T] or [_T, _U]
+            generic_params_str = ", ".join(context.registered_params)
+            # Get the scoped module name from scoped_builder_type_name by removing .Builder suffix
+            # e.g., "_PersistentModule._SaveParamsModule.Builder" -> "_PersistentModule._SaveParamsModule"
+            scoped_module_name = context.scoped_builder_type_name.rsplit(".Builder", 1)[0]
+            # Build return type: _PersistentModule._SaveParamsModule[_T].Builder
+            builder_return_type = f"{scoped_module_name}[{generic_params_str}].Builder"
+        else:
+            builder_return_type = context.builder_type_name
+
         self._gen_struct_reader_class(
             fields_collection.slot_fields,
-            context.scoped_builder_type_name,
+            builder_return_type,
             context.schema,
         )
 
@@ -1836,6 +1929,7 @@ class Writer:
             fields_collection: The processed fields collection
         """
         # Build the Builder class declaration inheriting from _DynamicStructBuilder
+        # Nested classes should NOT be Generic - they use TypeVars from parent scope
         builder_class_declaration = helper.new_class_declaration("Builder", parameters=["_DynamicStructBuilder"])
 
         # Add the class declaration to the current scope (the struct scope)
@@ -1844,12 +1938,27 @@ class Writer:
         # Create a new scope for the Builder Protocol, explicitly using current scope as parent
         self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
 
+        # For generic structs, use scoped type with generic params: _BoxModule[_T].Reader
+        # For non-generic structs, use flat alias: BoxReader
+        if context.registered_params:
+            # Build generic param list: [_T] or [_T, _U]
+            generic_params_str = ", ".join(context.registered_params)
+            # Get the scoped module name from scoped_builder_type_name by removing .Builder suffix
+            # e.g., "_PersistentModule._SaveParamsModule.Builder" -> "_PersistentModule._SaveParamsModule"
+            scoped_module_name = context.scoped_builder_type_name.rsplit(".Builder", 1)[0]
+            # Build return types: _PersistentModule._SaveParamsModule[_T].Builder and ...Reader
+            builder_return_type = f"{scoped_module_name}[{generic_params_str}].Builder"
+            reader_return_type = f"{scoped_module_name}[{generic_params_str}].Reader"
+        else:
+            builder_return_type = context.builder_type_name
+            reader_return_type = context.reader_type_name
+
         self._gen_struct_builder_class(
             fields_collection.slot_fields,
             fields_collection.init_choices,
             fields_collection.list_init_choices,
-            context.scoped_builder_type_name,
-            context.scoped_reader_type_name,
+            builder_return_type,
+            reader_return_type,
             context.schema,
         )
 
@@ -1887,34 +1996,65 @@ class Writer:
         # Generate nested Builder Protocol (inside the main struct Protocol)
         self._generate_nested_builder_class(context, fields_collection)
 
+        # For generic structs, use scoped type with generic params for new_message return type
+        # For non-generic structs, use flat alias
+        if context.registered_params:
+            # Build generic param list: [_T] or [_T, _U]
+            generic_params_str = ", ".join(context.registered_params)
+            # Get the scoped module name from scoped_builder_type_name by removing .Builder suffix
+            # e.g., "_PersistentModule._SaveParamsModule.Builder" -> "_PersistentModule._SaveParamsModule"
+            scoped_module_name = context.scoped_builder_type_name.rsplit(".Builder", 1)[0]
+            # Build return type: _PersistentModule._SaveParamsModule[_T].Builder
+            builder_return_type_for_base = f"{scoped_module_name}[{generic_params_str}].Builder"
+        else:
+            builder_return_type_for_base = context.builder_type_name
+
         # Generate base Protocol methods (static methods, to_dict, etc.)
         self._gen_struct_base_class(
             fields_collection.slot_fields,
             fields_collection.init_choices,
             context.schema,
-            context.scoped_reader_type_name,
-            context.scoped_builder_type_name,
+            context.reader_type_name,
+            builder_return_type_for_base,
         )
 
         self.return_from_scope()
 
         # After the Protocol is complete and we've returned to the parent scope,
-        # add TypeAlias declarations at this level (self.scope is now the parent)
-        self._add_typing_import("TypeAlias")
-        # Add aliases for Reader and Builder at current scope
-        self.scope.add(f"{context.reader_type_name}: TypeAlias = {protocol_class_name}.Reader")
-        self.scope.add(f"{context.builder_type_name}: TypeAlias = {protocol_class_name}.Builder")
-
-        # Track for top-level TypeAliases ONLY if this is a nested type
-        # (Top-level types already have their TypeAliases in the root scope)
+        # add type alias declarations at this level ONLY for nested types
+        # Top-level types get their type aliases at module level
         if is_nested:
-            # Use scoped names which include the full path (e.g., "_PersonModule._PhoneNumberModule.Reader")
+            # Add aliases for Reader and Builder at current scope for nested types
+            # Use type statement (PEP 695) for consistency
+            self.scope.add(f"type {context.reader_type_name} = {protocol_class_name}.Reader")
+            self.scope.add(f"type {context.builder_type_name} = {protocol_class_name}.Builder")
+
+        # Track for top-level TypeAliases (both nested and top-level)
+        # Use scoped names which include the full path (e.g., "_PersonModule._PhoneNumberModule.Reader")
+        # For generic structs, we'll create PEP 695 generic type aliases instead of flat aliases
+        if context.registered_params:
+            # For generic structs, store info to generate PEP 695 aliases later
+            # Format: (type_params, scoped_module_name)
+            self._all_type_aliases[context.reader_type_name] = (
+                context.registered_params,
+                context.scoped_reader_type_name,
+                "GenericReader",
+            )
+            self._all_type_aliases[context.builder_type_name] = (
+                context.registered_params,
+                context.scoped_builder_type_name,
+                "GenericBuilder",
+            )
+        else:
+            # For non-generic structs, use regular TypeAlias
             self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
             self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
 
-        # Add annotation for the module type (both nested and top-level)
-        # This better matches runtime behavior and separates types from variables
-        self.scope.add(f"{context.type_name}: {protocol_class_name}")
+        # Add annotation for the module type at the correct parent scope
+        # Use the registered type's scope to ensure it goes to the right place
+        # For top-level types, this is root scope; for nested types, this is the parent's scope
+        target_scope = context.new_type.scope if context.new_type.scope else self.scope
+        target_scope.add(f"{context.type_name}: {protocol_class_name}")
 
     def gen_struct(self, schema: _StructSchema, type_name: str = "") -> CapnpType:  # noqa: C901
         """Generate a `struct` object.
@@ -1942,6 +2082,27 @@ class Writer:
                 if not type_name:
                     type_name = helper.get_display_name(schema)
                 return self.register_type(schema.node.id, schema, name=type_name, scope=self.scope.root)
+
+        # Register TypeAliases early so they're available during field processing
+        # This handles self-referential fields and forward references
+        # For generic structs, we'll create PEP 695 generic type aliases
+        if context.registered_params:
+            # For generic structs, store info to generate PEP 695 aliases later
+            # Format: (type_params, scoped_module_name)
+            self._all_type_aliases[context.reader_type_name] = (
+                context.registered_params,
+                context.scoped_reader_type_name,
+                "GenericReader",
+            )
+            self._all_type_aliases[context.builder_type_name] = (
+                context.registered_params,
+                context.scoped_builder_type_name,
+                "GenericBuilder",
+            )
+        else:
+            # For non-generic structs, use regular TypeAlias
+            self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
+            self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
 
         # Phase 2: Generate nested types (must be done before field processing)
         self._generate_nested_types(schema, context.type_name)
@@ -2993,11 +3154,6 @@ class Writer:
                     self.scope.add(line)
             self.scope.add("")
 
-        # Add __init__ method to allow subclasses to override without calling super()
-        # This is a common pattern for server implementations
-        self.scope.add("    def __init__(self, *args: Any, **kwargs: Any) -> None: ...")
-        self.scope.add("")
-
         # Add all server method signatures
         if server_collection.has_methods():
             for server_method in server_collection.server_methods:
@@ -3038,8 +3194,7 @@ class Writer:
         # Track the interface's parent scope (may differ from current scope when generated lazily)
         type_alias_scope = context.parent_scope or self.scope
 
-        # Add TypeAlias import
-        self._add_typing_import("TypeAlias")
+        # Add type alias import removed - using type statement now
 
         # Create interface module class declaration - use regular class (not Protocol)
         # Interface modules at runtime are _InterfaceModule instances, not Protocols
@@ -3176,12 +3331,12 @@ class Writer:
                 # Top-level interface
                 client_alias_path = f"{context.protocol_class_name}.{context.client_type_name}"
 
-            type_alias_scope.add(f"{context.client_type_name}: TypeAlias = {client_alias_path}")
-
-            # Track for top-level TypeAlias ONLY if nested
-            # (Top-level interfaces already have their Client TypeAlias in the root scope)
+            # Only add class-level type alias for nested interfaces
             if is_nested_interface:
-                self._all_type_aliases[context.client_type_name] = (client_alias_path, "Client")
+                type_alias_scope.add(f"type {context.client_type_name} = {client_alias_path}")
+
+            # Track for top-level TypeAlias (both nested and top-level)
+            self._all_type_aliases[context.client_type_name] = (client_alias_path, "Client")
 
         return context.registered_type
 
@@ -3852,8 +4007,23 @@ class Writer:
             out.append("")
             out.append("# Top-level type aliases for use in type annotations")
             for alias_name in sorted(self._all_type_aliases.keys()):
-                full_path, _ = self._all_type_aliases[alias_name]
-                out.append(f"{alias_name}: TypeAlias = {full_path}")
+                alias_info = self._all_type_aliases[alias_name]
+
+                # Check if this is a generic alias (3 elements) or regular alias (2 elements)
+                if len(alias_info) == 3 and alias_info[2] in ("GenericReader", "GenericBuilder"):
+                    # PEP 695 generic type alias
+                    type_params, scoped_path, _ = alias_info
+                    # Extract module name from scoped_path: "_BoxModule.Reader" -> "_BoxModule"
+                    module_name = scoped_path.rsplit(".", 1)[0]
+                    variant = scoped_path.rsplit(".", 1)[1]  # "Reader" or "Builder"
+
+                    # Generate: type BoxBuilder[T] = _BoxModule[T].Builder
+                    params_str = ", ".join(type_params)
+                    out.append(f"type {alias_name}[{params_str}] = {module_name}[{params_str}].{variant}")
+                else:
+                    # Regular type alias (also use type statement for consistency)
+                    full_path, _ = alias_info
+                    out.append(f"type {alias_name} = {full_path}")
 
         return "\n".join(out)
 

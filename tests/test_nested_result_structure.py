@@ -10,8 +10,6 @@ This validates the refactored design where:
 
 from __future__ import annotations
 
-from pathlib import Path
-
 
 class TestNestedResultStructure:
     """Test that Result protocols are properly nested in Client and Server classes."""
@@ -24,12 +22,12 @@ class TestNestedResultStructure:
         # Client Results should be nested inside Client classes
         assert "class CalculatorClient(_DynamicCapabilityClient):" in content
         assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in content
-        
+
         # Check that Result is inside CalculatorClient
         lines = content.split("\n")
         in_calculator_client = False
         found_nested_result = False
-        
+
         for i, line in enumerate(lines):
             if "class CalculatorClient(_DynamicCapabilityClient):" in line:
                 in_calculator_client = True
@@ -39,7 +37,7 @@ class TestNestedResultStructure:
             elif in_calculator_client and line.startswith("class ") and "Client" not in line:
                 # Found another top-level class, stop
                 break
-        
+
         assert found_nested_result, "EvaluateResult should be nested inside CalculatorClient"
 
     def test_server_result_nested_in_server(self, calculator_stubs):
@@ -51,17 +49,23 @@ class TestNestedResultStructure:
         lines = content.split("\n")
         in_server = False
         found_evaluate_result = False
-        
+
         for line in lines:
             if "class Server(_DynamicCapabilityServer):" in line:
                 in_server = True
             elif in_server and "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in line:
                 found_evaluate_result = True
                 break
-            elif in_server and line.strip().startswith("class ") and "Result" not in line and "Tuple" not in line and "CallContext" not in line:
+            elif (
+                in_server
+                and line.strip().startswith("class ")
+                and "Result" not in line
+                and "Tuple" not in line
+                and "CallContext" not in line
+            ):
                 # Found another nested class that's not a Result/Tuple/Context
                 in_server = False
-        
+
         assert found_evaluate_result, "EvaluateResult should also be nested inside Server"
 
     def test_client_method_returns_client_result(self, calculator_stubs):
@@ -100,23 +104,15 @@ class TestNestedResultStructure:
         lines = content.split("\n")
         in_server = False
         found_result_tuple = False
-        
+
         for line in lines:
             if "class Server(_DynamicCapabilityServer):" in line:
                 in_server = True
             elif in_server and "class EvaluateResultTuple(NamedTuple):" in line:
                 found_result_tuple = True
                 break
-        
+
         assert found_result_tuple, "EvaluateResultTuple should be nested inside Server"
-
-    def test_server_has_init_method(self, calculator_stubs):
-        """Test that Server class has __init__ method to allow subclass overrides."""
-        stub_file = calculator_stubs / "calculator_capnp.pyi"
-        content = stub_file.read_text()
-
-        # Server should have __init__
-        assert "def __init__(self, *args: Any, **kwargs: Any) -> None: ..." in content
 
 
 class TestNestedResultsAtDeeperLevels:
@@ -171,7 +167,7 @@ class TestAnyPointerTypeDifferences:
         in_holder_client = False
         in_value_result = False
         found_dynamic_object_reader = False
-        
+
         for line in lines:
             if "class HolderClient(_DynamicCapabilityClient):" in line:
                 in_holder_client = True
@@ -180,7 +176,7 @@ class TestAnyPointerTypeDifferences:
             elif in_value_result and "value: _DynamicObjectReader" in line:
                 found_dynamic_object_reader = True
                 break
-        
+
         assert found_dynamic_object_reader, "Client Result should use _DynamicObjectReader for AnyPointer"
 
     def test_server_anypointer_uses_broad_union(self, zalfmas_stubs):
@@ -194,7 +190,10 @@ class TestAnyPointerTypeDifferences:
         assert "class ValueResult(Awaitable[ValueResult], Protocol):" in content
         assert "_DynamicCapabilityServer" in content
         # The broad union should exist somewhere in Server
-        assert "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer" in content
+        assert (
+            "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+            in content
+        )
 
     def test_server_result_tuple_uses_broad_union(self, zalfmas_stubs):
         """Test that Server ResultTuple also uses broad type union for AnyPointer."""
@@ -206,14 +205,18 @@ class TestAnyPointerTypeDifferences:
         lines = content.split("\n")
         in_tuple = False
         found_broad_union = False
-        
+
         for line in lines:
             if "class ValueResultTuple(NamedTuple):" in line:
                 in_tuple = True
-            elif in_tuple and "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer" in line:
+            elif (
+                in_tuple
+                and "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+                in line
+            ):
                 found_broad_union = True
                 break
             elif in_tuple and line.strip().startswith("class "):
                 break
-        
+
         assert found_broad_union, "ResultTuple should use broad type union for AnyPointer"

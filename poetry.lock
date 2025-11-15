@@ -5,7 +5,7 @@ name = "capnp-stubs"
 version = "0.1.0"
 description = "Type stubs for the pycapnp package"
 optional = false
-python-versions = ">=3.10,<3.14"
+python-versions = ">=3.12,<3.14"
 groups = ["main"]
 files = []
 develop = true
@@ -33,23 +33,22 @@ files = [
 ]
 
 [[package]]
-name = "exceptiongroup"
-version = "1.3.0"
-description = "Backport of PEP 654 (exception groups)"
+name = "deadcode"
+version = "2.4.1"
+description = "Find and remove dead code."
 optional = false
-python-versions = ">=3.7"
-groups = ["dev"]
-markers = "python_version == \"3.10\""
+python-versions = ">=3.10"
+groups = ["main"]
 files = [
-    {file = "exceptiongroup-1.3.0-py3-none-any.whl", hash = "sha256:4d111e6e0c13d0644cad6ddaa7ed0261a0b36971f6d23e7ec9b4b9097da78a10"},
-    {file = "exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88"},
+    {file = "deadcode-2.4.1-py3-none-any.whl", hash = "sha256:a16b28b601a82d5dc7ebfcab464a6f65e22a99d5684ec4c7907bdb75f8f64050"},
+    {file = "deadcode-2.4.1.tar.gz", hash = "sha256:1ba1e22425cf53c4b3f5ddd46e62a86d98479b47f2ac3430ae60910ac8cb318d"},
 ]
 
 [package.dependencies]
-typing-extensions = {version = ">=4.6.0", markers = "python_version < \"3.13\""}
+tomli = ">=2.0.1"
 
 [package.extras]
-test = ["pytest (>=6)"]
+test = ["hatch", "mypy", "pip-audit", "pytest", "pytest-cov", "ruff"]
 
 [[package]]
 name = "iniconfig"
@@ -248,12 +247,10 @@ files = [
 
 [package.dependencies]
 colorama = {version = ">=0.4", markers = "sys_platform == \"win32\""}
-exceptiongroup = {version = ">=1", markers = "python_version < \"3.11\""}
 iniconfig = ">=1.0.1"
 packaging = ">=22"
 pluggy = ">=1.5,<2"
 pygments = ">=2.7.2"
-tomli = {version = ">=1", markers = "python_version < \"3.11\""}
 
 [package.extras]
 dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "requests", "setuptools", "xmlschema"]
@@ -293,8 +290,7 @@ version = "2.3.0"
 description = "A lil' TOML parser"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "dev"]
-markers = "python_version == \"3.10\""
+groups = ["main"]
 files = [
     {file = "tomli-2.3.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:88bd15eb972f3664f5ed4b57c1634a97153b4bac4479dcb6a495f41921eb7f45"},
     {file = "tomli-2.3.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:883b1c0d6398a6a9d29b508c331fa56adbcdff647f6ace4dfca0f50e90dfd0ba"},
@@ -346,12 +342,11 @@ version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "dev"]
+groups = ["main"]
 files = [
     {file = "typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548"},
     {file = "typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"},
 ]
-markers = {dev = "python_version == \"3.10\""}
 
 [[package]]
 name = "vulture"
@@ -365,10 +360,7 @@ files = [
     {file = "vulture-2.14.tar.gz", hash = "sha256:cb8277902a1138deeab796ec5bef7076a6e0248ca3607a3f3dee0b6d9e9b8415"},
 ]
 
-[package.dependencies]
-tomli = {version = ">=1.1.0", markers = "python_version < \"3.11\""}
-
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.10,<3.14"
-content-hash = "22d663951af392b5e7ba2ff64e6598aa4f87bf667222a933e835b4d6a30d67f5"
+python-versions = ">=3.12,<3.14"
+content-hash = "72d63d5e8b2707d714790c987bcd727532671b628690a1853452c1af757b9287"

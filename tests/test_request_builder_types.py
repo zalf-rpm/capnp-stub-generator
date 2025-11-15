@@ -184,7 +184,7 @@ class TestRequestBuilderFieldAccess:
         stub_content = stub_file.read_text()
 
         # With Protocol structure, check for TypeAlias
-        assert "ExpressionBuilder: TypeAlias = _ExpressionModule.Builder" in stub_content
+        assert "ExpressionBuilder = _ExpressionModule.Builder" in stub_content
 
         # Should have init overload for "call" that returns Call.Builder
         assert "def init(self" in stub_content and 'Literal["call"]' in stub_content
