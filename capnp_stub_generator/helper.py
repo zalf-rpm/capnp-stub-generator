@@ -463,13 +463,17 @@ def new_property(name: str, return_type: str, with_setter: bool = False, setter_
     # These are runtime introspection attributes exposed in pycapnp-stubs that shouldn't
     # conflict with actual Cap'n Proto field names, but pyright treats them as conflicts
     PYCAPNP_RESERVED_NAMES = {"struct", "list", "enum", "interface", "slot", "name", "schema"}
-    
+
     lines = []
-    
+
     # Add pyright ignore comment after the ellipsis for reserved names
     # This is the only place that works reliably, even when code formatters split the function across lines
-    ignore_comment = "  # pyright: ignore[reportIncompatibleVariableOverride,reportIncompatibleMethodOverride]" if name in PYCAPNP_RESERVED_NAMES else ""
-    
+    ignore_comment = (
+        "  # pyright: ignore[reportIncompatibleVariableOverride,reportIncompatibleMethodOverride]"
+        if name in PYCAPNP_RESERVED_NAMES
+        else ""
+    )
+
     lines.extend(["@property", f"def {name}(self) -> {return_type}: ...{ignore_comment}"])
 
     if with_setter:
@@ -479,13 +483,11 @@ def new_property(name: str, return_type: str, with_setter: bool = False, setter_
     return lines
 
 
-def new_class_declaration(name: str, parameters: list[str] | None = None, generic_params: list[str] | None = None) -> str:
+def new_class_declaration(name: str, parameters: list[str] | None = None) -> str:
     """Creates a string for declaring a class.
 
     For example, for a name of 'SomeClass' and a list of parameters that is 'str, Type[str, int]', the output
     will be 'SomeClass (str, Type[str, int]):'.
-
-    If generic_params are provided (PEP 695 syntax), output will be 'class SomeClass[T, U](BaseClass):'.
 
     If no parameters are provided, the output is just 'SomeClass:'.
 
@@ -493,19 +495,12 @@ def new_class_declaration(name: str, parameters: list[str] | None = None, generi
         name (str): The class name.
         parameters (list[str] | None, optional):
             A list of parameters that are part of the class declaration. Defaults to None.
-        generic_params (list[str] | None, optional):
-            A list of generic type parameters for PEP 695 syntax (e.g., ["T", "U"]). Defaults to None.
 
     Returns:
         str: The class declaration.
     """
-    # Build generic params part: [T] or [T, U]
-    generic_part = f"[{', '.join(generic_params)}]" if generic_params else ""
-    
     if parameters:
-        return f"class {name}{generic_part}({join_parameters(parameters)}):"
-    elif generic_params:
-        return f"class {name}{generic_part}:"
+        return f"class {name}({join_parameters(parameters)}):"
     else:
         return f"class {name}:"
 

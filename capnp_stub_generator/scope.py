@@ -128,13 +128,11 @@ class CapnpType:
         schema (Any):
         name (str):
         scope (Scope):
-        generic_params (list[str]):
     """
 
     schema: Any
     name: str
     scope: Scope
-    generic_params: list[str] = dataclasses.field(default_factory=list)
 
     @property
     def scoped_name(self) -> str:

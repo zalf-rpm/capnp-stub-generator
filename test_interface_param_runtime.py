@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Runtime test to verify what types can be passed for interface parameters."""
 import capnp
+
 capnp.remove_import_hook()
 calculator_capnp = capnp.load("tests/schemas/examples/calculator/calculator.capnp")
 
@@ -16,7 +17,7 @@ try:
     value_server = ValueImpl(42.0)
     expr = calculator_capnp.Calculator.Expression.new_message()
     expr.previousResult = value_server
-    print(f"✓ SUCCESS: Can assign Server")
+    print("✓ SUCCESS: Can assign Server")
     print(f"  Type: {type(value_server).__name__}, Bases: {[b.__name__ for b in value_server.__class__.__bases__]}")
 except Exception as e:
     print(f"✗ FAILED: {e}")
@@ -27,7 +28,7 @@ try:
     value_client = calculator_capnp.Calculator.Value._new_client(ValueImpl(99.0))
     expr = calculator_capnp.Calculator.Expression.new_message()
     expr.previousResult = value_client
-    print(f"✓ SUCCESS: Can assign Client")
+    print("✓ SUCCESS: Can assign Client")
     print(f"  Type: {type(value_client).__name__}, Bases: {[b.__name__ for b in value_client.__class__.__bases__]}")
 except Exception as e:
     print(f"✗ FAILED: {e}")

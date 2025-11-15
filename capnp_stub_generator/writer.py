@@ -498,14 +498,14 @@ class Writer:
             Tuple of (getter_type, setter_type). setter_type is None if same as getter.
         """
         # Handle generic parameters (AnyPointer with parameter)
-        if hasattr(field, '_is_generic_param') and field._is_generic_param:
+        if hasattr(field, "_is_generic_param") and field._is_generic_param:
             # Getter returns _DynamicObjectReader
             getter_type = field.primary_type_nested
             # Setter accepts only pointer types (structs, lists, blobs, interfaces)
             # Primitives (int, float, bool) are NOT allowed as Cap'n Proto generic parameters
             setter_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
             return getter_type, setter_type
-        
+
         if field.has_type_hint_with_builder_affix:
             # For lists, use MutableSequence for Builder (lists are mutable)
             if field.nesting_depth == 1:
@@ -752,14 +752,11 @@ class Writer:
         # Add each field as an optional kwarg parameter
         for slot_field in slot_fields:
             # Handle generic parameters specially
-            if hasattr(slot_field, '_is_generic_param') and slot_field._is_generic_param:
+            if hasattr(slot_field, "_is_generic_param") and slot_field._is_generic_param:
                 # Generic parameters accept only pointer types (structs, lists, blobs, interfaces)
                 # Primitives (int, float, bool) are NOT allowed per Cap'n Proto spec
                 field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
-                type_hints = [
-                    helper.TypeHint(field_type, primary=True),
-                    helper.TypeHint("None")
-                ]
+                type_hints = [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")]
             else:
                 # Get the type suitable for initialization (Builder types for struct fields)
                 field_type = (
@@ -1510,11 +1507,11 @@ class Writer:
             helper.HintedVariable | None: The extracted hinted variable object, or None in case of error.
         """
         try:
-            # Check if this is a generic parameter
-            param = field.slot.type.anyPointer.parameter
+            # Check if this is a generic parameter (will raise exception if not)
+            _ = field.slot.type.anyPointer.parameter
             # Generic parameters at runtime:
             # - Reader properties return _DynamicObjectReader
-            # - Builder properties return _DynamicObjectReader (getter) 
+            # - Builder properties return _DynamicObjectReader (getter)
             # - Builder properties accept only pointer types (setter):
             #   * Structs: _DynamicStructBuilder, _DynamicStructReader
             #   * Blobs: str (Text), bytes (Data)
@@ -1523,11 +1520,10 @@ class Writer:
             # Primitives (int, float, bool) are NOT allowed per Cap'n Proto spec
             # This matches the behavior of generic interface methods
             self._needs_dynamic_object_reader_augmentation = True
-            
+
             # Create TypeHintedVariable with primary type for getter and Any for setter
             hinted_var = helper.TypeHintedVariable(
-                helper.sanitize_name(field.name), 
-                [helper.TypeHint("_DynamicObjectReader", primary=True)]
+                helper.sanitize_name(field.name), [helper.TypeHint("_DynamicObjectReader", primary=True)]
             )
             # Mark that this field needs special setter handling in Builder
             hinted_var._is_generic_param = True
@@ -1631,43 +1627,6 @@ class Writer:
 
         return new_type
 
-    def gen_generic(self, schema: _StructSchema) -> list[str]:
-        """Generate generic type parameter names for PEP 695 syntax.
-
-        With PEP 695, we don't need to register TypeVars explicitly.
-        We just return the parameter names to use in class[T, U] syntax.
-
-        Args:
-            schema (_StructSchema): The schema to generate the `generic` object out of.
-
-        Returns:
-            list[str]: The list of generic type parameter names.
-        """
-        # No longer need to import TypeVar and Generic for PEP 695 syntax
-        # These imports are only added if needed elsewhere
-
-        generic_params: list[str] = [param.name for param in schema.node.parameters]
-        referenced_params: list[str] = []
-
-        for field, _ in zip(schema.node.struct.fields, schema.as_struct().fields_list):
-            if field.slot.type.which() == "anyPointer" and field.slot.type.anyPointer.which() == "parameter":
-                param = field.slot.type.anyPointer.parameter
-
-                # Try to get the type, but skip if not found (forward reference)
-                try:
-                    t = self.get_type_by_id(param.scopeId)
-                    if t is not None:
-                        param_source = t.schema
-                        source_params: list[str] = [param.name for param in param_source.node.parameters]
-                        referenced_params.append(source_params[param.parameterIndex])
-                except KeyError:
-                    # Type not yet registered, skip for now
-                    pass
-
-        # Return param names for PEP 695 (no underscore prefix needed - they're scoped)
-        # e.g., schema has "T" -> return "T" (not "_T")
-        return generic_params + referenced_params
-
     # ===== Struct Generation Helper Methods (Phase 2 Refactoring) =====
 
     def _setup_struct_generation(
@@ -1678,8 +1637,7 @@ class Writer:
         This method handles the initial setup phase of struct generation including:
         - Checking if the struct is already imported
         - Determining the type name
-        - Handling generic parameters
-        - Creating the Protocol class declaration with underscore prefix
+        - Creating the _StructModule class declaration
         - Setting up the scope
         - Registering the type
 
@@ -1701,21 +1659,9 @@ class Writer:
         if not type_name:
             type_name = helper.get_display_name(schema)
 
-        # Handle generics
-        registered_params: list[str] = []
-        if schema.node.isGeneric:
-            registered_params = self.gen_generic(schema)
-
-        # Create _StructModule class declaration (no longer Protocol)
+        # Create _StructModule class declaration
         protocol_class_name = f"_{type_name}Module"
-
-        if registered_params:
-            # Use PEP 695 syntax: class _BoxModule[_T](_StructModule):
-            protocol_declaration = helper.new_class_declaration(
-                protocol_class_name, parameters=["_StructModule"], generic_params=registered_params
-            )
-        else:
-            protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=["_StructModule"])
+        protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=["_StructModule"])
 
         # Create scope using the Protocol class name
         try:
@@ -1727,13 +1673,10 @@ class Writer:
         # Register type with the Protocol class name for correct scoped_name generation
         # The type's scoped_name will be used for all internal type references
         new_type = self.register_type(schema.node.id, schema, name=protocol_class_name)
-        new_type.generic_params = registered_params
 
         # Create context with auto-generated names
         # Pass the original type_name for TypeAlias generation
-        context = StructGenerationContext.create_with_protocol(
-            schema, type_name, protocol_class_name, new_type, registered_params
-        )
+        context = StructGenerationContext.create_with_protocol(schema, type_name, protocol_class_name, new_type, [])
 
         return context, protocol_declaration
 
@@ -1896,18 +1839,8 @@ class Writer:
         # Create a new scope for the Reader Protocol, explicitly using current scope as parent
         self.new_scope("Reader", context.schema.node, register=False, parent_scope=self.scope)
 
-        # For generic structs, use scoped type with generic params: _BoxModule[_T].Builder
-        # For non-generic structs, use flat alias: BoxBuilder
-        if context.registered_params:
-            # Build generic param list: [_T] or [_T, _U]
-            generic_params_str = ", ".join(context.registered_params)
-            # Get the scoped module name from scoped_builder_type_name by removing .Builder suffix
-            # e.g., "_PersistentModule._SaveParamsModule.Builder" -> "_PersistentModule._SaveParamsModule"
-            scoped_module_name = context.scoped_builder_type_name.rsplit(".Builder", 1)[0]
-            # Build return type: _PersistentModule._SaveParamsModule[_T].Builder
-            builder_return_type = f"{scoped_module_name}[{generic_params_str}].Builder"
-        else:
-            builder_return_type = context.builder_type_name
+        # Use flat alias for as_builder return type
+        builder_return_type = context.builder_type_name
 
         self._gen_struct_reader_class(
             fields_collection.slot_fields,
@@ -1938,20 +1871,9 @@ class Writer:
         # Create a new scope for the Builder Protocol, explicitly using current scope as parent
         self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
 
-        # For generic structs, use scoped type with generic params: _BoxModule[_T].Reader
-        # For non-generic structs, use flat alias: BoxReader
-        if context.registered_params:
-            # Build generic param list: [_T] or [_T, _U]
-            generic_params_str = ", ".join(context.registered_params)
-            # Get the scoped module name from scoped_builder_type_name by removing .Builder suffix
-            # e.g., "_PersistentModule._SaveParamsModule.Builder" -> "_PersistentModule._SaveParamsModule"
-            scoped_module_name = context.scoped_builder_type_name.rsplit(".Builder", 1)[0]
-            # Build return types: _PersistentModule._SaveParamsModule[_T].Builder and ...Reader
-            builder_return_type = f"{scoped_module_name}[{generic_params_str}].Builder"
-            reader_return_type = f"{scoped_module_name}[{generic_params_str}].Reader"
-        else:
-            builder_return_type = context.builder_type_name
-            reader_return_type = context.reader_type_name
+        # Use flat aliases for return types
+        builder_return_type = context.builder_type_name
+        reader_return_type = context.reader_type_name
 
         self._gen_struct_builder_class(
             fields_collection.slot_fields,
@@ -1996,18 +1918,8 @@ class Writer:
         # Generate nested Builder Protocol (inside the main struct Protocol)
         self._generate_nested_builder_class(context, fields_collection)
 
-        # For generic structs, use scoped type with generic params for new_message return type
-        # For non-generic structs, use flat alias
-        if context.registered_params:
-            # Build generic param list: [_T] or [_T, _U]
-            generic_params_str = ", ".join(context.registered_params)
-            # Get the scoped module name from scoped_builder_type_name by removing .Builder suffix
-            # e.g., "_PersistentModule._SaveParamsModule.Builder" -> "_PersistentModule._SaveParamsModule"
-            scoped_module_name = context.scoped_builder_type_name.rsplit(".Builder", 1)[0]
-            # Build return type: _PersistentModule._SaveParamsModule[_T].Builder
-            builder_return_type_for_base = f"{scoped_module_name}[{generic_params_str}].Builder"
-        else:
-            builder_return_type_for_base = context.builder_type_name
+        # Use flat alias for new_message return type
+        builder_return_type_for_base = context.builder_type_name
 
         # Generate base Protocol methods (static methods, to_dict, etc.)
         self._gen_struct_base_class(
@@ -2031,24 +1943,8 @@ class Writer:
 
         # Track for top-level TypeAliases (both nested and top-level)
         # Use scoped names which include the full path (e.g., "_PersonModule._PhoneNumberModule.Reader")
-        # For generic structs, we'll create PEP 695 generic type aliases instead of flat aliases
-        if context.registered_params:
-            # For generic structs, store info to generate PEP 695 aliases later
-            # Format: (type_params, scoped_module_name)
-            self._all_type_aliases[context.reader_type_name] = (
-                context.registered_params,
-                context.scoped_reader_type_name,
-                "GenericReader",
-            )
-            self._all_type_aliases[context.builder_type_name] = (
-                context.registered_params,
-                context.scoped_builder_type_name,
-                "GenericBuilder",
-            )
-        else:
-            # For non-generic structs, use regular TypeAlias
-            self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
-            self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
+        self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
+        self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
 
         # Add annotation for the module type at the correct parent scope
         # Use the registered type's scope to ensure it goes to the right place
@@ -2085,24 +1981,8 @@ class Writer:
 
         # Register TypeAliases early so they're available during field processing
         # This handles self-referential fields and forward references
-        # For generic structs, we'll create PEP 695 generic type aliases
-        if context.registered_params:
-            # For generic structs, store info to generate PEP 695 aliases later
-            # Format: (type_params, scoped_module_name)
-            self._all_type_aliases[context.reader_type_name] = (
-                context.registered_params,
-                context.scoped_reader_type_name,
-                "GenericReader",
-            )
-            self._all_type_aliases[context.builder_type_name] = (
-                context.registered_params,
-                context.scoped_builder_type_name,
-                "GenericBuilder",
-            )
-        else:
-            # For non-generic structs, use regular TypeAlias
-            self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
-            self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
+        self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
+        self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
 
         # Phase 2: Generate nested types (must be done before field processing)
         self._generate_nested_types(schema, context.type_name)
@@ -3832,24 +3712,6 @@ class Writer:
 
             element_type = self.get_type_by_id(type_id)
             type_name = element_type.name
-            generic_params = []
-
-            for brand_scope in type_reader.struct.brand.scopes:
-                brand_scope_type = brand_scope.which()
-
-                if brand_scope_type == "inherit":
-                    parent_scope = self.get_type_by_id(brand_scope.scopeId)
-                    generic_params.extend(parent_scope.generic_params)
-
-                elif brand_scope_type == "bind":
-                    for bind in brand_scope.bind:
-                        generic_params.append(self.get_type_name(bind.type))
-
-                else:
-                    raise TypeError(f"Unknown brand scope '{brand_scope_type}'.")
-
-            if generic_params:
-                type_name += f"[{', '.join(generic_params)}]"
 
         elif type_reader_type == capnp_types.CapnpElementType.ENUM:
             element_type = self.get_type_by_id(type_reader.enum.typeId)
@@ -4008,22 +3870,9 @@ class Writer:
             out.append("# Top-level type aliases for use in type annotations")
             for alias_name in sorted(self._all_type_aliases.keys()):
                 alias_info = self._all_type_aliases[alias_name]
-
-                # Check if this is a generic alias (3 elements) or regular alias (2 elements)
-                if len(alias_info) == 3 and alias_info[2] in ("GenericReader", "GenericBuilder"):
-                    # PEP 695 generic type alias
-                    type_params, scoped_path, _ = alias_info
-                    # Extract module name from scoped_path: "_BoxModule.Reader" -> "_BoxModule"
-                    module_name = scoped_path.rsplit(".", 1)[0]
-                    variant = scoped_path.rsplit(".", 1)[1]  # "Reader" or "Builder"
-
-                    # Generate: type BoxBuilder[T] = _BoxModule[T].Builder
-                    params_str = ", ".join(type_params)
-                    out.append(f"type {alias_name}[{params_str}] = {module_name}[{params_str}].{variant}")
-                else:
-                    # Regular type alias (also use type statement for consistency)
-                    full_path, _ = alias_info
-                    out.append(f"type {alias_name} = {full_path}")
+                # Regular type alias (use type statement for consistency)
+                full_path, _ = alias_info
+                out.append(f"type {alias_name} = {full_path}")
 
         return "\n".join(out)
 
