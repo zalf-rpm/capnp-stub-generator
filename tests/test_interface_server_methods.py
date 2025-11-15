@@ -54,7 +54,9 @@ def test_server_methods_accept_context(calculator_stub_lines):
     # Find all Server classes and verify their methods
     import re
 
-    server_sections = re.findall(r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL)
+    server_sections = re.findall(
+        r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL
+    )
 
     assert len(server_sections) > 0, "Should find at least one Server class"
 
@@ -110,7 +112,8 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
     # Server parameters remain required for type safety
     # CallContext is now inside Server, so reference is _CalculatorModule._FunctionModule.Server.CallCallContext
     server_call_found = (
-        "def call(self, params: Sequence[float], _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs: Any)" in content
+        "def call(self, params: Sequence[float], _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs: Any)"
+        in content
     )
 
     assert server_call_found, "Server call method should have same params as Protocol plus _context and **kwargs"

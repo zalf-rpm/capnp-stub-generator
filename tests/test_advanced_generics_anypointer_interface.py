@@ -11,7 +11,10 @@ def test_generics_anypointer_interface(basic_stubs):
     content = stub.read_text()
 
     # Check for GenericBox struct Protocol
-    assert "class _GenericBoxModule(_StructModule):" in content or "class _GenericBoxModule(Generic[T], _StructModule):" in content, "GenericBox _StructModule should exist"
+    assert (
+        "class _GenericBoxModule(_StructModule):" in content
+        or "class _GenericBoxModule(Generic[T], _StructModule):" in content
+    ), "GenericBox _StructModule should exist"
     assert "def value(self) -> Any:" in content, "GenericBox.value should be typed as Any (from AnyPointer)"
     # Check for module annotation (not TypeAlias)
     assert "GenericBox: _GenericBoxModule" in content, "GenericBox annotation should exist"

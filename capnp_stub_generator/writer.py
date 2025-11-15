@@ -38,6 +38,11 @@ InitChoice = tuple[str, str]
 # Constants
 DISCRIMINANT_NONE = 65535  # Value indicating no discriminant (not part of a union)
 
+# Type alias for AnyPointer fields - accepts all pointer types
+ANYPOINTER_TYPE = (
+    "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+)
+
 
 class Writer:
     """A class that handles writing the stub file, based on a provided module definition."""
@@ -115,6 +120,9 @@ class Writer:
 
         # Track if we need _DynamicObjectReader augmentation (for AnyPointer in interface returns)
         self._needs_dynamic_object_reader_augmentation = False
+
+        # Track if we need AnyPointer type alias (for generic parameter fields)
+        self._needs_anypointer_alias = False
 
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
@@ -503,7 +511,8 @@ class Writer:
             getter_type = field.primary_type_nested
             # Setter accepts only pointer types (structs, lists, blobs, interfaces)
             # Primitives (int, float, bool) are NOT allowed as Cap'n Proto generic parameters
-            setter_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+            setter_type = "AnyPointer"
+            self._needs_anypointer_alias = True
             return getter_type, setter_type
 
         if field.has_type_hint_with_builder_affix:
@@ -755,7 +764,8 @@ class Writer:
             if hasattr(slot_field, "_is_generic_param") and slot_field._is_generic_param:
                 # Generic parameters accept only pointer types (structs, lists, blobs, interfaces)
                 # Primitives (int, float, bool) are NOT allowed per Cap'n Proto spec
-                field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+                field_type = "AnyPointer"
+                self._needs_anypointer_alias = True
                 type_hints = [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")]
             else:
                 # Get the type suitable for initialization (Builder types for struct fields)
@@ -2120,8 +2130,15 @@ class Writer:
 
             field_type = field_obj.slot.type.which()
 
+            # Handle ANY_POINTER: client receives DynamicObjectReader, server receives AnyPointer
+            if field_type == capnp_types.CapnpElementType.ANY_POINTER:
+                client_type = "_DynamicObjectReader"
+                server_type = "AnyPointer"
+                request_type = "AnyPointer"
+                self._needs_anypointer_alias = True
+
             # Handle ENUM: add Literal union
-            if field_type == capnp_types.CapnpElementType.ENUM:
+            elif field_type == capnp_types.CapnpElementType.ENUM:
                 client_type = self._add_enum_literal_union(field_obj, base_type)
                 server_type = client_type
                 request_type = client_type
@@ -2453,7 +2470,8 @@ class Writer:
                         if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
                             if for_server:
                                 # Server can set any Cap'n Proto type
-                                field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+                                field_type = "AnyPointer"
+                                self._needs_anypointer_alias = True
                             else:
                                 # Client receives _DynamicObjectReader and must cast
                                 field_type = "_DynamicObjectReader"
@@ -2528,7 +2546,8 @@ class Writer:
                     if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
                         if for_server:
                             # Server can set any Cap'n Proto type
-                            field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+                            field_type = "AnyPointer"
+                            self._needs_anypointer_alias = True
                         else:
                             # Client receives _DynamicObjectReader and must cast
                             field_type = "_DynamicObjectReader"
@@ -2650,7 +2669,8 @@ class Writer:
                 # For AnyPointer in server results, use Cap'n Proto type union
                 # Server can return: Text (str), Data (bytes), Struct, Interface (client or server)
                 if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-                    field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+                    field_type = "AnyPointer"
+                    self._needs_anypointer_alias = True
                 # For structs, accept both Builder and Reader
                 elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                     builder_type = self._build_nested_builder_type(field_type)
@@ -3853,6 +3873,12 @@ class Writer:
         # We import the actual class from capnp.lib.capnp rather than generating a Protocol
         if self._needs_dynamic_object_reader_augmentation:
             out.append("from capnp.lib.capnp import _DynamicObjectReader")
+
+        # Add AnyPointer type alias if needed (for generic parameter fields)
+        if self._needs_anypointer_alias:
+            out.append("")
+            out.append("# Type alias for AnyPointer parameters (accepts all Cap'n Proto pointer types)")
+            out.append(f"type AnyPointer = {ANYPOINTER_TYPE}")
 
         out.append("")
 

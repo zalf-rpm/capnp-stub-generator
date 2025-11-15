@@ -125,8 +125,6 @@ class TestStaticMethodReturnTypes:
             "new_message should return _TestAllTypesModule.Builder type"
         )
 
-
-
     def test_reader_does_not_have_new_message(self, dummy_stub_file):
         """Reader class should not have new_message method (can't create new messages)."""
         content = dummy_stub_file.read_text()
@@ -150,5 +148,3 @@ class TestStaticMethodReturnTypes:
 
 class TestRuntimeAccuracy:
     """Test that type annotations match actual runtime behavior."""
-
-

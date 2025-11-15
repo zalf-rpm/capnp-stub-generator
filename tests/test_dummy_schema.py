@@ -27,10 +27,7 @@ class TestDummyEnumsAndTypes:
 
     def test_testalltypes_field_presence_and_collections_import(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any(
-            line.startswith("from collections.abc import") and "Sequence" in line
-            for line in lines
-        )
+        assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
         # Fields are now properties
         for field in [
             "voidField",

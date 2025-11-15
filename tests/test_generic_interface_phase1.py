@@ -11,9 +11,7 @@ def test_dynamic_object_reader_import(basic_stubs):
     content = stub_file.read_text()
 
     # Check that _DynamicObjectReader is imported (might be in multi-line import)
-    assert "_DynamicObjectReader" in content, (
-        "_DynamicObjectReader should be imported when AnyPointer is used"
-    )
+    assert "_DynamicObjectReader" in content, "_DynamicObjectReader should be imported when AnyPointer is used"
 
 
 def test_interface_method_returns_dynamic_object_reader(basic_stubs):
@@ -27,7 +25,7 @@ def test_interface_method_returns_dynamic_object_reader(basic_stubs):
     # Check that Result Protocol fields use _DynamicObjectReader (client side)
     # Client receives _DynamicObjectReader and must manually cast with .as_text(), .as_struct(), etc.
     assert "result: _DynamicObjectReader" in content, "Result Protocol should have _DynamicObjectReader"
-    
+
     # But NamedTuple (server side) should have the full type union
     assert "_DynamicCapabilityServer" in content, "Server NamedTuple should include _DynamicCapabilityServer"
 
@@ -63,10 +61,14 @@ def test_client_method_signature(basic_stubs):
     assert "class GenericGetterClient" in content, "GenericGetterClient should exist"
     assert "def get(self)" in content, "get() method should exist"
     assert "def getById(self" in content, "getById() method should exist"
-    
+
     # Results should be nested in Client (GetResult, GetbyidResult)
     assert "GenericGetterClient.GetResult" in content or "class GetResult" in content
-    assert "GenericGetterClient.GetbyidResult" in content or "GenericGetterClient.GetByIdResult" in content or "class GetbyidResult" in content
+    assert (
+        "GenericGetterClient.GetbyidResult" in content
+        or "GenericGetterClient.GetByIdResult" in content
+        or "class GetbyidResult" in content
+    )
 
 
 def test_result_protocol_has_dynamic_object_reader_field(basic_stubs):

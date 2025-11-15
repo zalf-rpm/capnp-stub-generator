@@ -200,23 +200,19 @@ class TestAnyPointerTypeDifferences:
         stub_file = zalfmas_stubs / "common_capnp.pyi"
         content = stub_file.read_text()
 
-        # ValueResultTuple should also use broad union
+        # ValueResultTuple should also use AnyPointer type alias
         assert "class ValueResultTuple(NamedTuple):" in content
         lines = content.split("\n")
         in_tuple = False
-        found_broad_union = False
+        found_anypointer = False
 
         for line in lines:
             if "class ValueResultTuple(NamedTuple):" in line:
                 in_tuple = True
-            elif (
-                in_tuple
-                and "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
-                in line
-            ):
-                found_broad_union = True
+            elif in_tuple and "AnyPointer" in line:
+                found_anypointer = True
                 break
             elif in_tuple and line.strip().startswith("class "):
                 break
 
-        assert found_broad_union, "ResultTuple should use broad type union for AnyPointer"
+        assert found_anypointer, "ResultTuple should use AnyPointer type alias"

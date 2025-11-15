@@ -210,15 +210,9 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir):
     content = stub_file.read_text()
 
     # Check nested interfaces extend Identifiable (no longer needs Protocol suffix)
-    assert "class _AdminMasterModule(_IdentifiableModule):" in content, (
-        "AdminMaster Module should extend Identifiable"
-    )
-    assert "class _UserMasterModule(_IdentifiableModule):" in content, (
-        "UserMaster Module should extend Identifiable"
-    )
-    assert "class _RuntimeModule(_IdentifiableModule):" in content, (
-        "Runtime Module should extend Identifiable"
-    )
+    assert "class _AdminMasterModule(_IdentifiableModule):" in content, "AdminMaster Module should extend Identifiable"
+    assert "class _UserMasterModule(_IdentifiableModule):" in content, "UserMaster Module should extend Identifiable"
+    assert "class _RuntimeModule(_IdentifiableModule):" in content, "Runtime Module should extend Identifiable"
 
     # Check that all Server classes extend _IdentifiableModule.Server
     # Count how many times we see "class Server(_IdentifiableModule.Server"

@@ -86,7 +86,10 @@ def test_nested_interface_context_methods(calculator_stubs):
     content = stub_file.read_text()
 
     # Calculator.Value is a nested interface (now _ValueModule inside _CalculatorModule)
-    assert "def read_context(self, context: _CalculatorModule._ValueModule.Server.ReadCallContext) -> Awaitable[None]:" in content
+    assert (
+        "def read_context(self, context: _CalculatorModule._ValueModule.Server.ReadCallContext) -> Awaitable[None]:"
+        in content
+    )
 
     # Calculator.Function is a nested interface (now _FunctionModule inside _CalculatorModule)
     assert "def call_context(" in content  # Verify method exists
