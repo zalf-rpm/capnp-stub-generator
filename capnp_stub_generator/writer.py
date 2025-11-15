@@ -14,7 +14,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, Literal
 
 import capnp
-from capnp.lib.capnp import _DynamicStructBuilder, _DynamicStructReader, _StructModule, _StructSchema
+from capnp.lib.capnp import _DynamicStructReader, _StructSchema
 
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
@@ -92,7 +92,7 @@ class Writer:
         self._imports: list[str] = []
         self._add_import("from __future__ import annotations")
         self._add_import(
-            "from capnp.lib.capnp import _DynamicCapabilityClient, _DynamicStructBuilder, _DynamicStructReader, _InterfaceModule, _Request, _StructModule"
+            "from capnp.lib.capnp import _DynamicCapabilityClient, _DynamicCapabilityServer, _DynamicStructBuilder, _DynamicStructReader, _InterfaceModule, _Request, _StructModule"
         )
 
         self._typing_imports: set[Writer.VALID_TYPING_IMPORTS] = set()
@@ -302,8 +302,8 @@ class Writer:
             names.extend(extra)
 
             # Split names into collections.abc vs typing
-            collections_abc_names = [n for n in names if n in ("Iterator", "Sequence", "Awaitable")]
-            typing_names = [n for n in names if n not in ("Iterator", "Sequence", "Awaitable")]
+            collections_abc_names = [n for n in names if n in ("Iterator", "Sequence", "Awaitable", "MutableSequence")]
+            typing_names = [n for n in names if n not in ("Iterator", "Sequence", "Awaitable", "MutableSequence")]
 
             if collections_abc_names:
                 import_lines.append("from collections.abc import " + ", ".join(collections_abc_names))
@@ -460,7 +460,7 @@ class Writer:
         # Add @override if requested (goes before other decorators)
         if add_override:
             self.scope.add(helper.new_decorator("override"))
-        
+
         # Add any additional decorators first (they go above @staticmethod)
         if decorators:
             for decorator in decorators:
@@ -498,9 +498,13 @@ class Writer:
             Tuple of (getter_type, setter_type). setter_type is None if same as getter.
         """
         if field.has_type_hint_with_builder_affix:
-            # For lists, use Sequence[ElementBuilder] for compatibility
+            # For lists, use MutableSequence for Builder (lists are mutable)
             if field.nesting_depth == 1:
                 getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
+                # Replace Sequence with MutableSequence for builders (they support __setitem__)
+                if "Sequence[" in getter_type:
+                    getter_type = getter_type.replace("Sequence[", "MutableSequence[")
+                    self._add_typing_import("MutableSequence")
                 # Setter accepts Builder/Reader types + dict, but NOT the base type
                 setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
                 setter_type = field.get_type_with_affixes(setter_types) + " | Sequence[dict[str, Any]]"
@@ -517,8 +521,12 @@ class Writer:
             getter_type = field.primary_type_nested  # Protocol only
             setter_type = field.full_type_nested  # Protocol | Server
         else:
-            # Primitive and enum fields
+            # Primitive and enum fields (including primitive lists)
             getter_type = field.primary_type_nested
+            # For Builder properties with list types, use MutableSequence
+            if "Sequence[" in getter_type:
+                getter_type = getter_type.replace("Sequence[", "MutableSequence[")
+                self._add_typing_import("MutableSequence")
             setter_type = field.full_type_nested if field.full_type_nested != getter_type else None
 
         return getter_type, setter_type
@@ -633,7 +641,9 @@ class Writer:
             self._add_typing_import("overload")
         if init_choices or list_init_choices:
             self._add_typing_import("Literal")
-        
+        if list_init_choices:
+            self._add_typing_import("MutableSequence")
+
         # Note: The init() method parameter is now LiteralString in pycapnp stubs
         # This allows our Literal["fieldname"] overloads to be compatible
 
@@ -648,7 +658,9 @@ class Writer:
             init_params = [
                 "self",
                 helper.TypeHintedVariable("field", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"),
+                helper.TypeHintedVariable(
+                    "size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"
+                ),
             ]
 
             self.scope.add(
@@ -669,14 +681,16 @@ class Writer:
             init_params_list = [
                 "self",
                 helper.TypeHintedVariable("field", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"),
+                helper.TypeHintedVariable(
+                    "size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"
+                ),
             ]
 
             self.scope.add(
                 helper.new_function(
                     "init",
                     parameters=init_params_list,
-                    return_type=f"Sequence[{element_type_for_list}]",
+                    return_type=f"MutableSequence[{element_type_for_list}]",
                 )
             )
 
@@ -686,7 +700,9 @@ class Writer:
             catchall_params = [
                 "self",
                 helper.TypeHintedVariable("field", [helper.TypeHint("str", primary=True)]),
-                helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"),
+                helper.TypeHintedVariable(
+                    "size", [helper.TypeHint("int", primary=True), helper.TypeHint("None")], default="None"
+                ),
             ]
             self.scope.add(
                 helper.new_function(
@@ -1627,7 +1643,9 @@ class Writer:
 
         if registered_params:
             parameter = helper.new_type_group("Generic", registered_params)
-            protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=[parameter, "_StructModule"])
+            protocol_declaration = helper.new_class_declaration(
+                protocol_class_name, parameters=[parameter, "_StructModule"]
+            )
         else:
             protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=["_StructModule"])
 
@@ -2105,7 +2123,7 @@ class Writer:
                     client_alias = f"{interface_name}Client"
                 else:
                     client_alias = None
-                
+
                 if client_alias:
                     # Use the Client alias (either local or imported)
                     client_type = f"{client_alias} | {base_type}.Server"
@@ -2142,7 +2160,7 @@ class Writer:
         # Always generate a Result class name (even for void methods)
         # For void methods, the Result Protocol will be awaitable but have no fields
         result_class_name = f"{helper.sanitize_name(method_info.method_name).title()}Result"
-        
+
         if not method_info.result_fields:
             # Void method: still return Result class name for promise pipelining
             return result_class_name, False
@@ -2161,6 +2179,25 @@ class Writer:
 
         # Named field return (single or multiple): use Result Protocol
         return result_class_name, False
+
+    def _get_client_type_name_from_interface_path(self, interface_path: str) -> str:
+        """Extract client type name from interface path.
+
+        E.g., "_HolderModule" -> "HolderClient"
+              "_CalculatorModule._FunctionModule" -> "FunctionClient"
+
+        Args:
+            interface_path: The full interface path
+
+        Returns:
+            The client type name
+        """
+        # Get the last component: "_HolderModule" -> "_HolderModule"
+        last_component = interface_path.split(".")[-1]
+        # Remove "_" prefix and "Module" suffix: "_HolderModule" -> "Holder"
+        name = last_component.replace("_", "").replace("Module", "")
+        # Add "Client" suffix: "Holder" -> "HolderClient"
+        return f"{name}Client"
 
     def _get_list_parameters(
         self,
@@ -2296,7 +2333,7 @@ class Writer:
 
             # Add list init overloads
             if list_params:
-                self._add_typing_import("Sequence")
+                self._add_typing_import("MutableSequence")
                 for field_name, element_type, needs_builder in list_params:
                     lines.append("    @overload")
                     if needs_builder:
@@ -2305,7 +2342,7 @@ class Writer:
                         element_type_for_list = element_type
                     lines.append(
                         f'    def init(self, name: Literal["{field_name}"], '
-                        f"size: int = ...) -> Sequence[{element_type_for_list}]: ..."
+                        f"size: int = ...) -> MutableSequence[{element_type_for_list}]: ..."
                     )
 
             # Add struct init overloads
@@ -2328,6 +2365,7 @@ class Writer:
         method_info: MethodInfo,
         result_type: str,
         is_direct_struct_return: bool,
+        for_server: bool = False,
     ) -> list[str]:
         """Generate Result Protocol class for a method.
 
@@ -2335,6 +2373,7 @@ class Writer:
             method_info: Information about the method
             result_type: The result type name (unscoped)
             is_direct_struct_return: Whether this is a direct struct return
+            for_server: If True, generate server-side types (broader unions for AnyPointer)
 
         Returns:
             List of lines for the Result Protocol class
@@ -2368,7 +2407,16 @@ class Writer:
 
                         # For struct types, accept both Builder and Reader in Result Protocol
                         field_type_enum = field_obj.slot.type.which()
-                        if field_type_enum == capnp_types.CapnpElementType.STRUCT:
+
+                        # For AnyPointer: different types for client vs server
+                        if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
+                            if for_server:
+                                # Server can set any Cap'n Proto type
+                                field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+                            else:
+                                # Client receives _DynamicObjectReader and must cast
+                                field_type = "_DynamicObjectReader"
+                        elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                             builder_type = self._build_nested_builder_type(field_type)
                             reader_type = self._build_nested_reader_type(field_type)
                             field_type = f"{builder_type} | {reader_type}"
@@ -2434,7 +2482,16 @@ class Writer:
 
                     # For struct types, accept both Builder and Reader in Result Protocol
                     field_type_enum = field_obj.slot.type.which()
-                    if field_type_enum == capnp_types.CapnpElementType.STRUCT:
+
+                    # For AnyPointer: different types for client vs server
+                    if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
+                        if for_server:
+                            # Server can set any Cap'n Proto type
+                            field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
+                        else:
+                            # Client receives _DynamicObjectReader and must cast
+                            field_type = "_DynamicObjectReader"
+                    elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                         builder_type = self._build_nested_builder_type(field_type)
                         reader_type = self._build_nested_reader_type(field_type)
                         field_type = f"{builder_type} | {reader_type}"
@@ -2548,11 +2605,11 @@ class Writer:
 
                 # Check the field type
                 field_type_enum = field_obj.slot.type.which()
-                
+
                 # For AnyPointer in server results, use Cap'n Proto type union
-                # AnyPointer can be: Text (str), Data (bytes), Struct, or Interface
+                # Server can return: Text (str), Data (bytes), Struct, Interface (client or server)
                 if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-                    field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient"
+                    field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
                 # For structs, accept both Builder and Reader
                 elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                     builder_type = self._build_nested_builder_type(field_type)
@@ -2738,14 +2795,14 @@ class Writer:
             fully_qualified_params = request_type
         lines.append(f"    params: {fully_qualified_params}")
 
-        # CallContext.results points to the Result Protocol at interface level (only if method has results)
+        # CallContext.results points to the Server Result Protocol (nested in Server class)
         if has_results:
             if result_type_for_context:
                 if scope_path:
-                    # Use interface-level Result Protocol
-                    fully_qualified_results = f"{scope_path}.{result_type_for_context}"
+                    # Use Server-nested Result Protocol: e.g., "_HolderModule.Server.ValueResult"
+                    fully_qualified_results = f"{scope_path}.Server.{result_type_for_context}"
                 else:
-                    fully_qualified_results = result_type_for_context
+                    fully_qualified_results = f"Server.{result_type_for_context}"
             else:
                 # Shouldn't happen, but fallback
                 fully_qualified_results = "Any"
@@ -2785,14 +2842,15 @@ class Writer:
         result_type, is_direct_struct_return = self._process_method_results(method_info)
 
         # Determine scoping for result type in client methods:
-        # - All interfaces (depth >= 1): prefix with full interface path (e.g., "TestIface.PingResult" or "Metadata.Supported.CategoriesResult")
-        # - This is necessary because Result classes are nested inside the interface class
+        # Result classes are nested inside Client class
         scope_depth = len([s for s in self.scope.trace if not s.is_root])
         interface_path = self._get_scope_path()
 
         if scope_depth >= 1 and interface_path and result_type != "None":
-            # Interface at any depth: prefix with full interface path for proper scoping
-            scoped_result_type = f"{interface_path}.{result_type}"
+            # Client methods return Client.ResultName (nested in Client class)
+            # e.g., "_HolderModule.HolderClient.ValueResult"
+            client_type_name = self._get_client_type_name_from_interface_path(interface_path)
+            scoped_result_type = f"{interface_path}.{client_type_name}.{result_type}"
         else:
             # No interface scope (shouldn't happen for interface methods)
             scoped_result_type = result_type
@@ -2805,9 +2863,17 @@ class Writer:
         request_lines = self._generate_request_protocol(method_info, parameters, scoped_result_type)
         collection.set_request_class(request_lines)
 
-        # Generate Result Protocol (if needed)
-        result_lines = self._generate_result_protocol(method_info, result_type, is_direct_struct_return)
-        collection.set_result_class(result_lines)
+        # Generate Client Result Protocol (will be nested in Client class)
+        client_result_lines = self._generate_result_protocol(
+            method_info, result_type, is_direct_struct_return, for_server=False
+        )
+        collection.set_client_result_class(client_result_lines)
+
+        # Generate Server Result Protocol (will be nested in Server class)
+        server_result_lines = self._generate_result_protocol(
+            method_info, result_type, is_direct_struct_return, for_server=True
+        )
+        collection.set_server_result_class(server_result_lines)
 
         # Generate CallContext for server - points to Result Protocol at interface level
         if is_direct_struct_return:
@@ -2855,12 +2921,14 @@ class Writer:
         self,
         context: InterfaceGenerationContext,
         server_collection: ServerMethodsCollection,
+        server_result_lines: list[str],
     ) -> None:
         """Generate the Server class with all server methods.
 
         Args:
             context: The interface generation context
             server_collection: Collection of server methods and NamedTuples
+            server_result_lines: List of server Result protocol lines to add
         """
         # Build Server base classes (superclass Servers)
         server_base_classes = []
@@ -2888,11 +2956,18 @@ class Writer:
         if server_base_classes:
             server_declaration = helper.new_class_declaration("Server", server_base_classes)
         else:
-            server_declaration = helper.new_class_declaration("Server", ["Protocol"])
+            # Server inherits from _DynamicCapabilityServer
+            server_declaration = helper.new_class_declaration("Server", ["_DynamicCapabilityServer"])
 
         self.scope.add(server_declaration)
 
-        # Add NamedTuple result types first
+        # Add Server Result protocols first (nested inside Server)
+        for line in server_result_lines:
+            self.scope.add(f"    {line}")
+        if server_result_lines:
+            self.scope.add("")
+
+        # Add NamedTuple result types
         if server_collection.namedtuples:
             self._add_typing_import("NamedTuple")
             for result_type, fields in server_collection.namedtuples.items():
@@ -2917,6 +2992,11 @@ class Writer:
                 else:
                     self.scope.add(line)
             self.scope.add("")
+
+        # Add __init__ method to allow subclasses to override without calling super()
+        # This is a common pattern for server implementations
+        self.scope.add("    def __init__(self, *args: Any, **kwargs: Any) -> None: ...")
+        self.scope.add("")
 
         # Add all server method signatures
         if server_collection.has_methods():
@@ -2965,9 +3045,7 @@ class Writer:
         # Interface modules at runtime are _InterfaceModule instances, not Protocols
         if context.base_classes:
             # Inherit from parent interface modules only (they already inherit from _InterfaceModule)
-            protocol_declaration = helper.new_class_declaration(
-                context.protocol_class_name, context.base_classes
-            )
+            protocol_declaration = helper.new_class_declaration(context.protocol_class_name, context.base_classes)
         else:
             # No parent interfaces - inherit directly from _InterfaceModule
             protocol_declaration = helper.new_class_declaration(context.protocol_class_name, ["_InterfaceModule"])
@@ -2987,6 +3065,8 @@ class Writer:
         server_collection = ServerMethodsCollection()
         client_method_collection = []  # Collect client methods for nested Client class
         request_helper_collection = []  # Collect request helpers for Client class
+        client_result_collection = []  # Collect client Result protocols
+        server_result_collection = []  # Collect server Result protocols
 
         for method_info in methods:
             method_collection = self._process_interface_method(method_info, server_collection)
@@ -2994,13 +3074,14 @@ class Writer:
             # Collect client methods and request helpers for Client class
             client_method_collection.extend(method_collection.client_method_lines)
             request_helper_collection.extend(method_collection.request_helper_lines)
+            client_result_collection.extend(method_collection.client_result_lines)
 
-            # Add Request/Result classes to interface Protocol
+            # Add Request classes to interface Protocol (at module level)
             for line in method_collection.request_class_lines:
                 self.scope.add(line)
 
-            for line in method_collection.result_class_lines:
-                self.scope.add(line)
+            # Collect server Result protocols for Server class
+            server_result_collection.extend(method_collection.server_result_lines)
 
             # Store context lines for Server class
             server_collection.add_context_lines(method_collection.server_context_lines)
@@ -3016,7 +3097,7 @@ class Writer:
             self._add_new_client_method(context.type_name, context.schema, client_return_type=nested_client_name)
 
         # Phase 4: Generate Server class inside interface Protocol
-        self._generate_server_class(context, server_collection)
+        self._generate_server_class(context, server_collection, server_result_collection)
 
         # Phase 5: Generate Client Protocol class INSIDE interface Protocol (not at parent level)
         should_generate_client = (
@@ -3025,7 +3106,11 @@ class Writer:
 
         if should_generate_client:
             self._generate_client_class_nested(
-                context, client_method_collection, request_helper_collection, server_base_classes
+                context,
+                client_method_collection,
+                request_helper_collection,
+                client_result_collection,
+                server_base_classes,
             )
 
             # Track this interface for cast_as overloads with inheritance info
@@ -3131,6 +3216,7 @@ class Writer:
         context: InterfaceGenerationContext,
         client_method_lines: list[str],
         request_helper_lines: list[str],
+        client_result_lines: list[str],
         server_base_classes: list[str],
     ) -> None:
         """Generate the Client Protocol class NESTED inside the interface Protocol.
@@ -3139,6 +3225,7 @@ class Writer:
             context: The interface generation context
             client_method_lines: List of client method lines to add
             request_helper_lines: List of request helper method lines to add
+            client_result_lines: List of client Result protocol lines to add
             server_base_classes: List of server base classes for inheritance resolution
         """
         # Build client base classes - inherit from superclass Clients
@@ -3161,14 +3248,18 @@ class Writer:
         # Generate Client class declaration
         self.scope.add(helper.new_class_declaration(context.client_type_name, client_base_classes))
 
+        # Add client Result protocols (nested inside Client)
+        for line in client_result_lines:
+            self.scope.add(f"    {line}")
+
         # Add client methods and request helpers with proper indentation
         all_method_lines = client_method_lines + request_helper_lines
         if all_method_lines:
             for line in all_method_lines:
                 # Methods come without indentation, add class-level indentation
                 self.scope.add(f"    {line}")
-        else:
-            # Empty client class (inherits everything from superclasses)
+        elif not client_result_lines:
+            # Empty client class (inherits everything from superclasses and has no Results)
             self.scope.add("    ...")
 
     def _generate_client_class(

@@ -30,7 +30,7 @@ class TestServerContextParameter:
         import re
 
         server_methods = re.findall(
-            r"class Server\(Protocol\):.*?(?=\n    class |\n\nclass |\Z)", stub_content, re.DOTALL
+            r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)", stub_content, re.DOTALL
         )
         assert server_methods, "No Server classes found in stubs"
 
@@ -72,7 +72,7 @@ class TestServerContextParameter:
         assert function_section, "_CalculatorModule._FunctionModule not found"
 
         server_call = re.search(
-            r"class Server\(Protocol\):.*?def call\(([^)]+(?:\)[^)]*)*)\)",
+            r"class Server\(_DynamicCapabilityServer\):.*?def call\(([^)]+(?:\)[^)]*)*)\)",
             function_section.group(0),
             re.DOTALL,
         )

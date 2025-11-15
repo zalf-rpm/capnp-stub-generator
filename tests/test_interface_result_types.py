@@ -21,32 +21,32 @@ class TestRPCResultTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have EvaluateResult class
+        # Should have EvaluateResult class nested in CalculatorClient
         assert "class EvaluateResult" in stub_content
 
         # Should have value field (using nested Protocol naming)
         assert "value: _CalculatorModule._ValueModule.ValueClient" in stub_content
 
-        # evaluate should return _CalculatorModule.EvaluateResult (which is Awaitable)
+        # evaluate should return _CalculatorModule.CalculatorClient.EvaluateResult (which is Awaitable)
         assert "def evaluate(" in stub_content
-        assert "-> _CalculatorModule.EvaluateResult:" in stub_content
+        assert "-> _CalculatorModule.CalculatorClient.EvaluateResult:" in stub_content
 
     def test_deffunction_returns_result_with_func_field(self, generate_calculator_stubs):
         """Test that defFunction() returns a result with .func attribute."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have DeffunctionResult class
+        # Should have DeffunctionResult class nested in CalculatorClient
         assert "class DeffunctionResult" in stub_content
 
         # Should have func field (using nested Protocol naming)
         assert "func: _CalculatorModule._FunctionModule.FunctionClient" in stub_content
 
-        # defFunction should return _CalculatorModule.DeffunctionResult (which is Awaitable)
+        # defFunction should return _CalculatorModule.CalculatorClient.DeffunctionResult (which is Awaitable)
         assert "def defFunction(" in stub_content
         assert "paramCount: int | None = None" in stub_content
         assert "body: ExpressionBuilder | ExpressionReader | dict[str, Any] | None = None" in stub_content
-        assert "-> _CalculatorModule.DeffunctionResult:" in stub_content
+        assert "-> _CalculatorModule.CalculatorClient.DeffunctionResult:" in stub_content
 
     def test_getoperator_returns_result_with_func_field(self, generate_calculator_stubs):
         """Test that getOperator() returns a result with .func attribute."""
@@ -93,7 +93,7 @@ class TestRPCResultTypes:
 
         # call should return _CalculatorModule._FunctionModule.CallResult (which is Awaitable)
         assert (
-            "def call(self, params: Sequence[float] | None = None) -> _CalculatorModule._FunctionModule.CallResult:"
+            "def call(self, params: Sequence[float] | None = None) -> _CalculatorModule._FunctionModule.FunctionClient.CallResult:"
             in stub_content
         )
 
@@ -107,15 +107,16 @@ class TestRPCResultsAreAwaitable:
         stub_content = stub_file.read_text()
 
         # All result types should inherit from Awaitable[Result] for promise pipelining
+        # Now nested in Client and Server classes
         assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in stub_content
         assert "class DeffunctionResult(Awaitable[DeffunctionResult], Protocol):" in stub_content
         assert "class GetoperatorResult(Awaitable[GetoperatorResult], Protocol):" in stub_content
         assert "class ReadResult(Awaitable[ReadResult], Protocol):" in stub_content
         assert "class CallResult(Awaitable[CallResult], Protocol):" in stub_content
 
-        # Methods should return the Result directly (not wrapped in Awaitable)
-        assert "-> _CalculatorModule.EvaluateResult:" in stub_content
-        assert "-> _CalculatorModule._ValueModule.ReadResult:" in stub_content
+        # Methods should return Client.Result (nested in Client class)
+        assert "-> _CalculatorModule.CalculatorClient.EvaluateResult:" in stub_content
+        assert "-> _CalculatorModule._ValueModule.ValueClient.ReadResult:" in stub_content
 
     def test_awaitable_imported(self, generate_calculator_stubs):
         """Test that Awaitable is imported from typing."""

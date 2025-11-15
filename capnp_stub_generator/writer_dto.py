@@ -449,7 +449,9 @@ class MethodSignatureCollection:
         self.method_name = method_name
         self.client_method_lines: list[str] = []
         self.request_class_lines: list[str] = []
-        self.result_class_lines: list[str] = []
+        self.result_class_lines: list[str] = []  # For module-level (to be removed)
+        self.client_result_lines: list[str] = []  # Nested in Client
+        self.server_result_lines: list[str] = []  # Nested in Server
         self.request_helper_lines: list[str] = []
         self.server_context_lines: list[str] = []
         self.server_method_signature: str = ""
@@ -479,6 +481,22 @@ class MethodSignatureCollection:
             lines: List of lines for the Result Protocol class
         """
         self.result_class_lines = lines
+
+    def set_client_result_class(self, lines: list[str]) -> None:
+        """Set the Client-side Result Protocol class lines (nested in Client).
+
+        Args:
+            lines: List of lines for the Client Result Protocol class
+        """
+        self.client_result_lines = lines
+
+    def set_server_result_class(self, lines: list[str]) -> None:
+        """Set the Server-side Result Protocol class lines (nested in Server).
+
+        Args:
+            lines: List of lines for the Server Result Protocol class
+        """
+        self.server_result_lines = lines
 
     def set_request_helper(self, lines: list[str]) -> None:
         """Set the _request helper method lines.

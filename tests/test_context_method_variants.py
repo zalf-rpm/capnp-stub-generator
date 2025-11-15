@@ -55,7 +55,8 @@ def test_callcontext_has_params_and_results(calculator_stubs):
     # Check a method with parameters and results
     assert "class EvaluateCallContext(Protocol):" in content
     assert "params: _CalculatorModule.EvaluateRequest" in content
-    assert "results: _CalculatorModule.EvaluateResult" in content
+    # Results now point to Server.Result
+    assert "results: _CalculatorModule.Server.EvaluateResult" in content
 
 
 def test_callcontext_void_method(basic_stubs):
@@ -111,7 +112,8 @@ def test_context_method_documentation(calculator_stubs):
     # The CallContext should provide access to both params and results
     assert "class DeffunctionCallContext(Protocol):" in content
     assert "params: _CalculatorModule.DeffunctionRequest" in content
-    assert "results: _CalculatorModule.DeffunctionResult" in content
+    # Results now point to Server.Result
+    assert "results: _CalculatorModule.Server.DeffunctionResult" in content
 
 
 def test_context_methods_count(calculator_stubs):

@@ -12,27 +12,28 @@ def test_void_methods_return_result_protocol(tmp_path: Path):
     stub_path = generate_stub_from_schema("fbp_simple.capnp", tmp_path)
     content = stub_path.read_text()
 
-    # close() should return CloseResult (which is Awaitable[None])
-    assert "def close(self) -> _ChannelModule._ReaderModule.CloseResult:" in content or \
-           "def close(self) -> _ChannelModule._WriterModule.CloseResult:" in content, \
-           "Void methods should return Result protocol for promise pipelining"
+    # close() should return Client.CloseResult (which is Awaitable[None])
+    # Results are now nested inside Client classes
+    assert "def close(self) -> _ChannelModule._ReaderModule.ReaderClient.CloseResult:" in content or \
+           "def close(self) -> _ChannelModule._WriterModule.WriterClient.CloseResult:" in content, \
+           "Void methods should return nested Client.Result protocol for promise pipelining"
 
-    # CloseRequest should exist
+    # CloseRequest should exist at module level
     assert "class CloseRequest(Protocol):" in content
 
 
 def test_void_method_send_returns_result(tmp_path: Path):
-    """Test that CloseRequest.send() returns CloseResult (awaitable)."""
+    """Test that CloseRequest.send() returns Client.CloseResult (awaitable)."""
     from tests.conftest import generate_stub_from_schema
 
     stub_path = generate_stub_from_schema("fbp_simple.capnp", tmp_path)
     content = stub_path.read_text()
 
-    # CloseRequest.send() should return CloseResult (consistent with non-void methods)
+    # CloseRequest.send() should return Client.CloseResult (consistent with non-void methods)
     assert "class CloseRequest(Protocol):" in content
-    assert "def send(self) -> _ChannelModule._ReaderModule.CloseResult:" in content or \
-           "def send(self) -> _ChannelModule._WriterModule.CloseResult:" in content, \
-           "send() for void methods should return CloseResult (awaitable)"
+    assert "def send(self) -> _ChannelModule._ReaderModule.ReaderClient.CloseResult:" in content or \
+           "def send(self) -> _ChannelModule._WriterModule.WriterClient.CloseResult:" in content, \
+           "send() for void methods should return nested Client.CloseResult (awaitable)"
 
 
 def test_void_result_protocol_is_awaitable(tmp_path: Path):
@@ -65,12 +66,13 @@ def test_comparison_with_non_void_methods(tmp_path: Path):
     stub_path = generate_stub_from_schema("fbp_simple.capnp", tmp_path)
     content = stub_path.read_text()
 
-    # read() returns ReadResult (which is Awaitable) - using Protocol naming
+    # read() returns Client.ReadResult (which is Awaitable) - using Protocol naming
+    # Results are now nested inside Client classes
     assert "def read(" in content
-    assert ") -> _ChannelModule._ReaderModule.ReadResult:" in content
+    assert ") -> _ChannelModule._ReaderModule.ReaderClient.ReadResult:" in content
 
-    # close() also returns Result (CloseResult which is Awaitable[None])
-    assert "def close(self) -> _ChannelModule._ReaderModule.CloseResult:" in content or \
-           "def close(self) -> _ChannelModule._WriterModule.CloseResult:" in content
+    # close() also returns nested Client.Result (CloseResult which is Awaitable[None])
+    assert "def close(self) -> _ChannelModule._ReaderModule.ReaderClient.CloseResult:" in content or \
+           "def close(self) -> _ChannelModule._WriterModule.WriterClient.CloseResult:" in content
 
-    print("✅ Consistent void/non-void method patterns!")
+    print("✅ Consistent void/non-void method patterns with nested Results!")

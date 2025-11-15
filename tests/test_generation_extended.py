@@ -25,10 +25,10 @@ def test_primitives_and_lists_imports_and_types():
     lines = _read(stub_path)
     content = "".join(lines)
     assert "from __future__ import annotations" in content
-    # Iterator appears (for from_bytes) and Sequence appears (list fields) from collections.abc
+    # Sequence and MutableSequence appear (list fields) from collections.abc
     assert "from collections.abc import" in content
-    assert "Iterator" in content
     assert "Sequence" in content
+    assert "MutableSequence" in content
     # Literal now appears for list init overloads, overload appears for typed init methods
     assert "from typing import" in content
     assert "Literal" in content

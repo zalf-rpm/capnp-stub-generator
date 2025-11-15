@@ -10,11 +10,11 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines):
     assert any("class _FunctionModule(_InterfaceModule):" in line for line in lines)
     assert any("class _CalculatorModule(_InterfaceModule):" in line for line in lines)
 
-    # Check that Server classes exist
-    assert any("class Server(Protocol):" in line for line in lines)
+    # Check that Server classes exist (now inherit from _DynamicCapabilityServer)
+    assert any("class Server(_DynamicCapabilityServer):" in line for line in lines)
 
     # Count Server classes - should be 3 (Value, Function, Calculator)
-    server_count = sum(1 for line in lines if line.strip() == "class Server(Protocol):")
+    server_count = sum(1 for line in lines if line.strip() == "class Server(_DynamicCapabilityServer):")
     assert server_count == 3, f"Expected 3 Server classes, found {server_count}"
 
 
@@ -24,7 +24,7 @@ def test_server_methods_have_signatures(calculator_stub_lines):
     content = "".join(lines)
 
     # Function.Server should have call method
-    assert "class Server(Protocol):" in content
+    assert "class Server(_DynamicCapabilityServer):" in content
     assert "def call(self, params: Sequence[float], _context:" in content
     assert "Awaitable[" in content  # Server.call returns Awaitable
 
@@ -54,7 +54,7 @@ def test_server_methods_accept_context(calculator_stub_lines):
     # Find all Server classes and verify their methods
     import re
 
-    server_sections = re.findall(r"class Server\(Protocol\):.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL)
+    server_sections = re.findall(r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL)
 
     assert len(server_sections) > 0, "Should find at least one Server class"
 

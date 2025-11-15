@@ -41,11 +41,11 @@ def test_generics_anypointer_interface(basic_stubs):
     assert found_enum_box, "enumBox should be typed as GenericBox"
     assert found_inner_box, "innerBox should be typed as GenericBox"
 
-    # Check for interface (still uses Protocol pattern since it's not a struct)
-    assert "class _TestIfaceModule(Protocol):" in content, "TestIface Protocol module should exist"
+    # Check for interface (now uses _InterfaceModule pattern)
+    assert "class _TestIfaceModule(_InterfaceModule):" in content, "TestIface _InterfaceModule should exist"
     assert "TestIface: _TestIfaceModule" in content, "TestIface annotation should exist"
-    assert "class TestIfaceClient(Protocol):" in content, (
-        "TestIfaceClient should be a Protocol nested in _TestIfaceModule"
+    assert "class TestIfaceClient(_DynamicCapabilityClient):" in content, (
+        "TestIfaceClient should inherit from _DynamicCapabilityClient"
     )
 
     # Check interface client methods
