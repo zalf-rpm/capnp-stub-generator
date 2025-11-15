@@ -2395,7 +2395,11 @@ class Writer:
                 for field_name, element_type, needs_builder in list_params:
                     lines.append("    @overload")
                     if needs_builder:
-                        element_type_for_list = self._build_scoped_builder_type(element_type)
+                        # Extract module path from type name (e.g., "_MetadataModule._EntryModule" from "_MetadataModule._EntryModule.Entry")
+                        parts = element_type.rsplit(".", 1)
+                        module_path = parts[0] if len(parts) > 1 else element_type
+                        builder_alias = self._get_flat_builder_alias(module_path)
+                        element_type_for_list = builder_alias or self._build_scoped_builder_type(element_type)
                     else:
                         element_type_for_list = element_type
                     lines.append(
