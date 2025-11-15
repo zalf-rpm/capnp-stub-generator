@@ -140,6 +140,69 @@ class Writer:
         """
         return f"{base_type}.Reader"
 
+    def _get_flat_builder_alias(self, module_type: str) -> str | None:
+        """Convert a module type path to its flat Builder alias name if defined in this module.
+
+        Args:
+            module_type: The module type path (e.g., "_CalculatorModule._ExpressionModule")
+
+        Returns:
+            The flat Builder alias name if the type is defined in this module (e.g., "ExpressionBuilder"),
+            or None if the type is imported from another module
+        """
+        # Extract the last component (e.g., "_ExpressionModule")
+        last_part = module_type.split(".")[-1]
+        # Remove "_" prefix and "Module" suffix to get the base name
+        if last_part.startswith("_") and last_part.endswith("Module"):
+            base_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+            alias_name = helper.new_builder_flat(base_name)
+            # Check if this alias is defined in the current module
+            if alias_name in self._all_type_aliases:
+                return alias_name
+        return None
+
+    def _get_flat_reader_alias(self, module_type: str) -> str | None:
+        """Convert a module type path to its flat Reader alias name if defined in this module.
+
+        Args:
+            module_type: The module type path (e.g., "_CalculatorModule._ExpressionModule")
+
+        Returns:
+            The flat Reader alias name if the type is defined in this module (e.g., "ExpressionReader"),
+            or None if the type is imported from another module
+        """
+        # Extract the last component (e.g., "_ExpressionModule")
+        last_part = module_type.split(".")[-1]
+        # Remove "_" prefix and "Module" suffix to get the base name
+        if last_part.startswith("_") and last_part.endswith("Module"):
+            base_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+            alias_name = helper.new_reader_flat(base_name)
+            # Check if this alias is defined in the current module
+            if alias_name in self._all_type_aliases:
+                return alias_name
+        return None
+
+    def _get_flat_client_alias(self, module_type: str) -> str | None:
+        """Convert an interface module type path to its flat Client alias name if defined in this module.
+
+        Args:
+            module_type: The interface module type path (e.g., "_CalculatorModule._ValueModule")
+
+        Returns:
+            The flat Client alias name if the type is defined in this module (e.g., "ValueClient"),
+            or None if the type is imported from another module
+        """
+        # Extract the last component (e.g., "_ValueModule")
+        last_part = module_type.split(".")[-1]
+        # Remove "_" prefix and "Module" suffix to get the base name
+        if last_part.startswith("_") and last_part.endswith("Module"):
+            base_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+            alias_name = f"{base_name}Client"
+            # Check if this alias is defined in the current module
+            if alias_name in self._all_type_aliases:
+                return alias_name
+        return None
+
     def _protocol_path_to_runtime_path(self, path: str) -> str:
         """Convert Protocol module path to runtime-accessible path.
 
@@ -2004,11 +2067,19 @@ class Writer:
                 server_type = client_type
                 request_type = client_type
 
-            # Handle STRUCT: add dict union for client, Reader for server, Builder for request
+            # Handle STRUCT: use type aliases for client if defined locally, Reader for server, Builder for request
             elif field_type == capnp_types.CapnpElementType.STRUCT:
                 reader_type = self._build_nested_reader_type(base_type)
                 builder_type = self._build_nested_builder_type(base_type)
-                client_type = f"{base_type} | dict[str, Any]"
+                # For client methods, try to use flat type aliases if defined in this module
+                builder_alias = self._get_flat_builder_alias(base_type)
+                reader_alias = self._get_flat_reader_alias(base_type)
+                if builder_alias and reader_alias:
+                    # Type is defined in this module, use flat aliases
+                    client_type = f"{builder_alias} | {reader_alias} | dict[str, Any]"
+                else:
+                    # Type is imported, use the module type with dict union
+                    client_type = f"{base_type} | dict[str, Any]"
                 server_type = reader_type
                 request_type = builder_type  # Request fields use Builder type
 
@@ -2024,10 +2095,25 @@ class Writer:
                     server_type = f"Sequence[{elem_reader_type}]"
                     request_type = client_type
 
-            # Handle INTERFACE: add Server union
+            # Handle INTERFACE: use Client alias if available
             elif field_type == capnp_types.CapnpElementType.INTERFACE:
-                client_type = f"{base_type} | {base_type}.Server"
-                server_type = base_type
+                # Extract interface name for the Client alias
+                # base_type is like "_IdentifiableModule" or "_ParentModule._NestedInterfaceModule"
+                last_part = base_type.split(".")[-1]
+                if last_part.startswith("_") and last_part.endswith("Module"):
+                    interface_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+                    client_alias = f"{interface_name}Client"
+                else:
+                    client_alias = None
+                
+                if client_alias:
+                    # Use the Client alias (either local or imported)
+                    client_type = f"{client_alias} | {base_type}.Server"
+                    server_type = client_alias
+                else:
+                    # Fallback to module type
+                    client_type = f"{base_type} | {base_type}.Server"
+                    server_type = base_type
                 request_type = client_type
 
             return ParameterInfo(
@@ -2053,8 +2139,13 @@ class Writer:
         Returns:
             Tuple of (return_type, is_direct_struct_return)
         """
+        # Always generate a Result class name (even for void methods)
+        # For void methods, the Result Protocol will be awaitable but have no fields
+        result_class_name = f"{helper.sanitize_name(method_info.method_name).title()}Result"
+        
         if not method_info.result_fields:
-            return "None", False
+            # Void method: still return Result class name for promise pipelining
+            return result_class_name, False
 
         # Check if result schema is a direct struct return (not a synthetic $Results struct)
         # When you write `method() -> Struct`, pycapnp gives you the Struct schema directly
@@ -2066,11 +2157,9 @@ class Writer:
 
         if is_direct_struct:
             # Direct struct return: use Result Protocol with struct's fields expanded
-            result_class_name = f"{helper.sanitize_name(method_info.method_name).title()}Result"
             return result_class_name, True
 
         # Named field return (single or multiple): use Result Protocol
-        result_class_name = f"{helper.sanitize_name(method_info.method_name).title()}Result"
         return result_class_name, False
 
     def _get_list_parameters(
@@ -2318,9 +2407,14 @@ class Writer:
 
             return lines
 
-        # For void methods (no result fields), no Result Protocol
+        # For void methods, generate an empty Result Protocol that is just Awaitable[None]
         if not method_info.result_fields:
-            return []
+            lines = []
+            result_class_name = result_type
+            self._add_typing_import("Awaitable")
+            lines.append(f"class {result_class_name}(Awaitable[None], Protocol):")
+            lines.append("    ...")  # Empty protocol body
+            return lines
 
         # For single or multiple named fields, generate Result Protocol
         # This handles both `method() -> (field: Type)` and `method() -> (a: X, b: Y)`
@@ -2432,6 +2526,7 @@ class Writer:
 
         Gets the field names and their types for Server NamedTuple result types.
         For structs, accepts both Builder and Reader types.
+        For AnyPointer, uses Any since servers can return any Python type.
 
         Args:
             method_info: Information about the method
@@ -2451,9 +2546,15 @@ class Writer:
                 # Get base type
                 field_type = self.get_type_name(field_obj.slot.type)
 
-                # For structs, accept both Builder and Reader
+                # Check the field type
                 field_type_enum = field_obj.slot.type.which()
-                if field_type_enum == capnp_types.CapnpElementType.STRUCT:
+                
+                # For AnyPointer in server results, use Cap'n Proto type union
+                # AnyPointer can be: Text (str), Data (bytes), Struct, or Interface
+                if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
+                    field_type = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient"
+                # For structs, accept both Builder and Reader
+                elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                     builder_type = self._build_nested_builder_type(field_type)
                     reader_type = self._build_nested_reader_type(field_type)
                     field_type = f"{builder_type} | {reader_type}"

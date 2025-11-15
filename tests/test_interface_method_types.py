@@ -17,13 +17,13 @@ class TestCalculatorInterfaceMethodTypes:
     """Test that Calculator interface methods have proper types."""
 
     def test_evaluate_has_expression_parameter(self, generate_calculator_stubs):
-        """Test that evaluate() has _CalculatorModule._ExpressionModule parameter type."""
+        """Test that evaluate() has ExpressionBuilder | ExpressionReader parameter type."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
         # Should have evaluate with Expression parameter (optional) and EvaluateResult return type
         assert "def evaluate(" in stub_content
-        assert "expression: _CalculatorModule._ExpressionModule | dict[str, Any] | None = None" in stub_content
+        assert "expression: ExpressionBuilder | ExpressionReader | dict[str, Any] | None = None" in stub_content
         assert ") -> _CalculatorModule.EvaluateResult:" in stub_content
 
         # Should NOT have Any for the expression parameter
@@ -37,7 +37,7 @@ class TestCalculatorInterfaceMethodTypes:
         # Should have defFunction with int and Expression parameters (both optional) and DeffunctionResult return
         assert "def defFunction(" in stub_content
         assert "paramCount: int | None = None" in stub_content
-        assert "body: _CalculatorModule._ExpressionModule | dict[str, Any] | None = None" in stub_content
+        assert "body: ExpressionBuilder | ExpressionReader | dict[str, Any] | None = None" in stub_content
         assert "DeffunctionResult:" in stub_content
 
         # Should NOT have Any for the body parameter
@@ -174,9 +174,9 @@ class TestInterfaceMethodComplexTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Expression is a struct, should be typed as _CalculatorModule._ExpressionModule (Protocol name)
-        assert "expression: _CalculatorModule._ExpressionModule" in stub_content
-        assert "body: _CalculatorModule._ExpressionModule" in stub_content
+        # Expression is a struct, should be typed with Builder | Reader type aliases for better IDE support
+        assert "expression: ExpressionBuilder | ExpressionReader" in stub_content
+        assert "body: ExpressionBuilder | ExpressionReader" in stub_content
 
     def test_interface_return_types(self, generate_calculator_stubs):
         """Test that interface return types are resolved correctly."""
