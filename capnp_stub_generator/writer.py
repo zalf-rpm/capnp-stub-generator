@@ -265,8 +265,10 @@ class Writer:
             self._imports.append(import_line)
 
     def _add_enum_import(self):
-        """Adds an import for the `Enum` class."""
-        self._add_import("from enum import Enum")
+        """Adds an import for the `Enum` class (deprecated - now using _EnumModule)."""
+        # Note: _EnumModule is already imported in __init__, so this method is now a no-op
+        # We keep it for compatibility with existing code structure
+        pass
 
     @property
     def full_display_name(self) -> str:
@@ -1448,10 +1450,7 @@ class Writer:
             except NoParentError:
                 pass
 
-        type_name = self.get_type_name(field.slot.type)
-
-        # Enum fields accept both the enum type and specific literal string values
-        # Get the enum's valid values to create a Literal type
+        # Enum values are integers at runtime, but also accept string literals
         try:
             enum_values = [e.name for e in schema.node.enum.enumerants]
             # Create a Literal type with all valid enum values
@@ -1461,13 +1460,13 @@ class Writer:
 
             return helper.TypeHintedVariable(
                 helper.sanitize_name(field.name),
-                [helper.TypeHint(type_name, primary=True), helper.TypeHint(literal_type)],
+                [helper.TypeHint("int", primary=True), helper.TypeHint(literal_type)],
             )
         except (AttributeError, TypeError):
             # Fallback if we can't get enumerants
             return helper.TypeHintedVariable(
                 helper.sanitize_name(field.name),
-                [helper.TypeHint(type_name, primary=True), helper.TypeHint("str")],
+                [helper.TypeHint("int", primary=True), helper.TypeHint("str")],
             )
 
     def gen_struct_slot(
@@ -1563,14 +1562,11 @@ class Writer:
             pass
 
     def gen_enum(self, schema: _StructSchema) -> CapnpType | None:
-        """Generate an `enum` object as a real Python Enum class.
+        """Generate an `enum` object as a class with int attributes.
 
-        At runtime, enums are _EnumModule objects with integer attributes.
-        We generate a real Enum class _<Name>Module with integer values,
-        then create a TypeAlias <Name> pointing to it for backwards compatibility.
-
-        The type is registered with the Protocol module name (e.g., _TestEnumModule)
-        so that fields correctly reference it with the module prefix.
+        At runtime, enums are _EnumModule instances with integer attributes.
+        We generate a simple class with int type annotations to represent this,
+        then create an instance annotation.
 
         Args:
             schema (_StructSchema): The schema to generate the `enum` object out of.
@@ -1588,11 +1584,11 @@ class Writer:
         # Create Enum class name (e.g., _TestEnumModule)
         enum_class_name = f"_{name}Module"
 
-        # Add Enum import
+        # No special imports needed - just a plain class
         self._add_enum_import()
 
-        # Generate the Enum class declaration
-        enum_declaration = helper.new_class_declaration(enum_class_name, ["Enum"])
+        # Generate a plain class declaration (no inheritance)
+        enum_declaration = helper.new_class_declaration(enum_class_name, [])
 
         # Find the parent scope for the enum (where it should be declared)
         try:
@@ -1604,7 +1600,6 @@ class Writer:
         self.new_scope(enum_class_name, schema.node, scope_heading=enum_declaration, parent_scope=enum_parent_scope)
 
         # Register type with the Enum class name (not user-facing name)
-        # This ensures fields reference "_TestEnumModule" not "TestEnum"
         new_type = self.register_type(
             schema.node.id, schema, name=enum_class_name, scope=self.scope.parent or self.scope.root
         )
@@ -1616,24 +1611,28 @@ class Writer:
             new_type=new_type,
         )
 
-        # Generate enum values as Enum members
+        # Generate enum values as type annotations (not assignments)
+        # At runtime these are integer attributes set by pycapnp
+        enum_values = []
         for enumerant in schema.node.enum.enumerants:
-            # Python Enum syntax: NAME = value
-            self.scope.add(f"{enumerant.name} = {enumerant.codeOrder}")
+            self.scope.add(f"{enumerant.name}: int")
+            enum_values.append(enumerant.name)
 
         # Return to parent scope
         self.return_from_scope()
 
-        # Add type alias at the enum's parent scope level for backwards compatibility
-        # This allows users to reference the enum by its short name
-        # Only add if this is a nested type (top-level types get their aliases at module level)
+        # Ensure Literal is imported for type alias generation
+        self._add_typing_import("Literal")
+
+        # For nested enums, add instance annotation so enum.value works at runtime
         is_nested = enum_parent_scope and not enum_parent_scope.is_root
         if is_nested:
-            enum_parent_scope.add(f"type {context.type_name} = {enum_class_name}")
+            # Instance annotation: allows Calculator.Operator.add to return int at runtime
+            enum_parent_scope.add(f"{context.type_name}: {enum_class_name}")
 
-        # Track for top-level TypeAliases (both nested and top-level)
-        # For enums, we use the full scoped enum class name
-        self._all_type_aliases[context.type_name] = (new_type.scoped_name, "Enum")
+        # Track for top-level annotations
+        # For enums, we store the enum values to generate the type alias
+        self._all_type_aliases[context.type_name] = (new_type.scoped_name, "Enum", enum_values)
 
         return new_type
 
@@ -2137,11 +2136,34 @@ class Writer:
                 request_type = "AnyPointer"
                 self._needs_anypointer_alias = True
 
-            # Handle ENUM: add Literal union
+            # Handle ENUM: use int with Literal union
+            # Enum values are integers at runtime, but RPC accepts string literals
             elif field_type == capnp_types.CapnpElementType.ENUM:
-                client_type = self._add_enum_literal_union(field_obj, base_type)
-                server_type = client_type
-                request_type = client_type
+                # Get enum type to extract literal values
+                try:
+                    enum_type_id = field_obj.slot.type.enum.typeId
+                    enum_type = self.get_type_by_id(enum_type_id)
+
+                    if enum_type and enum_type.schema:
+                        enum_values = [e.name for e in enum_type.schema.node.enum.enumerants]
+                        literal_values = ", ".join(f'"{v}"' for v in enum_values)
+                        literal_type = f"Literal[{literal_values}]"
+                        self._add_typing_import("Literal")
+                        # Use int as base type since enum attributes return int
+                        client_type = f"int | {literal_type}"
+                        server_type = client_type
+                        request_type = client_type
+                    else:
+                        # Fallback if we can't get enum schema
+                        client_type = "int | str"
+                        server_type = client_type
+                        request_type = client_type
+                except Exception as e:
+                    logger.debug(f"Could not process enum type for {param_name}: {e}")
+                    # Fallback
+                    client_type = "int | str"
+                    server_type = client_type
+                    request_type = client_type
 
             # Handle STRUCT: use type aliases for client if defined locally, Reader for server, Builder for request
             elif field_type == capnp_types.CapnpElementType.STRUCT:
@@ -3894,15 +3916,30 @@ class Writer:
         out.extend(self.scope.lines)
 
         # Add top-level TypeAliases for all Reader/Builder/Client types
+        # For enums, add instance annotations instead of type aliases
         # This allows using these types in type annotations even though module types are now variables
         if self._all_type_aliases:
             out.append("")
             out.append("# Top-level type aliases for use in type annotations")
             for alias_name in sorted(self._all_type_aliases.keys()):
                 alias_info = self._all_type_aliases[alias_name]
-                # Regular type alias (use type statement for consistency)
-                full_path, _ = alias_info
-                out.append(f"type {alias_name} = {full_path}")
+
+                if len(alias_info) == 3:
+                    # Enum with values: (full_path, type_kind, enum_values)
+                    full_path, type_kind, enum_values = alias_info
+                    if type_kind == "Enum":
+                        # For enums, generate a single type alias that accepts int | Literal[...]
+                        # This allows both Operator.add (int) and string literals to be accepted
+                        literal_values = ", ".join(f'"{v}"' for v in enum_values)
+                        out.append(f"type {alias_name} = int | Literal[{literal_values}]")
+                    else:
+                        # Regular type alias (use type statement for consistency)
+                        out.append(f"type {alias_name} = {full_path}")
+                else:
+                    # Old format: (full_path, type_kind)
+                    full_path, type_kind = alias_info
+                    # All types use type alias now
+                    out.append(f"type {alias_name} = {full_path}")
 
         return "\n".join(out)
 

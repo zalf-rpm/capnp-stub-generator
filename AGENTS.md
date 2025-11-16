@@ -344,7 +344,6 @@ assert any("@fieldName.setter" in line for line in lines)
 #### Checking for Imports
 ```python
 assert any(line.startswith("from typing import") and "Protocol" in line for line in lines)
-assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
 ```
 
 #### Checking for Union Discriminants

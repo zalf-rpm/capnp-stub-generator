@@ -18,12 +18,12 @@ class TestDummyEnumsAndTypes:
 
     def test_enum_definition_and_imports(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
-        # Note: 'type' is a PEP 695 built-in statement, not imported from typing
-        assert any(line.strip().startswith("class _TestEnumModule(Enum):") for line in lines)
-        assert any(line.strip() == "type TestEnum = _TestEnumModule" for line in lines)
+        # Enums are now simple classes with int attributes
+        assert any(line.strip().startswith("class _TestEnumModule:") for line in lines)
+        # Type alias at top level (not instance annotation)
+        assert any(line.strip().startswith('type TestEnum = int | Literal[') for line in lines)
         for name in ["foo", "bar", "baz", "qux"]:
-            assert any(f"{name} =" in line for line in lines)
+            assert any(f"{name}: int" in line for line in lines)
 
     def test_testalltypes_field_presence_and_collections_import(self, dummy_stub_lines):
         lines = dummy_stub_lines
@@ -39,7 +39,7 @@ class TestDummyEnumsAndTypes:
         ]:
             assert any(f"def {field}(self)" in line for line in lines)
         assert any("def structField(self)" in line and "TestAllTypes" in line for line in lines)
-        assert any("def enumField(self)" in line and "TestEnum" in line for line in lines)
+        assert any("def enumField(self)" in line for line in lines)
 
 
 class TestDummyListsAndDefaults:
@@ -116,19 +116,18 @@ class TestDummyGroupsAndNested:
 
     def test_nested_types_enums_and_lists(self, dummy_stub_lines):
         lines = dummy_stub_lines
-        assert any(re.match(r"^\s*class _NestedEnum1Module\(Enum\):", line) for line in lines)
-        assert any(re.match(r"^\s*class _NestedEnum2Module\(Enum\):", line) for line in lines)
-        assert any("NestedEnum1 = _NestedEnum1Module" in line for line in lines)
-        assert any("NestedEnum2 = _NestedEnum2Module" in line for line in lines)
+        assert any(re.match(r"^\s*class _NestedEnum1Module:", line) for line in lines)
+        assert any(re.match(r"^\s*class _NestedEnum2Module:", line) for line in lines)
+        assert any("NestedEnum1: _NestedEnum1Module" in line for line in lines)
+        assert any("NestedEnum2: _NestedEnum2Module" in line for line in lines)
         assert any("class _TestUsingModule(_StructModule):" in line for line in lines)
-        # Fields are now properties using module aliases
+        # Enum fields now return int
         assert any(
-            "def outerNestedEnum(self)" in line and "_TestNestedTypesModule._NestedEnum1Module" in line
+            "def outerNestedEnum(self)" in line and "-> int" in line
             for line in lines
         )
         assert any(
-            "def innerNestedEnum(self)" in line
-            and "_TestNestedTypesModule._NestedStructModule._NestedEnum2Module" in line
+            "def innerNestedEnum(self)" in line and "-> int" in line
             for line in lines
         )
 
@@ -196,8 +195,8 @@ class TestDummyConstantsAndVersioning:
     def test_name_annotations_renamed_struct_enum_fields(self, dummy_stub_lines):
         lines = dummy_stub_lines
         assert any("class _TestNameAnnotationModule(_StructModule):" in line for line in lines)
-        assert any("class _BadlyNamedEnumModule(Enum):" in line for line in lines)
-        assert any("BadlyNamedEnum = _BadlyNamedEnumModule" in line for line in lines)
+        assert any("class _BadlyNamedEnumModule:" in line for line in lines)
+        assert any("BadlyNamedEnum: _BadlyNamedEnumModule" in line for line in lines)
         assert any("badFieldName" in line or "bar" in line for line in lines)
 
     def test_empty_struct_representation(self, dummy_stub_lines):

@@ -74,8 +74,8 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     """Implementation of the Calculator.Function Cap'n Proto interface, wrapping
     basic binary arithmetic operators."""
 
-    def __init__(self, op):
-        self.op = op
+    def __init__(self, op: calculator_capnp.Operator):
+        self.op: calculator_capnp.Operator = op
 
     async def call(self, params, _context, **kwargs):
         assert len(params) == 2

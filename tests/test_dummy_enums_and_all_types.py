@@ -5,15 +5,13 @@ from __future__ import annotations
 
 def test_enum_definition_and_imports(dummy_stub_lines):
     lines = dummy_stub_lines
-    # Enum import present and TestEnum defined as Enum with type alias
-    assert any(line.startswith("from enum import") and "Enum" in line for line in lines)
-    # Note: 'type' is a PEP 695 built-in statement, not imported from typing
-    assert any(line.strip().startswith("class _TestEnumModule(Enum):") for line in lines)
-    assert any(line.strip() == "type TestEnum = _TestEnumModule" for line in lines)
-    # Enum values are now Enum members with integer values
+    # Enums are now simple classes with int attributes
+    assert any(line.strip().startswith("class _TestEnumModule:") for line in lines)
+    # Type alias at top level (not instance annotation)
+    assert any(line.strip().startswith('type TestEnum = int | Literal[') for line in lines)
+    # Enum values are now int annotations (e.g., "foo: int")
     for name in ["foo", "bar", "baz", "qux"]:
-        # Check for enum member assignments (e.g., "foo = 0")
-        assert any(f"{name} =" in line for line in lines)
+        assert any(f"{name}: int" in line for line in lines)
 
 
 def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):
@@ -25,7 +23,7 @@ def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):
         assert any(f"def {field}(self)" in line for line in lines)
     # Nested struct and enum field annotations (now as properties)
     assert any("def structField(self)" in line and "TestAllTypes" in line for line in lines)
-    assert any("def enumField(self)" in line and "TestEnum" in line for line in lines)
+    assert any("def enumField(self)" in line for line in lines)
     # List field typing includes Sequence (now as properties)
     assert any("def voidList(self)" in line and "Sequence" in line for line in lines)
 

@@ -48,10 +48,10 @@ class TestCalculatorInterfaceMethodTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have getOperator with _OperatorModule enum parameter (including string literals, optional)
-        # Note: Now accepts _OperatorModule | Literal[...] | None = None and returns GetoperatorResult
+        # Should have getOperator with enum parameter as int | Literal[...]
         assert "def getOperator(" in stub_content
-        assert "_CalculatorModule._OperatorModule" in stub_content
+        # Check that the method accepts the enum literals
+        assert 'int | Literal["add", "subtract", "multiply", "divide"]' in stub_content
         assert "GetoperatorResult" in stub_content
 
         # Should NOT have Any for the op parameter
@@ -197,12 +197,15 @@ class TestInterfaceMethodComplexTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # getOperator takes an _OperatorModule enum (module alias, not type alias)
-        assert "op: _CalculatorModule._OperatorModule" in stub_content
+        # getOperator takes an int or Literal enum value
+        assert "op: int | Literal[" in stub_content
 
-        # Verify the Operator enum exists as Enum class with TypeAlias
-        assert "class _OperatorModule(Enum):" in stub_content
-        assert "Operator = _OperatorModule" in stub_content
+        # Verify the Operator enum exists as plain class with instance annotation (nested)
+        assert "class _OperatorModule:" in stub_content
+        # Nested: instance annotation for Calculator.Operator.add access
+        assert "    Operator: _OperatorModule" in stub_content  # Note the indentation
+        # Top-level: type alias for annotations
+        assert 'type Operator = int | Literal["add", "subtract", "multiply", "divide"]' in stub_content
 
     def test_list_parameter_types(self, generate_calculator_stubs):
         """Test that list parameters use Sequence with proper element types."""

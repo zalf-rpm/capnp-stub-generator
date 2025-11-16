@@ -35,7 +35,7 @@ async def main(connection: capnp.AsyncIoStream):
     # Bootstrap the Calculator interface
     calculator = client.bootstrap().cast_as(calculator_capnp.Calculator)
 
-    calculator = cast(calculator_capnp.CalculatorClient, calculator)
+    calculator = cast(calculator_capnp.CalculatorClient,calculator)
     """Make a request that just evaluates the literal value 123.
 
     What's interesting here is that evaluate() returns a "Value", which is

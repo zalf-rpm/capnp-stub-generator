@@ -28,19 +28,19 @@ def test_interleaved_groups_union_and_nested_group_fields(dummy_stub_lines):
 
 def test_nested_types_enums_and_lists(dummy_stub_lines):
     lines = dummy_stub_lines
-    # Nested enums are now Enum classes under their parent struct with TypeAliases
-    assert any(re.match(r"^\s*class _NestedEnum1Module\(Enum\):", line) for line in lines)
-    assert any(re.match(r"^\s*class _NestedEnum2Module\(Enum\):", line) for line in lines)
-    assert any("NestedEnum1 = _NestedEnum1Module" in line for line in lines)
-    assert any("NestedEnum2 = _NestedEnum2Module" in line for line in lines)
+    # Nested enums are now simple classes under their parent struct with instance annotations
+    assert any(re.match(r"^\s*class _NestedEnum1Module:", line) for line in lines)
+    assert any(re.match(r"^\s*class _NestedEnum2Module:", line) for line in lines)
+    assert any("NestedEnum1: _NestedEnum1Module" in line for line in lines)
+    assert any("NestedEnum2: _NestedEnum2Module" in line for line in lines)
     # Using declarations produce aliases or reexports
     assert any("class _TestUsingModule(_StructModule):" in line for line in lines)
-    # Fields referencing nested enums use dotted names with module alias (not flattened, now as properties)
+    # Fields referencing nested enums now return int with Literal setters
     assert any(
-        "def outerNestedEnum(self)" in line and "_TestNestedTypesModule._NestedEnum1Module" in line for line in lines
+        "def outerNestedEnum(self)" in line and "-> int" in line for line in lines
     )
     assert any(
-        "def innerNestedEnum(self)" in line and "_TestNestedTypesModule._NestedStructModule._NestedEnum2Module" in line
+        "def innerNestedEnum(self)" in line and "-> int" in line
         for line in lines
     )
 

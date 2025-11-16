@@ -32,7 +32,7 @@ def test_name_annotations(basic_stubs):
         elif in_badname and line.startswith("class ") and "_BadNameModule" not in line and "Oops" not in line:
             in_badname = False
 
-        if in_badname and "class _OopsModule(Enum):" in line:
+        if in_badname and "class _OopsModule:" in line:
             found_oops_enum = True
             break
 
