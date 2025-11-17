@@ -3129,6 +3129,7 @@ class Writer:
         request_helper_collection = []  # Collect request helpers for Client class
         client_result_collection = []  # Collect client Result protocols
         server_result_collection = []  # Collect server Result protocols
+        result_type_names = []  # Collect result type names for top-level aliases
 
         for method_info in methods:
             method_collection = self._process_interface_method(method_info, server_collection)
@@ -3137,6 +3138,10 @@ class Writer:
             client_method_collection.extend(method_collection.client_method_lines)
             request_helper_collection.extend(method_collection.request_helper_lines)
             client_result_collection.extend(method_collection.client_result_lines)
+
+            # Collect result type name for top-level type alias
+            result_type_name = f"{helper.sanitize_name(method_info.method_name).title()}Result"
+            result_type_names.append(result_type_name)
 
             # Add Request classes to interface Protocol (at module level)
             for line in method_collection.request_class_lines:
@@ -3244,6 +3249,19 @@ class Writer:
 
             # Track for top-level TypeAlias (both nested and top-level)
             self._all_type_aliases[context.client_type_name] = (client_alias_path, "Client")
+
+            # Track Result types for top-level TypeAliases
+            for result_type_name in result_type_names:
+                # Result types are nested inside Client class
+                if is_nested_interface:
+                    result_alias_path = (
+                        f"{context.registered_type.scoped_name}.{context.client_type_name}.{result_type_name}"
+                    )
+                else:
+                    result_alias_path = f"{context.protocol_class_name}.{context.client_type_name}.{result_type_name}"
+
+                # Track for top-level TypeAlias
+                self._all_type_aliases[result_type_name] = (result_alias_path, "Result")
 
         return context.registered_type
 
