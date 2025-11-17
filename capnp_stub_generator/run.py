@@ -83,32 +83,22 @@ class InterfaceNode:
 
 
 def find_capnp_stubs_package() -> str | None:
-    """Find the installed capnp-stubs package directory.
+    """Find the bundled capnp-stubs package directory.
 
-    Checks both standard site-packages and .pth files for the package location.
+    Uses the bundled stubs from the resources directory.
 
     Returns:
         Path to the capnp-stubs directory, or None if not found.
     """
-    # First check for direct capnp-stubs directory
-    for path in sys.path:
-        capnp_stubs_path = os.path.join(path, "capnp-stubs")
-        if os.path.isdir(capnp_stubs_path):
-            logger.info(f"Found capnp-stubs package at: {capnp_stubs_path}")
-            return capnp_stubs_path
+    # Get the bundled capnp-stubs from resources directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    bundled_stubs_path = os.path.join(current_dir, "resources", "capnp-stubs")
 
-    # Check for .pth files that might point to capnp-stubs
-    for path in sys.path:
-        if os.path.isdir(path):
-            pth_file = os.path.join(path, "capnp_stubs.pth")
-            if os.path.exists(pth_file):
-                with open(pth_file) as f:
-                    pth_path = f.read().strip()
-                    capnp_stubs_path = os.path.join(pth_path, "capnp-stubs")
-                    if os.path.isdir(capnp_stubs_path):
-                        logger.info(f"Found capnp-stubs package via .pth file at: {capnp_stubs_path}")
-                        return capnp_stubs_path
+    if os.path.isdir(bundled_stubs_path):
+        logger.info(f"Using bundled capnp-stubs from: {bundled_stubs_path}")
+        return bundled_stubs_path
 
+    logger.warning(f"Bundled capnp-stubs not found at: {bundled_stubs_path}")
     return None
 
 

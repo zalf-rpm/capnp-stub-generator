@@ -1,3 +1,46 @@
+capnp-stub-generator - Cap'n Proto stub generator for Python
+
+Copyright (C) 2022 Adrian Figueroa <adrian.figueroa@metirionic.com>
+Copyright (C) 2025 Vincent Dlugosch <vincent.dlugosch@zalf.de>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+================================================================================
+
+Original work by Adrian Figueroa (Metirionic), 2022-2023
+Modified and enhanced by Vincent Dlugosch (ZALF), 2025
+
+This is a derivative work based on the original capnp-stub-generator
+developed at Metirionic. The modifications include extensive enhancements
+for Python 3.10-3.13 compatibility, comprehensive test coverage,
+improved type system support, and production-ready features.
+
+================================================================================
+
+BUNDLED THIRD-PARTY SOFTWARE
+
+This package bundles pycapnp type stubs (capnp-stubs) located in
+capnp_stub_generator/resources/capnp-stubs/, which are licensed under
+the BSD 2-Clause License. See capnp_stub_generator/resources/capnp-stubs/LICENSE
+for the full license text.
+
+Copyright (c) 2025, Vincent Dlugosch <vincent.dlugosch@zalf.de>
+Copyright (c) 2013, Jason Paryani <pycapnp@jparyani.com>
+Copyright (c) 2019-2020, Jacob Alexander <haata@kiibohd.com>
+
+================================================================================
+
 GNU GENERAL PUBLIC LICENSE
 
 Version 3, 29 June 2007
