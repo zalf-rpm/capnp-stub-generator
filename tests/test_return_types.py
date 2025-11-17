@@ -116,14 +116,12 @@ class TestStaticMethodReturnTypes:
     """Test that static factory methods have correct return types."""
 
     def test_new_message_returns_builder(self, dummy_stub_file):
-        """new_message should return Builder type (for mutation)."""
+        """new_message should return Builder type alias (for readability)."""
         content = dummy_stub_file.read_text()
 
-        # Find new_message in base class - with nested structure
+        # Find new_message in base class - should use flat type alias
         assert "def new_message(" in content
-        assert ") -> _TestAllTypesModule.Builder:" in content, (
-            "new_message should return _TestAllTypesModule.Builder type"
-        )
+        assert ") -> TestAllTypesBuilder:" in content, "new_message should return TestAllTypesBuilder type alias"
 
     def test_reader_does_not_have_new_message(self, dummy_stub_file):
         """Reader class should not have new_message method (can't create new messages)."""

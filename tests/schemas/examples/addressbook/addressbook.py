@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from typing import IO
 import capnp  # noqa: F401
 from _generated.examples.addressbook import addressbook_capnp
 
@@ -30,7 +31,7 @@ def writeAddressBook(file):
     addresses.write(file)
 
 
-def printAddressBook(file):
+def printAddressBook(file:IO[str]):
     addresses = addressbook_capnp.AddressBook.read(file)
 
     for person in addresses.people:

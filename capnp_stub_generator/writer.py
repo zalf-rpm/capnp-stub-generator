@@ -373,53 +373,92 @@ class Writer:
             ),
         ]
 
-    def _add_from_bytes_methods(self, scoped_reader_type: str):
-        """Add from_bytes and from_bytes_packed static methods to current scope.
+    def _add_from_bytes_methods(self, scoped_reader_type: str, scoped_builder_type: str):
+        """Add from_bytes and from_bytes_packed instance methods to current scope.
+
+        These are instance methods on the module that override base class methods.
 
         Args:
-            scoped_reader_type (str): The fully qualified Reader type name.
+            scoped_reader_type (str): The Reader type name (can be flat alias or scoped).
+            scoped_builder_type (str): The Builder type name (can be flat alias or scoped).
         """
-        self._add_typing_import("Iterator")
-        self._add_import("from contextlib import contextmanager")
+        self._add_import("from contextlib import AbstractContextManager")
+        self._add_typing_import("Literal")
+        self._add_typing_import("overload")
 
-        # from_bytes method (returns Iterator for context manager usage)
-        data_param = helper.TypeHintedVariable("data", [helper.TypeHint("bytes", primary=True)])
-        self._add_static_method(
-            "from_bytes",
-            parameters=[data_param] + self._create_capnp_limit_params(),
-            return_type=helper.new_type_group("Iterator", [scoped_reader_type]),
-            decorators=["contextmanager"],
+        buf_param = helper.TypeHintedVariable("buf", [helper.TypeHint("bytes", primary=True)])
+
+        # from_bytes overload 1: no builder parameter (returns Reader)
+        self.scope.add(helper.new_decorator("overload"))
+        self.scope.add(
+            helper.new_function(
+                "from_bytes",
+                parameters=["self", buf_param] + self._create_capnp_limit_params(),
+                return_type=helper.new_type_group("AbstractContextManager", [scoped_reader_type]),
+            )
         )
 
-        # from_bytes_packed method
-        self._add_static_method(
-            "from_bytes_packed",
-            parameters=[data_param] + self._create_capnp_limit_params(),
-            return_type=scoped_reader_type,
+        # from_bytes overload 2: builder=False (returns Reader)
+        builder_kwarg = helper.TypeHintedVariable("builder", [helper.TypeHint("Literal[False]", primary=True)])
+        self.scope.add(helper.new_decorator("overload"))
+        self.scope.add(
+            helper.new_function(
+                "from_bytes",
+                parameters=["self", buf_param] + self._create_capnp_limit_params() + ["*", builder_kwarg],
+                return_type=helper.new_type_group("AbstractContextManager", [scoped_reader_type]),
+            )
+        )
+
+        # from_bytes overload 3: builder=True (returns Builder)
+        builder_kwarg_true = helper.TypeHintedVariable("builder", [helper.TypeHint("Literal[True]", primary=True)])
+        self.scope.add(helper.new_decorator("overload"))
+        self.scope.add(
+            helper.new_function(
+                "from_bytes",
+                parameters=["self", buf_param] + self._create_capnp_limit_params() + ["*", builder_kwarg_true],
+                return_type=helper.new_type_group("AbstractContextManager", [scoped_builder_type]),
+            )
+        )
+
+        # from_bytes_packed method - returns bare _DynamicStructReader, not override
+        self.scope.add(
+            helper.new_function(
+                "from_bytes_packed",
+                parameters=["self", buf_param] + self._create_capnp_limit_params(),
+                return_type="_DynamicStructReader",
+            )
         )
 
     def _add_read_methods(self, scoped_reader_type: str):
-        """Add read and read_packed static methods to current scope.
+        """Add read and read_packed instance methods to current scope.
+
+        These are instance methods on the module that override base class methods.
 
         Args:
-            scoped_reader_type (str): The fully qualified Reader type name.
+            scoped_reader_type (str): The Reader type name (can be flat alias or scoped).
         """
-        self._add_typing_import("BinaryIO")
+        self._add_typing_import("IO")
 
-        file_param = helper.TypeHintedVariable("file", [helper.TypeHint("BinaryIO", primary=True)])
+        file_param = helper.TypeHintedVariable("file", [helper.TypeHint("IO[str] | IO[bytes]", primary=True)])
 
         # read method
-        self._add_static_method(
-            "read",
-            parameters=[file_param] + self._create_capnp_limit_params(),
-            return_type=scoped_reader_type,
+        self.scope.add(helper.new_decorator("override"))
+        self.scope.add(
+            helper.new_function(
+                "read",
+                parameters=["self", file_param] + self._create_capnp_limit_params(),
+                return_type=scoped_reader_type,
+            )
         )
 
         # read_packed method
-        self._add_static_method(
-            "read_packed",
-            parameters=[file_param] + self._create_capnp_limit_params(),
-            return_type=scoped_reader_type,
+        self.scope.add(helper.new_decorator("override"))
+        self.scope.add(
+            helper.new_function(
+                "read_packed",
+                parameters=["self", file_param] + self._create_capnp_limit_params(),
+                return_type=scoped_reader_type,
+            )
         )
 
     def _add_write_methods(self):
@@ -671,8 +710,9 @@ class Writer:
         for field_name, field_type in init_choices:
             if use_overload:
                 self.scope.add(helper.new_decorator("overload"))
-            # Build builder type name (respect scoped names)
-            builder_type = self._build_scoped_builder_type(field_type)
+            # Build builder type name - try flat alias first
+            builder_alias = self._get_flat_builder_alias(field_type)
+            builder_type = builder_alias or self._build_scoped_builder_type(field_type)
 
             # Parameter must be named "field" to match base class
             init_params = [
@@ -695,7 +735,12 @@ class Writer:
         for field_name, element_type, needs_builder in list_init_choices:
             if use_overload:
                 self.scope.add(helper.new_decorator("overload"))
-            element_type_for_list = self._build_scoped_builder_type(element_type) if needs_builder else element_type
+            # For list element types, try to use flat Builder alias if available
+            if needs_builder:
+                builder_alias = self._get_flat_builder_alias(element_type)
+                element_type_for_list = builder_alias or self._build_scoped_builder_type(element_type)
+            else:
+                element_type_for_list = element_type
 
             # Parameter must be named "field" to match base class
             init_params_list = [
@@ -798,6 +843,9 @@ class Writer:
             )
             new_message_params.append(field_param)
 
+        # Add **kwargs: Any to match base signature
+        new_message_params.append("**kwargs: Any")
+
         # Add as instance method with @override decorator
         self.scope.add("@override")
         self.scope.add(helper.new_function("new_message", new_message_params, builder_type_name))
@@ -814,6 +862,7 @@ class Writer:
 
         Now inherits from _StructModule, so we only need to add:
         - new_message with field parameters (overriding base)
+        - read methods (from_bytes, from_bytes_packed, read, read_packed) with correct Reader return type
 
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
@@ -825,6 +874,10 @@ class Writer:
         # Add new_message method override with field parameters
         self._add_typing_import("override")
         self._add_new_message_method(slot_fields, builder_type_name)
+
+        # Add read method overrides with correct Reader and Builder return types (flat aliases)
+        self._add_from_bytes_methods(reader_type_name, builder_type_name)
+        self._add_read_methods(reader_type_name)
 
     def _gen_struct_reader_class(
         self,
@@ -1062,84 +1115,11 @@ class Writer:
         scope_path = self._get_scope_path()
         fully_qualified_interface = scope_path if scope_path else name
 
-        # Build server parameter type - should accept this Server OR ANY ancestor Server types
-        # This ensures compatibility with inherited _new_client signatures
-        # We need to recursively collect all ancestors, not just direct parents
-        def collect_all_ancestor_servers(node_id: int, visited: set[int] | None = None) -> set[str]:
-            """Recursively collect all ancestor Server types by node ID."""
-            if visited is None:
-                visited = set()
+        # Use base type _DynamicCapabilityServer for parameter to match base class signature
+        # This accepts any server implementation (including subclasses of this interface's Server)
+        server_param_type = "_DynamicCapabilityServer"
 
-            # Avoid infinite loops
-            if node_id in visited:
-                return set()
-            visited.add(node_id)
-
-            ancestors = set()
-
-            # Try to get the schema for this node ID
-            schema_node = None
-            if node_id in self.type_map:
-                type_info = self.type_map[node_id]
-                if hasattr(type_info, "schema") and hasattr(type_info.schema, "node"):
-                    schema_node = type_info.schema.node
-
-            # If not found in current module, check the module registry
-            if schema_node is None:
-                for module_id, (path, module) in self._module_registry.items():
-                    if module_id == node_id:
-                        schema_node = module.schema.node
-                        break
-                    # Check all top-level types in this module
-                    for attr_name in dir(module.schema):
-                        if attr_name.startswith("_"):
-                            continue
-                        try:
-                            attr = getattr(module.schema, attr_name)
-                            if hasattr(attr, "schema") and hasattr(attr.schema, "node"):
-                                if attr.schema.node.id == node_id:
-                                    schema_node = attr.schema.node
-                                    break
-                        except (AttributeError, TypeError):
-                            continue
-                    if schema_node:
-                        break
-
-            # If we found the schema, process its superclasses
-            if schema_node and schema_node.which() == "interface":
-                for superclass in schema_node.interface.superclasses:
-                    try:
-                        superclass_type = self.get_type_by_id(superclass.id)
-                        # superclass_type.name is now the Protocol name
-                        protocol_name = superclass_type.name
-                        if superclass_type.scope and not superclass_type.scope.is_root:
-                            ancestor_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
-                        else:
-                            ancestor_protocol = protocol_name
-                        ancestor_server_type = f"{ancestor_protocol}.Server"
-                        ancestors.add(ancestor_server_type)
-                        # Recursively collect ancestors of this superclass
-                        ancestors.update(collect_all_ancestor_servers(superclass.id, visited))
-                    except (KeyError, AttributeError):
-                        pass
-
-            return ancestors
-
-        # Build the server type for the current interface (use module alias)
-        # scope_path already contains the Protocol module path (e.g., "_ChannelModule._ReaderModule")
-        # so we can use it directly
-        if scope_path:
-            current_interface_protocol = scope_path
-        else:
-            # Top-level interface - add _Module suffix
-            current_interface_protocol = f"_{name}Module"
-        server_types = [f"{current_interface_protocol}.Server"]
-        ancestor_servers = collect_all_ancestor_servers(schema.node.id)
-        server_types.extend(sorted(ancestor_servers))  # Sort for consistency
-
-        server_param_type = " | ".join(server_types)
-
-        # Determine return type
+        # Determine return type (narrow, specific client type)
         if client_return_type:
             # For nested interfaces: Calculator.Value -> Calculator.ValueClient
             # For top-level: Greeter -> GreeterClient
@@ -2337,8 +2317,9 @@ class Writer:
 
                 if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
                     struct_type_name = self.get_type_name(field_obj.slot.type)
-                    # Get the Builder type for the struct
-                    builder_type = self._build_scoped_builder_type(struct_type_name)
+                    # Get the Builder type for the struct - try flat alias first
+                    builder_alias = self._get_flat_builder_alias(struct_type_name)
+                    builder_type = builder_alias or self._build_scoped_builder_type(struct_type_name)
                     struct_params.append((param.name, builder_type))
             except Exception:
                 continue
