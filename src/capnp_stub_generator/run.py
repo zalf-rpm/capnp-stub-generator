@@ -8,7 +8,6 @@ import logging
 import os.path
 import shutil
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -90,9 +89,9 @@ def find_capnp_stubs_package() -> str | None:
     Returns:
         Path to the capnp-stubs directory, or None if not found.
     """
-    # Get the bundled capnp-stubs from resources directory
+    # Get the bundled capnp-stubs from capnp-stubs directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    bundled_stubs_path = os.path.join(current_dir, "resources", "capnp-stubs")
+    bundled_stubs_path = os.path.join(current_dir, "..", "capnp-stubs")
 
     if os.path.isdir(bundled_stubs_path):
         logger.info(f"Using bundled capnp-stubs from: {bundled_stubs_path}")
@@ -545,9 +544,11 @@ def _augment_dynamic_object_reader(
         else:
             clean_param = protocol_name
 
-        # For return type, use the type alias pattern
-        # From "_MyStructModule.Reader" build "MyStructReader"
+        # For return type, use the flat type alias pattern
+        # Top-level type aliases are generated as flat names at module level
         # From "generic_interface_capnp._MyStructModule.Reader" build "generic_interface_capnp.MyStructReader"
+        # From "management_capnp._ParamsModule._AutomaticSowingModule._AvgSoilTempModule.Reader"
+        # build "management_capnp.AvgSoilTempReader" (just the innermost struct)
         return_parts = reader_type.split(".")
         capnp_idx = None
         for i, part in enumerate(return_parts):
@@ -555,15 +556,17 @@ def _augment_dynamic_object_reader(
                 capnp_idx = i
                 break
         if capnp_idx is not None and len(return_parts) >= capnp_idx + 3:
-            # return_parts = ["generic_interface_capnp", "_MyStructModule", "Reader"]
-            module_name = return_parts[capnp_idx]  # "generic_interface_capnp"
-            struct_module = return_parts[capnp_idx + 1]  # "_MyStructModule"
+            # return_parts might be ["management_capnp", "_ParamsModule", "_AutomaticSowingModule", "_AvgSoilTempModule", "Reader"]
+            module_name = return_parts[capnp_idx]  # "management_capnp"
             reader_builder = return_parts[-1]  # "Reader" or "Builder"
 
-            # Build alias name: "_MyStructModule" -> "MyStruct", then add "Reader"
-            if struct_module.startswith("_") and struct_module.endswith("Module"):
-                struct_base_name = struct_module[1:-6]  # Remove "_" and "Module"
-                alias_name = f"{struct_base_name}{reader_builder}"  # "MyStructReader"
+            # Get the last module part (the actual struct we're returning)
+            last_module = return_parts[-2]  # "_AvgSoilTempModule"
+
+            # Convert _XxxModule to Xxx
+            if last_module.startswith("_") and last_module.endswith("Module"):
+                struct_name = last_module[1:-6]  # "AvgSoilTemp"
+                alias_name = f"{struct_name}{reader_builder}"  # "AvgSoilTempReader"
                 clean_return = f"{module_name}.{alias_name}"
             else:
                 # Fallback to full path
