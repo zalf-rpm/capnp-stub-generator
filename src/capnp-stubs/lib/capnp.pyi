@@ -1040,11 +1040,11 @@ class _CapabilityClient:
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-    def cast_as(self, schema: type[T]) -> T:
+    def cast_as(self, schema: Any) -> _DynamicCapabilityClient:
         """Cast this capability to a specific interface type.
 
         Args:
-            schema: Interface schema to cast to
+            schema: Interface schema or module to cast to
 
         Returns:
             Capability cast to the specified interface
@@ -1648,9 +1648,6 @@ def _init_capnp_api() -> None:
     ...
 
 # RPC Classes
-class _CastableBootstrap:
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-    def cast_as(self, interface: Any) -> _DynamicCapabilityClient: ...
 
 class TwoPartyClient:
     """Two-party RPC client for Cap'n Proto.
@@ -1666,7 +1663,7 @@ class TwoPartyClient:
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> None: ...
-    def bootstrap(self) -> _CastableBootstrap:
+    def bootstrap(self) -> _CapabilityClient:
         """Get the bootstrap interface for this client."""
         ...
     def close(self) -> None:

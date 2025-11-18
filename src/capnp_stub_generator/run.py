@@ -331,7 +331,7 @@ def _augment_capnp_pyi(
     interfaces: dict[str, tuple[str, list[str]]],
     module_imports: dict[str, str],
 ) -> None:
-    """Augment _CastableBootstrap.cast_as method with interface-specific overloads.
+    """Augment _CapabilityClient.cast_as method with interface-specific overloads.
 
     Args:
         capnp_pyi_path: Path to the lib/capnp.pyi file.
@@ -345,22 +345,22 @@ def _augment_capnp_pyi(
 
     lines = original_content.split("\n")
 
-    # Now find _CastableBootstrap class and its cast_as method
+    # Now find _CapabilityClient class and its cast_as method
     cast_as_line_idx = None
     in_castable_bootstrap = False
 
     for i, line in enumerate(lines):
-        if "class _CastableBootstrap" in line:
+        if "class _CapabilityClient" in line:
             in_castable_bootstrap = True
-        elif in_castable_bootstrap and "def cast_as(self, interface:" in line:
+        elif in_castable_bootstrap and "def cast_as(self, schema:" in line:
             cast_as_line_idx = i
             break
-        elif in_castable_bootstrap and line.strip().startswith("class ") and "_CastableBootstrap" not in line:
+        elif in_castable_bootstrap and line.strip().startswith("class ") and "_CapabilityClient" not in line:
             # Found another class, stop looking
             break
 
     if cast_as_line_idx is None:
-        logger.warning("Could not find cast_as method in _CastableBootstrap class, skipping augmentation.")
+        logger.warning("Could not find cast_as method in _CapabilityClient class, skipping augmentation.")
         return
 
     # Sort interfaces by inheritance depth (most derived first)
