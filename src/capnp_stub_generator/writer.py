@@ -1134,11 +1134,10 @@ class Writer:
         else:
             return_type = fully_qualified_interface
 
-        self.scope.add("@classmethod")
         self.scope.add(
             helper.new_function(
                 "_new_client",
-                parameters=["cls", f"server: {server_param_type}"],
+                parameters=["self", f"server: {server_param_type}"],
                 return_type=return_type,
             )
         )

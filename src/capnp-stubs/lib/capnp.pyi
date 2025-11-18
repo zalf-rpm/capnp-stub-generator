@@ -1600,11 +1600,10 @@ class _InterfaceModule:
     The Server base class is accessed via the `Server` attribute.
     """
 
-    schema: _InterfaceSchema
-
     def __init__(self, schema: _InterfaceSchema, name: str) -> None: ...
-    @classmethod
-    def _new_client(cls, server: _DynamicCapabilityServer) -> _DynamicCapabilityClient:
+    @property
+    def schema(self) -> _InterfaceSchema: ...
+    def _new_client(self, server: _DynamicCapabilityServer) -> _DynamicCapabilityClient:
         """Create a new client from a server implementation.
 
         Note: Requires an active event loop (use within capnp.kj_loop() or async context).
