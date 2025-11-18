@@ -392,7 +392,7 @@ class _DynamicObjectReader:
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> Any:
+    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this AnyPointer to an interface capability.
 
         The return type matches the interface type parameterized in the schema.
@@ -419,7 +419,7 @@ class _DynamicObjectReader:
         """
         ...
 
-    def as_struct(self, schema: _StructSchema | type[_StructModule]) -> Any:
+    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
         """Cast this AnyPointer to a struct reader.
 
         The return type matches the Reader type parameterized in the schema.
@@ -488,7 +488,7 @@ class _DynamicObjectBuilder:
         """
         ...
 
-    def as_struct(self, schema: _StructSchema | type[_StructModule]) -> Any:
+    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder:
         """Cast this AnyPointer to a struct builder.
 
         The return type matches the Builder type parameterized in the schema.
@@ -995,28 +995,17 @@ class _CallContext:
         ...
 
 # Capability Types
-class _DynamicCapabilityClient:
+class _DynamicCapabilityClient(_CapabilityClient):
     """Dynamic capability client.
 
     Represents a reference to a remote capability.
     This is the base class for all generated capability client classes.
     """
 
-    schema: _InterfaceSchema
-
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-    def cast_as(self, schema: type[T]) -> T:
-        """Cast this capability to a specific interface type.
-
-        Args:
-            schema: Interface type to cast to
-
-        Returns:
-            Capability cast to the specified interface
-        """
-        ...
-
-    def upcast(self, schema: type[T]) -> T:
+    @property
+    def schema(self) -> _InterfaceSchema: ...
+    def upcast(self, schema: Any) -> _DynamicCapabilityClient:
         """Upcast this capability to a parent interface type.
 
         Args:
@@ -1040,7 +1029,7 @@ class _CapabilityClient:
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-    def cast_as(self, schema: Any) -> _DynamicCapabilityClient:
+    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this capability to a specific interface type.
 
         Args:

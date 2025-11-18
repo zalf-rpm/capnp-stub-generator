@@ -403,11 +403,13 @@ def _augment_capnp_pyi(
         qualified_client = client_suffix
 
         overload_lines.append("    @overload")
-        overload_lines.append(f"    def cast_as(self, interface: {qualified_interface}) -> {qualified_client}: ...")
+        overload_lines.append(f"    def cast_as(self, schema: {qualified_interface}) -> {qualified_client}: ...")
 
     # Add a catchall overload that matches the original function definition
     overload_lines.append("    @overload")
-    overload_lines.append("    def cast_as(self, interface: Any) -> _DynamicCapabilityClient: ...")
+    overload_lines.append(
+        "    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ..."
+    )
 
     # Insert overloads before the original cast_as method
     lines[cast_as_line_idx:cast_as_line_idx] = overload_lines
@@ -418,19 +420,6 @@ def _augment_capnp_pyi(
         f.write(augmented_content)
 
     logger.info(f"Augmented {capnp_pyi_path} with {len(interfaces)} cast_as overload(s).")
-
-    # Format the augmented file with ruff
-    try:
-        subprocess.run(
-            ["ruff", "format", capnp_pyi_path],
-            capture_output=True,
-            check=True,
-        )
-        logger.info(f"Formatted augmented file: {capnp_pyi_path}")
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Failed to format augmented file: {e}")
-    except FileNotFoundError:
-        logger.warning("ruff not found, skipping formatting of augmented file")
 
 
 def _augment_dynamic_object_reader(
@@ -575,11 +564,13 @@ def _augment_dynamic_object_reader(
             clean_return = reader_type
 
         struct_overloads.append("    @overload")
-        struct_overloads.append(f"    def as_struct(self, type: {clean_param}) -> {clean_return}: ...")
+        struct_overloads.append(f"    def as_struct(self, schema: {clean_param}) -> {clean_return}: ...")
 
     # Add catchall overload for as_struct
     struct_overloads.append("    @overload")
-    struct_overloads.append("    def as_struct(self, schema: Any) -> Any: ...")
+    struct_overloads.append(
+        "    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ..."
+    )
 
     # Build overloads for as_interface (insert before the existing as_interface method)
     # Sort interface types by inheritance depth (most derived first) - same as cast_as
@@ -639,11 +630,13 @@ def _augment_dynamic_object_reader(
             clean_return = client_type
 
         interface_overloads.append("    @overload")
-        interface_overloads.append(f"    def as_interface(self, type: {clean_param}) -> {clean_return}: ...")
+        interface_overloads.append(f"    def as_interface(self, schema: {clean_param}) -> {clean_return}: ...")
 
     # Add catchall overload for as_interface
     interface_overloads.append("    @overload")
-    interface_overloads.append("    def as_interface(self, schema: Any) -> Any: ...")
+    interface_overloads.append(
+        "    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ..."
+    )
 
     # Insert overloads - ensure proper ordering
     # We want: interface overloads before as_interface, struct overloads before as_struct
@@ -667,19 +660,6 @@ def _augment_dynamic_object_reader(
 
     total_overloads = len(struct_overloads) + len(interface_overloads)
     logger.info(f"Augmented _DynamicObjectReader in {capnp_pyi_path} with {total_overloads // 2} overload(s).")
-
-    # Format the augmented file with ruff
-    try:
-        subprocess.run(
-            ["ruff", "format", capnp_pyi_path],
-            capture_output=True,
-            check=True,
-        )
-        logger.info(f"Formatted augmented file: {capnp_pyi_path}")
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Failed to format augmented file: {e}")
-    except FileNotFoundError:
-        logger.warning("ruff not found, skipping formatting of augmented file")
 
 
 def validate_with_pyright(output_directories: set[str]) -> None:

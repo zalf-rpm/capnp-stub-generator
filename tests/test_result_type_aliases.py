@@ -1,6 +1,5 @@
 """Test that Result types are available as top-level type aliases like Builder and Reader."""
 
-
 import pytest
 
 
