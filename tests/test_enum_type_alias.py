@@ -1,7 +1,6 @@
 """Test enum type alias generation and usage."""
 
 import subprocess
-from pathlib import Path
 
 
 def test_enum_type_alias_exists(calculator_stubs):

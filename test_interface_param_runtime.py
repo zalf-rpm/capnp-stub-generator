@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Runtime test to verify what types can be passed for interface parameters."""
+
 import capnp
 
 capnp.remove_import_hook()
 calculator_capnp = capnp.load("tests/schemas/examples/calculator/calculator.capnp")
 
+
 class ValueImpl(calculator_capnp.Calculator.Value.Server):
     def __init__(self, value):
         self._value = value
+
     def read_context(self, context):
         context.results.value = self._value
+
 
 # Test 1: Server
 print("Test 1: Server implementation")
@@ -33,6 +37,6 @@ try:
 except Exception as e:
     print(f"✗ FAILED: {e}")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("CONCLUSION: Both Server and Client can be assigned to interface fields")
 print("Type hint should be: ValueClient | Value.Server")

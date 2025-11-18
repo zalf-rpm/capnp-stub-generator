@@ -36,12 +36,7 @@ from capnp._internal import (
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 type AnyPointer = (
-    str
-    | bytes
-    | _DynamicStructBuilder
-    | _DynamicStructReader
-    | _DynamicCapabilityClient
-    | _DynamicCapabilityServer
+    str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer
 )
 
 class KjException(Exception):
@@ -96,9 +91,9 @@ class KjException(Exception):
         ...
 
 class _StructSchema:
-    node: _SchemaNode
-
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+    @property
+    def node(self) -> _SchemaNode: ...
     def which(self) -> str: ...
     def as_struct(self) -> Any: ...
     def get_nested(self, name: str) -> Any: ...
@@ -113,9 +108,9 @@ class _StructModule:
     Nested types (structs, enums, interfaces) are accessed as attributes, not methods.
     """
 
-    schema: _StructSchema
-
     def __init__(self, schema: _StructSchema, name: str) -> None: ...
+    @property
+    def schema(self) -> _StructSchema: ...
     def new_message(
         self,
         num_first_segment_words: int | None = None,
@@ -549,6 +544,12 @@ class _DynamicObjectBuilder:
         """
         ...
 
+class _MessageSize:
+    @property
+    def cap_count(self) -> int: ...
+    @property
+    def word_count(self) -> int: ...
+
 class _DynamicStructReader:
     """Reader for Cap'n Proto structs.
 
@@ -563,16 +564,23 @@ class _DynamicStructReader:
         print(getattr(person, 'field-with-hyphens'))  # for names that are invalid for python
     """
 
-    slot: _SlotRuntime
-    schema: _StructSchema
-    list: _DynamicListReader
-    struct: _StructType
-    enum: _EnumType
-    interface: _InterfaceType
-    is_root: bool  # True if this is the root struct of a message
-    total_size: Any  # Message size information
-
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+    @property
+    def slot(self) -> _SlotRuntime: ...
+    @property
+    def schema(self) -> _StructSchema: ...
+    @property
+    def list(self) -> _DynamicListReader: ...
+    @property
+    def struct(self) -> _StructType: ...
+    @property
+    def enum(self) -> _EnumType: ...
+    @property
+    def interface(self) -> _InterfaceType: ...
+    @property
+    def is_root(self) -> bool: ...
+    @property
+    def total_size(self) -> _MessageSize: ...
     @property
     def name(self) -> str: ...
     def which(self) -> str:
@@ -914,15 +922,7 @@ class _ListSchema:
 
     def __init__(
         self,
-        schema: (
-            _StructSchema
-            | _EnumSchema
-            | _InterfaceSchema
-            | _ListSchema
-            | _SchemaType
-            | Any
-            | None
-        ) = None,
+        schema: (_StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema | _SchemaType | Any | None) = None,
     ) -> None:
         """Create a list schema for the given element type.
 
@@ -1707,9 +1707,7 @@ class AsyncIoStream:
 
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @staticmethod
-    async def create_connection(
-        host: str | None = None, port: int | None = None, **kwargs: Any
-    ) -> AsyncIoStream:
+    async def create_connection(host: str | None = None, port: int | None = None, **kwargs: Any) -> AsyncIoStream:
         """Create an async TCP connection.
 
         Args:
@@ -1723,9 +1721,7 @@ class AsyncIoStream:
         ...
 
     @staticmethod
-    async def create_unix_connection(
-        path: str | None = None, **kwargs: Any
-    ) -> AsyncIoStream:
+    async def create_unix_connection(path: str | None = None, **kwargs: Any) -> AsyncIoStream:
         """Create an async Unix domain socket connection.
 
         Args:

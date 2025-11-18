@@ -36,13 +36,8 @@ def test_nested_types_enums_and_lists(dummy_stub_lines):
     # Using declarations produce aliases or reexports
     assert any("class _TestUsingModule(_StructModule):" in line for line in lines)
     # Fields referencing nested enums now return int with Literal setters
-    assert any(
-        "def outerNestedEnum(self)" in line and "-> int" in line for line in lines
-    )
-    assert any(
-        "def innerNestedEnum(self)" in line and "-> int" in line
-        for line in lines
-    )
+    assert any("def outerNestedEnum(self)" in line and "-> int" in line for line in lines)
+    assert any("def innerNestedEnum(self)" in line and "-> int" in line for line in lines)
 
 
 def test_using_type_aliases_resolved(dummy_stub_lines):

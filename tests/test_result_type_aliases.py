@@ -1,7 +1,7 @@
 """Test that Result types are available as top-level type aliases like Builder and Reader."""
 
+
 import pytest
-from pathlib import Path
 
 
 def test_result_type_aliases_exist(calculator_stubs):
@@ -23,17 +23,17 @@ def test_result_type_aliases_point_to_client_nested_types(calculator_stubs):
     content = stub_file.read_text()
 
     # Result types should point to Client.Result (not Server.Result)
-    assert (
-        "type EvaluateResult = _CalculatorModule.CalculatorClient.EvaluateResult" in content
-    ), "EvaluateResult should point to CalculatorClient.EvaluateResult"
-    
-    assert (
-        "type ReadResult = _CalculatorModule._ValueModule.ValueClient.ReadResult" in content
-    ), "ReadResult should point to ValueClient.ReadResult"
-    
-    assert (
-        "type CallResult = _CalculatorModule._FunctionModule.FunctionClient.CallResult" in content
-    ), "CallResult should point to FunctionClient.CallResult"
+    assert "type EvaluateResult = _CalculatorModule.CalculatorClient.EvaluateResult" in content, (
+        "EvaluateResult should point to CalculatorClient.EvaluateResult"
+    )
+
+    assert "type ReadResult = _CalculatorModule._ValueModule.ValueClient.ReadResult" in content, (
+        "ReadResult should point to ValueClient.ReadResult"
+    )
+
+    assert "type CallResult = _CalculatorModule._FunctionModule.FunctionClient.CallResult" in content, (
+        "CallResult should point to FunctionClient.CallResult"
+    )
 
 
 def test_result_type_aliases_alongside_builder_reader(calculator_stubs):
@@ -42,10 +42,10 @@ def test_result_type_aliases_alongside_builder_reader(calculator_stubs):
     content = stub_file.read_text()
 
     # Find the type alias section
-    lines = content.split('\n')
+    lines = content.split("\n")
     type_alias_section = []
     in_type_alias_section = False
-    
+
     for line in lines:
         if "# Top-level type aliases" in line:
             in_type_alias_section = True
@@ -68,10 +68,10 @@ def test_result_type_aliases_in_sorted_order(calculator_stubs):
     content = stub_file.read_text()
 
     # Extract all type aliases
-    lines = content.split('\n')
+    lines = content.split("\n")
     type_aliases = []
     in_type_alias_section = False
-    
+
     for line in lines:
         if "# Top-level type aliases" in line:
             in_type_alias_section = True
@@ -92,12 +92,12 @@ def test_void_method_result_type_alias_exists(calculator_stubs):
     """Test that void methods also have Result type aliases."""
     # For the channel example with void methods
     channel_stub = calculator_stubs.parent.parent / "basic" / "interfaces_capnp.pyi"
-    
+
     if not channel_stub.exists():
         pytest.skip("Channel stub not available")
-    
+
     content = channel_stub.read_text()
-    
+
     # Check for CloseResult (void method)
     if "CloseResult" in content:
         # Should have type alias for void method result too
@@ -127,7 +127,7 @@ def test_result_type_alias_usage_in_type_hints(calculator_stubs):
     # def my_function() -> EvaluateResult: ...
     # This is verified by the presence of the type alias definition
     assert "type EvaluateResult = _CalculatorModule.CalculatorClient.EvaluateResult" in content
-    
+
     # And the actual Result class should be nested in Client
     assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in content
     assert "    class CalculatorClient" in content
@@ -145,7 +145,7 @@ def test_result_type_count_matches_method_count(calculator_stubs):
         ("defFunction", "DeffunctionResult"),  # .title() makes it "Deffunction"
         ("getOperator", "GetoperatorResult"),  # .title() makes it "Getoperator"
     ]
-    
+
     for method_name, result_name in calculator_results:
         assert f"type {result_name} = " in content, f"Should have {result_name} type alias for {method_name}"
 
