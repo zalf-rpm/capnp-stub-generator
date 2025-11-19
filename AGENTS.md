@@ -11,7 +11,7 @@ This is a Python stub generator that creates `.pyi` type hint files from Cap'n P
 
 ## Project Structure
 ```
-capnp_stub_generator/
+src/capnp_stub_generator/
 ├── cli.py              # Command-line interface and argument parsing
 ├── run.py              # Main execution logic and file processing
 ├── writer.py           # Core stub generation logic (main class: Writer)
