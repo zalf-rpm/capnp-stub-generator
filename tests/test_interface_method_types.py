@@ -197,15 +197,15 @@ class TestInterfaceMethodComplexTypes:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # getOperator takes an int or Literal enum value
-        assert "op: int | Literal[" in stub_content
+        # getOperator takes an int or Literal enum value -> now uses CalculatorOperatorEnum
+        assert "op: CalculatorOperatorEnum" in stub_content
 
         # Verify the Operator enum exists as plain class with instance annotation (nested)
         assert "class _OperatorModule:" in stub_content
         # Nested: instance annotation for Calculator.Operator.add access
         assert "    Operator: _OperatorModule" in stub_content  # Note the indentation
         # Top-level: type alias for annotations
-        assert 'type Operator = int | Literal["add", "subtract", "multiply", "divide"]' in stub_content
+        assert 'type CalculatorOperatorEnum = int | Literal["add", "subtract", "multiply", "divide"]' in stub_content
 
     def test_list_parameter_types(self, generate_calculator_stubs):
         """Test that list parameters use Sequence with proper element types."""

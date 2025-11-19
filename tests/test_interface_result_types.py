@@ -136,9 +136,9 @@ class TestEnumParametersAcceptLiterals:
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
-        # getOperator should accept int | Literal[...] | None (optional)
+        # getOperator should accept int | Literal[...] | None (optional) -> now uses CalculatorOperatorEnum alias
         assert "def getOperator(" in stub_content
-        assert 'int | Literal["add", "subtract", "multiply", "divide"] | None = None' in stub_content
+        assert "op: CalculatorOperatorEnum | None = None" in stub_content
 
     def test_enum_literals_match_enum_values(self, generate_calculator_stubs):
         """Test that the enum literal values match the actual enum."""

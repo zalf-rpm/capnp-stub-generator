@@ -21,7 +21,7 @@ class TestDummyEnumsAndTypes:
         # Enums are now simple classes with int attributes
         assert any(line.strip().startswith("class _TestEnumModule:") for line in lines)
         # Type alias at top level (not instance annotation)
-        assert any(line.strip().startswith("type TestEnum = int | Literal[") for line in lines)
+        assert any(line.strip().startswith("type TestEnumEnum = int | Literal[") for line in lines)
         for name in ["foo", "bar", "baz", "qux"]:
             assert any(f"{name}: int" in line for line in lines)
 
@@ -121,9 +121,9 @@ class TestDummyGroupsAndNested:
         assert any("NestedEnum1: _NestedEnum1Module" in line for line in lines)
         assert any("NestedEnum2: _NestedEnum2Module" in line for line in lines)
         assert any("class _TestUsingModule(_StructModule):" in line for line in lines)
-        # Enum fields now return int
-        assert any("def outerNestedEnum(self)" in line and "-> int" in line for line in lines)
-        assert any("def innerNestedEnum(self)" in line and "-> int" in line for line in lines)
+        # Enum fields now return the Enum type alias
+        assert any("def outerNestedEnum(self) -> TestNestedTypesNestedEnum1Enum" in line for line in lines)
+        assert any("def innerNestedEnum(self) -> TestNestedTypesNestedStructNestedEnum2Enum" in line for line in lines)
 
     def test_using_type_aliases_resolved(self, dummy_stub_lines):
         lines = dummy_stub_lines
