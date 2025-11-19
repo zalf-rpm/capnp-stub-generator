@@ -8,8 +8,8 @@ def test_enum_type_alias_exists(calculator_stubs):
     stub_file = calculator_stubs / "calculator_capnp.pyi"
     content = stub_file.read_text()
 
-    # Check that the enum type alias exists
-    assert 'type Operator = int | Literal["add", "subtract", "multiply", "divide"]' in content
+    # Check that the enum type alias exists (flattened name)
+    assert 'type CalculatorOperatorEnum = int | Literal["add", "subtract", "multiply", "divide"]' in content
 
 
 def test_enum_type_alias_accepts_literals(calculator_stubs):
@@ -17,7 +17,7 @@ def test_enum_type_alias_accepts_literals(calculator_stubs):
     test_code = '''
 import calculator_capnp
 
-def use_operator_literal(op: calculator_capnp.Operator):
+def use_operator_literal(op: calculator_capnp.CalculatorOperatorEnum):
     """Function that accepts Operator."""
     pass
 
@@ -46,7 +46,7 @@ def test_enum_type_alias_accepts_int(calculator_stubs):
     test_code = '''
 import calculator_capnp
 
-def use_operator_int(op: calculator_capnp.Operator):
+def use_operator_int(op: calculator_capnp.CalculatorOperatorEnum):
     """Function that accepts Operator."""
     pass
 
@@ -75,7 +75,7 @@ def test_enum_type_alias_accepts_enum_attribute(calculator_stubs):
     test_code = '''
 import calculator_capnp
 
-def use_operator_enum(op: calculator_capnp.Operator):
+def use_operator_enum(op: calculator_capnp.CalculatorOperatorEnum):
     """Function that accepts Operator."""
     pass
 
@@ -104,7 +104,7 @@ def test_enum_type_alias_rejects_invalid_literals(calculator_stubs):
     test_code = '''
 import calculator_capnp
 
-def use_operator(op: calculator_capnp.Operator):
+def use_operator(op: calculator_capnp.CalculatorOperatorEnum):
     """Function that accepts Operator."""
     pass
 
@@ -136,7 +136,7 @@ import calculator_capnp
 class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     """Implementation wrapping arithmetic operators."""
     
-    def __init__(self, op: calculator_capnp.Operator):
+    def __init__(self, op: calculator_capnp.CalculatorOperatorEnum):
         self.op = op
     
     async def call(self, params, _context, **kwargs):
@@ -179,7 +179,7 @@ def test_enum_comparison_with_literals(calculator_stubs):
     test_code = '''
 import calculator_capnp
 
-def process_operator(op: calculator_capnp.Operator) -> str:
+def process_operator(op: calculator_capnp.CalculatorOperatorEnum) -> str:
     """Process operator and return string description."""
     if op == "add":
         return "addition"

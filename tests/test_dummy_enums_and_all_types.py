@@ -8,7 +8,7 @@ def test_enum_definition_and_imports(dummy_stub_lines):
     # Enums are now simple classes with int attributes
     assert any(line.strip().startswith("class _TestEnumModule:") for line in lines)
     # Type alias at top level (not instance annotation)
-    assert any(line.strip().startswith("type TestEnum = int | Literal[") for line in lines)
+    assert any(line.strip().startswith("type TestEnumEnum = int | Literal[") for line in lines)
     # Enum values are now int annotations (e.g., "foo: int")
     for name in ["foo", "bar", "baz", "qux"]:
         assert any(f"{name}: int" in line for line in lines)

@@ -1431,15 +1431,10 @@ class Writer:
 
         # Enum values are integers at runtime, but also accept string literals
         try:
-            enum_values = [e.name for e in schema.node.enum.enumerants]
-            # Create a Literal type with all valid enum values
-            literal_values = ", ".join(f'"{v}"' for v in enum_values)
-            literal_type = f"Literal[{literal_values}]"
-            self._add_typing_import("Literal")
-
+            type_name = self.get_type_name(field.slot.type)
             return helper.TypeHintedVariable(
                 helper.sanitize_name(field.name),
-                [helper.TypeHint("int", primary=True), helper.TypeHint(literal_type)],
+                [helper.TypeHint(type_name, primary=True)],
             )
         except (AttributeError, TypeError):
             # Fallback if we can't get enumerants
@@ -1578,9 +1573,26 @@ class Writer:
         # Create new scope for the Enum
         self.new_scope(enum_class_name, schema.node, scope_heading=enum_declaration, parent_scope=enum_parent_scope)
 
-        # Register type with the Enum class name (not user-facing name)
+        # Construct flat alias name for nested enums to avoid "Variable not allowed" errors
+        # e.g. CalculatorOperatorEnum
+        flat_name = name
+        s = enum_parent_scope
+        while s and not s.is_root:
+            # s.name is like _CalculatorModule
+            # Extract Calculator
+            if s.name.startswith("_") and s.name.endswith("Module"):
+                part = s.name[1:-6]
+            else:
+                part = s.name
+            flat_name = f"{part}{flat_name}"
+            s = s.parent
+        
+        alias_name = f"{flat_name}Enum"
+
+        # Register type with the alias name so get_type_name() returns the alias
+        # Always register at root scope so it's a top-level alias
         new_type = self.register_type(
-            schema.node.id, schema, name=enum_class_name, scope=self.scope.parent or self.scope.root
+            schema.node.id, schema, name=alias_name, scope=self.scope.root
         )
 
         # Create context
@@ -1611,7 +1623,8 @@ class Writer:
 
         # Track for top-level annotations
         # For enums, we store the enum values to generate the type alias
-        self._all_type_aliases[context.type_name] = (new_type.scoped_name, "Enum", enum_values)
+        # Suffix with Enum to make it clear it's a type alias
+        self._all_type_aliases[alias_name] = (new_type.scoped_name, "Enum", enum_values)
 
         return new_type
 
@@ -2115,28 +2128,15 @@ class Writer:
                 request_type = "AnyPointer"
                 self._needs_anypointer_alias = True
 
-            # Handle ENUM: use int with Literal union
+            # Handle ENUM: use type alias
             # Enum values are integers at runtime, but RPC accepts string literals
             elif field_type == capnp_types.CapnpElementType.ENUM:
-                # Get enum type to extract literal values
+                # Get enum type to extract name
                 try:
-                    enum_type_id = field_obj.slot.type.enum.typeId
-                    enum_type = self.get_type_by_id(enum_type_id)
-
-                    if enum_type and enum_type.schema:
-                        enum_values = [e.name for e in enum_type.schema.node.enum.enumerants]
-                        literal_values = ", ".join(f'"{v}"' for v in enum_values)
-                        literal_type = f"Literal[{literal_values}]"
-                        self._add_typing_import("Literal")
-                        # Use int as base type since enum attributes return int
-                        client_type = f"int | {literal_type}"
-                        server_type = client_type
-                        request_type = client_type
-                    else:
-                        # Fallback if we can't get enum schema
-                        client_type = "int | str"
-                        server_type = client_type
-                        request_type = client_type
+                    type_name = self.get_type_name(field_obj.slot.type)
+                    client_type = type_name
+                    server_type = type_name
+                    request_type = type_name
                 except Exception as e:
                     logger.debug(f"Could not process enum type for {param_name}: {e}")
                     # Fallback
@@ -2778,6 +2778,13 @@ class Writer:
                         is_single_primitive_or_interface = True
                         interface_type = self.get_type_name(field_obj.slot.type)
                         single_field_type = f"{interface_type}.Server"
+                    elif field_type_enum == capnp_types.CapnpElementType.ENUM:
+                        # Enum type - server returns Enum alias
+                        is_single_primitive_or_interface = True
+                        try:
+                            single_field_type = self.get_type_name(field_obj.slot.type)
+                        except Exception:
+                            single_field_type = "int"
                 except Exception:
                     pass
 
@@ -3545,8 +3552,9 @@ class Writer:
                     return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
                 else:
                     # Enums just need the enum itself
-                    self._add_import(f"from {python_import_path} import {definition_name}")
-                    return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
+                    alias_name = f"{definition_name}Enum"
+                    self._add_import(f"from {python_import_path} import {alias_name}")
+                    return self.register_type(schema.node.id, schema, name=alias_name, scope=self.scope.root)
             else:
                 # Structs: import the Protocol class (_<Name>Module) for internal type references
                 # The TypeAlias can be accessed if needed, but internal references use the Protocol
