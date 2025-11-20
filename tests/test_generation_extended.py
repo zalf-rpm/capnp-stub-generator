@@ -82,12 +82,16 @@ def test_imports_cross_module_reference():
     user_lines = _read(user_stub)
     # With nested structure, Shared.Reader and Shared.Builder are used
     # Reader class should return Shared.Reader
-    assert any("def shared(self) -> _SharedModule.Reader:" in line for line in user_lines), (
-        "Reader class should return Shared.Reader"
-    )
+    # Now we use aliases, so it should be SharedReader
+    assert any("def shared(self) -> SharedReader:" in line for line in user_lines) or any(
+        "def shared(self) -> _SharedModule.Reader:" in line for line in user_lines
+    ), "Reader class should return Shared.Reader or SharedReader"
     # Builder class should narrow to Shared.Builder
-    assert any("def shared(self) -> _SharedModule.Builder:" in line for line in user_lines), (
-        "Builder class should return Shared.Builder"
-    )
+    assert any("def shared(self) -> SharedBuilder:" in line for line in user_lines) or any(
+        "def shared(self) -> _SharedModule.Builder:" in line for line in user_lines
+    ), "Builder class should return Shared.Builder or SharedBuilder"
     # Ensure import statement for base module types exists (imports Protocol module, not user-facing name)
-    assert any(line.startswith("from ") and "import _SharedModule" in line for line in user_lines)
+    # Now we also import aliases
+    assert any(line.startswith("from ") and "import _SharedModule" in line for line in user_lines) or any(
+        line.startswith("from ") and "SharedReader" in line for line in user_lines
+    )

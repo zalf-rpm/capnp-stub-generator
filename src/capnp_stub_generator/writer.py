@@ -107,6 +107,7 @@ class Writer:
 
         # Track imported module paths for capnp.load imports parameter
         self._imported_module_paths: set[pathlib.Path] = set()
+        self._imported_aliases: set[str] = set()
 
         # Track all server NamedTuples globally (scope_name -> {method_name: (namedtuple_name, fields)})
         self._all_server_namedtuples: dict[str, dict[str, tuple[str, list[tuple[str, str]]]]] = {}
@@ -167,6 +168,9 @@ class Writer:
             # Check if this alias is defined in the current module
             if alias_name in self._all_type_aliases:
                 return alias_name
+            # Also check if it's an imported alias
+            if alias_name in self._imported_aliases:
+                return alias_name
         return None
 
     def _get_flat_reader_alias(self, module_type: str) -> str | None:
@@ -188,6 +192,9 @@ class Writer:
             # Check if this alias is defined in the current module
             if alias_name in self._all_type_aliases:
                 return alias_name
+            # Also check if it's an imported alias
+            if alias_name in self._imported_aliases:
+                return alias_name
         return None
 
     def _get_flat_client_alias(self, module_type: str) -> str | None:
@@ -208,6 +215,9 @@ class Writer:
             alias_name = f"{base_name}Client"
             # Check if this alias is defined in the current module
             if alias_name in self._all_type_aliases:
+                return alias_name
+            # Also check if it's an imported alias
+            if alias_name in self._imported_aliases:
                 return alias_name
         return None
 
@@ -2508,10 +2518,19 @@ class Writer:
                             if last_part.startswith("_") and last_part.endswith("Module"):
                                 # Extract user-facing name: "_ReaderModule" -> "Reader"
                                 user_facing_name = last_part[1:-6]
-                                field_type = f"{field_type}.{user_facing_name}Client"
+                                client_type = f"{field_type}.{user_facing_name}Client"
+                                server_type = f"{field_type}.Server"
                             else:
                                 # Fallback
-                                field_type = f"{field_type}Client"
+                                client_type = f"{field_type}Client"
+                                # If field_type is "Registry", then "Registry.Server" might be valid if Registry is the module
+                                # But usually field_type is the Protocol name
+                                server_type = f"{field_type}.Server"
+
+                            if for_server:
+                                field_type = f"{server_type} | {client_type}"
+                            else:
+                                field_type = client_type
                         elif field_type_enum == capnp_types.CapnpElementType.LIST:
                             # For lists of structs, accept both Builder and Reader for elements
                             element_type_obj = field_obj.slot.type.list.elementType
@@ -2615,10 +2634,17 @@ class Writer:
                         if last_part.startswith("_") and last_part.endswith("Module"):
                             # Extract user-facing name: "_ReaderModule" -> "Reader"
                             user_facing_name = last_part[1:-6]
-                            field_type = f"{field_type}.{user_facing_name}Client"
+                            client_type = f"{field_type}.{user_facing_name}Client"
+                            server_type = f"{field_type}.Server"
                         else:
                             # Fallback
-                            field_type = f"{field_type}Client"
+                            client_type = f"{field_type}Client"
+                            server_type = f"{field_type}.Server"
+
+                        if for_server:
+                            field_type = f"{server_type} | {client_type}"
+                        else:
+                            field_type = client_type
                     elif field_type_enum == capnp_types.CapnpElementType.LIST:
                         # For lists of structs, accept both Builder and Reader for elements
                         element_type_obj = field_obj.slot.type.list.elementType
@@ -2645,9 +2671,54 @@ class Writer:
                                     element_type_replacement = f"{element_builder} | {element_reader}"
 
                             field_type = field_type.replace(element_type_name, element_type_replacement)
+                        elif element_type_obj.which() == capnp_types.CapnpElementType.INTERFACE:
+                            element_type_name = self.get_type_name(element_type_obj)
+
+                            # Process interface type similar to above
+                            parts = element_type_name.split(".")
+                            last_part = parts[-1]
+                            if last_part.startswith("_") and last_part.endswith("Module"):
+                                user_facing_name = last_part[1:-6]
+                                client_type = f"{element_type_name}.{user_facing_name}Client"
+                                server_type = f"{element_type_name}.Server"
+                            else:
+                                # Try to use alias if available
+                                client_alias = self._get_flat_client_alias(element_type_name)
+                                if client_alias:
+                                    client_type = client_alias
+                                else:
+                                    # Fallback: try to extract name from module name
+                                    # e.g. _IdentifiableModule -> IdentifiableClient
+                                    parts = element_type_name.split(".")
+                                    last_part = parts[-1]
+                                    if last_part.startswith("_") and last_part.endswith("Module"):
+                                        base_name = last_part[1:-6]
+                                        client_type = f"{base_name}Client"
+                                    else:
+                                        client_type = f"{element_type_name}Client"
+                                server_type = f"{element_type_name}.Server"
+
+                            # Debug logging
+                            # logger.debug(f"Interface list element: {element_type_name} -> {client_type} (server={for_server})")
+
+                            if for_server:
+                                element_type_replacement = f"{server_type} | {client_type}"
+                            else:
+                                element_type_replacement = client_type
+
+                            # If we have an alias, we should just use it as the element type.
+                            # field_type was constructed as "Sequence[{element_type_name}]" earlier.
+
+                            # So we can just reconstruct it.
+                            field_type = f"Sequence[{element_type_replacement}]"
+                            
+                            # Debug logging
+                            # logger.debug(f"Replaced list element type: {element_type_name} -> {element_type_replacement}")
+                            # logger.debug(f"New field type: {field_type}")
 
                     lines.append(f"    {rf}: {field_type}")
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Could not get field type for {rf}: {e}")
                     lines.append(f"    {rf}: Any")
 
         return lines
@@ -2756,7 +2827,23 @@ class Writer:
                         field_type = f"{builder_type} | {reader_type}"
                 # For interfaces in NamedTuples, server returns Interface.Server
                 elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-                    field_type = f"{field_type}.Server"
+                    # For interface types, use the nested Client class
+                    # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
+                    parts = field_type.split(".")
+                    last_part = parts[-1]
+                    if last_part.startswith("_") and last_part.endswith("Module"):
+                        # Extract user-facing name: "_ReaderModule" -> "Reader"
+                        user_facing_name = last_part[1:-6]
+                        client_type = f"{field_type}.{user_facing_name}Client"
+                        server_type = f"{field_type}.Server"
+                    else:
+                        # Fallback
+                        client_type = f"{field_type}Client"
+                        server_type = f"{field_type}.Server"
+
+                    # NamedTuples are always for Server, so we accept both Server and Client
+                    field_type = f"{server_type} | {client_type}"
+
                 elif field_type_enum == capnp_types.CapnpElementType.LIST:
                     # For lists of structs, accept both Builder and Reader for elements
                     element_type_obj = field_obj.slot.type.list.elementType
@@ -2775,6 +2862,27 @@ class Writer:
                         else:
                             element_type_replacement = f"{element_builder} | {element_reader}"
 
+                        field_type = field_type.replace(element_type_name, element_type_replacement)
+                    elif element_type_obj.which() == capnp_types.CapnpElementType.INTERFACE:
+                        element_type_name = self.get_type_name(element_type_obj)
+
+                        # Process interface type similar to above
+                        parts = element_type_name.split(".")
+                        last_part = parts[-1]
+                        if last_part.startswith("_") and last_part.endswith("Module"):
+                            user_facing_name = last_part[1:-6]
+                            client_type = f"{element_type_name}.{user_facing_name}Client"
+                            server_type = f"{element_type_name}.Server"
+                        else:
+                            # Try to use alias if available
+                            client_alias = self._get_flat_client_alias(element_type_name)
+                            if client_alias:
+                                client_type = client_alias
+                            else:
+                                client_type = f"{element_type_name}Client"
+                            server_type = f"{element_type_name}.Server"
+
+                        element_type_replacement = f"{server_type} | {client_type}"
                         field_type = field_type.replace(element_type_name, element_type_replacement)
 
                 # Sanitize field name to avoid conflicts with tuple methods
@@ -3672,6 +3780,10 @@ class Writer:
                     self._add_import(
                         f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}"
                     )
+
+                    # Track imported aliases
+                    self._imported_aliases.add(client_name)
+
                     # Register with Protocol name for internal type references
                     return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
                 else:
@@ -3683,7 +3795,15 @@ class Writer:
                 # Structs: import the Protocol class (_<Name>Module) for internal type references
                 # The TypeAlias can be accessed if needed, but internal references use the Protocol
                 protocol_name = f"_{definition_name}Module"
-                self._add_import(f"from {python_import_path} import {protocol_name}")
+                reader_alias = f"{definition_name}Reader"
+                builder_alias = f"{definition_name}Builder"
+
+                self._add_import(f"from {python_import_path} import {protocol_name}, {reader_alias}, {builder_alias}")
+
+                # Track imported aliases
+                self._imported_aliases.add(reader_alias)
+                self._imported_aliases.add(builder_alias)
+
                 # Register the type with the Protocol name so scoped_name returns the Protocol name
                 return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
 
@@ -3760,8 +3880,36 @@ class Writer:
         if self.is_type_id_known(type_id):
             return self.type_map[type_id]
 
-        else:
-            raise KeyError(f"The type ID '{type_id} was not found in the type registry.'")
+        # Try to find the type in other modules
+        for module_id, (path, module) in self._module_registry.items():
+            # Helper to search recursively
+            def find_schema_by_id(schema_obj, target_id):
+                if schema_obj.node.id == target_id:
+                    return schema_obj
+                for nested_node in schema_obj.node.nestedNodes:
+                    try:
+                        nested_schema = schema_obj.get_nested(nested_node.name)
+                        found = find_schema_by_id(nested_schema, target_id)
+                        if found:
+                            return found
+                    except Exception:
+                        pass
+                return None
+
+            found_schema = find_schema_by_id(module.schema, type_id)
+            if found_schema:
+                # Found it!
+                # If it's in the current module, generate it
+                if module_id == self._module.schema.node.id:
+                    self.generate_nested(found_schema)
+                else:
+                    # If it's in another module, register it as an import
+                    self.register_import(found_schema)
+
+                if self.is_type_id_known(type_id):
+                    return self.type_map[type_id]
+
+        raise KeyError(f"The type ID '{type_id} was not found in the type registry.'")
 
     def new_scope(
         self, name: str, node: Any, scope_heading: str = "", register: bool = True, parent_scope: Scope | None = None
@@ -3901,7 +4049,20 @@ class Writer:
             element_type = None  # List itself doesn't have an element_type in our registry
 
         elif type_reader_type == capnp_types.CapnpElementType.INTERFACE:
-            element_type = self.get_type_by_id(type_reader.interface.typeId)
+            type_id = type_reader.interface.typeId
+            if not self.is_type_id_known(type_id):
+                # Try to generate the interface before using it
+                try:
+                    all_nested = list(self._module.schema.node.nestedNodes)
+                    for nested_node in all_nested:
+                        if nested_node.id == type_id:
+                            nested_schema = self._module.schema.get_nested(nested_node.name)
+                            self.generate_nested(nested_schema)
+                            break
+                except Exception as e:
+                    logger.debug(f"Could not pre-generate interface with ID {type_id}: {e}")
+
+            element_type = self.get_type_by_id(type_id)
             type_name = element_type.name
 
             # Traverse down to the innermost nested list element.
