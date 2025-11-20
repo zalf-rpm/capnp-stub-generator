@@ -6,7 +6,7 @@ import capnp  # noqa: F401
 from _generated.examples.addressbook import addressbook_capnp
 
 
-def writeAddressBook(file):
+def writeAddressBook(file: IO[str]):
     addresses = addressbook_capnp.AddressBook.new_message()
     people = addresses.init("people", 2)
 

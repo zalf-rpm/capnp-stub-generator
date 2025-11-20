@@ -4141,6 +4141,9 @@ class Writer:
             for imported_path in sorted(self._imported_module_paths):
                 add_path(imported_path.parent)
 
+        # Always add the schema's own directory to import path
+        add_path(self._module_path.parent)
+
         out.append(f"import_path = [{', '.join(import_paths)}]")
 
         for scope in self.scopes_by_id.values():
