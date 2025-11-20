@@ -15,4 +15,12 @@ interface Restorer {
 
   restore @0 RestoreParams -> (cap :Capability);
   # restore from the localRef in a transient sturdy ref as live capability
+
+  getAnyTester @1 () -> (tester :AnyTester);
+}
+
+interface AnyTester {
+  getAnyStruct @0 () -> (s :AnyStruct);
+  getAnyList @1 () -> (l :AnyList);
+  getAnyPointer @2 () -> (p :AnyPointer);
 }

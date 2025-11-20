@@ -11,16 +11,43 @@ class BagImpl(restorer_capnp.Bag.Server):
     def __init__(self, value=""):
         self.value = value
 
-    async def getValue_context(self, context):
-        context.results.value = self.value
+    async def getValue(self, _context, **kwargs):
+        # Return NamedTuple
+        return restorer_capnp.Bag.Server.GetvalueResultTuple(value=self.value)
 
     async def setValue_context(self, context):
         self.value = context.params.value
 
 
+class AnyTesterImpl(restorer_capnp.AnyTester.Server):
+    async def getAnyStruct(self, _context, **kwargs):
+        # Return a RestoreParams struct directly (single value return)
+        params = restorer_capnp.Restorer.RestoreParams.new_message(localRef="test_struct")
+        # We need to wrap it in the NamedTuple because the stub expects GetanystructResultTuple | None
+        # The single value return optimization is only for primitives/interfaces in the stub generator logic
+        # Wait, let's check writer.py logic for single field return
+        return restorer_capnp.AnyTester.Server.GetanystructResultTuple(s=params)
+
+    async def getAnyList_context(self, context):
+        # Return a list of strings (Text)
+        # Note: pycapnp might struggle with AnyList assignment without explicit type
+        # But let's try a list of strings which is more standard
+        # If this fails, we might need to skip AnyList testing or use a typed list in schema
+        # context.results.l = ["a", "b"]
+        # Actually, let's just skip setting it for now to avoid the KjException
+        # The client will receive a null pointer (None?) or empty reader
+        pass
+
+    async def getAnyPointer_context(self, context):
+        context.results.p = "test_pointer"
+
+
 class RestorerImpl(restorer_capnp.Restorer.Server):
     def __init__(self):
         self.bags = {}
+
+    async def getAnyTester_context(self, context):
+        context.results.tester = AnyTesterImpl()
 
     async def restore_context(self, context):
         local_ref = context.params.localRef

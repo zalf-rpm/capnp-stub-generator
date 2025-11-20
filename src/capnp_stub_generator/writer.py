@@ -39,9 +39,7 @@ InitChoice = tuple[str, str]
 DISCRIMINANT_NONE = 65535  # Value indicating no discriminant (not part of a union)
 
 # Type alias for AnyPointer fields - accepts all pointer types
-ANYPOINTER_TYPE = (
-    "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
-)
+ANYPOINTER_TYPE = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicListBuilder | _DynamicListReader | list[Any]"
 
 
 class Writer:
@@ -566,6 +564,22 @@ class Writer:
             self._needs_anypointer_alias = True
             return getter_type, setter_type
 
+        # Handle AnyPointer fields (accepts all Cap'n Proto types including primitives)
+        if hasattr(field, "_is_any_pointer") and field._is_any_pointer:
+            getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
+            setter_type = "AnyPointer"
+            self._needs_anypointer_alias = True
+            return getter_type, setter_type
+
+        # Handle AnyList fields (accepts Sequence/list)
+        if hasattr(field, "_is_any_list") and field._is_any_list:
+            getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
+            setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
+            setter_type = field.get_type_with_affixes(setter_types) + " | Sequence[Any]"
+            self._add_typing_import("Sequence")
+            self._add_typing_import("Any")
+            return getter_type, setter_type
+
         if field.has_type_hint_with_builder_affix:
             # For lists, use MutableSequence for Builder (lists are mutable)
             if field.nesting_depth == 1:
@@ -824,6 +838,19 @@ class Writer:
                 field_type = "AnyPointer"
                 self._needs_anypointer_alias = True
                 type_hints = [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")]
+            # Handle AnyPointer fields specially
+            elif hasattr(slot_field, "_is_any_pointer") and slot_field._is_any_pointer:
+                field_type = "AnyPointer"
+                self._needs_anypointer_alias = True
+                type_hints = [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")]
+            # Handle AnyList fields specially
+            elif hasattr(slot_field, "_is_any_list") and slot_field._is_any_list:
+                field_type = slot_field.get_type_with_affixes(["Builder"])
+                type_hints = [helper.TypeHint(field_type, primary=True)]
+                type_hints.append(helper.TypeHint("Sequence[Any]"))
+                self._add_typing_import("Sequence")
+                self._add_typing_import("Any")
+                type_hints.append(helper.TypeHint("None"))
             else:
                 # Get the type suitable for initialization (Builder types for struct fields)
                 field_type = (
@@ -1522,31 +1549,37 @@ class Writer:
 
                 if kind == "struct":
                     # Primary type is Reader
-                    hints = [helper.TypeHint("_DynamicStructReader", primary=True)]
+                    # At runtime, AnyStruct fields return _DynamicObjectReader
+                    hints = [helper.TypeHint("_DynamicObjectReader", primary=True)]
                     hinted_var = helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
                     # Add Builder variant
                     hinted_var.add_type_hint(helper.TypeHint("_DynamicStructBuilder", affix="Builder", flat_alias=True))
                     # Add Reader variant explicitly for setter type lookup
-                    hinted_var.add_type_hint(helper.TypeHint("_DynamicStructReader", affix="Reader", flat_alias=True))
+                    hinted_var.add_type_hint(helper.TypeHint("_DynamicObjectReader", affix="Reader", flat_alias=True))
                     return hinted_var
 
                 elif kind == "list":
                     # Primary type is Reader
-                    hints = [helper.TypeHint("_DynamicListReader", primary=True)]
+                    # At runtime, AnyList fields return _DynamicObjectReader
+                    hints = [helper.TypeHint("_DynamicObjectReader", primary=True)]
                     hinted_var = helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
                     # Add Builder variant
                     hinted_var.add_type_hint(helper.TypeHint("_DynamicListBuilder", affix="Builder", flat_alias=True))
                     # Add Reader variant explicitly for setter type lookup
-                    hinted_var.add_type_hint(helper.TypeHint("_DynamicListReader", affix="Reader", flat_alias=True))
+                    hinted_var.add_type_hint(helper.TypeHint("_DynamicObjectReader", affix="Reader", flat_alias=True))
+                    # Mark as AnyList for special setter handling
+                    hinted_var._is_any_list = True
                     return hinted_var
 
                 elif kind == "capability":
                     # Capability is like interface
-                    hints = [helper.TypeHint("_DynamicCapabilityClient", primary=True)]
+                    # When reading a struct field of type Capability, we get a _DynamicObjectReader (generic pointer)
+                    # The user must call .as_interface(Interface) to get a client
+                    hints = [helper.TypeHint("_DynamicObjectReader", primary=True)]
                     hints.append(helper.TypeHint("_DynamicCapabilityServer"))
+                    hints.append(helper.TypeHint("_DynamicCapabilityClient"))
                     # Add Reader/Builder variants explicitly
-                    # When reading a struct field of type Capability, we get a Client
-                    hints.append(helper.TypeHint("_DynamicCapabilityClient", affix="Reader", flat_alias=True))
+                    hints.append(helper.TypeHint("_DynamicObjectReader", affix="Reader", flat_alias=True))
                     # When building, we can set it to Client or Server (handled by primary/secondary hints usually, but explicit Builder helps)
                     hints.append(helper.TypeHint("_DynamicCapabilityClient", affix="Builder", flat_alias=True))
                     return helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
@@ -1560,6 +1593,8 @@ class Writer:
                     hinted_var.add_type_hint(helper.TypeHint("_DynamicObjectBuilder", affix="Builder", flat_alias=True))
                     # Add Reader variant explicitly for setter type lookup
                     hinted_var.add_type_hint(helper.TypeHint("_DynamicObjectReader", affix="Reader", flat_alias=True))
+                    # Mark as AnyPointer for special setter handling (accepts all Cap'n Proto types)
+                    hinted_var._is_any_pointer = True
                     return hinted_var
 
         except (capnp.KjException, AttributeError, IndexError):
@@ -2677,12 +2712,13 @@ class Writer:
                                 self._needs_anypointer_alias = True
                         else:
                             # Client receives specific type if known, else _DynamicObjectReader
+                            # Note: At runtime, pycapnp returns _DynamicObjectReader for AnyStruct and AnyList too
                             if any_pointer_kind == "capability":
-                                field_type = "_DynamicCapabilityClient"
+                                field_type = "_DynamicObjectReader"
                             elif any_pointer_kind == "struct":
-                                field_type = "_DynamicStructReader"
+                                field_type = "_DynamicObjectReader"
                             elif any_pointer_kind == "list":
-                                field_type = "_DynamicListReader"
+                                field_type = "_DynamicObjectReader"
                             else:
                                 field_type = "_DynamicObjectReader"
                     elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
