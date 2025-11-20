@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 import asyncio
-from typing import cast
 
 import capnp
-from _generated.examples.calculator import calculator_capnp
+
+from tests._generated.examples.calculator import calculator_capnp
 
 
 class PowerFunction(calculator_capnp.Calculator.Function.Server):
@@ -35,7 +35,6 @@ async def main(connection: capnp.AsyncIoStream):
     # Bootstrap the Calculator interface
     calculator = client.bootstrap().cast_as(calculator_capnp.Calculator)
 
-    calculator = cast(calculator_capnp.CalculatorClient, calculator)
     """Make a request that just evaluates the literal value 123.
 
     What's interesting here is that evaluate() returns a "Value", which is

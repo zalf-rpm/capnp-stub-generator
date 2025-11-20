@@ -30,12 +30,8 @@ capnp-stub-generator = "capnp_stub_generator.cli:main"
 [tool.setuptools]
 packages = ["capnp_stub_generator"]
 
-[tool.setuptools.package-data]
-capnp_stub_generator = ["resources/capnp-stubs/**/*"]
-
 [tool.poetry]
 packages = [
-  { include = "capnp-stubs", from = "src" },
   { include = "capnp_stub_generator", from = "src" },
   { include = "tests" },
 ]

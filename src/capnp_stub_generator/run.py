@@ -91,7 +91,7 @@ def find_capnp_stubs_package() -> str | None:
     """
     # Get the bundled capnp-stubs from capnp-stubs directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    bundled_stubs_path = os.path.join(current_dir, "..", "capnp-stubs")
+    bundled_stubs_path = os.path.join(current_dir, "..", "pycapnp-base-stubs")
 
     if os.path.isdir(bundled_stubs_path):
         logger.info(f"Using bundled capnp-stubs from: {bundled_stubs_path}")

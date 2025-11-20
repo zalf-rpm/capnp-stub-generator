@@ -15,7 +15,9 @@ def test_generics_anypointer_interface(basic_stubs):
         "class _GenericBoxModule(_StructModule):" in content
         or "class _GenericBoxModule(Generic[T], _StructModule):" in content
     ), "GenericBox _StructModule should exist"
-    assert "def value(self) -> Any:" in content, "GenericBox.value should be typed as Any (from AnyPointer)"
+    assert "def value(self) -> _DynamicObjectReader:" in content, (
+        "GenericBox.value should be typed as _DynamicObjectReader (from AnyPointer)"
+    )
     # Check for module annotation (not TypeAlias)
     assert "GenericBox: _GenericBoxModule" in content, "GenericBox annotation should exist"
 

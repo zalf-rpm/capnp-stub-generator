@@ -16,7 +16,7 @@ struct IP {
   # an FBP information packet
 
   struct KV {
-    key 	@0 :Text;
+    key @0 :Text;
     desc 	@1 :Text; # optional human readable info on what value is
     value   @2 :AnyPointer;  # would often be a Common.Value
   }
@@ -41,7 +41,7 @@ struct IIP {
 
 interface Channel(V) extends(Common.Identifiable, Persistent) {
   # a potentially buffered channel to transport values of type V
-  
+
   enum CloseSemantics {
     fbp   @0; # close channel automatically if there are no writers anymore and buffer is empty = no upstream data
     no    @1; # keep channel open until close message received

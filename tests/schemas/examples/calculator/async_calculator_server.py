@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 import asyncio
@@ -6,7 +6,8 @@ import logging
 from collections.abc import Sequence
 
 import capnp
-from _generated.examples.calculator import calculator_capnp
+
+from tests._generated.examples.calculator import calculator_capnp
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

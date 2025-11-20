@@ -20,7 +20,7 @@ import pytest
 
 # Base directories
 TESTS_DIR = Path(__file__).parent
-EXAMPLES_DIR = TESTS_DIR / "examples"
+EXAMPLES_DIR = TESTS_DIR / "schemas" / "examples"
 GENERATED_EXAMPLES_DIR = TESTS_DIR / "_generated" / "examples"
 
 
@@ -67,6 +67,11 @@ EXAMPLES = [
         name="calculator",
         schema_files=["calculator.capnp"],
         python_files=["async_calculator_client.py", "async_calculator_server.py"],
+    ),
+    Example(
+        name="restorer",
+        schema_files=["restorer.capnp"],
+        python_files=["restorer_client.py", "restorer_server.py"],
     ),
 ]
 
@@ -129,6 +134,57 @@ class TestExampleFunctionality:
         finally:
             # Clean up sys.path
             sys.path.remove(str(example.generated_dir))
+
+    @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
+    def test_example_type_checking(self, generate_all_stubs, example: Example):
+        """Test that example python files pass type checking with pyright."""
+        import os
+        import subprocess
+
+        if not example.python_files:
+            return
+
+        # Get generated directory
+        generated_dir = example.generated_dir
+
+        # Run pyright on each python file
+        # We need to set PYTHONPATH to include the generated stubs
+        # The examples use 'from _generated.examples.xxx import xxx_capnp'
+        # So we need to add the parent of _generated (which is tests/) to PYTHONPATH
+        env = os.environ.copy()
+        python_path = env.get("PYTHONPATH", "")
+
+        # Add tests/ directory to PYTHONPATH so _generated package is found
+        tests_dir = str(TESTS_DIR)
+        env["PYTHONPATH"] = f"{tests_dir}:{python_path}"
+
+        for python_file in example.get_python_paths():
+            if not python_file.exists():
+                continue
+
+            # Run pyright
+            # We use --pythonpath to ensure it finds the stubs
+            cmd = ["pyright", str(python_file)]
+
+            # Note: We need to ensure pyright can find the generated stubs.
+            # Usually pyright looks in the current directory or site-packages.
+            # Since stubs are in _generated/examples/<name>, we might need to configure pyright
+            # or copy stubs to a place where pyright finds them.
+            # But setting PYTHONPATH might be enough if pyright respects it for import resolution.
+
+            # Actually, pyright execution might be slow, so we should be careful.
+            # But for correctness it's valuable.
+
+            result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+
+            # We expect success (0)
+            # If it fails, print output for debugging
+            if result.returncode != 0:
+                print(f"Pyright failed for {python_file}:")
+                print(result.stdout)
+                print(result.stderr)
+
+            assert result.returncode == 0, f"Type checking failed for {python_file.name}"
 
 
 # Summary test to show overall status

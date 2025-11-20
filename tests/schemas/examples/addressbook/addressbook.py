@@ -1,9 +1,10 @@
-#!/usr/bin/env python3
+from __future__ import annotations
 
 from typing import IO
 
 import capnp  # noqa: F401
-from _generated.examples.addressbook import addressbook_capnp
+
+from tests._generated.examples.addressbook import addressbook_capnp
 
 
 def writeAddressBook(file: IO[str]):

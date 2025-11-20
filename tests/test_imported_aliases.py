@@ -102,6 +102,7 @@ def test_imported_return_type_aliases(zalfmas_stubs):
     # RemovecategoryResult is a Protocol for Client result.
     # So it should be Sequence[IdentifiableClient].
 
-    assert "Sequence[IdentifiableClient]" in result_content, (
-        f"Expected Sequence[IdentifiableClient], got: {result_content}"
-    )
+    assert (
+        "Sequence[IdentifiableClient]" in result_content
+        or "Sequence[_IdentifiableModule.IdentifiableClient]" in result_content
+    ), f"Expected Sequence[IdentifiableClient], got: {result_content}"

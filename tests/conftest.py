@@ -73,6 +73,7 @@ def generate_all_stubs():
             "-o",
             str(EXAMPLES_GENERATED_DIR),
             "-r",  # Recursive
+            "--augment-capnp-stubs",
         ],
         capture_output=True,
         text=True,

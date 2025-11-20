@@ -35,10 +35,6 @@ from capnp._internal import (
 )
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
-# Generated imports for project-specific types
-from tests._generated.examples.calculator import calculator_capnp  # type: ignore[import-not-found]
-from tests._generated.examples.restorer import restorer_capnp  # type: ignore[import-not-found]
-
 type AnyPointer = (
     str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer
 )
@@ -396,12 +392,6 @@ class _DynamicObjectReader:
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-    @overload
-    def as_interface(self, schema: restorer_capnp._BagModule) -> restorer_capnp.BagClient: ...
-    @overload
-    def as_interface(self, schema: restorer_capnp._RestorerModule) -> restorer_capnp.RestorerClient: ...
-    @overload
-    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this AnyPointer to an interface capability.
 
@@ -428,12 +418,7 @@ class _DynamicObjectReader:
             A list reader.
         """
         ...
-    @overload
-    def as_struct(
-        self, schema: restorer_capnp._RestorerModule._RestoreParamsModule
-    ) -> restorer_capnp.RestoreParamsReader: ...
-    @overload
-    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...
+
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
         """Cast this AnyPointer to a struct reader.
 
@@ -1044,20 +1029,6 @@ class _CapabilityClient:
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-    @overload
-    def cast_as(self, schema: calculator_capnp._CalculatorModule) -> calculator_capnp.CalculatorClient: ...
-    @overload
-    def cast_as(
-        self, schema: calculator_capnp._CalculatorModule._FunctionModule
-    ) -> calculator_capnp.FunctionClient: ...
-    @overload
-    def cast_as(self, schema: calculator_capnp._CalculatorModule._ValueModule) -> calculator_capnp.ValueClient: ...
-    @overload
-    def cast_as(self, schema: restorer_capnp._BagModule) -> restorer_capnp.BagClient: ...
-    @overload
-    def cast_as(self, schema: restorer_capnp._RestorerModule) -> restorer_capnp.RestorerClient: ...
-    @overload
-    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this capability to a specific interface type.
 
