@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import logging
+from collections.abc import Sequence
 
 import capnp
 from _generated.examples.calculator import calculator_capnp
@@ -11,7 +12,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-async def evaluate_impl(expression: calculator_capnp.ExpressionReader, params=None):
+async def evaluate_impl(
+    expression: calculator_capnp.ExpressionBuilder | calculator_capnp.ExpressionReader,
+    params: Sequence[float] | None = None,
+):
     """Implementation of CalculatorImpl::evaluate(), also shared by
     FunctionImpl::call().  In the latter case, `params` are the parameter
     values passed to the function; in the former case, `params` is just an
@@ -56,9 +60,9 @@ class FunctionImpl(calculator_capnp.Calculator.Function.Server):
     """Implementation of the Calculator.Function Cap'n Proto interface, where the
     function is defined by a Calculator.Expression."""
 
-    def __init__(self, paramCount, body):
-        self.paramCount = paramCount
-        self.body = body.as_builder()
+    def __init__(self, paramCount: int, body: calculator_capnp.ExpressionReader):
+        self.paramCount: int = paramCount
+        self.body: calculator_capnp.ExpressionBuilder = body.as_builder()
 
     async def call(self, params, _context, **kwargs):
         """Note that we're returning a Promise object here, and bypassing the

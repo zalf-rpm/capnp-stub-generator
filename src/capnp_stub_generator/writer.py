@@ -1586,14 +1586,12 @@ class Writer:
                 part = s.name
             flat_name = f"{part}{flat_name}"
             s = s.parent
-        
+
         alias_name = f"{flat_name}Enum"
 
         # Register type with the alias name so get_type_name() returns the alias
         # Always register at root scope so it's a top-level alias
-        new_type = self.register_type(
-            schema.node.id, schema, name=alias_name, scope=self.scope.root
-        )
+        new_type = self.register_type(schema.node.id, schema, name=alias_name, scope=self.scope.root)
 
         # Create context
         context = EnumGenerationContext.create(
@@ -2154,11 +2152,13 @@ class Writer:
                 if builder_alias and reader_alias:
                     # Type is defined in this module, use flat aliases
                     client_type = f"{builder_alias} | {reader_alias} | dict[str, Any]"
+                    server_type = reader_alias
+                    request_type = builder_alias
                 else:
                     # Type is imported, use the module type with dict union
                     client_type = f"{base_type} | dict[str, Any]"
-                server_type = reader_type
-                request_type = builder_type  # Request fields use Builder type
+                    server_type = reader_type
+                    request_type = builder_type  # Request fields use Builder type
 
             # Handle LIST: check for struct lists
             elif field_type == capnp_types.CapnpElementType.LIST:
@@ -2560,7 +2560,22 @@ class Writer:
                     elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                         builder_type = self._build_nested_builder_type(field_type)
                         reader_type = self._build_nested_reader_type(field_type)
-                        field_type = f"{builder_type} | {reader_type}"
+                        # For client methods, try to use flat type aliases if defined in this module
+                        builder_alias = self._get_flat_builder_alias(field_type)
+                        reader_alias = self._get_flat_reader_alias(field_type)
+
+                        if not for_server:
+                            # Client receives Reader only
+                            if reader_alias:
+                                field_type = reader_alias
+                            else:
+                                field_type = reader_type
+                        else:
+                            # Server returns Builder | Reader
+                            if builder_alias and reader_alias:
+                                field_type = f"{builder_alias} | {reader_alias}"
+                            else:
+                                field_type = f"{builder_type} | {reader_type}"
                     elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                         # For interface types, use the nested Client class
                         # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
@@ -2731,11 +2746,12 @@ class Writer:
         param_parts = ["self"]
         param_parts.extend([p.to_server_param() for p in parameters])
         param_parts.append(f"_context: {context_type}")
-        param_parts.append("**kwargs: Any")
+        param_parts.append("**kwargs: dict[str, Any]")
         param_str = ", ".join(param_parts)
 
         # Determine return type
         self._add_typing_import("Awaitable")
+        self._add_typing_import("Any")
 
         if not method_info.result_fields:
             # Void method - returns Awaitable[None]
@@ -2838,6 +2854,33 @@ class Writer:
 
         return f"    def {method_name}_context({param_str}) -> {return_type_str}: ..."
 
+    def _generate_params_protocol(
+        self,
+        method_info: MethodInfo,
+        parameters: list[ParameterInfo],
+    ) -> list[str]:
+        """Generate Params Protocol class for server context.
+
+        Args:
+            method_info: Information about the method
+            parameters: List of processed parameters
+
+        Returns:
+            List of lines for the Params Protocol class
+        """
+        method_name = helper.sanitize_name(method_info.method_name)
+        params_class_name = f"{method_name.title()}Params"
+
+        lines = [helper.new_class_declaration(params_class_name, ["Protocol"])]
+
+        for param in parameters:
+            lines.append(f"    {param.name}: {param.server_type}")
+
+        if not parameters:
+            lines.append("    ...")
+
+        return lines
+
     def _generate_callcontext_protocol(
         self,
         method_info: MethodInfo,
@@ -2861,12 +2904,12 @@ class Writer:
 
         scope_path = self._get_scope_path()
 
-        # CallContext.params points to the Request Protocol at interface level
-        request_type = f"{method_name.title()}Request"
+        # CallContext.params points to the Params Protocol (nested in Server class)
+        params_type = f"{method_name.title()}Params"
         if scope_path:
-            fully_qualified_params = f"{scope_path}.{request_type}"
+            fully_qualified_params = f"{scope_path}.Server.{params_type}"
         else:
-            fully_qualified_params = request_type
+            fully_qualified_params = f"Server.{params_type}"
         lines.append(f"    params: {fully_qualified_params}")
 
         # CallContext.results points to the Server Result Protocol (nested in Server class)
@@ -2950,6 +2993,11 @@ class Writer:
         collection.set_server_result_class(server_result_lines)
 
         # Generate CallContext for server - points to Result Protocol at interface level
+        # Also generate Params Protocol for CallContext.params
+        params_lines = self._generate_params_protocol(method_info, parameters)
+        for line in params_lines:
+            collection.server_context_lines.append(line)
+
         if is_direct_struct_return:
             # Direct struct return: CallContext.results points to interface-level Result Protocol
             has_results = True
@@ -3985,47 +4033,37 @@ class Writer:
 
         # Build import_path with relative paths to imported modules
         import_paths = ["here"]
+        seen_rel_paths = {".", ""}
 
         # Determine the reference point for import paths
         # If output_directory is set, we need paths relative to where the generated file will be
         # Otherwise, paths relative to where the schema file is
         reference_dir = self._output_directory if self._output_directory else self._module_path.parent
 
+        def add_path(path_dir: pathlib.Path) -> None:
+            """Add a path to import_paths if it's unique."""
+            try:
+                # Calculate relative path from reference directory to import path
+                rel_path = os.path.relpath(path_dir, reference_dir)
+
+                # Only add if it's not the same directory (not just ".") and not already added
+                if rel_path not in seen_rel_paths:
+                    seen_rel_paths.add(rel_path)
+                    # Wrap in abspath for cleaner debugging as requested
+                    import_paths.append(f'os.path.abspath(os.path.join(here, "{rel_path}"))')
+            except (ValueError, OSError):
+                # If relative path calculation fails (e.g., different drives on Windows), skip
+                pass
+
         # Add import paths from CLI (-I flags) - these take precedence
         if self._import_paths:
             for import_path_dir in sorted(self._import_paths):
-                try:
-                    # Calculate relative path from reference directory to import path
-                    rel_path = os.path.relpath(import_path_dir, reference_dir)
-                    # Only add if it's not the same directory (not just ".")
-                    if rel_path != ".":
-                        import_paths.append(f'os.path.join(here, "{rel_path}")')
-                except (ValueError, OSError):
-                    # If relative path calculation fails (e.g., different drives on Windows), skip
-                    pass
+                add_path(import_path_dir)
 
         # Add paths to imported modules (schemas that import each other)
         if self._imported_module_paths:
-            # Calculate relative paths from reference directory to imported modules
-            unique_import_dirs: set[str] = set()
-
             for imported_path in sorted(self._imported_module_paths):
-                try:
-                    # Get the directory of the imported module
-                    imported_dir = imported_path.parent
-
-                    # Calculate relative path from reference directory to imported module's directory
-                    rel_path = os.path.relpath(imported_dir, reference_dir)
-
-                    # Only add if it's not the same directory (not just ".")
-                    if rel_path != ".":
-                        unique_import_dirs.add(rel_path)
-                except (ValueError, OSError):
-                    # If relative path calculation fails (e.g., different drives on Windows), skip
-                    pass
-
-            for rel_path in sorted(unique_import_dirs):
-                import_paths.append(f'os.path.join(here, "{rel_path}")')
+                add_path(imported_path.parent)
 
         out.append(f"import_path = [{', '.join(import_paths)}]")
 

@@ -36,7 +36,7 @@ def test_server_methods_have_signatures(calculator_stub_lines):
 
     # Calculator.Server should have evaluate method with Reader type and return NamedTuple with "Tuple" suffix
     assert "def evaluate(" in content
-    assert "expression: _CalculatorModule._ExpressionModule.Reader" in content
+    assert "expression: ExpressionReader" in content
     assert (
         "Awaitable[_CalculatorModule._ValueModule.Server | _CalculatorModule.Server.EvaluateResultTuple | None]"
         in content
@@ -112,7 +112,7 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
     # Server parameters remain required for type safety
     # CallContext is now inside Server, so reference is _CalculatorModule._FunctionModule.Server.CallCallContext
     server_call_found = (
-        "def call(self, params: Sequence[float], _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs: Any)"
+        "def call(self, params: Sequence[float], _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs: dict[str, Any])"
         in content
     )
 

@@ -14,9 +14,9 @@ def test_both_method_variants_exist(calculator_stubs):
     content = stub_file.read_text()
 
     # Regular method with individual parameters (single line signature)
-    assert "def evaluate(self, expression: _CalculatorModule._ExpressionModule.Reader, _context:" in content
+    assert "def evaluate(self, expression: ExpressionReader, _context:" in content
     assert "_context: _CalculatorModule.Server.EvaluateCallContext" in content
-    assert "**kwargs: Any" in content
+    assert "**kwargs: dict[str, Any]" in content
 
     # _context variant with only context parameter
     assert "def evaluate_context(self, context: _CalculatorModule.Server.EvaluateCallContext)" in content
@@ -54,7 +54,7 @@ def test_callcontext_has_params_and_results(calculator_stubs):
 
     # Check a method with parameters and results
     assert "class EvaluateCallContext(Protocol):" in content
-    assert "params: _CalculatorModule.EvaluateRequest" in content
+    assert "params: _CalculatorModule.Server.EvaluateParams" in content
     # Results now point to Server.Result
     assert "results: _CalculatorModule.Server.EvaluateResult" in content
 
@@ -66,7 +66,7 @@ def test_callcontext_void_method(basic_stubs):
 
     # Check void method CallContext (Reader.close is a void method)
     assert "class CloseCallContext(Protocol):" in content
-    assert "params: _ChannelModule._ReaderModule.CloseRequest" in content
+    assert "params: _ChannelModule._ReaderModule.Server.CloseParams" in content
 
     # Should NOT have results for void method
     import re
@@ -114,7 +114,7 @@ def test_context_method_documentation(calculator_stubs):
 
     # The CallContext should provide access to both params and results
     assert "class DeffunctionCallContext(Protocol):" in content
-    assert "params: _CalculatorModule.DeffunctionRequest" in content
+    assert "params: _CalculatorModule.Server.DeffunctionParams" in content
     # Results now point to Server.Result
     assert "results: _CalculatorModule.Server.DeffunctionResult" in content
 

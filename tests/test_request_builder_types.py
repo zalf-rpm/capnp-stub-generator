@@ -32,7 +32,7 @@ class TestRequestBuilderStructure:
             if "class EvaluateRequest(Protocol):" in line:
                 in_evaluate_request = True
             elif in_evaluate_request and "expression:" in line:
-                assert "_CalculatorModule._ExpressionModule" in line, f"Expected Expression type, got: {line}"
+                assert "ExpressionBuilder" in line, f"Expected Expression type, got: {line}"
                 found_expression_field = True
                 break
             elif in_evaluate_request and (line.startswith("    def ") or line.startswith("class ")):
@@ -61,7 +61,7 @@ class TestRequestBuilderStructure:
                 assert "int" in line
                 found_param_count = True
             elif in_deffunction_request and "body:" in line:
-                assert "_CalculatorModule._ExpressionModule" in line, f"Expected Expression type, got: {line}"
+                assert "ExpressionBuilder" in line, f"Expected Expression type, got: {line}"
                 found_body = True
                 break  # Found both fields, exit
             elif in_deffunction_request and line.startswith("class "):
