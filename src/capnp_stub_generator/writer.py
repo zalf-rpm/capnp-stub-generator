@@ -2484,7 +2484,22 @@ class Writer:
                         elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                             builder_type = self._build_nested_builder_type(field_type)
                             reader_type = self._build_nested_reader_type(field_type)
-                            field_type = f"{builder_type} | {reader_type}"
+                            # For client methods, try to use flat type aliases if defined in this module
+                            builder_alias = self._get_flat_builder_alias(field_type)
+                            reader_alias = self._get_flat_reader_alias(field_type)
+
+                            if not for_server:
+                                # Client receives Reader only
+                                if reader_alias:
+                                    field_type = reader_alias
+                                else:
+                                    field_type = reader_type
+                            else:
+                                # Server returns Builder | Reader
+                                if builder_alias and reader_alias:
+                                    field_type = f"{builder_alias} | {reader_alias}"
+                                else:
+                                    field_type = f"{builder_type} | {reader_type}"
                         elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                             # For interface types, use the nested Client class
                             # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
@@ -2504,9 +2519,25 @@ class Writer:
                                 element_type_name = self.get_type_name(element_type_obj)
                                 element_builder = self._build_nested_builder_type(element_type_name)
                                 element_reader = self._build_nested_reader_type(element_type_name)
-                                field_type = field_type.replace(
-                                    element_type_name, f"{element_builder} | {element_reader}"
-                                )
+
+                                # For client methods, try to use flat type aliases if defined in this module
+                                builder_alias = self._get_flat_builder_alias(element_type_name)
+                                reader_alias = self._get_flat_reader_alias(element_type_name)
+
+                                if not for_server:
+                                    # Client receives Reader only
+                                    if reader_alias:
+                                        element_type_replacement = reader_alias
+                                    else:
+                                        element_type_replacement = element_reader
+                                else:
+                                    # Server returns Builder | Reader
+                                    if builder_alias and reader_alias:
+                                        element_type_replacement = f"{builder_alias} | {reader_alias}"
+                                    else:
+                                        element_type_replacement = f"{element_builder} | {element_reader}"
+
+                                field_type = field_type.replace(element_type_name, element_type_replacement)
 
                         lines.append(f"    {rf}: {field_type}")
                     except Exception:
@@ -2595,7 +2626,25 @@ class Writer:
                             element_type_name = self.get_type_name(element_type_obj)
                             element_builder = self._build_nested_builder_type(element_type_name)
                             element_reader = self._build_nested_reader_type(element_type_name)
-                            field_type = field_type.replace(element_type_name, f"{element_builder} | {element_reader}")
+
+                            # For client methods, try to use flat type aliases if defined in this module
+                            builder_alias = self._get_flat_builder_alias(element_type_name)
+                            reader_alias = self._get_flat_reader_alias(element_type_name)
+
+                            if not for_server:
+                                # Client receives Reader only
+                                if reader_alias:
+                                    element_type_replacement = reader_alias
+                                else:
+                                    element_type_replacement = element_reader
+                            else:
+                                # Server returns Builder | Reader
+                                if builder_alias and reader_alias:
+                                    element_type_replacement = f"{builder_alias} | {reader_alias}"
+                                else:
+                                    element_type_replacement = f"{element_builder} | {element_reader}"
+
+                            field_type = field_type.replace(element_type_name, element_type_replacement)
 
                     lines.append(f"    {rf}: {field_type}")
                 except Exception:
@@ -2696,10 +2745,37 @@ class Writer:
                 elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                     builder_type = self._build_nested_builder_type(field_type)
                     reader_type = self._build_nested_reader_type(field_type)
-                    field_type = f"{builder_type} | {reader_type}"
+                    # For client methods, try to use flat type aliases if defined in this module
+                    builder_alias = self._get_flat_builder_alias(field_type)
+                    reader_alias = self._get_flat_reader_alias(field_type)
+
+                    # NamedTuples are always for Server, so we use Builder | Reader
+                    if builder_alias and reader_alias:
+                        field_type = f"{builder_alias} | {reader_alias}"
+                    else:
+                        field_type = f"{builder_type} | {reader_type}"
                 # For interfaces in NamedTuples, server returns Interface.Server
                 elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                     field_type = f"{field_type}.Server"
+                elif field_type_enum == capnp_types.CapnpElementType.LIST:
+                    # For lists of structs, accept both Builder and Reader for elements
+                    element_type_obj = field_obj.slot.type.list.elementType
+                    if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
+                        element_type_name = self.get_type_name(element_type_obj)
+                        element_builder = self._build_nested_builder_type(element_type_name)
+                        element_reader = self._build_nested_reader_type(element_type_name)
+
+                        # For client methods, try to use flat type aliases if defined in this module
+                        builder_alias = self._get_flat_builder_alias(element_type_name)
+                        reader_alias = self._get_flat_reader_alias(element_type_name)
+
+                        # NamedTuples are always for Server
+                        if builder_alias and reader_alias:
+                            element_type_replacement = f"{builder_alias} | {reader_alias}"
+                        else:
+                            element_type_replacement = f"{element_builder} | {element_reader}"
+
+                        field_type = field_type.replace(element_type_name, element_type_replacement)
 
                 # Sanitize field name to avoid conflicts with tuple methods
                 sanitized_name = self._sanitize_namedtuple_field_name(field_name)
