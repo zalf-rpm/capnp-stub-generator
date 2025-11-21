@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import os.path
 import pathlib
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from copy import copy
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Literal
@@ -39,7 +39,10 @@ InitChoice = tuple[str, str]
 DISCRIMINANT_NONE = 65535  # Value indicating no discriminant (not part of a union)
 
 # Type alias for AnyPointer fields - accepts all pointer types
-ANYPOINTER_TYPE = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicListBuilder | _DynamicListReader | list[Any]"
+ANYPOINTER_TYPE = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder"
+CAPABILITY_TYPE = "_DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicObjectReader | _DynamicObjectBuilder"
+ANYSTRUCT_TYPE = "_DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder"
+ANYLIST_TYPE = "_DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder"
 
 
 class Writer:
@@ -61,6 +64,8 @@ class Writer:
         "Self",
         "TypeAlias",
         "override",
+        "MutableSequence",
+        "IO",
     ]
 
     def __init__(
@@ -114,14 +119,17 @@ class Writer:
         self._all_interfaces: dict[str, tuple[str, list[str]]] = {}
 
         # Track all generated types for top-level TypeAliases
-        # Format: {flat_name: (protocol_path, type_kind)} where type_kind is "Reader", "Builder", or "Client"
-        self._all_type_aliases: dict[str, tuple[str, str]] = {}
+        # Format: {flat_name: (protocol_path, type_kind, [enum_values])} where type_kind is "Reader", "Builder", "Client", or "Enum"
+        self._all_type_aliases: dict[str, tuple[str, str] | tuple[str, str, list[str]]] = {}
 
         # Track if we need _DynamicObjectReader augmentation (for AnyPointer in interface returns)
         self._needs_dynamic_object_reader_augmentation = False
 
         # Track if we need AnyPointer type alias (for generic parameter fields)
         self._needs_anypointer_alias = False
+        self._needs_capability_alias = False
+        self._needs_anystruct_alias = False
+        self._needs_anylist_alias = False
 
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
@@ -481,7 +489,7 @@ class Writer:
     def _add_static_method(
         self,
         name: str,
-        parameters: list[helper.TypeHintedVariable] | list[str] | None = None,
+        parameters: Sequence[helper.TypeHintedVariable | str] | None = None,
         return_type: str | None = None,
         decorators: list[str] | None = None,
         add_override: bool = False,
@@ -571,13 +579,28 @@ class Writer:
             self._needs_anypointer_alias = True
             return getter_type, setter_type
 
+        # Handle AnyStruct fields
+        if hasattr(field, "_is_any_struct") and field._is_any_struct:
+            getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
+            setter_type = "AnyStruct | dict[str, Any]"
+            self._needs_anystruct_alias = True
+            self._add_typing_import("Any")
+            return getter_type, setter_type
+
         # Handle AnyList fields (accepts Sequence/list)
         if hasattr(field, "_is_any_list") and field._is_any_list:
             getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
-            setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
-            setter_type = field.get_type_with_affixes(setter_types) + " | Sequence[Any]"
+            setter_type = "AnyList | Sequence[Any]"
+            self._needs_anylist_alias = True
             self._add_typing_import("Sequence")
             self._add_typing_import("Any")
+            return getter_type, setter_type
+
+        # Handle Capability fields
+        if hasattr(field, "_is_capability") and field._is_capability:
+            getter_type = field.primary_type_nested
+            setter_type = "Capability"
+            self._needs_capability_alias = True
             return getter_type, setter_type
 
         if field.has_type_hint_with_builder_affix:
@@ -843,14 +866,28 @@ class Writer:
                 field_type = "AnyPointer"
                 self._needs_anypointer_alias = True
                 type_hints = [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")]
+            # Handle AnyStruct fields specially
+            elif hasattr(slot_field, "_is_any_struct") and slot_field._is_any_struct:
+                field_type = "AnyStruct"
+                self._needs_anystruct_alias = True
+                type_hints = [helper.TypeHint(field_type, primary=True)]
+                type_hints.append(helper.TypeHint("dict[str, Any]"))
+                self._add_typing_import("Any")
+                type_hints.append(helper.TypeHint("None"))
             # Handle AnyList fields specially
             elif hasattr(slot_field, "_is_any_list") and slot_field._is_any_list:
-                field_type = slot_field.get_type_with_affixes(["Builder"])
+                field_type = "AnyList"
+                self._needs_anylist_alias = True
                 type_hints = [helper.TypeHint(field_type, primary=True)]
                 type_hints.append(helper.TypeHint("Sequence[Any]"))
                 self._add_typing_import("Sequence")
                 self._add_typing_import("Any")
                 type_hints.append(helper.TypeHint("None"))
+            # Handle Capability fields specially
+            elif hasattr(slot_field, "_is_capability") and slot_field._is_capability:
+                field_type = "Capability"
+                self._needs_capability_alias = True
+                type_hints = [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")]
             else:
                 # Get the type suitable for initialization (Builder types for struct fields)
                 field_type = (
@@ -1556,6 +1593,8 @@ class Writer:
                     hinted_var.add_type_hint(helper.TypeHint("_DynamicStructBuilder", affix="Builder", flat_alias=True))
                     # Add Reader variant explicitly for setter type lookup
                     hinted_var.add_type_hint(helper.TypeHint("_DynamicObjectReader", affix="Reader", flat_alias=True))
+                    # Mark as AnyStruct for special setter handling
+                    hinted_var._is_any_struct = True
                     return hinted_var
 
                 elif kind == "list":
@@ -1582,7 +1621,10 @@ class Writer:
                     hints.append(helper.TypeHint("_DynamicObjectReader", affix="Reader", flat_alias=True))
                     # When building, we can set it to Client or Server (handled by primary/secondary hints usually, but explicit Builder helps)
                     hints.append(helper.TypeHint("_DynamicCapabilityClient", affix="Builder", flat_alias=True))
-                    return helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
+                    hinted_var = helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
+                    # Mark as Capability for special setter handling
+                    hinted_var._is_capability = True
+                    return hinted_var
 
                 elif kind == "anyKind":
                     # AnyPointer
@@ -2208,7 +2250,7 @@ class Writer:
 
             # Handle ANY_POINTER: client receives DynamicObjectReader, server receives AnyPointer
             if field_type == capnp_types.CapnpElementType.ANY_POINTER:
-                client_type = "_DynamicObjectReader"
+                client_type = "AnyPointer"
                 server_type = "AnyPointer"
                 request_type = "AnyPointer"
                 self._needs_anypointer_alias = True
@@ -2706,7 +2748,14 @@ class Writer:
                         if for_server:
                             # Server can set any Cap'n Proto type
                             if any_pointer_kind == "capability":
-                                field_type = "_DynamicCapabilityClient | _DynamicCapabilityServer"
+                                field_type = "Capability"
+                                self._needs_capability_alias = True
+                            elif any_pointer_kind == "struct":
+                                field_type = "AnyStruct"
+                                self._needs_anystruct_alias = True
+                            elif any_pointer_kind == "list":
+                                field_type = "AnyList"
+                                self._needs_anylist_alias = True
                             else:
                                 field_type = "AnyPointer"
                                 self._needs_anypointer_alias = True
@@ -2924,8 +2973,26 @@ class Writer:
                 # For AnyPointer in server results, use Cap'n Proto type union
                 # Server can return: Text (str), Data (bytes), Struct, Interface (client or server)
                 if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-                    field_type = "AnyPointer"
-                    self._needs_anypointer_alias = True
+                    # Check kind
+                    any_pointer_kind = "anyKind"
+                    try:
+                        if field_obj.slot.type.anyPointer.which() == "unconstrained":
+                            any_pointer_kind = field_obj.slot.type.anyPointer.unconstrained.which()
+                    except (AttributeError, IndexError):
+                        pass
+
+                    if any_pointer_kind == "capability":
+                        field_type = "Capability"
+                        self._needs_capability_alias = True
+                    elif any_pointer_kind == "struct":
+                        field_type = "AnyStruct"
+                        self._needs_anystruct_alias = True
+                    elif any_pointer_kind == "list":
+                        field_type = "AnyList"
+                        self._needs_anylist_alias = True
+                    else:
+                        field_type = "AnyPointer"
+                        self._needs_anypointer_alias = True
                 # For structs, accept both Builder and Reader
                 elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
                     builder_type = self._build_nested_builder_type(field_type)
@@ -4310,6 +4377,21 @@ class Writer:
             out.append("")
             out.append("# Type alias for AnyPointer parameters (accepts all Cap'n Proto pointer types)")
             out.append(f"type AnyPointer = {ANYPOINTER_TYPE}")
+
+        if self._needs_capability_alias:
+            out.append("")
+            out.append("# Type alias for Capability parameters")
+            out.append(f"type Capability = {CAPABILITY_TYPE}")
+
+        if self._needs_anystruct_alias:
+            out.append("")
+            out.append("# Type alias for AnyStruct parameters")
+            out.append(f"type AnyStruct = {ANYSTRUCT_TYPE}")
+
+        if self._needs_anylist_alias:
+            out.append("")
+            out.append("# Type alias for AnyList parameters")
+            out.append(f"type AnyList = {ANYLIST_TYPE}")
 
         out.append("")
 

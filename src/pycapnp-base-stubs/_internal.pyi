@@ -11,16 +11,9 @@ These are imported by lib/capnp.pyi for type annotations but NOT re-exported.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Literal, Protocol, TypeVar
+from typing import Any, Literal, Protocol
 
 from capnp.lib.capnp import _SchemaType
-
-# TypeVars used throughout the stubs
-T = TypeVar("T")
-T_co = TypeVar("T_co", covariant=True)
-TReader = TypeVar("TReader")
-TBuilder = TypeVar("TBuilder")
-TInterface = TypeVar("TInterface")
 
 # Protocol classes for types imported from capnp runtime
 

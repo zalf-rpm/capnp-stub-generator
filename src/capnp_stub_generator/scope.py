@@ -112,6 +112,11 @@ class Scope:
         """
         return delimiter.join(scope.name for scope in self.trace if (not scope.is_root) and (scope.name))
 
+    @property
+    def scoped_name(self) -> str:
+        """Get the full scoped name (dotted path) excluding root."""
+        return self.trace_as_str(".")
+
     def __repr__(self) -> str:
         """A string representation of this scope.
 

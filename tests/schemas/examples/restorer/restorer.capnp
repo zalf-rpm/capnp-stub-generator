@@ -23,4 +23,5 @@ interface AnyTester {
   getAnyStruct @0 () -> (s :AnyStruct);
   getAnyList @1 () -> (l :AnyList);
   getAnyPointer @2 () -> (p :AnyPointer);
+  setAnyPointer @3 (p :AnyPointer) -> ();
 }

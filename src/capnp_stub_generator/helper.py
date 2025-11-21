@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import keyword
+from collections.abc import Sequence
 from copy import copy
 from dataclasses import dataclass, field
 from typing import Any
@@ -170,6 +171,11 @@ class TypeHintedVariable:
     type_hints: list[TypeHint]
     default: str = ""
     nesting_depth: int = 0
+    _is_generic_param: bool = field(default=False, init=False)
+    _is_any_pointer: bool = field(default=False, init=False)
+    _is_any_list: bool = field(default=False, init=False)
+    _is_any_struct: bool = field(default=False, init=False)
+    _is_capability: bool = field(default=False, init=False)
 
     def __post_init__(self):
         """Sanity check for provided type hints."""
@@ -358,11 +364,11 @@ def replace_capnp_suffix(original: str) -> str:
     return result
 
 
-def join_parameters(parameters: list[TypeHintedVariable] | list[str] | None) -> str:
+def join_parameters(parameters: Sequence[TypeHintedVariable | str] | None) -> str:
     """Joins parameters by means of ', '.
 
     Args:
-        parameters (list[HintedVariable] | list[str] | None): The parameters to join.
+        parameters (Sequence[HintedVariable | str] | None): The parameters to join.
 
     Returns:
         str: The joined parameters.
@@ -407,14 +413,14 @@ def new_type_group(name: str, types: list[str]) -> str:
 
 def new_function(
     name: str,
-    parameters: list[TypeHintedVariable] | list[str] | None = None,
+    parameters: Sequence[TypeHintedVariable | str] | None = None,
     return_type: str | None = None,
 ) -> str:
     """Create a string for a function.
 
     Args:
         name (str): The function name.
-        parameters (list[HintedVariable] | list[str] | None, optional): The function parameters, if any. Defaults to None.
+        parameters (Sequence[HintedVariable | str] | None, optional): The function parameters, if any. Defaults to None.
         return_type (str | None, optional): The function's return type. Defaults to None.
 
     Returns:
@@ -427,12 +433,12 @@ def new_function(
     return f"def {name}({arguments}) -> {return_type}: ..."
 
 
-def new_decorator(name: str, parameters: list[TypeHintedVariable] | list[str] | None = None) -> str:
+def new_decorator(name: str, parameters: Sequence[TypeHintedVariable | str] | None = None) -> str:
     """Create a new decorator.
 
     Args:
         name (str): The name of the decorator.
-        parameters (list[HintedVariable] | list[str] | None, optional): The parameters (args, kwargs) of the decorator,
+        parameters (Sequence[HintedVariable | str] | None, optional): The parameters (args, kwargs) of the decorator,
             if any. Defaults to None.
 
     Returns:
@@ -483,7 +489,7 @@ def new_property(name: str, return_type: str, with_setter: bool = False, setter_
     return lines
 
 
-def new_class_declaration(name: str, parameters: list[str] | None = None) -> str:
+def new_class_declaration(name: str, parameters: Sequence[str] | None = None) -> str:
     """Creates a string for declaring a class.
 
     For example, for a name of 'SomeClass' and a list of parameters that is 'str, Type[str, int]', the output
@@ -493,7 +499,7 @@ def new_class_declaration(name: str, parameters: list[str] | None = None) -> str
 
     Args:
         name (str): The class name.
-        parameters (list[str] | None, optional):
+        parameters (Sequence[str] | None, optional):
             A list of parameters that are part of the class declaration. Defaults to None.
 
     Returns:

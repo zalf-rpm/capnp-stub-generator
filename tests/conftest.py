@@ -106,6 +106,20 @@ def generate_all_stubs():
 
     logger.info("✓ All test stubs generated successfully")
 
+    # Run pyright validation on the whole repository
+    logger.info("Running pyright validation...")
+    pyright_result = subprocess.run(
+        ["pyright", "."],
+        capture_output=True,
+        text=True,
+    )
+
+    if pyright_result.returncode != 0:
+        logger.error(f"Pyright validation failed:\n{pyright_result.stdout}")
+        pytest.fail(f"Pyright validation failed:\n{pyright_result.stdout}")
+
+    logger.info("✓ Pyright validation passed")
+
     # Return paths for tests to use
     return {
         "basic": BASIC_GENERATED_DIR,

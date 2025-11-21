@@ -472,23 +472,25 @@ def _augment_dynamic_object_reader(
                 # Find the start of this method definition (skip back over any decorators/empty lines)
                 insert_at = i
                 # Look backwards to find where to insert (before any decorators)
-                for j in range(i - 1, dynamic_reader_idx, -1):
-                    prev_line = lines[j].strip()
-                    if prev_line.startswith("@") or prev_line == "":
-                        insert_at = j
-                    else:
-                        break
+                if dynamic_reader_idx is not None:
+                    for j in range(i - 1, dynamic_reader_idx, -1):
+                        prev_line = lines[j].strip()
+                        if prev_line.startswith("@") or prev_line == "":
+                            insert_at = j
+                        else:
+                            break
                 as_interface_insert_idx = insert_at
             elif "def as_struct" in line and as_struct_insert_idx is None and "schema:" in line:
                 # This is the original implementation (has schema parameter)
                 insert_at = i
                 # Look backwards to find where to insert (before any decorators)
-                for j in range(i - 1, dynamic_reader_idx, -1):
-                    prev_line = lines[j].strip()
-                    if prev_line.startswith("@") or prev_line == "":
-                        insert_at = j
-                    else:
-                        break
+                if dynamic_reader_idx is not None:
+                    for j in range(i - 1, dynamic_reader_idx, -1):
+                        prev_line = lines[j].strip()
+                        if prev_line.startswith("@") or prev_line == "":
+                            insert_at = j
+                        else:
+                            break
                 as_struct_insert_idx = insert_at
             elif line.strip().startswith("class ") and "_DynamicObjectReader" not in line:
                 # Found another class, stop looking
@@ -771,7 +773,7 @@ def generate_stubs(
     output_directory: str | None = None,
     import_paths: list[str] | None = None,
     module_path_prefix: str | None = None,
-) -> dict[str, tuple[str, list[str]]]:
+) -> tuple[dict[str, tuple[str, list[str]]], tuple[list[tuple[str, str]], list[tuple[str, str]]]]:
     """Entry-point for generating *.pyi stubs from a module definition.
 
     Args:

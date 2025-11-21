@@ -28,11 +28,6 @@ from capnp._internal import (
 from capnp._internal import (
     StructType as _StructType,
 )
-from capnp._internal import (
-    T,
-    TBuilder,
-    TReader,
-)
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 # Generated imports for project-specific types
@@ -40,8 +35,20 @@ from tests._generated.examples.calculator import calculator_capnp  # type: ignor
 from tests._generated.examples.restorer import restorer_capnp  # type: ignore[import-not-found]
 
 type AnyPointer = (
-    str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer
+    str
+    | bytes
+    | _DynamicStructBuilder
+    | _DynamicStructReader
+    | _DynamicCapabilityClient
+    | _DynamicCapabilityServer
+    | _DynamicListBuilder
+    | _DynamicListReader
+    | _DynamicObjectReader
+    | _DynamicObjectBuilder
 )
+type Capability = _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicObjectReader | _DynamicObjectBuilder
+type AnyStruct = _DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder
+type AnyList = _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder
 
 class KjException(Exception):
     """Exception raised by Cap'n Proto operations.
@@ -396,6 +403,8 @@ class _DynamicObjectReader:
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+    @overload
+    def as_interface(self, schema: restorer_capnp._AnyTesterModule) -> restorer_capnp.AnyTesterClient: ...
     @overload
     def as_interface(self, schema: restorer_capnp._BagModule) -> restorer_capnp.BagClient: ...
     @overload
@@ -1053,6 +1062,8 @@ class _CapabilityClient:
     @overload
     def cast_as(self, schema: calculator_capnp._CalculatorModule._ValueModule) -> calculator_capnp.ValueClient: ...
     @overload
+    def cast_as(self, schema: restorer_capnp._AnyTesterModule) -> restorer_capnp.AnyTesterClient: ...
+    @overload
     def cast_as(self, schema: restorer_capnp._BagModule) -> restorer_capnp.BagClient: ...
     @overload
     def cast_as(self, schema: restorer_capnp._RestorerModule) -> restorer_capnp.RestorerClient: ...
@@ -1148,7 +1159,7 @@ class _MessageBuilder:
         Don't ever instantiate this class directly. It is only used for inheritance.
     """
 
-    def init_root(self, schema: _StructSchema) -> TBuilder:
+    def init_root(self, schema: _StructSchema) -> Any:
         """Initialize the message root as a struct of the given type.
 
         Args:
@@ -1159,7 +1170,7 @@ class _MessageBuilder:
         """
         ...
 
-    def get_root(self, schema: _StructSchema) -> TReader:
+    def get_root(self, schema: _StructSchema) -> Any:
         """Get the message root as a struct of the given type.
 
         Args:
@@ -1238,7 +1249,7 @@ class _MessageReader:
         Don't ever instantiate this class. It is only used for inheritance.
     """
 
-    def get_root(self, schema: _StructSchema) -> TReader:
+    def get_root(self, schema: _StructSchema) -> Any:
         """Get the message root as a struct of the given type.
 
         Args:
@@ -1794,7 +1805,7 @@ class AsyncIoStream:
         ...
 
 # Async utilities
-async def run(coro: Awaitable[T]) -> T:
+async def run[T](coro: Awaitable[T]) -> T:
     """Run an async coroutine with Cap'n Proto event loop.
 
     Ensures that the coroutine runs while the KJ event loop is running.

@@ -16,13 +16,15 @@ def test_any_pointer_setters(basic_stubs):
     assert "def any(self, value: AnyPointer) -> None: ..." in content
 
     # s setter should accept struct builder/reader/dict
-    assert "def s(self, value: _DynamicStructBuilder | _DynamicObjectReader | dict[str, Any]) -> None: ..." in content
+    assert "def s(self, value: AnyStruct | dict[str, Any]) -> None: ..." in content
 
     # l setter should accept list builder/reader/Sequence
-    assert "def l(self, value: _DynamicListBuilder | _DynamicObjectReader | Sequence[Any]) -> None: ..." in content
+    assert "def l(self, value: AnyList | Sequence[Any]) -> None: ..." in content
 
     # Check new_message
     assert "any: AnyPointer | None = None" in content
+    assert "s: AnyStruct | dict[str, Any] | None = None" in content
+    assert "l: AnyList | Sequence[Any] | None = None" in content
 
 
 def test_any_pointer_type_checking(basic_stubs):

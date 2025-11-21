@@ -20,11 +20,8 @@ just like Builder and Reader types.
 
 def example_usage():
     """Example showing the improved type annotation style."""
-    import sys
 
-    sys.path.insert(0, str(__file__).rsplit("/", 2)[0] + "/_generated/examples/calculator")
-
-    import calculator_capnp
+    from tests._generated.examples.calculator import calculator_capnp
 
     # Type aliases are now available at module level
     def handle_evaluate_result(result: calculator_capnp.EvaluateResult) -> None:
@@ -49,7 +46,7 @@ def example_usage():
         """
         # This would normally make an RPC call
         # For the example, we just show the type signature
-        pass
+        raise NotImplementedError
 
     print("✓ Result type aliases work as expected")
     print("✓ Consistent with Builder/Reader naming patterns")

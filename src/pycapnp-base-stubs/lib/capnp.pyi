@@ -28,16 +28,23 @@ from capnp._internal import (
 from capnp._internal import (
     StructType as _StructType,
 )
-from capnp._internal import (
-    T,
-    TBuilder,
-    TReader,
-)
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 type AnyPointer = (
-    str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer
+    str
+    | bytes
+    | _DynamicStructBuilder
+    | _DynamicStructReader
+    | _DynamicCapabilityClient
+    | _DynamicCapabilityServer
+    | _DynamicListBuilder
+    | _DynamicListReader
+    | _DynamicObjectReader
+    | _DynamicObjectBuilder
 )
+type Capability = _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicObjectReader | _DynamicObjectBuilder
+type AnyStruct = _DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder
+type AnyList = _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder
 
 class KjException(Exception):
     """Exception raised by Cap'n Proto operations.
@@ -1119,7 +1126,7 @@ class _MessageBuilder:
         Don't ever instantiate this class directly. It is only used for inheritance.
     """
 
-    def init_root(self, schema: _StructSchema) -> TBuilder:
+    def init_root(self, schema: _StructSchema) -> Any:
         """Initialize the message root as a struct of the given type.
 
         Args:
@@ -1130,7 +1137,7 @@ class _MessageBuilder:
         """
         ...
 
-    def get_root(self, schema: _StructSchema) -> TReader:
+    def get_root(self, schema: _StructSchema) -> Any:
         """Get the message root as a struct of the given type.
 
         Args:
@@ -1209,7 +1216,7 @@ class _MessageReader:
         Don't ever instantiate this class. It is only used for inheritance.
     """
 
-    def get_root(self, schema: _StructSchema) -> TReader:
+    def get_root(self, schema: _StructSchema) -> Any:
         """Get the message root as a struct of the given type.
 
         Args:
@@ -1765,7 +1772,7 @@ class AsyncIoStream:
         ...
 
 # Async utilities
-async def run(coro: Awaitable[T]) -> T:
+async def run[T](coro: Awaitable[T]) -> T:
     """Run an async coroutine with Cap'n Proto event loop.
 
     Ensures that the coroutine runs while the KJ event loop is running.

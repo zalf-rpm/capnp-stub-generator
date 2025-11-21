@@ -41,6 +41,10 @@ class AnyTesterImpl(restorer_capnp.AnyTester.Server):
     async def getAnyPointer_context(self, context):
         context.results.p = "test_pointer"
 
+    async def setAnyPointer_context(self, context):
+        # Just consume it to verify it was passed
+        pass
+
 
 class RestorerImpl(restorer_capnp.Restorer.Server):
     def __init__(self):
