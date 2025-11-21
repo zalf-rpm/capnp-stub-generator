@@ -3166,6 +3166,37 @@ class Writer:
                             single_field_type = self.get_type_name(field_obj.slot.type)
                         except Exception:
                             single_field_type = "int"
+                    elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
+                        # Struct type - server returns Builder
+                        is_single_primitive_or_interface = True
+                        struct_type = self.get_type_name(field_obj.slot.type)
+                        single_field_type = self._build_nested_builder_type(struct_type)
+                    elif field_type_enum == capnp_types.CapnpElementType.LIST:
+                        # List type - server returns Sequence (list)
+                        is_single_primitive_or_interface = True
+                        single_field_type = self.get_type_name(field_obj.slot.type)
+
+                        # If list of structs, use Builder | Reader for elements
+                        element_type_obj = field_obj.slot.type.list.elementType
+                        if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
+                            element_type_name = self.get_type_name(element_type_obj)
+                            element_builder = self._build_nested_builder_type(element_type_name)
+                            element_reader = self._build_nested_reader_type(element_type_name)
+
+                            builder_alias = self._get_flat_builder_alias(element_type_name)
+                            reader_alias = self._get_flat_reader_alias(element_type_name)
+
+                            if builder_alias and reader_alias:
+                                element_replacement = f"{builder_alias} | {reader_alias}"
+                            else:
+                                element_replacement = f"{element_builder} | {element_reader}"
+
+                            single_field_type = single_field_type.replace(element_type_name, element_replacement)
+                    elif field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
+                        # AnyPointer type
+                        is_single_primitive_or_interface = True
+                        single_field_type = "AnyPointer"
+                        self._needs_anypointer_alias = True
                 except Exception:
                     pass
 
@@ -3251,13 +3282,15 @@ class Writer:
         method_info: MethodInfo,
         has_results: bool,
         result_type_for_context: str | None = None,
+        is_direct_struct_return: bool = False,
     ) -> list[str]:
         """Generate CallContext Protocol for server _context parameter.
 
         Args:
             method_info: Information about the method
             has_results: Whether the method has results
-            result_type_for_context: Result type name (points to interface-level Protocol)
+            result_type_for_context: Result type name (points to interface-level Protocol or struct name)
+            is_direct_struct_return: Whether this is a direct struct return
 
         Returns:
             List of lines for CallContext Protocol
@@ -3278,8 +3311,14 @@ class Writer:
         lines.append(f"    params: {fully_qualified_params}")
 
         # CallContext.results points to the Server Result Protocol (nested in Server class)
+        # OR to the Builder type for direct struct returns
         if has_results:
-            if result_type_for_context:
+            if is_direct_struct_return and result_type_for_context:
+                # For direct struct returns, use the Builder type
+                # result_type_for_context is the struct name (e.g. "IdInformation")
+                builder_alias = self._get_flat_builder_alias(result_type_for_context)
+                fully_qualified_results = builder_alias or self._build_scoped_builder_type(result_type_for_context)
+            elif result_type_for_context:
                 if scope_path:
                     # Use Server-nested Result Protocol: e.g., "_HolderModule.Server.ValueResult"
                     fully_qualified_results = f"{scope_path}.Server.{result_type_for_context}"
@@ -3289,7 +3328,9 @@ class Writer:
                 # Shouldn't happen, but fallback
                 fully_qualified_results = "Any"
 
-            lines.append(f"    results: {fully_qualified_results}")
+            # Make results a read-only property
+            lines.append("    @property")
+            lines.append(f"    def results(self) -> {fully_qualified_results}: ...")
         # Void methods have no results field in CallContext
 
         return lines
@@ -3366,8 +3407,18 @@ class Writer:
         if is_direct_struct_return:
             # Direct struct return: CallContext.results points to interface-level Result Protocol
             has_results = True
+
+            # Get struct name for Builder type generation
+            # Use get_type_by_id to ensure the type is generated and get its Protocol name
+            # e.g. "_IdInformationModule"
+            if method_info.result_schema is None:
+                raise ValueError("Result schema is None for direct struct return")
+
+            struct_type = self.get_type_by_id(method_info.result_schema.node.id)
+            struct_name = struct_type.scoped_name
+
             callcontext_lines = self._generate_callcontext_protocol(
-                method_info, has_results, result_type_for_context=result_type
+                method_info, has_results, result_type_for_context=struct_name, is_direct_struct_return=True
             )
             for line in callcontext_lines:
                 collection.server_context_lines.append(line)
@@ -3377,7 +3428,7 @@ class Writer:
             # Pass result_type so CallContext can reference the Protocol
             result_type_for_ctx = f"{method_info.method_name.title()}Result" if has_results else None
             callcontext_lines = self._generate_callcontext_protocol(
-                method_info, has_results, result_type_for_context=result_type_for_ctx
+                method_info, has_results, result_type_for_context=result_type_for_ctx, is_direct_struct_return=False
             )
             for line in callcontext_lines:
                 collection.server_context_lines.append(line)
@@ -3681,6 +3732,20 @@ class Writer:
 
                 # Track for top-level TypeAlias
                 self._all_type_aliases[result_type_name] = (result_alias_path, "Result")
+
+        # Add TypeAlias for Server class if it exists
+        should_generate_server = server_collection.has_methods() or server_base_classes
+        if should_generate_server:
+            server_alias_name = f"{context.type_name}Server"
+            server_alias_path = f"{context.registered_type.scoped_name}.Server"
+
+            # Only add class-level type alias for nested interfaces
+            is_nested_interface = context.registered_type.scope and not context.registered_type.scope.is_root
+            if is_nested_interface:
+                type_alias_scope.add(f"type {server_alias_name} = {server_alias_path}")
+
+            # Track for top-level TypeAlias
+            self._all_type_aliases[server_alias_name] = (server_alias_path, "Server")
 
         return context.registered_type
 

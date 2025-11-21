@@ -93,7 +93,8 @@ class TestNestedResultStructure:
 
         # CallContext.results should point to Server.Result
         assert "class EvaluateCallContext(Protocol):" in content
-        assert "results: _CalculatorModule.Server.EvaluateResult" in content
+        assert "@property" in content
+        assert "def results(self) -> _CalculatorModule.Server.EvaluateResult: ..." in content
 
     def test_result_tuple_stays_under_server(self, calculator_stubs):
         """Test that ResultTuple (NamedTuple) stays under Server."""
@@ -151,7 +152,8 @@ class TestNestedResultsAtDeeperLevels:
 
         # ReadCallContext.results should point to Server.ReadResult
         assert "class ReadCallContext(Protocol):" in content
-        assert "results: _CalculatorModule._ValueModule.Server.ReadResult" in content
+        assert "@property" in content
+        assert "def results(self) -> _CalculatorModule._ValueModule.Server.ReadResult: ..." in content
 
 
 class TestAnyPointerTypeDifferences:

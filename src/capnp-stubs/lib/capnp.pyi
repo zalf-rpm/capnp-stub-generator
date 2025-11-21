@@ -33,6 +33,7 @@ from capnp._internal import (
 # Generated imports for project-specific types
 from tests._generated.examples.calculator import calculator_capnp  # type: ignore[import-not-found]
 from tests._generated.examples.restorer import restorer_capnp  # type: ignore[import-not-found]
+from tests._generated.examples.single_value import single_value_capnp  # type: ignore[import-not-found]
 
 type AnyPointer = (
     str
@@ -410,6 +411,8 @@ class _DynamicObjectReader:
     @overload
     def as_interface(self, schema: restorer_capnp._RestorerModule) -> restorer_capnp.RestorerClient: ...
     @overload
+    def as_interface(self, schema: single_value_capnp._SingleValueModule) -> single_value_capnp.SingleValueClient: ...
+    @overload
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this AnyPointer to an interface capability.
@@ -441,6 +444,8 @@ class _DynamicObjectReader:
     def as_struct(
         self, schema: restorer_capnp._RestorerModule._RestoreParamsModule
     ) -> restorer_capnp.RestoreParamsReader: ...
+    @overload
+    def as_struct(self, schema: single_value_capnp._MyStructModule) -> single_value_capnp.MyStructReader: ...
     @overload
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
@@ -1067,6 +1072,8 @@ class _CapabilityClient:
     def cast_as(self, schema: restorer_capnp._BagModule) -> restorer_capnp.BagClient: ...
     @overload
     def cast_as(self, schema: restorer_capnp._RestorerModule) -> restorer_capnp.RestorerClient: ...
+    @overload
+    def cast_as(self, schema: single_value_capnp._SingleValueModule) -> single_value_capnp.SingleValueClient: ...
     @overload
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:

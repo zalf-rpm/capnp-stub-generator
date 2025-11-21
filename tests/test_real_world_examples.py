@@ -73,6 +73,11 @@ EXAMPLES = [
         schema_files=["restorer.capnp"],
         python_files=["restorer_client.py", "restorer_server.py"],
     ),
+    Example(
+        name="single_value",
+        schema_files=["single_value.capnp"],
+        python_files=["single_value_client.py", "single_value_server.py"],
+    ),
 ]
 
 
