@@ -11,22 +11,10 @@ from collections.abc import (
 from contextlib import AbstractContextManager, asynccontextmanager
 from typing import IO, Any, Literal, overload
 
-from capnp._internal import CapnpTypesModule as _CapnpTypesModule
-from capnp._internal import (
-    EnumType as _EnumType,
-)
-from capnp._internal import (
-    InterfaceType as _InterfaceType,
-)
-from capnp._internal import SchemaNode as _SchemaNode
-from capnp._internal import (
+from .._internal import CapnpModule as _CapnpModule
+from .._internal import CapnpTypesModule as _CapnpTypesModule
+from .._internal import (
     Server as _Server,
-)
-from capnp._internal import (
-    SlotRuntime as _SlotRuntime,
-)
-from capnp._internal import (
-    StructType as _StructType,
 )
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
@@ -45,6 +33,9 @@ type AnyPointer = (
 type Capability = _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicObjectReader | _DynamicObjectBuilder
 type AnyStruct = _DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder
 type AnyList = _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder
+type _CapnpModuleType = _CapnpModule
+
+types: _CapnpTypesModule
 
 class KjException(Exception):
     """Exception raised by Cap'n Proto operations.
@@ -97,12 +88,45 @@ class KjException(Exception):
         """Convert to a more specific Python exception if appropriate."""
         ...
 
-class _StructSchema:
+class _StructSchemaField:
+    proto: _DynamicStructReader
+    schema: _StructSchema
+
+class _NodeReader:
+    displayName: str
+    id: int
+    isConst: bool
+    isEnum: bool
+    isInterface: bool
+    isStruct: bool
+    nestedNodes: Any
+    node: _DynamicStructReader
+    scopeId: int
+
+class _ParsedSchema:
     @property
-    def node(self) -> _SchemaNode: ...
-    def which(self) -> str: ...
-    def as_struct(self) -> Any: ...
+    def node(self) -> _DynamicStructReader: ...
+    def get_proto(self) -> _DynamicStructReader: ...
     def get_nested(self, name: str) -> Any: ...
+    def as_const_value(self) -> Any: ...
+    def as_enum(self) -> _EnumSchema: ...
+    def as_interface(self) -> _InterfaceSchema: ...
+    def as_struct(self) -> _StructSchema: ...
+
+class _StructSchema:
+    fields: dict[str, _StructSchemaField]
+    fieldnames: tuple[str, ...]
+    fields_list: list[_StructSchemaField]
+    non_union_fields: tuple[str, ...]
+    union_fields: tuple[str, ...]
+
+    @property
+    def node(self) -> _DynamicStructReader: ...
+    def as_const_value(self) -> Any: ...
+    def as_enum(self) -> _EnumSchema: ...
+    def as_interface(self) -> _InterfaceSchema: ...
+    def as_struct(self) -> _StructSchema: ...
+    def get_proto(self) -> _DynamicStructReader: ...
 
 class _StructModule:
     """Module/class for a generated struct type.
@@ -569,17 +593,17 @@ class _DynamicStructReader:
     """
 
     @property
-    def slot(self) -> _SlotRuntime: ...
+    def slot(self) -> _DynamicStructReader: ...
     @property
     def schema(self) -> _StructSchema: ...
     @property
     def list(self) -> _DynamicListReader: ...
     @property
-    def struct(self) -> _StructType: ...
+    def struct(self) -> _DynamicStructReader: ...
     @property
-    def enum(self) -> _EnumType: ...
+    def enum(self) -> _DynamicStructReader: ...
     @property
-    def interface(self) -> _InterfaceType: ...
+    def interface(self) -> _DynamicStructReader: ...
     @property
     def is_root(self) -> bool: ...
     @property
@@ -596,6 +620,10 @@ class _DynamicStructReader:
 
     def _get(self, field: str) -> Any:
         """Low-level get method for accessing struct fields by name."""
+        ...
+
+    def __getattr__(self, field: str) -> Any:
+        """Access struct fields by name."""
         ...
 
     def _has(self, field: str) -> bool:
@@ -879,7 +907,11 @@ class _EnumSchema:
     """
 
     enumerants: dict[str, int]
-    node: _SchemaNode
+    node: _DynamicStructReader
+
+class _InterfaceMethod:
+    param_type: _StructSchema
+    result_type: _StructSchema
 
 class _InterfaceSchema:
     """Schema for interface types, parameterized by the interface type.
@@ -890,8 +922,8 @@ class _InterfaceSchema:
 
     method_names: tuple[str, ...]
     method_names_inherited: set[str]
-    methods: dict[str, Any]  # Maps method name to _InterfaceMethod object
-    methods_inherited: dict[str, Any]  # Maps method name to _InterfaceMethod object
+    methods: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
+    methods_inherited: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
     node: _DynamicStructReader  # The raw schema node
     superclasses: list[Any]  # List of parent interface schemas
 
@@ -1287,13 +1319,13 @@ class SchemaParser:
     Use the convenience method :func:`load` instead.
     """
 
-    modules_by_id: MutableMapping[int, Any]
+    modules_by_id: MutableMapping[int, Any]  # Maps ID to loaded module
     def load(
         self,
         file_name: str,
         display_name: str | None = None,
         imports: Sequence[str] = [],
-    ) -> Any:
+    ) -> _CapnpModule:
         """Load a Cap'n Proto schema file.
 
         Args:
@@ -1302,9 +1334,15 @@ class SchemaParser:
             imports: List of import paths for resolving imports
 
         Returns:
-            Loaded GeneratedModule
+            Loaded module (types.ModuleType with extra attributes like .schema)
         """
         ...
+    def _parse_disk_file(
+        self,
+        display_name: str,
+        file_name: str,
+        imports: Sequence[str],
+    ) -> _ParsedSchema: ...
 
 class SchemaLoader:
     """Class for constructing Schema objects from schema::Nodes.
@@ -1359,7 +1397,7 @@ def load(
     file_name: str,
     display_name: str | None = None,
     imports: Sequence[str] = [],
-) -> Any:
+) -> _CapnpModule:
     """Load a Cap'n Proto schema from a file.
 
     Args:
@@ -1466,8 +1504,6 @@ class _SchemaType:
     Instances are used for type comparisons and type checking.
     """
 
-types: _CapnpTypesModule
-
 class _DynamicListBuilder:
     """List builder type returned by init() for list fields.
 
@@ -1569,6 +1605,16 @@ class _EventLoop:
 
     Internal class for managing the KJ event loop.
     """
+
+class _EnumModule:
+    """Module/class for a generated enum type.
+
+    Instances of this class are what you get when you access an enum from
+    a loaded schema.
+    """
+
+    schema: _EnumSchema
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
 class _InterfaceModule:
     """Module/class for a generated interface.
@@ -1803,14 +1849,18 @@ __all__ = [
     "_DynamicStructBuilder",
     "_DynamicStructReader",
     "_EventLoop",
+    "_InterfaceMethod",
     "_InterfaceModule",
     "_ListSchema",
     "_MallocMessageBuilder",
+    "_NodeReader",
     "_PackedFdMessageReader",
+    "_ParsedSchema",
     "_PyCustomMessageBuilder",
     "_StreamFdMessageReader",
     "_StructModule",
     "_StructSchema",
+    "_StructSchemaField",
     "_init_capnp_api",
     "_write_message_to_fd",
     "_write_packed_message_to_fd",

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from capnp.lib.capnp import _StructSchema
+    from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _StructSchema
 
     from capnp_stub_generator import helper
     from capnp_stub_generator.scope import CapnpType
@@ -210,7 +210,7 @@ class EnumGenerationContext:
         new_type: The registered CapnpType object
     """
 
-    schema: _StructSchema
+    schema: _EnumSchema
     type_name: str
     protocol_class_name: str
     new_type: CapnpType
@@ -218,7 +218,7 @@ class EnumGenerationContext:
     @classmethod
     def create(
         cls,
-        schema: _StructSchema,
+        schema: _EnumSchema,
         type_name: str,
         new_type: CapnpType,
     ) -> EnumGenerationContext:
@@ -259,7 +259,7 @@ class InterfaceGenerationContext:
         parent_scope: The parent scope for this interface
     """
 
-    schema: _StructSchema
+    schema: _InterfaceSchema
     type_name: str
     protocol_class_name: str
     client_type_name: str
@@ -270,7 +270,7 @@ class InterfaceGenerationContext:
     @classmethod
     def create(
         cls,
-        schema: _StructSchema,
+        schema: _InterfaceSchema,
         type_name: str,
         registered_type: CapnpType,
         base_classes: list[str],

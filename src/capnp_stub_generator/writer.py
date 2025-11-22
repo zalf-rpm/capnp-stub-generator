@@ -10,11 +10,10 @@ import os.path
 import pathlib
 from collections.abc import Sequence
 from copy import copy
-from types import ModuleType
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import capnp
-from capnp.lib.capnp import _DynamicStructReader, _StructSchema
+from capnp.lib.capnp import _DynamicStructReader, _EnumSchema, _InterfaceSchema, _ParsedSchema, _StructSchema
 
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
@@ -70,7 +69,7 @@ class Writer:
 
     def __init__(
         self,
-        module: ModuleType,
+        module: capnp.lib.capnp._CapnpModuleType,
         module_registry: capnp_types.ModuleRegistryType,
         output_directory: str | None = None,
         import_paths: list[str] | None = None,
@@ -1059,11 +1058,11 @@ class Writer:
 
     # ===== Interface Generation Helper Methods =====
 
-    def _collect_interface_base_classes(self, schema: _StructSchema) -> list[str]:
+    def _collect_interface_base_classes(self, schema: _InterfaceSchema) -> list[str]:
         """Collect base classes for an interface (superclasses only).
 
         Args:
-            schema (_StructSchema): The interface schema.
+            schema (_InterfaceSchema): The interface schema.
 
         Returns:
             list[str]: List of base interface module class names (e.g., ["_IdentifiableModule"]).
@@ -1135,11 +1134,11 @@ class Writer:
         # No longer add Protocol - interface modules inherit from _InterfaceModule
         return base_classes
 
-    def _generate_nested_types_for_interface(self, schema: _StructSchema):
+    def _generate_nested_types_for_interface(self, schema: _InterfaceSchema):
         """Generate all nested types for an interface.
 
         Args:
-            schema (_StructSchema): The interface schema.
+            schema (_InterfaceSchema): The interface schema.
         """
         # Build runtime path for this interface (handles nested interfaces)
         # Use self.scope.trace to get the full path including current interface
@@ -1173,12 +1172,12 @@ class Writer:
         # Restore interface scope after generating nested types
         self.scope = interface_scope
 
-    def _add_new_client_method(self, name: str, schema: _StructSchema, client_return_type: str | None = None):
+    def _add_new_client_method(self, name: str, schema: _InterfaceSchema, client_return_type: str | None = None):
         """Add _new_client() class method to create capability client from Server.
 
         Args:
             name (str): The interface name.
-            schema (_StructSchema): The interface schema.
+            schema (_InterfaceSchema): The interface schema.
             client_return_type (str | None): Optional client class name to return (default: interface name).
         """
         scope_path = self._get_scope_path()
@@ -1523,12 +1522,12 @@ class Writer:
             helper.sanitize_name(field.name), [helper.TypeHint(python_type_name, primary=True)]
         )
 
-    def gen_enum_slot(self, field: capnp._DynamicStructReader, schema: _StructSchema) -> helper.TypeHintedVariable:
+    def gen_enum_slot(self, field: capnp._DynamicStructReader, schema: _EnumSchema) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `enum`.
 
         Args:
             field (_DynamicStructReader): The field reader.
-            schema (_StructSchema): The schema of the field.
+            schema (_EnumSchema): The schema of the field.
 
         Returns:
             str: The type-hinted slot.
@@ -1683,11 +1682,11 @@ class Writer:
         self._add_typing_import("Any")
         return helper.TypeHintedVariable(helper.sanitize_name(field.name), [helper.TypeHint("Any", primary=True)])
 
-    def gen_const(self, schema: _StructSchema) -> None:
+    def gen_const(self, schema: _ParsedSchema) -> None:
         """Generate a `const` object.
 
         Args:
-            schema (_StructSchema): The schema to generate the `const` object out of.
+            schema (_ParsedSchema): The schema to generate the `const` object out of.
         """
         assert schema.node.which() == capnp_types.CapnpElementType.CONST
 
@@ -1701,7 +1700,7 @@ class Writer:
         elif const_type == "struct":
             pass
 
-    def gen_enum(self, schema: _StructSchema) -> CapnpType | None:
+    def gen_enum(self, schema: _EnumSchema) -> CapnpType | None:
         """Generate an `enum` object as a class with int attributes.
 
         At runtime, enums are _EnumModule instances with integer attributes.
@@ -1709,7 +1708,7 @@ class Writer:
         then create an instance annotation.
 
         Args:
-            schema (_StructSchema): The schema to generate the `enum` object out of.
+            schema (_EnumSchema): The schema to generate the `enum` object out of.
         """
         assert schema.node.which() == capnp_types.CapnpElementType.ENUM
 
@@ -1846,8 +1845,11 @@ class Writer:
         return context, protocol_declaration
 
     def _resolve_nested_schema(
-        self, nested_node: Any, parent_schema: _StructSchema, parent_type_name: str
-    ) -> _StructSchema | None:
+        self,
+        nested_node: Any,
+        parent_schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema,
+        parent_type_name: str,
+    ) -> _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema | None:
         """Resolve a nested schema from a nested node, with fallback strategies.
 
         Args:
@@ -1858,17 +1860,29 @@ class Writer:
         Returns:
             The nested schema or None if it cannot be resolved
         """
-        try:
+        if isinstance(parent_schema, _ParsedSchema):
             return parent_schema.get_nested(nested_node.name)
-        except Exception:
-            # Fallback: access via runtime module (needed for nested interfaces)
-            try:
-                runtime_parent = getattr(self._module, parent_type_name)
-                runtime_nested = getattr(runtime_parent, nested_node.name)
-                return runtime_nested.schema
-            except Exception as e:
-                logger.debug(f"Could not resolve nested node {nested_node.name}: {e}")
-                return None
+
+        # Fallback: access via runtime module (needed for nested interfaces)
+        try:
+            display_name = parent_schema.node.displayName
+            # Format is "filename:Path.To.Type"
+            if ":" in display_name:
+                _, path = display_name.split(":", 1)
+            else:
+                path = display_name
+
+            # Traverse from module
+            runtime_parent = self._module
+            if path:
+                for part in path.split("."):
+                    runtime_parent = getattr(runtime_parent, part)
+
+            runtime_nested = getattr(runtime_parent, nested_node.name)
+            return runtime_nested.schema
+        except Exception as e:
+            logger.debug(f"Could not resolve nested node {nested_node.name}: {e}")
+            return None
 
     def _generate_nested_types(self, schema: _StructSchema, type_name: str) -> None:
         """Generate all nested types (structs, enums, interfaces) within this struct.
@@ -2162,7 +2176,7 @@ class Writer:
 
     # ===== Interface Generation Helper Methods (Phase 2 Extraction) =====
 
-    def _setup_interface_generation(self, schema: _StructSchema) -> InterfaceGenerationContext | None:
+    def _setup_interface_generation(self, schema: _InterfaceSchema) -> InterfaceGenerationContext | None:
         """Setup interface generation by checking imports and preparing context.
 
         Args:
@@ -2226,7 +2240,8 @@ class Writer:
                     runtime_name = runtime_name[1:-6]  # Remove leading "_" and trailing "Module"
                 runtime_iface = getattr(runtime_iface, runtime_name)
 
-            method_items = runtime_iface.schema.methods.items()
+            iface_schema = cast(_InterfaceSchema, runtime_iface.schema)
+            method_items = iface_schema.methods.items()
 
             return [MethodInfo.from_runtime_method(method_name, method) for method_name, method in method_items]
         except Exception as e:
@@ -2302,7 +2317,7 @@ class Writer:
                     server_type = type_name
                     request_type = type_name
                 except Exception as e:
-                    logger.debug(f"Could not process enum type for {param_name}: {e}")
+                    logger.debug(f"Could not proces enum type for {param_name}: {e}")
                     # Fallback
                     client_type = "int | str"
                     server_type = client_type
@@ -3529,7 +3544,7 @@ class Writer:
             # Empty server class (inherits everything from superclasses)
             self.scope.add("    ...")
 
-    def gen_interface(self, schema: _StructSchema) -> CapnpType | None:
+    def gen_interface(self, schema: _InterfaceSchema) -> CapnpType | None:
         """Generate an `interface` definition using Protocol pattern.
 
         At runtime, interfaces are _InterfaceModule objects with integer attributes.
@@ -3739,7 +3754,7 @@ class Writer:
 
         return context.registered_type
 
-    def _collect_server_base_classes(self, schema: _StructSchema) -> list[str]:
+    def _collect_server_base_classes(self, schema: _InterfaceSchema) -> list[str]:
         """Collect Server base classes for an interface's Server class.
 
         Args:
@@ -3863,11 +3878,11 @@ class Writer:
             # Empty client class (inherits everything from superclasses)
             self.scope.add("    ...")
 
-    def generate_nested(self, schema: _StructSchema) -> None:
+    def generate_nested(self, schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema) -> None:
         """Generate the type for a nested schema.
 
         Args:
-            schema (_StructSchema): The schema to generate types for.
+            schema (SchemaType): The schema to generate types for.
 
         Raises:
             AssertionError: If the schema belongs to an unknown type.
@@ -3878,16 +3893,30 @@ class Writer:
         node_type = schema.node.which()
 
         if node_type == "const":
-            self.gen_const(schema)
+            # Const schemas are always _ParsedSchema
+            if isinstance(schema, _ParsedSchema):
+                self.gen_const(schema)
 
         elif node_type == "struct":
-            self.gen_struct(schema)
+            # Both _ParsedSchema and _StructSchema have as_struct()
+            if isinstance(schema, _ParsedSchema):
+                self.gen_struct(schema.as_struct())
+            elif isinstance(schema, _StructSchema):
+                self.gen_struct(schema)
 
         elif node_type == "enum":
-            self.gen_enum(schema)
+            # Only _ParsedSchema has as_enum()
+            if isinstance(schema, _ParsedSchema):
+                self.gen_enum(schema.as_enum())
+            elif isinstance(schema, _EnumSchema):
+                self.gen_enum(schema)
 
         elif node_type == "interface":
-            self.gen_interface(schema)
+            # Only _ParsedSchema has as_interface()
+            if isinstance(schema, _ParsedSchema):
+                self.gen_interface(schema.as_interface())
+            elif isinstance(schema, _InterfaceSchema):
+                self.gen_interface(schema)
 
         elif node_type == "annotation":
             logger.warning("Skipping annotation: not implemented.")
@@ -3900,13 +3929,15 @@ class Writer:
         for node in self._module.schema.node.nestedNodes:
             self.generate_nested(self._module.schema.get_nested(node.name))
 
-    def register_import(self, schema: _StructSchema) -> CapnpType | None:
+    def register_import(
+        self, schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema
+    ) -> CapnpType | None:
         """Determine, whether a schema is imported from the base module.
 
         If so, the type definition that the schema contains, is added to the type registry.
 
         Args:
-            schema (_StructSchema): The schema to check.
+            schema (SchemaType): The schema to check.
 
         Returns:
             Type | None: The type of the import, if the schema is imported,
@@ -4063,7 +4094,7 @@ class Writer:
     def register_type(
         self,
         type_id: int,
-        schema: _StructSchema,
+        schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema,
         name: str = "",
         scope: Scope | None = None,
     ) -> CapnpType:
@@ -4071,7 +4102,7 @@ class Writer:
 
         Args:
             type_id (int): The identification number of the type.
-            schema (_StructSchema): The schema that defines the type.
+            schema (SchemaType): The schema that defines the type.
             name (str, optional): An name to specify, if overriding the type name. Defaults to "".
             scope (Scope | None, optional): The scope in which the type is defined. Defaults to None.
 

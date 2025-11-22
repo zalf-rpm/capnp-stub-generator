@@ -11,39 +11,11 @@ These are imported by lib/capnp.pyi for type annotations but NOT re-exported.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Literal, Protocol
+import types
 
-from capnp.lib.capnp import _SchemaType
+from .lib.capnp import SchemaParser, _NodeReader, _ParsedSchema, _SchemaType
 
 # Protocol classes for types imported from capnp runtime
-
-class EnumType(Protocol):
-    typeId: int
-
-class StructType(Protocol):
-    typeId: int
-    brand: Any
-
-class InterfaceType(Protocol):
-    typeId: int
-
-class SlotRuntime(Protocol):
-    type: Any
-
-class SchemaNode(Protocol):
-    id: int
-    scopeId: int
-    displayName: str
-    displayNamePrefixLength: int
-    isGeneric: bool
-    nestedNodes: Any
-    parameters: Any
-    struct: Any
-    enum: Any
-    interface: Any
-    const: Any
-    annotation: Any
-    def which(self) -> Literal["interface", "struct", "const", "enum", "annotation"]: ...
 
 class CapnpTypesModule:
     Void: _SchemaType
@@ -61,6 +33,12 @@ class CapnpTypesModule:
     Text: _SchemaType
     Data: _SchemaType
     AnyPointer: _SchemaType
+
+class CapnpModule(types.ModuleType):
+    schema: _ParsedSchema
+    _nodeSchema: _ParsedSchema
+    _nodeProto: _NodeReader
+    _parser: SchemaParser
 
 # Re-export commonly used types
 Server = asyncio.Server

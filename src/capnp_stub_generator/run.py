@@ -11,7 +11,6 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
 
 import capnp
 
@@ -767,7 +766,7 @@ def format_outputs(raw_input: str, is_pyi: bool) -> str:
 
 
 def generate_stubs(
-    module: ModuleType,
+    module: capnp.lib.capnp._CapnpModuleType,
     module_registry: ModuleRegistryType,
     output_file_path: str,
     output_directory: str | None = None,

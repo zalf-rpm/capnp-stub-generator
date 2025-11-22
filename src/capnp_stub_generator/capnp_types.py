@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from types import ModuleType
+import capnp
 
 CAPNP_TYPE_TO_PYTHON = {
     "void": "None",
@@ -40,4 +40,4 @@ class CapnpElementType:
     INTERFACE = "interface"
 
 
-ModuleRegistryType = dict[int, tuple[str, ModuleType]]
+type ModuleRegistryType = dict[int, tuple[str, capnp.lib.capnp._CapnpModuleType]]

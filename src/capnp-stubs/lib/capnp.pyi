@@ -11,29 +11,17 @@ from collections.abc import (
 from contextlib import AbstractContextManager, asynccontextmanager
 from typing import IO, Any, Literal, overload
 
-from capnp._internal import CapnpTypesModule as _CapnpTypesModule
-from capnp._internal import (
-    EnumType as _EnumType,
-)
-from capnp._internal import (
-    InterfaceType as _InterfaceType,
-)
-from capnp._internal import SchemaNode as _SchemaNode
-from capnp._internal import (
-    Server as _Server,
-)
-from capnp._internal import (
-    SlotRuntime as _SlotRuntime,
-)
-from capnp._internal import (
-    StructType as _StructType,
-)
-
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 # Generated imports for project-specific types
 from tests._generated.examples.calculator import calculator_capnp  # type: ignore[import-not-found]
 from tests._generated.examples.restorer import restorer_capnp  # type: ignore[import-not-found]
 from tests._generated.examples.single_value import single_value_capnp  # type: ignore[import-not-found]
+
+from .._internal import CapnpModule as _CapnpModule
+from .._internal import CapnpTypesModule as _CapnpTypesModule
+from .._internal import (
+    Server as _Server,
+)
 
 type AnyPointer = (
     str
@@ -50,6 +38,9 @@ type AnyPointer = (
 type Capability = _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicObjectReader | _DynamicObjectBuilder
 type AnyStruct = _DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder
 type AnyList = _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder
+type _CapnpModuleType = _CapnpModule
+
+types: _CapnpTypesModule
 
 class KjException(Exception):
     """Exception raised by Cap'n Proto operations.
@@ -102,13 +93,45 @@ class KjException(Exception):
         """Convert to a more specific Python exception if appropriate."""
         ...
 
-class _StructSchema:
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+class _StructSchemaField:
+    proto: _DynamicStructReader
+    schema: _StructSchema
+
+class _NodeReader:
+    displayName: str
+    id: int
+    isConst: bool
+    isEnum: bool
+    isInterface: bool
+    isStruct: bool
+    nestedNodes: Any
+    node: _DynamicStructReader
+    scopeId: int
+
+class _ParsedSchema:
     @property
-    def node(self) -> _SchemaNode: ...
-    def which(self) -> str: ...
-    def as_struct(self) -> Any: ...
+    def node(self) -> _DynamicStructReader: ...
+    def get_proto(self) -> _DynamicStructReader: ...
     def get_nested(self, name: str) -> Any: ...
+    def as_const_value(self) -> Any: ...
+    def as_enum(self) -> _EnumSchema: ...
+    def as_interface(self) -> _InterfaceSchema: ...
+    def as_struct(self) -> _StructSchema: ...
+
+class _StructSchema:
+    fields: dict[str, _StructSchemaField]
+    fieldnames: tuple[str, ...]
+    fields_list: list[_StructSchemaField]
+    non_union_fields: tuple[str, ...]
+    union_fields: tuple[str, ...]
+
+    @property
+    def node(self) -> _DynamicStructReader: ...
+    def as_const_value(self) -> Any: ...
+    def as_enum(self) -> _EnumSchema: ...
+    def as_interface(self) -> _InterfaceSchema: ...
+    def as_struct(self) -> _StructSchema: ...
+    def get_proto(self) -> _DynamicStructReader: ...
 
 class _StructModule:
     """Module/class for a generated struct type.
@@ -402,8 +425,6 @@ class _DynamicObjectReader:
     This class wraps the Cap'n Proto C++ DynamicObject::Reader.
     AnyPointer can be cast to different pointer types (struct, list, text, interface).
     """
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @overload
     def as_interface(self, schema: restorer_capnp._AnyTesterModule) -> restorer_capnp.AnyTesterClient: ...
     @overload
@@ -481,7 +502,6 @@ class _DynamicObjectBuilder:
     AnyPointer can be initialized or cast to different pointer types.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> Any:
         """Cast this AnyPointer to an interface capability.
 
@@ -593,19 +613,18 @@ class _DynamicStructReader:
         print(getattr(person, 'field-with-hyphens'))  # for names that are invalid for python
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @property
-    def slot(self) -> _SlotRuntime: ...
+    def slot(self) -> _DynamicStructReader: ...
     @property
     def schema(self) -> _StructSchema: ...
     @property
     def list(self) -> _DynamicListReader: ...
     @property
-    def struct(self) -> _StructType: ...
+    def struct(self) -> _DynamicStructReader: ...
     @property
-    def enum(self) -> _EnumType: ...
+    def enum(self) -> _DynamicStructReader: ...
     @property
-    def interface(self) -> _InterfaceType: ...
+    def interface(self) -> _DynamicStructReader: ...
     @property
     def is_root(self) -> bool: ...
     @property
@@ -622,6 +641,10 @@ class _DynamicStructReader:
 
     def _get(self, field: str) -> Any:
         """Low-level get method for accessing struct fields by name."""
+        ...
+
+    def __getattr__(self, field: str) -> Any:
+        """Access struct fields by name."""
         ...
 
     def _has(self, field: str) -> bool:
@@ -700,7 +723,6 @@ class _DynamicStructBuilder:
     is_root: bool  # True if this is the root struct of a message
     total_size: Any  # Message size information
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @property
     def name(self) -> str: ...
     def which(self) -> str:
@@ -906,9 +928,11 @@ class _EnumSchema:
     """
 
     enumerants: dict[str, int]
-    node: _SchemaNode
+    node: _DynamicStructReader
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+class _InterfaceMethod:
+    param_type: _StructSchema
+    result_type: _StructSchema
 
 class _InterfaceSchema:
     """Schema for interface types, parameterized by the interface type.
@@ -919,12 +943,10 @@ class _InterfaceSchema:
 
     method_names: tuple[str, ...]
     method_names_inherited: set[str]
-    methods: dict[str, Any]  # Maps method name to _InterfaceMethod object
-    methods_inherited: dict[str, Any]  # Maps method name to _InterfaceMethod object
+    methods: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
+    methods_inherited: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
     node: _DynamicStructReader  # The raw schema node
     superclasses: list[Any]  # List of parent interface schemas
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
 class _ListSchema:
     """Schema for list types.
@@ -1005,7 +1027,6 @@ class _CallContext:
 
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def params(self) -> _DynamicStructReader: ...
     def release_params(self) -> None:
         """Release the parameter struct.
@@ -1031,7 +1052,6 @@ class _DynamicCapabilityClient(_CapabilityClient):
     This is the base class for all generated capability client classes.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @property
     def schema(self) -> _InterfaceSchema: ...
     def upcast(self, schema: Any) -> _DynamicCapabilityClient:
@@ -1057,7 +1077,6 @@ class _CapabilityClient:
     Wraps Cap'n Proto capability references.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @overload
     def cast_as(self, schema: calculator_capnp._CalculatorModule) -> calculator_capnp.CalculatorClient: ...
     @overload
@@ -1094,7 +1113,6 @@ class _Promise:
     Can be awaited in async contexts.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def cancel(self) -> None:
         """Cancel the promise."""
         ...
@@ -1106,7 +1124,6 @@ class _RemotePromise(_Promise):
     accessing pipelined capabilities.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def to_dict(
         self,
         verbose: bool = False,
@@ -1139,7 +1156,6 @@ class _DynamicStructPipeline:
         result.field.another_method()  # Pipelined call
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def to_dict(
         self,
         verbose: bool = False,
@@ -1342,14 +1358,13 @@ class SchemaParser:
     Use the convenience method :func:`load` instead.
     """
 
-    modules_by_id: MutableMapping[int, Any]
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+    modules_by_id: MutableMapping[int, Any]  # Maps ID to loaded module
     def load(
         self,
         file_name: str,
         display_name: str | None = None,
         imports: Sequence[str] = [],
-    ) -> Any:
+    ) -> _CapnpModule:
         """Load a Cap'n Proto schema file.
 
         Args:
@@ -1358,16 +1373,21 @@ class SchemaParser:
             imports: List of import paths for resolving imports
 
         Returns:
-            Loaded GeneratedModule
+            Loaded module (types.ModuleType with extra attributes like .schema)
         """
         ...
+    def _parse_disk_file(
+        self,
+        display_name: str,
+        file_name: str,
+        imports: Sequence[str],
+    ) -> _ParsedSchema: ...
 
 class SchemaLoader:
     """Class for constructing Schema objects from schema::Nodes.
 
     Wraps capnproto/c++/src/capnp/schema-loader.h directly.
     """
-    def __init__(self) -> None: ...
     def get(self, id_: int) -> _StructSchema:
         """Get a schema by its ID.
 
@@ -1416,7 +1436,7 @@ def load(
     file_name: str,
     display_name: str | None = None,
     imports: Sequence[str] = [],
-) -> Any:
+) -> _CapnpModule:
     """Load a Cap'n Proto schema from a file.
 
     Args:
@@ -1523,10 +1543,6 @@ class _SchemaType:
     Instances are used for type comparisons and type checking.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-
-types: _CapnpTypesModule
-
 class _DynamicListBuilder:
     """List builder type returned by init() for list fields.
 
@@ -1549,7 +1565,6 @@ class _DynamicListBuilder:
         list_builder[0] = {"field": value}
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def __len__(self) -> int: ...
     def __getitem__(self, index: int) -> Any: ...
     def __setitem__(self, index: int, value: Any) -> None: ...
@@ -1600,7 +1615,6 @@ class _DynamicListReader:
 
     elementType: Any
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def __len__(self) -> int: ...
     def __getitem__(self, index: int) -> Any: ...
     def __iter__(self) -> Iterator[Any]: ...
@@ -1611,8 +1625,6 @@ class _DynamicOrphan:
     An orphan is a message that has been disowned from its parent.
     Don't use this class unless you know what you're doing.
     """
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
 class _DynamicResizableListBuilder:
     """Resizable list builder for Cap'n Proto lists.
@@ -1633,6 +1645,14 @@ class _EventLoop:
     Internal class for managing the KJ event loop.
     """
 
+class _EnumModule:
+    """Module/class for a generated enum type.
+
+    Instances of this class are what you get when you access an enum from
+    a loaded schema.
+    """
+
+    schema: _EnumSchema
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
 class _InterfaceModule:
@@ -1737,7 +1757,6 @@ class AsyncIoStream:
     Provides async I/O operations for Cap'n Proto RPC over TCP and Unix domain sockets.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @staticmethod
     async def create_connection(host: str | None = None, port: int | None = None, **kwargs: Any) -> AsyncIoStream:
         """Create an async TCP connection.
@@ -1869,14 +1888,18 @@ __all__ = [
     "_DynamicStructBuilder",
     "_DynamicStructReader",
     "_EventLoop",
+    "_InterfaceMethod",
     "_InterfaceModule",
     "_ListSchema",
     "_MallocMessageBuilder",
+    "_NodeReader",
     "_PackedFdMessageReader",
+    "_ParsedSchema",
     "_PyCustomMessageBuilder",
     "_StreamFdMessageReader",
     "_StructModule",
     "_StructSchema",
+    "_StructSchemaField",
     "_init_capnp_api",
     "_write_message_to_fd",
     "_write_packed_message_to_fd",
