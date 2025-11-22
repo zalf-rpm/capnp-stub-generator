@@ -62,17 +62,24 @@ def test_server_registry_result_type(zalfmas_stubs):
     server_content = server_match.group(1)
 
     # Find RegistryResult in Server
+    # Now inherits from _DynamicStructBuilder
     result_match = re.search(
-        r"class RegistryResult\(Awaitable\[RegistryResult\], Protocol\):(.*?)(?=\n\s+class)", server_content, re.DOTALL
+        r"class RegistryResult\(_DynamicStructBuilder\):(.*?)(?=\n\s+class)", server_content, re.DOTALL
     )
     assert result_match, "RegistryResult class not found in Server"
     result_content = result_match.group(1)
 
     # Check registry field
-    # For server, it should probably be Server or Client | Server
-    # The user said "a client or server on the server side"
-    # Let's check what we generate currently (likely Any)
-    assert (
-        "registry: _RegistryModule.RegistryClient | _RegistryModule.Server" in result_content
-        or "registry: _RegistryModule.Server" in result_content
-    ), f"Expected RegistryClient | Server, got: {result_content}"
+    # For server, it should be a property with getter and setter
+    # Getter returns Server | Client (or just Server/Client depending on logic)
+    # Setter accepts Server | Client
+
+    # We expect property definition
+    assert "@property" in result_content
+    assert "def registry(self) ->" in result_content
+    assert "@registry.setter" in result_content
+
+    # Check types in getter/setter
+    # The exact order might vary, so check for presence of types
+    assert "_RegistryModule.Server" in result_content
+    assert "_RegistryModule.RegistryClient" in result_content

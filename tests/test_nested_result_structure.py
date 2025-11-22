@@ -53,7 +53,7 @@ class TestNestedResultStructure:
         for line in lines:
             if "class Server(_DynamicCapabilityServer):" in line:
                 in_server = True
-            elif in_server and "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in line:
+            elif in_server and "class EvaluateResult(_DynamicStructBuilder):" in line:
                 found_evaluate_result = True
                 break
             elif (

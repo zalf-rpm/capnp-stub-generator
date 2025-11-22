@@ -98,7 +98,6 @@ class KjException(Exception):
         ...
 
 class _StructSchema:
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @property
     def node(self) -> _SchemaNode: ...
     def which(self) -> str: ...
@@ -398,7 +397,6 @@ class _DynamicObjectReader:
     AnyPointer can be cast to different pointer types (struct, list, text, interface).
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this AnyPointer to an interface capability.
 
@@ -459,7 +457,6 @@ class _DynamicObjectBuilder:
     AnyPointer can be initialized or cast to different pointer types.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> Any:
         """Cast this AnyPointer to an interface capability.
 
@@ -571,7 +568,6 @@ class _DynamicStructReader:
         print(getattr(person, 'field-with-hyphens'))  # for names that are invalid for python
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @property
     def slot(self) -> _SlotRuntime: ...
     @property
@@ -678,7 +674,6 @@ class _DynamicStructBuilder:
     is_root: bool  # True if this is the root struct of a message
     total_size: Any  # Message size information
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @property
     def name(self) -> str: ...
     def which(self) -> str:
@@ -886,8 +881,6 @@ class _EnumSchema:
     enumerants: dict[str, int]
     node: _SchemaNode
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-
 class _InterfaceSchema:
     """Schema for interface types, parameterized by the interface type.
 
@@ -901,8 +894,6 @@ class _InterfaceSchema:
     methods_inherited: dict[str, Any]  # Maps method name to _InterfaceMethod object
     node: _DynamicStructReader  # The raw schema node
     superclasses: list[Any]  # List of parent interface schemas
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
 class _ListSchema:
     """Schema for list types.
@@ -983,7 +974,6 @@ class _CallContext:
 
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def params(self) -> _DynamicStructReader: ...
     def release_params(self) -> None:
         """Release the parameter struct.
@@ -1009,7 +999,6 @@ class _DynamicCapabilityClient(_CapabilityClient):
     This is the base class for all generated capability client classes.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @property
     def schema(self) -> _InterfaceSchema: ...
     def upcast(self, schema: Any) -> _DynamicCapabilityClient:
@@ -1035,7 +1024,6 @@ class _CapabilityClient:
     Wraps Cap'n Proto capability references.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this capability to a specific interface type.
 
@@ -1054,7 +1042,6 @@ class _Promise:
     Can be awaited in async contexts.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def cancel(self) -> None:
         """Cancel the promise."""
         ...
@@ -1066,7 +1053,6 @@ class _RemotePromise(_Promise):
     accessing pipelined capabilities.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def to_dict(
         self,
         verbose: bool = False,
@@ -1099,7 +1085,6 @@ class _DynamicStructPipeline:
         result.field.another_method()  # Pipelined call
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def to_dict(
         self,
         verbose: bool = False,
@@ -1303,7 +1288,6 @@ class SchemaParser:
     """
 
     modules_by_id: MutableMapping[int, Any]
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def load(
         self,
         file_name: str,
@@ -1327,7 +1311,6 @@ class SchemaLoader:
 
     Wraps capnproto/c++/src/capnp/schema-loader.h directly.
     """
-    def __init__(self) -> None: ...
     def get(self, id_: int) -> _StructSchema:
         """Get a schema by its ID.
 
@@ -1483,8 +1466,6 @@ class _SchemaType:
     Instances are used for type comparisons and type checking.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-
 types: _CapnpTypesModule
 
 class _DynamicListBuilder:
@@ -1509,7 +1490,6 @@ class _DynamicListBuilder:
         list_builder[0] = {"field": value}
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def __len__(self) -> int: ...
     def __getitem__(self, index: int) -> Any: ...
     def __setitem__(self, index: int, value: Any) -> None: ...
@@ -1560,7 +1540,6 @@ class _DynamicListReader:
 
     elementType: Any
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def __len__(self) -> int: ...
     def __getitem__(self, index: int) -> Any: ...
     def __iter__(self) -> Iterator[Any]: ...
@@ -1571,8 +1550,6 @@ class _DynamicOrphan:
     An orphan is a message that has been disowned from its parent.
     Don't use this class unless you know what you're doing.
     """
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
 class _DynamicResizableListBuilder:
     """Resizable list builder for Cap'n Proto lists.
@@ -1592,8 +1569,6 @@ class _EventLoop:
 
     Internal class for managing the KJ event loop.
     """
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
 class _InterfaceModule:
     """Module/class for a generated interface.
@@ -1697,7 +1672,6 @@ class AsyncIoStream:
     Provides async I/O operations for Cap'n Proto RPC over TCP and Unix domain sockets.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     @staticmethod
     async def create_connection(host: str | None = None, port: int | None = None, **kwargs: Any) -> AsyncIoStream:
         """Create an async TCP connection.

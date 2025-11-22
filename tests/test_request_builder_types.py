@@ -79,7 +79,7 @@ class TestRequestBuilderStructure:
         assert "class CallRequest(Protocol):" in stub_content
 
         # Should have params field
-        assert "params: Sequence[float]" in stub_content
+        assert "params: Float64ListBuilder | Float64ListReader | Sequence[Any]" in stub_content
 
 
 class TestRequestBuilderSendMethod:

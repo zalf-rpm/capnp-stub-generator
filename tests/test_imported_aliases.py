@@ -87,22 +87,11 @@ def test_imported_return_type_aliases(zalfmas_stubs):
     result_content = result_match.group(1)
 
     # Check removedObjects
-    # Should be Sequence[IdentifiableClient]
-    # IdentifiableClient is an alias for _IdentifiableModule.IdentifiableClient
-
-    # We expect: removedObjects: Sequence[IdentifiableClient]
-    # Or: removedObjects: Sequence[_IdentifiableModule.IdentifiableClient]
-
-    # If we use aliases, it should be IdentifiableClient
+    # Should be IdentifiableClientListReader (alias for _IdentifiableClientList.Reader)
     # IdentifiableClient is imported from common_capnp
 
-    # Note: For client results, it should be Sequence[IdentifiableClient].
-    # For server results (NamedTuple), it might be Sequence[Server | Client].
+    # We expect: removedObjects: IdentifiableClientListReader
 
-    # RemovecategoryResult is a Protocol for Client result.
-    # So it should be Sequence[IdentifiableClient].
-
-    assert (
-        "Sequence[IdentifiableClient]" in result_content
-        or "Sequence[_IdentifiableModule.IdentifiableClient]" in result_content
-    ), f"Expected Sequence[IdentifiableClient], got: {result_content}"
+    assert "removedObjects: IdentifiableClientListReader" in result_content, (
+        f"Expected removedObjects: IdentifiableClientListReader, got: {result_content}"
+    )

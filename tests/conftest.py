@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -49,7 +50,9 @@ def generate_all_stubs():
     logger.info(f"Generating basic schemas from {BASIC_SCHEMAS_DIR}")
     result = subprocess.run(
         [
-            "capnp-stub-generator",
+            sys.executable,
+            "-m",
+            "capnp_stub_generator",
             "-p",
             str(BASIC_SCHEMAS_DIR),
             "-o",
@@ -67,7 +70,9 @@ def generate_all_stubs():
     logger.info(f"Generating example schemas from {EXAMPLES_SCHEMAS_DIR}")
     result = subprocess.run(
         [
-            "capnp-stub-generator",
+            sys.executable,
+            "-m",
+            "capnp_stub_generator",
             "-p",
             str(EXAMPLES_SCHEMAS_DIR),
             "-o",
@@ -86,7 +91,9 @@ def generate_all_stubs():
     logger.info(f"Generating zalfmas schemas from {ZALFMAS_SCHEMAS_DIR}")
     result = subprocess.run(
         [
-            "capnp-stub-generator",
+            sys.executable,
+            "-m",
+            "capnp_stub_generator",
             "-p",
             str(ZALFMAS_SCHEMAS_DIR),
             "-o",

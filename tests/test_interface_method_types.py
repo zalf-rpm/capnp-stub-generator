@@ -64,7 +64,7 @@ class TestCalculatorInterfaceMethodTypes:
 
         # Should have call with Sequence[float] parameter (optional) and CallResult return type
         assert "def call(" in stub_content
-        assert "params: Sequence[float] | None = None" in stub_content
+        assert "params: Float64ListBuilder | Float64ListReader | Sequence[Any] | None = None" in stub_content
         assert ") -> _CalculatorModule._FunctionModule.FunctionClient.CallResult:" in stub_content
 
         # Should NOT have Any for the params parameter
@@ -213,7 +213,7 @@ class TestInterfaceMethodComplexTypes:
         stub_content = stub_file.read_text()
 
         # Function.call takes List(Float64), should be Sequence[float]
-        assert "params: Sequence[float]" in stub_content
+        assert "params: Float64ListBuilder | Float64ListReader | Sequence[Any]" in stub_content
 
         # Should import Sequence
         assert "from collections.abc import" in stub_content

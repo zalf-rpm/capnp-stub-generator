@@ -25,7 +25,7 @@ def test_server_methods_have_signatures(calculator_stub_lines):
 
     # Function.Server should have call method
     assert "class Server(_DynamicCapabilityServer):" in content
-    assert "def call(self, params: Sequence[float], _context:" in content
+    assert "def call(self, params: Float64ListReader, _context:" in content
     assert "Awaitable[" in content  # Server.call returns Awaitable
 
     # Value.Server should have read method with _context parameter and returns NamedTuple with "Tuple" suffix
@@ -99,7 +99,7 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
     # Find Function Protocol's call method (now optional parameters)
     protocol_call_found = False
     for i, line in enumerate(lines):
-        if "def call(self, params: Sequence[float] | None = None)" in line:
+        if "def call(self, params: Float64ListBuilder | Float64ListReader | Sequence[Any] | None = None)" in line:
             # Make sure it's not in a Server class
             context = "".join(lines[max(0, i - 10) : i])
             if "class Server:" not in context:
@@ -112,7 +112,7 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
     # Server parameters remain required for type safety
     # CallContext is now inside Server, so reference is _CalculatorModule._FunctionModule.Server.CallCallContext
     server_call_found = (
-        "def call(self, params: Sequence[float], _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs: dict[str, Any])"
+        "def call(self, params: Float64ListReader, _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs: dict[str, Any])"
         in content
     )
 

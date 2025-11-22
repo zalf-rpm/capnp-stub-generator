@@ -93,7 +93,7 @@ class TestRPCResultTypes:
 
         # call should return _CalculatorModule._FunctionModule.CallResult (which is Awaitable)
         assert (
-            "def call(self, params: Sequence[float] | None = None) -> _CalculatorModule._FunctionModule.FunctionClient.CallResult:"
+            "def call(self, params: Float64ListBuilder | Float64ListReader | Sequence[Any] | None = None) -> _CalculatorModule._FunctionModule.FunctionClient.CallResult:"
             in stub_content
         )
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from collections.abc import Sequence
 
 import capnp
 
@@ -15,7 +14,7 @@ logger.setLevel(logging.DEBUG)
 
 async def evaluate_impl(
     expression: calculator_capnp.ExpressionBuilder | calculator_capnp.ExpressionReader,
-    params: Sequence[float] | None = None,
+    params: calculator_capnp.Float64ListReader | None = None,
 ):
     """Implementation of CalculatorImpl::evaluate(), also shared by
     FunctionImpl::call().  In the latter case, `params` are the parameter

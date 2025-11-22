@@ -1,9 +1,3 @@
-"""Data Transfer Objects for writer.py refactoring.
-
-This module contains cohesive data objects that group related parameters
-and reduce coupling between methods in the Writer class.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -156,7 +150,7 @@ class StructFieldsCollection:
         """Initialize empty collections."""
         self.slot_fields: list[helper.TypeHintedVariable] = []
         self.init_choices: list[InitChoice] = []
-        self.list_init_choices: list[tuple[str, str, bool]] = []
+        self.list_init_choices: list[tuple[str, str]] = []
 
     def add_slot_field(self, field: helper.TypeHintedVariable) -> None:
         """Add a slot field to the collection.
@@ -178,18 +172,17 @@ class StructFieldsCollection:
         """
         self.init_choices.append((field_name, type_name))
 
-    def add_list_init_choice(self, field_name: str, element_type: str, needs_builder: bool) -> None:
+    def add_list_init_choice(self, field_name: str, builder_type: str) -> None:
         """Add an init choice for list fields.
 
         List init choices are used to generate overloaded init() methods that
-        return Sequence[ElementType] or Sequence[ElementTypeBuilder].
+        return the specific List Builder type.
 
         Args:
             field_name: The name of the list field
-            element_type: The element type (without Builder suffix)
-            needs_builder: Whether the element type needs a Builder suffix
+            builder_type: The Builder type for the list (e.g. "_Int32List.Builder")
         """
-        self.list_init_choices.append((field_name, element_type, needs_builder))
+        self.list_init_choices.append((field_name, builder_type))
 
     def __repr__(self) -> str:
         """Return a readable representation for debugging."""

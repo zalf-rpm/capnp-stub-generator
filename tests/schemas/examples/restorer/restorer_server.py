@@ -48,7 +48,7 @@ class AnyTesterImpl(restorer_capnp.AnyTester.Server):
 
 class RestorerImpl(restorer_capnp.Restorer.Server):
     def __init__(self):
-        self.bags = {}
+        self.bags: dict[str, capnp.lib.capnp.Capability] = {}
 
     async def getAnyTester_context(self, context):
         context.results.tester = AnyTesterImpl()

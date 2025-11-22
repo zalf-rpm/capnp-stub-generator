@@ -24,8 +24,8 @@ def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines):
     # Nested struct and enum field annotations (now as properties)
     assert any("def structField(self)" in line and "TestAllTypes" in line for line in lines)
     assert any("def enumField(self)" in line for line in lines)
-    # List field typing includes Sequence (now as properties)
-    assert any("def voidList(self)" in line and "Sequence" in line for line in lines)
+    # List field typing uses specific list classes (now as properties)
+    assert any("def voidList(self) -> VoidListReader" in line for line in lines)
 
 
 def test_builder_reader_classes_for_all_types(dummy_stub_lines):

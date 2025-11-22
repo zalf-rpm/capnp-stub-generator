@@ -50,10 +50,10 @@ def test_list_of_structs_not_any(zalfmas_stubs):
     result_content = result_match.group(1)
 
     # Check cats field
-    # Should be Sequence[IdInformationReader] (or similar alias)
+    # Should be IdInformationListReader (or similar alias)
     # Currently it is Any
     assert "cats: Any" not in result_content, "cats field should not be Any"
-    assert "Sequence[" in result_content, "cats field should be a Sequence"
+    assert "cats: IdInformationListReader" in result_content, "cats field should be IdInformationListReader"
 
 
 def test_list_of_interfaces_types(zalfmas_stubs):
@@ -89,9 +89,8 @@ def test_list_of_interfaces_types(zalfmas_stubs):
     result_content = result_match.group(1)
 
     # Check removedObjects field
-    # Should be Sequence[IdentifiableClient]
+    # Should be IdentifiableClientListReader
     # Currently it is Sequence[_IdentifiableModule] (the protocol/module)
-    assert (
-        "Sequence[_IdentifiableModule.IdentifiableClient]" in result_content
-        or "Sequence[IdentifiableClient]" in result_content
-    ), f"Expected Sequence[IdentifiableClient], got: {result_content}"
+    assert "removedObjects: IdentifiableClientListReader" in result_content, (
+        f"Expected removedObjects: IdentifiableClientListReader, got: {result_content}"
+    )

@@ -8,10 +8,10 @@ from __future__ import annotations
 import logging
 import os.path
 import pathlib
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from copy import copy
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import capnp
 from capnp.lib.capnp import _DynamicStructReader, _StructSchema
@@ -130,6 +130,9 @@ class Writer:
         self._needs_capability_alias = False
         self._needs_anystruct_alias = False
         self._needs_anylist_alias = False
+
+        # Track generated list types to avoid duplicates
+        self._generated_list_types: set[str] = set()
 
         self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
@@ -732,13 +735,13 @@ class Writer:
     def _add_builder_init_overloads(
         self,
         init_choices: list[InitChoice],
-        list_init_choices: list[tuple[str, str, bool]],
+        list_init_choices: list[tuple[str, str]],
     ):
         """Add init method overloads to Builder class.
 
         Args:
             init_choices (list[InitChoice]): List of (field_name, field_type) tuples for struct/group fields.
-            list_init_choices (list[tuple[str, str, bool]]): List of (field_name, element_type, needs_builder) for list fields.
+            list_init_choices (list[tuple[str, str]]): List of (field_name, builder_type) for list fields.
         """
         total_init_overloads = len(init_choices) + len(list_init_choices) if list_init_choices else len(init_choices)
         use_overload = total_init_overloads > 1
@@ -747,8 +750,6 @@ class Writer:
             self._add_typing_import("overload")
         if init_choices or list_init_choices:
             self._add_typing_import("Literal")
-        if list_init_choices:
-            self._add_typing_import("MutableSequence")
 
         # Note: The init() method parameter is now LiteralString in pycapnp stubs
         # This allows our Literal["fieldname"] overloads to be compatible
@@ -779,15 +780,9 @@ class Writer:
             )
 
         # Add init method overloads for lists (properly typed)
-        for field_name, element_type, needs_builder in list_init_choices:
+        for field_name, builder_type in list_init_choices:
             if use_overload:
                 self.scope.add(helper.new_decorator("overload"))
-            # For list element types, try to use flat Builder alias if available
-            if needs_builder:
-                builder_alias = self._get_flat_builder_alias(element_type)
-                element_type_for_list = builder_alias or self._build_scoped_builder_type(element_type)
-            else:
-                element_type_for_list = element_type
 
             # Parameter must be named "field" to match base class
             init_params_list = [
@@ -802,7 +797,7 @@ class Writer:
                 helper.new_function(
                     "init",
                     parameters=init_params_list,
-                    return_type=f"MutableSequence[{element_type_for_list}]",
+                    return_type=builder_type,
                 )
             )
 
@@ -1013,7 +1008,7 @@ class Writer:
         self,
         slot_fields: list[helper.TypeHintedVariable],
         init_choices: list[InitChoice],
-        list_init_choices: list[tuple[str, str, bool]],
+        list_init_choices: list[tuple[str, str]],
         builder_type_name: str,
         reader_type_name: str,
         schema: _StructSchema,
@@ -1028,7 +1023,7 @@ class Writer:
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
             init_choices (list[InitChoice]): Init method overload choices for structs.
-            list_init_choices (list[tuple[str, str, bool]]): Init method overload choices for lists.
+            list_init_choices (list[tuple[str, str]]): Init method overload choices for lists.
             builder_type_name (str): Builder type name (flat alias).
             reader_type_name (str): Reader type name (flat alias).
             schema (_StructSchema): The struct schema.
@@ -1218,13 +1213,173 @@ class Writer:
 
     # ===== Slot Generation Methods =====
 
+    def _generate_list_class(self, type_reader: _DynamicStructReader) -> tuple[str, str, str]:
+        """Generate a specific List class for the given list type reader.
+
+        Args:
+            type_reader: The TypeReader for the list (must be of type LIST).
+
+        Returns:
+            Tuple of (list_class_name, reader_alias, builder_alias).
+        """
+        assert type_reader.which() == capnp_types.CapnpElementType.LIST
+        element_type = type_reader.list.elementType
+        element_which = element_type.which()
+
+        # Determine element types and base name
+        reader_type: str
+        builder_type: str
+        setter_type: str
+        base_name: str
+        has_init = False
+        init_args: list[str] = []
+
+        if element_which == capnp_types.CapnpElementType.STRUCT:
+            # Struct list
+            struct_name = self.get_type_name(element_type)
+            # Use flat aliases if available
+            builder_alias = self._get_flat_builder_alias(struct_name)
+            reader_alias = self._get_flat_reader_alias(struct_name)
+
+            reader_type = reader_alias or self._build_nested_reader_type(struct_name)
+            builder_type = builder_alias or self._build_scoped_builder_type(struct_name)
+
+            # Setter accepts Reader, Builder, or dict
+            setter_type = f"{reader_type} | {builder_type} | dict[str, Any]"
+            self._add_typing_import("Any")
+
+            # Base name for list class (sanitize dots)
+            # Use only the last component to avoid scoped names in list class
+            last_component = struct_name.split(".")[-1]
+            if last_component.startswith("_") and last_component.endswith("Module"):
+                # Clean up protocol names: _CalculatorModule -> Calculator
+                base_name = last_component[1:-6]
+            else:
+                base_name = last_component
+
+            has_init = True
+            # Match base class signature: init(self, index, size=None)
+            init_args = ["self", "index: int", "size: int | None = None"]
+
+        elif element_which == capnp_types.CapnpElementType.LIST:
+            # List of lists
+            inner_list_class, inner_reader_alias, inner_builder_alias = self._generate_list_class(element_type)
+            reader_type = inner_reader_alias
+            builder_type = inner_builder_alias
+
+            # Setter accepts Reader, Builder, or Sequence
+            setter_type = f"{reader_type} | {builder_type} | Sequence[Any]"
+            self._add_typing_import("Sequence")
+            self._add_typing_import("Any")
+
+            base_name = inner_list_class
+            if base_name.startswith("_"):
+                base_name = base_name[1:]  # Remove _ prefix but keep List suffix
+
+            has_init = True
+            # Match base class signature: init(self, index, size=None)
+            # Although size is required for lists, we must match the base signature for type checking
+            init_args = ["self", "index: int", "size: int | None = None"]
+
+        elif element_which == capnp_types.CapnpElementType.ENUM:
+            # Enum list
+            enum_name = self.get_type_name(element_type)
+            reader_type = enum_name
+            builder_type = enum_name
+            setter_type = enum_name
+
+            base_name = enum_name.replace(".", "_")
+
+        elif element_which == capnp_types.CapnpElementType.INTERFACE:
+            # Interface list
+            interface_name = self.get_type_name(element_type)
+            # Use Client alias
+            client_alias = self._get_flat_client_alias(interface_name)
+            if not client_alias:
+                # Try to extract from protocol name
+                parts = interface_name.split(".")
+                last = parts[-1]
+                if last.startswith("_") and last.endswith("Module"):
+                    client_alias = f"{last[1:-6]}Client"
+                else:
+                    client_alias = f"{interface_name}Client"
+
+            reader_type = client_alias
+            builder_type = client_alias
+            setter_type = f"{client_alias} | {interface_name}.Server"
+
+            base_name = client_alias
+
+        elif element_which == capnp_types.CapnpElementType.ANY_POINTER:
+            # AnyPointer list
+            reader_type = "_DynamicObjectReader"
+            builder_type = "_DynamicObjectBuilder"
+            setter_type = "AnyPointer"
+            self._needs_anypointer_alias = True
+            base_name = "AnyPointer"
+
+        else:
+            # Primitive list
+            python_type = capnp_types.CAPNP_TYPE_TO_PYTHON[element_which]
+            reader_type = python_type
+            builder_type = python_type
+            setter_type = python_type
+            base_name = element_which.title()  # e.g. Int32
+
+        # Construct list class name
+        list_class_name = f"_{base_name}List"
+
+        # Register aliases
+        reader_alias = f"{base_name}ListReader"
+        builder_alias = f"{base_name}ListBuilder"
+
+        # Check if already generated
+        if list_class_name in self._generated_list_types:
+            return list_class_name, reader_alias, builder_alias
+
+        self._generated_list_types.add(list_class_name)
+
+        # Register in self._all_type_aliases
+        self._all_type_aliases[reader_alias] = (f"{list_class_name}.Reader", "Reader")
+        self._all_type_aliases[builder_alias] = (f"{list_class_name}.Builder", "Builder")
+
+        # Generate class
+        self._add_typing_import("Iterator")
+        # self._add_typing_import("Sequence")  # Removed as pycapnp lists don't support slicing
+        self._add_typing_import("overload")
+
+        # We need to add this to the ROOT scope
+        root_scope = self.scope.root
+
+        # Reader class
+        root_scope.add(f"class {list_class_name}:")
+        root_scope.add("    class Reader(_DynamicListReader):")
+        root_scope.add("        def __len__(self) -> int: ...")
+        root_scope.add(f"        def __getitem__(self, key: int) -> {reader_type}: ...")
+        root_scope.add(f"        def __iter__(self) -> Iterator[{reader_type}]: ...")
+
+        # Builder class
+        root_scope.add("    class Builder(_DynamicListBuilder):")
+        root_scope.add("        def __len__(self) -> int: ...")
+        root_scope.add(f"        def __getitem__(self, key: int) -> {builder_type}: ...")
+        root_scope.add(f"        def __setitem__(self, key: int, value: {setter_type}) -> None: ...")
+        root_scope.add(f"        def __iter__(self) -> Iterator[{builder_type}]: ...")
+
+        if has_init:
+            init_sig = ", ".join(init_args)
+            root_scope.add(f"        def init({init_sig}) -> {builder_type}: ...")
+
+        root_scope.add("")
+
+        return list_class_name, reader_alias, builder_alias
+
     def gen_slot(
         self,
         raw_field: Any,
         field: Any,
         new_type: CapnpType,
         init_choices: list[InitChoice],
-        list_init_choices: list[tuple[str, str, bool]] | None = None,
+        list_init_choices: list[tuple[str, str]] | None = None,
     ) -> helper.TypeHintedVariable | None:
         """Generates a new type from a slot. Which type, is later determined.
 
@@ -1245,11 +1400,9 @@ class Writer:
             hinted_variable = self.gen_list_slot(field, raw_field.schema)
             # Track list fields for init() overloads
             if list_init_choices is not None and hinted_variable:
-                # Get the element type from the primary type hint
-                element_type = hinted_variable.primary_type_hint.name
-                # Check if this list element type has Builder/Reader variants
-                needs_builder = hinted_variable.has_type_hint_with_builder_affix
-                list_init_choices.append((helper.sanitize_name(field.name), element_type, needs_builder))
+                # Get the Builder type for the list
+                builder_type = hinted_variable.get_type_with_affixes(["Builder"])
+                list_init_choices.append((helper.sanitize_name(field.name), builder_type))
 
         elif field_slot_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
             hinted_variable = self.gen_python_type_slot(field, field_slot_type)
@@ -1336,138 +1489,22 @@ class Writer:
         Returns:
             helper.TypeHintedVariable: The extracted hinted variable object.
         """
+        # Generate the specific list class
+        list_class_name, reader_alias, builder_alias = self._generate_list_class(field.slot.type)
 
-        def schema_elements(
-            schema: capnp._ListSchema,
-        ) -> Iterator[Any]:
-            """An iterator over the schema elements of nested lists.
-
-            Args:
-                schema (_ListSchema): The schema of a list.
-
-            Returns:
-                Iterator[Any]: The next deeper nested list schema.
-            """
-            next_schema_element = schema
-
-            while True:
-                try:
-                    # Use getattr to safely access elementType which may not exist on all schema types
-                    next_element = getattr(next_schema_element, "elementType", None)
-                    if next_element is None:
-                        break
-                    next_schema_element = next_element
-
-                except (AttributeError, capnp.KjException):
-                    break
-
-                else:
-                    yield next_schema_element
-
-        def list_elements(
-            list_: _DynamicStructReader,
-        ) -> Iterator[_DynamicStructReader]:
-            """An iterator over the list elements of nested lists.
-
-            Args:
-                list_ (_DynamicStructReader): A list element.
-
-            Returns:
-                Iterator[_DynamicStructReader]: The next deeper nested list element.
-            """
-            next_list_element = list_
-
-            while True:
-                try:
-                    next_list_element = next_list_element.list.elementType
-
-                except (AttributeError, capnp.KjException):
-                    break
-
-                else:
-                    yield next_list_element
-
-        list_depth: int = 1
-        nested_schema_elements = list(schema_elements(schema))
-        nested_list_elements = list(list_elements(field.slot.type))
-
-        create_extended_types = True
-        new_type = None
-
-        try:
-            last_element = nested_schema_elements[-1]
-
-            self.generate_nested(last_element)
-            list_depth = len(nested_schema_elements)
-            new_type = self.get_type_by_id(last_element.node.id)
-            type_name = new_type.scoped_name
-
-        except (AttributeError, IndexError):
-            # An attribute error indicates that the last element was not registered as a type, as it is a basic type.
-            # An index error indicates that the list is not nested.
-            last_element = nested_list_elements[-1]
-
-            # last_element may be a TypeReader; attempt to access its struct/interface schema.
-            try:
-                # Check if it has the required attributes for a struct schema
-                if hasattr(last_element, "node") and hasattr(last_element, "as_struct"):
-                    if TYPE_CHECKING:
-                        # For type checking, cast via object to satisfy type checker
-                        from typing import cast
-
-                        self.generate_nested(cast(_StructSchema, cast(object, last_element)))
-                    else:
-                        self.generate_nested(last_element)
-                    type_name = self.get_type_name(field.slot.type.list.elementType)
-                else:
-                    raise AttributeError("Not a struct schema")
-            except AttributeError:
-                # This is a built-in type and does not require generation.
-                create_extended_types = False
-                type_name = self.get_type_name(last_element)
-
-            list_depth = len(nested_list_elements)
-
-        self._add_typing_import("Sequence")
-
+        # Create TypeHintedVariable
+        # Primary type is Reader (for read-only access)
         hinted_variable = helper.TypeHintedVariable(
             helper.sanitize_name(field.name),
-            [helper.TypeHint(type_name, primary=True)],
-            nesting_depth=list_depth,
+            [helper.TypeHint(reader_alias, primary=True, flat_alias=True)],
+            nesting_depth=0,  # We handle nesting in the class itself
         )
 
-        # Do not create extended types for enum/interface lists; enums/interfaces
-        # lack builder/reader variants.
-        try:
-            base_list_element = field.slot.type.list.elementType.which()
-        except Exception:
-            base_list_element = None
-        if base_list_element in (
-            capnp_types.CapnpElementType.ENUM,
-            capnp_types.CapnpElementType.INTERFACE,
-        ):
-            create_extended_types = False
+        # Add Builder variant
+        hinted_variable.add_type_hint(helper.TypeHint(builder_alias, affix="Builder", flat_alias=True))
 
-        # Also check if the new_type (when registered) is an interface
-        try:
-            if new_type and new_type.schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
-                create_extended_types = False
-        except Exception:
-            pass
-
-        if create_extended_types:
-            # Try to use flat TypeAliases for Builder/Reader if available
-            builder_alias = self._get_flat_builder_alias(type_name)
-            reader_alias = self._get_flat_reader_alias(type_name)
-
-            if builder_alias and reader_alias:
-                # Use flat aliases with affix only for lookup (flat_alias=True prevents appending affix)
-                hinted_variable.add_type_hint(helper.TypeHint(builder_alias, affix="Builder", flat_alias=True))
-                hinted_variable.add_type_hint(helper.TypeHint(reader_alias, affix="Reader", flat_alias=True))
-            else:
-                # Fall back to scoped names with affixes (old behavior)
-                hinted_variable.add_builder_from_primary_type()
-                hinted_variable.add_reader_from_primary_type()
+        # Add Reader variant explicitly
+        hinted_variable.add_type_hint(helper.TypeHint(reader_alias, affix="Reader", flat_alias=True))
 
         return hinted_variable
 
@@ -2289,17 +2326,22 @@ class Writer:
                     server_type = reader_type
                     request_type = builder_type  # Request fields use Builder type
 
-            # Handle LIST: check for struct lists
+            # Handle LIST: use generated list aliases
             elif field_type == capnp_types.CapnpElementType.LIST:
+                # Generate list class and get aliases
+                _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
+
                 self._add_typing_import("Sequence")
-                element_type = field_obj.slot.type.list.elementType.which()
-                if element_type == capnp_types.CapnpElementType.STRUCT:
-                    # Get element type name
-                    elem_type_name = self.get_type_name(field_obj.slot.type.list.elementType)
-                    elem_reader_type = self._build_nested_reader_type(elem_type_name)
-                    client_type = f"Sequence[{elem_type_name}] | Sequence[dict[str, Any]]"
-                    server_type = f"Sequence[{elem_reader_type}]"
-                    request_type = client_type
+                self._add_typing_import("Any")
+
+                # Client accepts Builder, Reader, or Sequence (list/tuple)
+                client_type = f"{builder_alias} | {reader_alias} | Sequence[Any]"
+
+                # Server receives Reader
+                server_type = reader_alias
+
+                # Request builder accepts same as client
+                request_type = client_type
 
             # Handle INTERFACE: use Client alias if available
             elif field_type == capnp_types.CapnpElementType.INTERFACE:
@@ -2391,7 +2433,7 @@ class Writer:
         self,
         method_info: MethodInfo,
         parameters: list[ParameterInfo],
-    ) -> list[tuple[str, str, bool]]:
+    ) -> list[tuple[str, str]]:
         """Extract list parameters that need init() overloads.
 
         Args:
@@ -2399,7 +2441,7 @@ class Writer:
             parameters: List of processed parameters
 
         Returns:
-            List of (field_name, element_type, needs_builder) tuples
+            List of (field_name, list_builder_type) tuples
         """
         list_params = []
 
@@ -2411,10 +2453,9 @@ class Writer:
                 field_obj = next(f for f in method_info.param_schema.node.struct.fields if f.name == param.name)
 
                 if field_obj.slot.type.which() == capnp_types.CapnpElementType.LIST:
-                    element_type_obj = field_obj.slot.type.list.elementType
-                    element_type_name = self.get_type_name(element_type_obj)
-                    needs_builder = element_type_obj.which() == capnp_types.CapnpElementType.STRUCT
-                    list_params.append((param.name, element_type_name, needs_builder))
+                    # Generate list class and get aliases
+                    _, _, builder_alias = self._generate_list_class(field_obj.slot.type)
+                    list_params.append((param.name, builder_alias))
             except Exception:
                 continue
 
@@ -2522,20 +2563,11 @@ class Writer:
 
             # Add list init overloads
             if list_params:
-                self._add_typing_import("MutableSequence")
-                for field_name, element_type, needs_builder in list_params:
+                for field_name, list_builder_type in list_params:
                     lines.append("    @overload")
-                    if needs_builder:
-                        # Extract module path from type name (e.g., "_MetadataModule._EntryModule" from "_MetadataModule._EntryModule.Entry")
-                        parts = element_type.rsplit(".", 1)
-                        module_path = parts[0] if len(parts) > 1 else element_type
-                        builder_alias = self._get_flat_builder_alias(module_path)
-                        element_type_for_list = builder_alias or self._build_scoped_builder_type(element_type)
-                    else:
-                        element_type_for_list = element_type
                     lines.append(
                         f'    def init(self, name: Literal["{field_name}"], '
-                        f"size: int = ...) -> MutableSequence[{element_type_for_list}]: ..."
+                        f"size: int = ...) -> {list_builder_type}: ..."
                     )
 
             # Add struct init overloads
@@ -2669,31 +2701,15 @@ class Writer:
                             else:
                                 field_type = client_type
                         elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                            # For lists of structs, accept both Builder and Reader for elements
-                            element_type_obj = field_obj.slot.type.list.elementType
-                            if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
-                                element_type_name = self.get_type_name(element_type_obj)
-                                element_builder = self._build_nested_builder_type(element_type_name)
-                                element_reader = self._build_nested_reader_type(element_type_name)
+                            # Generate list class and get aliases
+                            _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
 
-                                # For client methods, try to use flat type aliases if defined in this module
-                                builder_alias = self._get_flat_builder_alias(element_type_name)
-                                reader_alias = self._get_flat_reader_alias(element_type_name)
-
-                                if not for_server:
-                                    # Client receives Reader only
-                                    if reader_alias:
-                                        element_type_replacement = reader_alias
-                                    else:
-                                        element_type_replacement = element_reader
-                                else:
-                                    # Server returns Builder | Reader
-                                    if builder_alias and reader_alias:
-                                        element_type_replacement = f"{builder_alias} | {reader_alias}"
-                                    else:
-                                        element_type_replacement = f"{element_builder} | {element_reader}"
-
-                                field_type = field_type.replace(element_type_name, element_type_replacement)
+                            if not for_server:
+                                # Client receives Reader only
+                                field_type = reader_alias
+                            else:
+                                # Server returns Builder | Reader
+                                field_type = f"{builder_alias} | {reader_alias}"
 
                         lines.append(f"    {rf}: {field_type}")
                     except Exception:
@@ -2721,9 +2737,19 @@ class Writer:
         lines = []
         result_class_name = result_type
 
-        # Class declaration - Protocol that is Awaitable and has result fields
-        self._add_typing_import("Awaitable")
-        lines.append(f"class {result_class_name}(Awaitable[{result_class_name}], Protocol):")
+        # Class declaration
+        if for_server:
+            # Server results are builders (mutable), so they inherit from _DynamicStructBuilder
+            # They are NOT Awaitable (context.results is not a promise)
+            # They are NOT Protocols (they are concrete builder wrappers in this stub)
+            lines.append(f"class {result_class_name}(_DynamicStructBuilder):")
+        else:
+            # Client results are promises (Awaitable) and Protocols
+            self._add_typing_import("Awaitable")
+            lines.append(f"class {result_class_name}(Awaitable[{result_class_name}], Protocol):")
+
+        # Collect fields for init() method generation (server only)
+        init_fields: list[tuple[str, str]] = []
 
         # Add result fields with Builder | Reader types for structs
         if method_info.result_schema is not None:
@@ -2734,6 +2760,12 @@ class Writer:
 
                     # For struct types, accept both Builder and Reader in Result Protocol
                     field_type_enum = field_obj.slot.type.which()
+
+                    # Initialize variables to avoid unbound errors
+                    builder_alias = None
+                    reader_alias = None
+                    builder_type = None
+                    reader_type = None
 
                     # For AnyPointer: different types for client vs server
                     if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
@@ -2787,8 +2819,12 @@ class Writer:
                             # Server returns Builder | Reader
                             if builder_alias and reader_alias:
                                 field_type = f"{builder_alias} | {reader_alias}"
+                                # Add to init fields
+                                init_fields.append((rf, builder_alias))
                             else:
                                 field_type = f"{builder_type} | {reader_type}"
+                                # Add to init fields
+                                init_fields.append((rf, builder_type))
                     elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                         # For interface types, use the nested Client class
                         # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
@@ -2809,80 +2845,68 @@ class Writer:
                         else:
                             field_type = client_type
                     elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                        # For lists of structs, accept both Builder and Reader for elements
-                        element_type_obj = field_obj.slot.type.list.elementType
-                        if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
-                            element_type_name = self.get_type_name(element_type_obj)
-                            element_builder = self._build_nested_builder_type(element_type_name)
-                            element_reader = self._build_nested_reader_type(element_type_name)
+                        # Generate list class and get aliases
+                        _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
 
-                            # For client methods, try to use flat type aliases if defined in this module
-                            builder_alias = self._get_flat_builder_alias(element_type_name)
-                            reader_alias = self._get_flat_reader_alias(element_type_name)
+                        if not for_server:
+                            # Client receives Reader only
+                            field_type = reader_alias
+                        else:
+                            # Server returns Builder | Reader
+                            field_type = f"{builder_alias} | {reader_alias}"
+                            # Add to init fields
+                            init_fields.append((rf, builder_alias))
 
-                            if not for_server:
-                                # Client receives Reader only
-                                if reader_alias:
-                                    element_type_replacement = reader_alias
-                                else:
-                                    element_type_replacement = element_reader
-                            else:
-                                # Server returns Builder | Reader
-                                if builder_alias and reader_alias:
-                                    element_type_replacement = f"{builder_alias} | {reader_alias}"
-                                else:
-                                    element_type_replacement = f"{element_builder} | {element_reader}"
+                    if for_server:
+                        # For server, generate properties with setters
+                        # Getter returns Builder (or specific type)
+                        # Setter accepts Builder | Reader | Sequence (for lists) | dict (for structs)
 
-                            field_type = field_type.replace(element_type_name, element_type_replacement)
-                        elif element_type_obj.which() == capnp_types.CapnpElementType.INTERFACE:
-                            element_type_name = self.get_type_name(element_type_obj)
+                        getter_type = field_type
+                        setter_type = field_type
 
-                            # Process interface type similar to above
-                            parts = element_type_name.split(".")
-                            last_part = parts[-1]
-                            if last_part.startswith("_") and last_part.endswith("Module"):
-                                user_facing_name = last_part[1:-6]
-                                client_type = f"{element_type_name}.{user_facing_name}Client"
-                                server_type = f"{element_type_name}.Server"
-                            else:
-                                # Try to use alias if available
-                                client_alias = self._get_flat_client_alias(element_type_name)
-                                if client_alias:
-                                    client_type = client_alias
-                                else:
-                                    # Fallback: try to extract name from module name
-                                    # e.g. _IdentifiableModule -> IdentifiableClient
-                                    parts = element_type_name.split(".")
-                                    last_part = parts[-1]
-                                    if last_part.startswith("_") and last_part.endswith("Module"):
-                                        base_name = last_part[1:-6]
-                                        client_type = f"{base_name}Client"
-                                    else:
-                                        client_type = f"{element_type_name}Client"
-                                server_type = f"{element_type_name}.Server"
+                        if field_type_enum == capnp_types.CapnpElementType.LIST:
+                            # Getter returns Builder
+                            getter_type = builder_alias
+                            # Setter accepts Builder | Reader | Sequence
+                            self._add_typing_import("Sequence")
+                            self._add_typing_import("Any")
+                            setter_type = f"{builder_alias} | {reader_alias} | Sequence[Any]"
+                        elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
+                            # Getter returns Builder
+                            # builder_alias might be None if not defined in this module
+                            # builder_type is always defined for structs
+                            b_type = builder_alias if builder_alias else builder_type
+                            getter_type = b_type
+                            # Setter accepts Builder | Reader | dict
+                            self._add_typing_import("Any")
+                            setter_type = f"{field_type} | dict[str, Any]"
 
-                            # Debug logging
-                            # logger.debug(f"Interface list element: {element_type_name} -> {client_type} (server={for_server})")
-
-                            if for_server:
-                                element_type_replacement = f"{server_type} | {client_type}"
-                            else:
-                                element_type_replacement = client_type
-
-                            # If we have an alias, we should just use it as the element type.
-                            # field_type was constructed as "Sequence[{element_type_name}]" earlier.
-
-                            # So we can just reconstruct it.
-                            field_type = f"Sequence[{element_type_replacement}]"
-
-                            # Debug logging
-                            # logger.debug(f"Replaced list element type: {element_type_name} -> {element_type_replacement}")
-                            # logger.debug(f"New field type: {field_type}")
-
-                    lines.append(f"    {rf}: {field_type}")
+                        lines.append("    @property")
+                        lines.append(f"    def {rf}(self) -> {getter_type}: ...")
+                        lines.append(f"    @{rf}.setter")
+                        lines.append(f"    def {rf}(self, value: {setter_type}) -> None: ...")
+                    else:
+                        lines.append(f"    {rf}: {field_type}")
                 except Exception as e:
                     logger.warning(f"Could not get field type for {rf}: {e}")
                     lines.append(f"    {rf}: Any")
+
+            # Add init() methods for server results
+            if for_server and init_fields:
+                self._add_typing_import("overload")
+                self._add_typing_import("Literal")
+                self._add_typing_import("Any")
+
+                for field_name, return_type in init_fields:
+                    lines.append("    @overload")
+                    lines.append(
+                        f'    def init(self, field: Literal["{field_name}"], size: int | None = None) -> {return_type}: ...'
+                    )
+
+                # Catch-all init
+                lines.append("    @overload")
+                lines.append("    def init(self, field: str, size: int | None = None) -> Any: ...")
 
         return lines
 
@@ -3026,45 +3050,11 @@ class Writer:
                     field_type = f"{server_type} | {client_type}"
 
                 elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                    # For lists of structs, accept both Builder and Reader for elements
-                    element_type_obj = field_obj.slot.type.list.elementType
-                    if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
-                        element_type_name = self.get_type_name(element_type_obj)
-                        element_builder = self._build_nested_builder_type(element_type_name)
-                        element_reader = self._build_nested_reader_type(element_type_name)
+                    # Generate list class and get aliases
+                    _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
 
-                        # For client methods, try to use flat type aliases if defined in this module
-                        builder_alias = self._get_flat_builder_alias(element_type_name)
-                        reader_alias = self._get_flat_reader_alias(element_type_name)
-
-                        # NamedTuples are always for Server
-                        if builder_alias and reader_alias:
-                            element_type_replacement = f"{builder_alias} | {reader_alias}"
-                        else:
-                            element_type_replacement = f"{element_builder} | {element_reader}"
-
-                        field_type = field_type.replace(element_type_name, element_type_replacement)
-                    elif element_type_obj.which() == capnp_types.CapnpElementType.INTERFACE:
-                        element_type_name = self.get_type_name(element_type_obj)
-
-                        # Process interface type similar to above
-                        parts = element_type_name.split(".")
-                        last_part = parts[-1]
-                        if last_part.startswith("_") and last_part.endswith("Module"):
-                            user_facing_name = last_part[1:-6]
-                            client_type = f"{element_type_name}.{user_facing_name}Client"
-                            server_type = f"{element_type_name}.Server"
-                        else:
-                            # Try to use alias if available
-                            client_alias = self._get_flat_client_alias(element_type_name)
-                            if client_alias:
-                                client_type = client_alias
-                            else:
-                                client_type = f"{element_type_name}Client"
-                            server_type = f"{element_type_name}.Server"
-
-                        element_type_replacement = f"{server_type} | {client_type}"
-                        field_type = field_type.replace(element_type_name, element_type_replacement)
+                    # NamedTuples are always for Server, so we use Builder | Reader
+                    field_type = f"{builder_alias} | {reader_alias}"
 
                 # Sanitize field name to avoid conflicts with tuple methods
                 sanitized_name = self._sanitize_namedtuple_field_name(field_name)

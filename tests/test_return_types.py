@@ -75,9 +75,9 @@ class TestStructReturnTypes:
         """List fields should follow the same narrowing pattern."""
         content = dummy_stub_file.read_text()
 
-        # With flat type aliases, check for Sequence[TestAllTypesReader]
-        assert "def structList(self) -> Sequence[TestAllTypesReader]:" in content, (
-            "Reader class list should be Sequence[TestAllTypesReader]"
+        # With flat type aliases, check for TestAllTypesListReader
+        assert "def structList(self) -> TestAllTypesListReader:" in content, (
+            "Reader class list should be TestAllTypesListReader"
         )
 
 

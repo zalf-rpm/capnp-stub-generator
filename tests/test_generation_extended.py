@@ -26,16 +26,18 @@ def test_primitives_and_lists_imports_and_types():
     content = "".join(lines)
     assert "from __future__ import annotations" in content
     # Sequence and MutableSequence appear (list fields) from collections.abc
-    assert "from collections.abc import" in content
-    assert "Sequence" in content
-    assert "MutableSequence" in content
+    # Note: With specific list classes, Sequence is only used for nested lists or setters
+    # assert "from collections.abc import" in content
+    # assert "Sequence" in content
+    # assert "MutableSequence" in content
     # Literal now appears for list init overloads, overload appears for typed init methods
     assert "from typing import" in content
     assert "Literal" in content
     assert "overload" in content
     # Basic field annotations present (now as properties)
     assert any("def aBool(self) -> bool" in line for line in lines)
-    assert any("def ints(self) -> Sequence[int]" in line for line in lines)
+    # List fields use specific list classes
+    assert any("def ints(self) -> Int32ListReader" in line for line in lines)
 
 
 def test_nested_enum_and_literal_and_overload():
@@ -44,8 +46,8 @@ def test_nested_enum_and_literal_and_overload():
     # Enum should now be a simple class with int annotations
     assert any(re.match(r"^\s*class _KindModule:", line) for line in lines)
     assert any("Kind: _KindModule" in line for line in lines)
-    # Sequence import still expected for list fields
-    assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
+    # Sequence import still expected for list fields (only for nested lists or setters)
+    # assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
     # Now overload is expected (for list init overloads)
     assert any("overload" in line for line in lines if line.startswith("from typing import"))
 

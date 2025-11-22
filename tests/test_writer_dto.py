@@ -128,26 +128,26 @@ class TestStructFieldsCollection:
         """Test adding list init choices."""
         collection = StructFieldsCollection()
 
-        collection.add_list_init_choice("phones", "PhoneNumber", needs_builder=True)
+        collection.add_list_init_choice("phones", "PhoneNumberBuilder")
 
         assert len(collection.list_init_choices) == 1
-        assert collection.list_init_choices[0] == ("phones", "PhoneNumber", True)
+        assert collection.list_init_choices[0] == ("phones", "PhoneNumberBuilder")
 
     def test_add_list_init_choice_without_builder(self):
         """Test adding list init choice for primitive types."""
         collection = StructFieldsCollection()
 
-        collection.add_list_init_choice("numbers", "int", needs_builder=False)
+        collection.add_list_init_choice("numbers", "int")
 
         assert len(collection.list_init_choices) == 1
-        assert collection.list_init_choices[0] == ("numbers", "int", False)
+        assert collection.list_init_choices[0] == ("numbers", "int")
 
     def test_repr(self):
         """Test string representation for debugging."""
         collection = StructFieldsCollection()
         collection.add_slot_field(Mock(spec=helper.TypeHintedVariable))
         collection.add_init_choice("field1", "Type1")
-        collection.add_list_init_choice("field2", "Type2", True)
+        collection.add_list_init_choice("field2", "Type2")
 
         repr_str = repr(collection)
 
@@ -168,10 +168,10 @@ class TestStructFieldsCollection:
         collection.add_slot_field(field1)
         collection.add_init_choice("address", "Address")
         collection.add_slot_field(field2)
-        collection.add_list_init_choice("emails", "str", False)
+        collection.add_list_init_choice("emails", "str")
         collection.add_slot_field(field3)
         collection.add_init_choice("company", "Company")
-        collection.add_list_init_choice("phones", "PhoneNumber", True)
+        collection.add_list_init_choice("phones", "PhoneNumber")
 
         # Verify final state
         assert len(collection.slot_fields) == 3
@@ -180,7 +180,7 @@ class TestStructFieldsCollection:
 
         # Verify order is preserved
         assert collection.init_choices == [("address", "Address"), ("company", "Company")]
-        assert collection.list_init_choices == [("emails", "str", False), ("phones", "PhoneNumber", True)]
+        assert collection.list_init_choices == [("emails", "str"), ("phones", "PhoneNumber")]
 
 
 class TestIntegration:
