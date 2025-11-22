@@ -6,7 +6,9 @@ import keyword
 from collections.abc import Sequence
 from copy import copy
 from dataclasses import dataclass, field
-from typing import Any
+from typing import override
+
+from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _ParsedSchema, _StructSchema
 
 BUILDER_NAME = "Builder"
 READER_NAME = "Reader"
@@ -122,6 +124,7 @@ class TypeHint:
     primary: bool = False
     flat_alias: bool = False  # If True, name is already a flat alias and affix is only for lookup
 
+    @override
     def __str__(self) -> str:
         """The string representation of the type hint.
 
@@ -172,6 +175,7 @@ class TypeHintedVariable:
         if primary_type_hint_count != 1:
             raise ValueError(f"There can only be exactly one primary type hint. Found {primary_type_hint_count}")
 
+    @override
     def __str__(self) -> str:
         """String representation of this object.
 
@@ -454,21 +458,13 @@ def new_property(name: str, return_type: str, with_setter: bool = False, setter_
     # conflict with actual Cap'n Proto field names, but pyright treats them as conflicts
     PYCAPNP_RESERVED_NAMES = {"struct", "list", "enum", "interface", "slot", "name", "schema"}
 
-    lines = []
+    lines: list[str] = []
 
-    # Add pyright ignore comment after the ellipsis for reserved names
-    # This is the only place that works reliably, even when code formatters split the function across lines
-    ignore_comment = (
-        "  # pyright: ignore[reportIncompatibleVariableOverride,reportIncompatibleMethodOverride]"
-        if name in PYCAPNP_RESERVED_NAMES
-        else ""
-    )
-
-    lines.extend(["@property", f"def {name}(self) -> {return_type}: ...{ignore_comment}"])
+    lines.extend(["@property", f"def {name}(self) -> {return_type}: ..."])
 
     if with_setter:
         param_type = setter_type if setter_type is not None else return_type
-        lines.extend([f"@{name}.setter", f"def {name}(self, value: {param_type}) -> None: ...{ignore_comment}"])
+        lines.extend([f"@{name}.setter", f"def {name}(self, value: {param_type}) -> None: ..."])
 
     return lines
 
@@ -495,7 +491,7 @@ def new_class_declaration(name: str, parameters: Sequence[str] | None = None) ->
         return f"class {name}:"
 
 
-def get_display_name(schema: Any) -> str:
+def get_display_name(schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema) -> str:
     """Extract the display name from a schema.
 
     Args:

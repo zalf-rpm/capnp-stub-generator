@@ -29,6 +29,16 @@ capnp-stub-generator = "capnp_stub_generator.cli:main"
 
 [tool.setuptools]
 packages = ["capnp_stub_generator"]
+[tool.basedpyright]
+reportExplicitAny = "none"
+reportPrivateUsage = "none"
+reportIncompatibleVariableOverride = "none"
+reportIncompatibleMethodOverride = "none"
+
+[tool.pyright]
+reportPrivateUsage = "none"
+reportIncompatibleVariableOverride = "none"
+reportIncompatibleMethodOverride = "none"
 
 [tool.poetry]
 packages = [
