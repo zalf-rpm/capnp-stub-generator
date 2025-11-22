@@ -479,14 +479,6 @@ class Writer:
             )
         )
 
-    def _add_write_methods(self):
-        """Add write and write_packed static methods to current scope."""
-        self._add_import("from io import BufferedWriter")
-
-        file_param = helper.TypeHintedVariable("file", [helper.TypeHint("BufferedWriter", primary=True)])
-
-        self._add_static_method("write", [file_param])
-        self._add_static_method("write_packed", [file_param])
 
     def _add_static_method(
         self,
@@ -666,14 +658,6 @@ class Writer:
                 ):
                     self.scope.add(line)
 
-    def _add_base_properties(self, slot_fields: list[helper.TypeHintedVariable]):
-        """Add read-only properties to base struct class.
-
-        Args:
-            slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
-        """
-        self._add_properties(slot_fields, "base")
-
     def _add_reader_properties(self, slot_fields: list[helper.TypeHintedVariable]):
         """Add read-only properties to Reader class.
 
@@ -689,47 +673,6 @@ class Writer:
             slot_fields (list[helper.TypeHintedVariable]): The fields to add as properties.
         """
         self._add_properties(slot_fields, "builder")
-
-    def _add_base_init_overloads(self, init_choices: list[InitChoice]):
-        """Add init method overloads to base struct class.
-
-        Args:
-            init_choices (list[InitChoice]): List of (field_name, field_type) tuples for overloads.
-        """
-        if not init_choices:
-            return
-
-        self._add_typing_import("Literal")
-        self._add_typing_import("Any")
-        use_overload = len(init_choices) > 1
-        if use_overload:
-            self._add_typing_import("overload")
-
-        for field_name, field_type in init_choices:
-            if use_overload:
-                self.scope.add(helper.new_decorator("overload"))
-
-            self.scope.add(
-                helper.new_function(
-                    "init",
-                    parameters=["self", f'name: Literal["{field_name}"]'],
-                    return_type=field_type,
-                )
-            )
-
-        # Add catch-all implementation (required when using @overload)
-        if use_overload:
-            self.scope.add(
-                helper.new_function(
-                    "init",
-                    parameters=[
-                        helper.TypeHintedVariable("self", [helper.TypeHint("Any", primary=True)]),
-                        helper.TypeHintedVariable("name", [helper.TypeHint("str", primary=True)]),
-                        helper.TypeHintedVariable("size", [helper.TypeHint("int", primary=True)], default="..."),
-                    ],
-                    return_type="Any",
-                )
-            )
 
     def _add_builder_init_overloads(
         self,
@@ -2248,31 +2191,6 @@ class Writer:
             logger.debug(f"Could not enumerate methods for {context.type_name}: {e}")
             return []
 
-    def _add_enum_literal_union(self, field_obj, base_type: str) -> str:
-        """Add Literal union for enum types.
-
-        Args:
-            field_obj: The field object containing enum type info
-            base_type: The base enum type name
-
-        Returns:
-            Type string with Literal union added, or base_type if failed
-        """
-        try:
-            enum_type_id = field_obj.slot.type.enum.typeId
-            enum_type = self.get_type_by_id(enum_type_id)
-
-            if enum_type and enum_type.schema:
-                enum_values = [e.name for e in enum_type.schema.node.enum.enumerants]
-                literal_values = ", ".join(f'"{v}"' for v in enum_values)
-                literal_type = f"Literal[{literal_values}]"
-                self._add_typing_import("Literal")
-                return f"{base_type} | {literal_type}"
-        except Exception as e:
-            logger.debug(f"Could not add enum literals: {e}")
-
-        return base_type
-
     def _process_method_parameter(
         self,
         param_name: str,
@@ -3444,7 +3362,6 @@ class Writer:
 
         # Generate server method signature
         server_sig = self._generate_server_method_signature(method_info, parameters, result_type)
-        collection.set_server_method(server_sig)
         server_collection.add_server_method(server_sig)
 
         # Generate server _context variant method signature
@@ -3831,53 +3748,6 @@ class Writer:
             # Empty client class (inherits everything from superclasses and has no Results)
             self.scope.add("    ...")
 
-    def _generate_client_class(
-        self,
-        context: InterfaceGenerationContext,
-        client_method_lines: list[str],
-        request_helper_lines: list[str],
-        server_base_classes: list[str],
-    ) -> None:
-        """Generate the Client Protocol class with all client methods.
-
-        Args:
-            context: The interface generation context
-            client_method_lines: List of client method lines to add
-            request_helper_lines: List of request helper method lines to add
-            server_base_classes: List of server base classes for inheritance resolution
-        """
-        client_class_name = context.client_type_name
-
-        # Build client base classes - inherit from superclass Clients
-        client_base_classes = []
-        has_parent_clients = False
-        for server_base in server_base_classes:
-            # Extract protocol name from Server type and build nested Client type
-            # e.g., "_IdentifiableModule.Server" -> "_IdentifiableModule.IdentifiableClient"
-            if ".Server" in server_base:
-                protocol_name = server_base.replace(".Server", "")
-                # Extract interface name from protocol name: _IdentifiableModule -> Identifiable
-                interface_name = protocol_name.split(".")[-1].replace("_", "").replace("Module", "")
-                client_base_classes.append(f"{protocol_name}.{interface_name}Client")
-                has_parent_clients = True
-
-        # Always inherit from _DynamicCapabilityClient as the base
-        if not has_parent_clients:
-            client_base_classes.insert(0, "_DynamicCapabilityClient")
-
-        # Generate Client class declaration
-        self.scope.add(helper.new_class_declaration(client_class_name, client_base_classes))
-
-        # Add client methods and request helpers with proper indentation
-        all_method_lines = client_method_lines + request_helper_lines
-        if all_method_lines:
-            for line in all_method_lines:
-                # Methods come without indentation, add class-level indentation
-                self.scope.add(f"    {line}")
-        else:
-            # Empty client class (inherits everything from superclasses)
-            self.scope.add("    ...")
-
     def generate_nested(self, schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema) -> None:
         """Generate the type for a nested schema.
 
@@ -4076,20 +3946,6 @@ class Writer:
 
         # This line should not be reached now since all branches return
         raise RuntimeError(f"Unexpected code path for import {definition_name}")
-
-    def register_type_var(self, name: str) -> str:
-        """Find and register the full name of a type variable, which includes its scopes.
-
-        Args:
-            name (str): The type name to register.
-
-        Returns:
-            str: The full name in the format scope0_scope1_..._scopeN_name, including the type name to register.
-        """
-        full_name: str = self.scope.trace_as_str("_") + f"_{name}"
-
-        self.type_vars.add(full_name)
-        return full_name
 
     def register_type(
         self,

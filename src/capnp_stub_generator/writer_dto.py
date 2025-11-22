@@ -447,9 +447,6 @@ class MethodSignatureCollection:
         self.server_result_lines: list[str] = []  # Nested in Server
         self.request_helper_lines: list[str] = []
         self.server_context_lines: list[str] = []
-        self.server_method_signature: str = ""
-        self.uses_direct_struct_return: bool = False
-        self.namedtuple_info: tuple[str, str, str] | None = None
 
     def set_client_method(self, lines: list[str]) -> None:
         """Set the client method signature lines.
@@ -466,14 +463,6 @@ class MethodSignatureCollection:
             lines: List of lines for the Request Protocol class
         """
         self.request_class_lines = lines
-
-    def set_result_class(self, lines: list[str]) -> None:
-        """Set the Result Protocol class lines.
-
-        Args:
-            lines: List of lines for the Result Protocol class
-        """
-        self.result_class_lines = lines
 
     def set_client_result_class(self, lines: list[str]) -> None:
         """Set the Client-side Result Protocol class lines (nested in Client).
@@ -498,25 +487,6 @@ class MethodSignatureCollection:
             lines: List of lines for the _request helper method
         """
         self.request_helper_lines = lines
-
-    def set_server_method(self, signature: str) -> None:
-        """Set the server method signature.
-
-        Args:
-            signature: Single-line server method signature
-        """
-        self.server_method_signature = signature
-
-    def set_namedtuple_info(self, result_type: str, field_name: str, field_type: str) -> None:
-        """Set info for direct struct return (NamedTuple).
-
-        Args:
-            result_type: The result type name
-            field_name: The field name in the NamedTuple
-            field_type: The field type
-        """
-        self.uses_direct_struct_return = True
-        self.namedtuple_info = (result_type, field_name, field_type)
 
     def __repr__(self) -> str:
         """Return a readable representation for debugging."""

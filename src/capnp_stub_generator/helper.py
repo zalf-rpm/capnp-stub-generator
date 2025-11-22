@@ -112,22 +112,6 @@ def new_builder(type_name: str) -> str:
     return _build_variant_type(type_name, BUILDER_NAME, flat=False)
 
 
-def new_reader(type_name: str) -> str:
-    """Converts a type name to its reader variant using nested class syntax.
-
-    E.g. `MyClass` becomes `MyClass.Reader`.
-    E.g. `Outer.Inner` becomes `Outer.Inner.Reader`.
-    For generic types like `MyClass[T]`, becomes `MyClass[T].Reader`.
-
-    Args:
-        type_name (str): The original type name.
-
-    Returns:
-        str: The reader variant.
-    """
-    return _build_variant_type(type_name, READER_NAME, flat=False)
-
-
 @dataclass
 class TypeHint:
     """A class that captures a type hint."""
