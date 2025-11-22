@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 if TYPE_CHECKING:
     from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _StructSchema
 
     from capnp_stub_generator import helper
-    from capnp_stub_generator.scope import CapnpType
+    from capnp_stub_generator.scope import CapnpType, Scope
 
 
 # Type alias for init choice tuples
@@ -91,7 +91,7 @@ class StructGenerationContext:
         cls,
         schema: _StructSchema,
         user_type_name: str,
-        protocol_class_name: str,
+        _: str,
         new_type: CapnpType,
         registered_params: list[str],
     ) -> StructGenerationContext:
@@ -184,6 +184,7 @@ class StructFieldsCollection:
         """
         self.list_init_choices.append((field_name, builder_type))
 
+    @override
     def __repr__(self) -> str:
         """Return a readable representation for debugging."""
         return (
@@ -265,7 +266,7 @@ class InterfaceGenerationContext:
     client_type_name: str
     registered_type: CapnpType
     base_classes: list[str]
-    parent_scope: Any  # Scope type
+    parent_scope: Scope
 
     @classmethod
     def create(
@@ -274,7 +275,7 @@ class InterfaceGenerationContext:
         type_name: str,
         registered_type: CapnpType,
         base_classes: list[str],
-        parent_scope: Any,
+        parent_scope: Scope,
     ) -> InterfaceGenerationContext:
         """Factory method to create interface context with Protocol-based naming.
 
@@ -433,6 +434,15 @@ class MethodSignatureCollection:
         namedtuple_info: Tuple of (result_type, field_name, field_type) or None
     """
 
+    method_name: str
+    client_method_lines: list[str]
+    request_class_lines: list[str]
+    result_class_lines: list[str]
+    client_result_lines: list[str]
+    server_result_lines: list[str]
+    request_helper_lines: list[str]
+    server_context_lines: list[str]
+
     def __init__(self, method_name: str):
         """Initialize empty collection for a method.
 
@@ -440,13 +450,13 @@ class MethodSignatureCollection:
             method_name: Name of the method being processed
         """
         self.method_name = method_name
-        self.client_method_lines: list[str] = []
-        self.request_class_lines: list[str] = []
-        self.result_class_lines: list[str] = []  # For module-level (to be removed)
-        self.client_result_lines: list[str] = []  # Nested in Client
-        self.server_result_lines: list[str] = []  # Nested in Server
-        self.request_helper_lines: list[str] = []
-        self.server_context_lines: list[str] = []
+        self.client_method_lines = []
+        self.request_class_lines = []
+        self.result_class_lines = []  # For module-level (to be removed)
+        self.client_result_lines = []  # Nested in Client
+        self.server_result_lines = []  # Nested in Server
+        self.request_helper_lines = []
+        self.server_context_lines = []
 
     def set_client_method(self, lines: list[str]) -> None:
         """Set the client method signature lines.
@@ -488,6 +498,7 @@ class MethodSignatureCollection:
         """
         self.request_helper_lines = lines
 
+    @override
     def __repr__(self) -> str:
         """Return a readable representation for debugging."""
         return (
@@ -511,11 +522,15 @@ class ServerMethodsCollection:
         context_classes: List of context class lines (CallContext and ResultsBuilder)
     """
 
+    server_methods: list[str]
+    namedtuples: dict[str, list[tuple[str, str]]]
+    context_classes: list[str]
+
     def __init__(self):
         """Initialize empty collection."""
-        self.server_methods: list[str] = []
-        self.namedtuples: dict[str, list[tuple[str, str]]] = {}
-        self.context_classes: list[str] = []
+        self.server_methods = []
+        self.namedtuples = {}
+        self.context_classes = []
 
     def add_server_method(self, signature: str) -> None:
         """Add a server method signature.
@@ -550,6 +565,7 @@ class ServerMethodsCollection:
         """
         return len(self.server_methods) > 0
 
+    @override
     def __repr__(self) -> str:
         """Return a readable representation for debugging."""
         return (

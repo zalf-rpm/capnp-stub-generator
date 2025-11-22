@@ -2499,7 +2499,7 @@ class Writer:
                     lines.append("    @overload")
                     lines.append(
                         f'    def init(self, name: Literal["{field_name}"], '
-                        f"size: int = ...) -> {list_builder_type}: ..."
+                        + f"size: int = ...) -> {list_builder_type}: ..."
                     )
 
             # Add struct init overloads
@@ -2657,7 +2657,7 @@ class Writer:
 
         # For void methods, generate an empty Result Protocol that is just Awaitable[None]
         if not method_info.result_fields:
-            lines = []
+            lines: list[str] = []
             result_class_name = result_type
             self._add_typing_import("Awaitable")
             lines.append(f"class {result_class_name}(Awaitable[None], Protocol):")
@@ -2911,7 +2911,7 @@ class Writer:
         Returns:
             List of (field_name, field_type) tuples
         """
-        fields = []
+        fields: list[tuple[str, str]] = []
 
         if not method_info.result_fields or method_info.result_schema is None:
             return fields
@@ -3504,7 +3504,7 @@ class Writer:
             protocol_declaration = helper.new_class_declaration(context.protocol_class_name, ["_InterfaceModule"])
 
         # Open interface Protocol scope
-        self.new_scope(
+        _ = self.new_scope(
             context.protocol_class_name,
             context.schema.node,
             scope_heading=protocol_declaration,
@@ -3516,11 +3516,11 @@ class Writer:
         # Phase 3: Enumerate and process methods
         methods = self._enumerate_interface_methods(context)
         server_collection = ServerMethodsCollection()
-        client_method_collection = []  # Collect client methods for nested Client class
-        request_helper_collection = []  # Collect request helpers for Client class
-        client_result_collection = []  # Collect client Result protocols
-        server_result_collection = []  # Collect server Result protocols
-        result_type_names = []  # Collect result type names for top-level aliases
+        client_method_collection: list[str] = []  # Collect client methods for nested Client class
+        request_helper_collection: list[str] = []  # Collect request helpers for Client class
+        client_result_collection: list[str] = []  # Collect client Result protocols
+        server_result_collection: list[str] = []  # Collect server Result protocols
+        result_type_names: list[str] = []  # Collect result type names for top-level aliases
 
         for method_info in methods:
             method_collection = self._process_interface_method(method_info, server_collection)
@@ -3679,7 +3679,7 @@ class Writer:
         Returns:
             List of Server base class names (e.g., ["_IdentifiableModule.Server"])
         """
-        server_base_classes = []
+        server_base_classes: list[str] = []
         if schema.node.which() == "interface":
             interface_node = schema.node.interface
             for superclass in interface_node.superclasses:
@@ -3714,7 +3714,7 @@ class Writer:
             server_base_classes: List of server base classes for inheritance resolution
         """
         # Build client base classes - inherit from superclass Clients
-        client_base_classes = []
+        client_base_classes: list[str] = []
         has_parent_clients = False
         for server_base in server_base_classes:
             # Extract protocol name from Server type and build Client type
@@ -3769,23 +3769,23 @@ class Writer:
         elif node_type == "struct":
             # Both _ParsedSchema and _StructSchema have as_struct()
             if isinstance(schema, _ParsedSchema):
-                self.gen_struct(schema.as_struct())
+                _ = self.gen_struct(schema.as_struct())
             elif isinstance(schema, _StructSchema):
-                self.gen_struct(schema)
+                _ = self.gen_struct(schema)
 
         elif node_type == "enum":
             # Only _ParsedSchema has as_enum()
             if isinstance(schema, _ParsedSchema):
-                self.gen_enum(schema.as_enum())
+                _ = self.gen_enum(schema.as_enum())
             elif isinstance(schema, _EnumSchema):
-                self.gen_enum(schema)
+                _ = self.gen_enum(schema)
 
         elif node_type == "interface":
             # Only _ParsedSchema has as_interface()
             if isinstance(schema, _ParsedSchema):
-                self.gen_interface(schema.as_interface())
+                _ = self.gen_interface(schema.as_interface())
             elif isinstance(schema, _InterfaceSchema):
-                self.gen_interface(schema)
+                _ = self.gen_interface(schema)
 
         elif node_type == "annotation":
             logger.warning("Skipping annotation: not implemented.")
@@ -3827,7 +3827,7 @@ class Writer:
         else:
             # Find the path of the parent module, from which this schema is imported.
             # We need to search recursively through nested nodes since schemas can be deeply nested
-            def search_nested_nodes(schema_obj, target_id):
+            def search_nested_nodes(schema_obj: _ParsedSchema, target_id: int) -> bool:
                 """Recursively search for a target ID in nested nodes."""
                 for nested_node in schema_obj.node.nestedNodes:
                     if nested_node.id == target_id:
@@ -3842,7 +3842,7 @@ class Writer:
                         pass
                 return False
 
-            for module_id, (path, module) in self._module_registry.items():
+            for _, (path, module) in self._module_registry.items():
                 if search_nested_nodes(module.schema, schema.node.id):
                     matching_path = pathlib.Path(path)
                     break
@@ -3943,9 +3943,6 @@ class Writer:
                 # Register the type with the Protocol name so scoped_name returns the Protocol name
                 return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
 
-        # This line should not be reached now since all branches return
-        raise RuntimeError(f"Unexpected code path for import {definition_name}")
-
     def register_type(
         self,
         type_id: int,
@@ -4003,9 +4000,9 @@ class Writer:
             return self.type_map[type_id]
 
         # Try to find the type in other modules
-        for module_id, (path, module) in self._module_registry.items():
+        for module_id, (_, module) in self._module_registry.items():
             # Helper to search recursively
-            def find_schema_by_id(schema_obj, target_id):
+            def find_schema_by_id(schema_obj: Any, target_id: int) -> Any | None:
                 if schema_obj.node.id == target_id:
                     return schema_obj
                 for nested_node in schema_obj.node.nestedNodes:
@@ -4026,7 +4023,7 @@ class Writer:
                     self.generate_nested(found_schema)
                 else:
                     # If it's in another module, register it as an import
-                    self.register_import(found_schema)
+                    _ = self.register_import(found_schema)
 
                 if self.is_type_id_known(type_id):
                     return self.type_map[type_id]
@@ -4034,7 +4031,12 @@ class Writer:
         raise KeyError(f"The type ID '{type_id} was not found in the type registry.'")
 
     def new_scope(
-        self, name: str, node: Any, scope_heading: str = "", register: bool = True, parent_scope: Scope | None = None
+        self,
+        name: str,
+        node: Any,
+        scope_heading: str = "",
+        register: bool = True,
+        parent_scope: Scope | None = None,
     ) -> Scope:
         """Creates a new scope below the scope of the provided node.
 
@@ -4138,7 +4140,7 @@ class Writer:
 
         type_reader_type = type_reader.which()
 
-        element_type: Any | None = None
+        element_type: CapnpType | None = None
 
         if type_reader_type == capnp_types.CapnpElementType.STRUCT:
             # Check if the type is registered; if not, try to generate it first
@@ -4160,18 +4162,18 @@ class Writer:
             type_name = element_type.name
 
         elif type_reader_type == capnp_types.CapnpElementType.ENUM:
-            element_type = self.get_type_by_id(type_reader.enum.typeId)
+            element_type = self.get_type_by_id(cast(int, type_reader.enum.typeId))
             type_name = element_type.name
 
         elif type_reader_type == capnp_types.CapnpElementType.LIST:
             # Recursively get the element type and wrap it in Sequence
-            element_type_name = self.get_type_name(type_reader.list.elementType)
+            element_type_name = self.get_type_name(cast(_DynamicStructReader, type_reader.list.elementType))
             self._add_typing_import("Sequence")
             type_name = f"Sequence[{element_type_name}]"
             element_type = None  # List itself doesn't have an element_type in our registry
 
         elif type_reader_type == capnp_types.CapnpElementType.INTERFACE:
-            type_id = type_reader.interface.typeId
+            type_id = cast(int, type_reader.interface.typeId)
             if not self.is_type_id_known(type_id):
                 # Try to generate the interface before using it
                 try:
@@ -4231,9 +4233,9 @@ class Writer:
             module_schema = self._module.schema
 
             # Recursively collect all nested type IDs defined in this module
-            def collect_nested_ids(schema):
+            def collect_nested_ids(schema: _ParsedSchema) -> set[int]:
                 """Recursively collect all nested type IDs from a schema."""
-                ids = {schema.node.id}
+                ids: set[int] = {schema.node.id}
                 for nested in schema.node.nestedNodes:
                     try:
                         nested_schema = schema.get_nested(nested.name)
@@ -4244,7 +4246,7 @@ class Writer:
                 return ids
 
             try:
-                defined_type_ids = collect_nested_ids(module_schema)
+                defined_type_ids: set[int] = collect_nested_ids(module_schema)
             except Exception:
                 # If collection fails, fall back to including all types
                 pass
@@ -4304,7 +4306,7 @@ class Writer:
         """
         assert self.scope.is_root
 
-        out = []
+        out: list[str] = []
         out.append(self.docstring)
         out.extend(self.imports)
 
@@ -4379,7 +4381,7 @@ class Writer:
         """
         assert self.scope.is_root
 
-        out = []
+        out: list[str] = []
         out.append(self.docstring)
         out.append("import os")
         out.append("import capnp")
@@ -4458,7 +4460,7 @@ class Writer:
         if self._all_server_namedtuples:
             out.append("")
             for interface_name, namedtuples_dict in sorted(self._all_server_namedtuples.items()):
-                for method_name, (namedtuple_name, fields) in sorted(namedtuples_dict.items()):
+                for _, (namedtuple_name, fields) in sorted(namedtuples_dict.items()):
                     # Convert Protocol path to runtime path
                     # E.g., "_HostPortResolverModule.Registrar" -> "HostPortResolver.Registrar"
                     runtime_interface_name = self._protocol_path_to_runtime_path(interface_name)
@@ -4469,7 +4471,7 @@ class Writer:
                     field_list = [f'("{field_name}", object)' for field_name, _ in fields]
                     out.append(
                         f"{runtime_interface_name}.Server.{namedtuple_name} = "
-                        f"NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])"
+                        + f"NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])"
                     )
 
         return "\n".join(out)
