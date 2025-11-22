@@ -479,7 +479,6 @@ class Writer:
             )
         )
 
-
     def _add_static_method(
         self,
         name: str,
@@ -761,6 +760,22 @@ class Writer:
                 )
             )
 
+    def _add_which_method(self, schema: _StructSchema) -> None:
+        """Add which() method override for unions with specific Literal return type.
+
+        Args:
+            schema: The struct schema containing potential union fields.
+        """
+        if schema.node.struct.discriminantCount:
+            self._add_typing_import("Literal")
+            self._add_typing_import("override")
+            field_names = [
+                f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
+            ]
+            return_type = helper.new_type_group("Literal", field_names)
+            self.scope.add("@override")
+            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
+
     # ===== Struct Generation Helper Methods =====
 
     def _add_new_message_method(
@@ -912,15 +927,7 @@ class Writer:
         self._add_reader_properties(slot_fields)
 
         # Add which() method override for unions with specific Literal return type
-        if schema.node.struct.discriminantCount:
-            self._add_typing_import("Literal")
-            self._add_typing_import("override")
-            field_names = [
-                f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
-            ]
-            return_type = helper.new_type_group("Literal", field_names)
-            self.scope.add("@override")
-            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
+        self._add_which_method(schema)
 
         # Add as_builder method with override decorator and proper signature
         self._add_typing_import("override")
@@ -974,15 +981,7 @@ class Writer:
         self._add_builder_properties(slot_fields)
 
         # Add which() method override for unions with specific Literal return type
-        if schema.node.struct.discriminantCount:
-            self._add_typing_import("Literal")
-            self._add_typing_import("override")
-            field_names = [
-                f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
-            ]
-            return_type = helper.new_type_group("Literal", field_names)
-            self.scope.add("@override")
-            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
+        self._add_which_method(schema)
 
         # Add init method overloads for struct and list fields
         # These are needed to properly initialize list fields with the right size
