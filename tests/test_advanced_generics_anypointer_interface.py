@@ -12,14 +12,14 @@ def test_generics_anypointer_interface(basic_stubs):
 
     # Check for GenericBox struct Protocol
     assert (
-        "class _GenericBoxModule(_StructModule):" in content
-        or "class _GenericBoxModule(Generic[T], _StructModule):" in content
+        "class _GenericBoxStructModule(_StructModule):" in content
+        or "class _GenericBoxStructModule(Generic[T], _StructModule):" in content
     ), "GenericBox _StructModule should exist"
     assert "def value(self) -> _DynamicObjectReader:" in content, (
         "GenericBox.value should be typed as _DynamicObjectReader (from AnyPointer)"
     )
     # Check for module annotation (not TypeAlias)
-    assert "GenericBox: _GenericBoxModule" in content, "GenericBox annotation should exist"
+    assert "GenericBox: _GenericBoxStructModule" in content, "GenericBox annotation should exist"
 
     # Check for generic instantiations in AdvancedContainer
     assert "def enumBox(self)" in content, "enumBox field should exist"
@@ -32,14 +32,14 @@ def test_generics_anypointer_interface(basic_stubs):
 
     for i, line in enumerate(lines):
         if "def enumBox(self)" in line:
-            # Check return type in next few lines - should reference _GenericBoxModule
+            # Check return type in next few lines - should reference _GenericBoxStructModule
             for j in range(i, min(i + 3, len(lines))):
-                if "GenericBox" in lines[j] or "_GenericBoxModule" in lines[j]:
+                if "GenericBox" in lines[j] or "_GenericBoxStructModule" in lines[j]:
                     found_enum_box = True
                     break
         if "def innerBox(self)" in line:
             for j in range(i, min(i + 3, len(lines))):
-                if "GenericBox" in lines[j] or "_GenericBoxModule" in lines[j]:
+                if "GenericBox" in lines[j] or "_GenericBoxStructModule" in lines[j]:
                     found_inner_box = True
                     break
 
@@ -47,8 +47,8 @@ def test_generics_anypointer_interface(basic_stubs):
     assert found_inner_box, "innerBox should be typed as GenericBox"
 
     # Check for interface (now uses _InterfaceModule pattern)
-    assert "class _TestIfaceModule(_InterfaceModule):" in content, "TestIface _InterfaceModule should exist"
-    assert "TestIface: _TestIfaceModule" in content, "TestIface annotation should exist"
+    assert "class _TestIfaceInterfaceModule(_InterfaceModule):" in content, "TestIface _InterfaceModule should exist"
+    assert "TestIface: _TestIfaceInterfaceModule" in content, "TestIface annotation should exist"
     assert "class TestIfaceClient(_DynamicCapabilityClient):" in content, (
         "TestIfaceClient should inherit from _DynamicCapabilityClient"
     )

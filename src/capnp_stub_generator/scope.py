@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from typing import Any, Literal
+from typing import Literal, override
+
+from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _ParsedSchema, _StructSchema
 
 from .helper import TypeHintedVariable
 
@@ -117,6 +119,7 @@ class Scope:
         """Get the full scoped name (dotted path) excluding root."""
         return self.trace_as_str(".")
 
+    @override
     def __repr__(self) -> str:
         """A string representation of this scope.
 
@@ -135,7 +138,7 @@ class CapnpType:
         scope (Scope):
     """
 
-    schema: Any
+    schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema | None
     name: str
     scope: Scope
 

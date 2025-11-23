@@ -6,9 +6,9 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines):
     lines = calculator_stub_lines
 
     # Check that interface modules exist (now inherit from _InterfaceModule)
-    assert any("class _ValueModule(_InterfaceModule):" in line for line in lines)
-    assert any("class _FunctionModule(_InterfaceModule):" in line for line in lines)
-    assert any("class _CalculatorModule(_InterfaceModule):" in line for line in lines)
+    assert any("class _ValueInterfaceModule(_InterfaceModule):" in line for line in lines)
+    assert any("class _FunctionInterfaceModule(_InterfaceModule):" in line for line in lines)
+    assert any("class _CalculatorInterfaceModule(_InterfaceModule):" in line for line in lines)
 
     # Check that Server classes exist (now inherit from _DynamicCapabilityServer)
     assert any("class Server(_DynamicCapabilityServer):" in line for line in lines)
@@ -29,16 +29,18 @@ def test_server_methods_have_signatures(calculator_stub_lines):
     assert "Awaitable[" in content  # Server.call returns Awaitable
 
     # Value.Server should have read method with _context parameter and returns NamedTuple with "Tuple" suffix
-    # CallContext is now inside Server, so reference is _CalculatorModule._ValueModule.Server.ReadCallContext
+    # CallContext is now inside Server, so reference is _CalculatorInterfaceModule._ValueInterfaceModule.Server.ReadCallContext
     assert "def read(" in content
-    assert "_context: _CalculatorModule._ValueModule.Server.ReadCallContext" in content
-    assert "Awaitable[float | _CalculatorModule._ValueModule.Server.ReadResultTuple | None]" in content
+    assert "_context: _CalculatorInterfaceModule._ValueInterfaceModule.Server.ReadCallContext" in content
+    assert (
+        "Awaitable[float | _CalculatorInterfaceModule._ValueInterfaceModule.Server.ReadResultTuple | None]" in content
+    )
 
     # Calculator.Server should have evaluate method with Reader type and return NamedTuple with "Tuple" suffix
     assert "def evaluate(" in content
     assert "expression: ExpressionReader" in content
     assert (
-        "Awaitable[_CalculatorModule._ValueModule.Server | _CalculatorModule.Server.EvaluateResultTuple | None]"
+        "Awaitable[_CalculatorInterfaceModule._ValueInterfaceModule.Server | _CalculatorInterfaceModule.Server.EvaluateResultTuple | None]"
         in content
     )
 
@@ -87,8 +89,8 @@ def test_server_methods_return_interface_or_implementation(calculator_stub_lines
     # Server methods returning interfaces return Interface.Server types
     # (not Interface | Interface.Server because servers work with Server implementations)
     # With nested Protocol naming, these are referenced via the full path
-    assert "_CalculatorModule._ValueModule.Server" in content
-    assert "_CalculatorModule._FunctionModule.Server" in content
+    assert "_CalculatorInterfaceModule._ValueInterfaceModule.Server" in content
+    assert "_CalculatorInterfaceModule._FunctionInterfaceModule.Server" in content
 
 
 def test_server_method_parameters_match_protocol(calculator_stub_lines):
@@ -110,9 +112,9 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
 
     # Find Function.Server's call method - should have params (required), _context, and **kwargs
     # Server parameters remain required for type safety
-    # CallContext is now inside Server, so reference is _CalculatorModule._FunctionModule.Server.CallCallContext
+    # CallContext is now inside Server, so reference is _CalculatorInterfaceModule._FunctionInterfaceModule.Server.CallCallContext
     server_call_found = (
-        "def call(self, params: Float64ListReader, _context: _CalculatorModule._FunctionModule.Server.CallCallContext, **kwargs: dict[str, Any])"
+        "def call(self, params: Float64ListReader, _context: _CalculatorInterfaceModule._FunctionInterfaceModule.Server.CallCallContext, **kwargs: dict[str, Any])"
         in content
     )
 

@@ -44,8 +44,8 @@ def test_nested_enum_and_literal_and_overload():
     stub_path = _get_stub_path("nested.capnp")
     lines = _read(stub_path)
     # Enum should now be a simple class with int annotations
-    assert any(re.match(r"^\s*class _KindModule:", line) for line in lines)
-    assert any("Kind: _KindModule" in line for line in lines)
+    assert any(re.match(r"^\s*class _KindEnumModule:", line) for line in lines)
+    assert any("Kind: _KindEnumModule" in line for line in lines)
     # Sequence import still expected for list fields (only for nested lists or setters)
     # assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
     # Now overload is expected (for list init overloads)
@@ -86,14 +86,14 @@ def test_imports_cross_module_reference():
     # Reader class should return Shared.Reader
     # Now we use aliases, so it should be SharedReader
     assert any("def shared(self) -> SharedReader:" in line for line in user_lines) or any(
-        "def shared(self) -> _SharedModule.Reader:" in line for line in user_lines
+        "def shared(self) -> _SharedStructModule.Reader:" in line for line in user_lines
     ), "Reader class should return Shared.Reader or SharedReader"
     # Builder class should narrow to Shared.Builder
     assert any("def shared(self) -> SharedBuilder:" in line for line in user_lines) or any(
-        "def shared(self) -> _SharedModule.Builder:" in line for line in user_lines
+        "def shared(self) -> _SharedStructModule.Builder:" in line for line in user_lines
     ), "Builder class should return Shared.Builder or SharedBuilder"
     # Ensure import statement for base module types exists (imports Protocol module, not user-facing name)
     # Now we also import aliases
-    assert any(line.startswith("from ") and "import _SharedModule" in line for line in user_lines) or any(
+    assert any(line.startswith("from ") and "import _SharedStructModule" in line for line in user_lines) or any(
         line.startswith("from ") and "SharedReader" in line for line in user_lines
     )

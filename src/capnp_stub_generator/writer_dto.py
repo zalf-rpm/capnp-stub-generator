@@ -69,9 +69,9 @@ class StructGenerationContext:
         reader_type_name = helper.new_reader_flat(new_type.name)
         builder_type_name = helper.new_builder_flat(new_type.name)
 
-        # For scoped names with Protocol approach, use _<Name>Module.Reader format
+        # For scoped names with Protocol approach, use _<Name>StructModule.Reader format
         # Build the scoped Protocol module name first
-        scoped_protocol_name = new_type.scoped_name.replace(new_type.name, f"_{new_type.name}Module")
+        scoped_protocol_name = new_type.scoped_name.replace(new_type.name, f"_{new_type.name}StructModule")
         scoped_reader_type_name = f"{scoped_protocol_name}.Reader"
         scoped_builder_type_name = f"{scoped_protocol_name}.Builder"
 
@@ -233,7 +233,7 @@ class EnumGenerationContext:
         Returns:
             A fully initialized EnumGenerationContext
         """
-        protocol_class_name = f"_{type_name}Module"
+        protocol_class_name = f"_{type_name}EnumModule"
 
         return cls(
             schema=schema,
@@ -289,7 +289,7 @@ class InterfaceGenerationContext:
         Returns:
             A fully initialized InterfaceGenerationContext
         """
-        protocol_class_name = f"_{type_name}Module"
+        protocol_class_name = f"_{type_name}InterfaceModule"
         client_type_name = f"{type_name}Client"
 
         return cls(

@@ -24,7 +24,7 @@ class TestCalculatorInterfaceMethodTypes:
         # Should have evaluate with Expression parameter (optional) and EvaluateResult return type
         assert "def evaluate(" in stub_content
         assert "expression: ExpressionBuilder | ExpressionReader | dict[str, Any] | None = None" in stub_content
-        assert ") -> _CalculatorModule.CalculatorClient.EvaluateResult:" in stub_content
+        assert ") -> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in stub_content
 
         # Should NOT have Any for the expression parameter
         assert "def evaluate(self, expression: Any)" not in stub_content
@@ -65,7 +65,7 @@ class TestCalculatorInterfaceMethodTypes:
         # Should have call with Sequence[float] parameter (optional) and CallResult return type
         assert "def call(" in stub_content
         assert "params: Float64ListBuilder | Float64ListReader | Sequence[Any] | None = None" in stub_content
-        assert ") -> _CalculatorModule._FunctionModule.FunctionClient.CallResult:" in stub_content
+        assert ") -> _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient.CallResult:" in stub_content
 
         # Should NOT have Any for the params parameter
         assert "def call(self, params: Any)" not in stub_content
@@ -76,7 +76,9 @@ class TestCalculatorInterfaceMethodTypes:
         stub_content = stub_file.read_text()
 
         # Should have read returning ReadResult
-        assert "def read(self) -> _CalculatorModule._ValueModule.ValueClient.ReadResult:" in stub_content
+        assert (
+            "def read(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in stub_content
+        )
 
         # ReadResult should have float value field
         assert "class ReadResult" in stub_content
@@ -98,19 +100,25 @@ class TestCalculatorInterfaceMethodTypes:
 
         # All main methods should have _request variants with proper return types
         # Check for method name and return type (allowing for kwargs parameters)
-        assert "def evaluate_request(" in stub_content and ") -> _CalculatorModule.EvaluateRequest:" in stub_content
         assert (
-            "def defFunction_request(" in stub_content and ") -> _CalculatorModule.DeffunctionRequest:" in stub_content
+            "def evaluate_request(" in stub_content
+            and ") -> _CalculatorInterfaceModule.EvaluateRequest:" in stub_content
         )
         assert (
-            "def getOperator_request(" in stub_content and ") -> _CalculatorModule.GetoperatorRequest:" in stub_content
+            "def defFunction_request(" in stub_content
+            and ") -> _CalculatorInterfaceModule.DeffunctionRequest:" in stub_content
         )
         assert (
-            "def read_request(" in stub_content and ") -> _CalculatorModule._ValueModule.ReadRequest:" in stub_content
+            "def getOperator_request(" in stub_content
+            and ") -> _CalculatorInterfaceModule.GetoperatorRequest:" in stub_content
+        )
+        assert (
+            "def read_request(" in stub_content
+            and ") -> _CalculatorInterfaceModule._ValueInterfaceModule.ReadRequest:" in stub_content
         )
         assert (
             "def call_request(" in stub_content
-            and ") -> _CalculatorModule._FunctionModule.CallRequest:" in stub_content
+            and ") -> _CalculatorInterfaceModule._FunctionInterfaceModule.CallRequest:" in stub_content
         )
 
 
@@ -153,17 +161,19 @@ class TestInterfaceMethodTypeRegression:
 
         # Function.call should have Sequence[float] (optional), not Any
         # Function is now an interface module inheriting from _InterfaceModule
-        assert "class _FunctionModule(_InterfaceModule):" in stub_content
+        assert "class _FunctionInterfaceModule(_InterfaceModule):" in stub_content
         assert "class FunctionClient(_DynamicCapabilityClient):" in stub_content
         assert "def call(" in stub_content
         # call() returns CallResult (nested in FunctionClient)
-        assert ") -> _CalculatorModule._FunctionModule.FunctionClient.CallResult:" in stub_content
+        assert ") -> _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient.CallResult:" in stub_content
 
         # Value.read should return ReadResult with float field, not Any
         # Value is now an interface module inheriting from _InterfaceModule
-        assert "class _ValueModule(_InterfaceModule):" in stub_content
+        assert "class _ValueInterfaceModule(_InterfaceModule):" in stub_content
         assert "class ValueClient(_DynamicCapabilityClient):" in stub_content
-        assert "def read(self) -> _CalculatorModule._ValueModule.ValueClient.ReadResult:" in stub_content
+        assert (
+            "def read(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in stub_content
+        )
 
 
 class TestInterfaceMethodComplexTypes:
@@ -184,13 +194,13 @@ class TestInterfaceMethodComplexTypes:
         stub_content = stub_file.read_text()
 
         # evaluate returns EvaluateResult which has a .value field of type ValueClient (nested capability)
-        assert "-> _CalculatorModule.CalculatorClient.EvaluateResult:" in stub_content
+        assert "-> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in stub_content
         assert "class EvaluateResult" in stub_content
-        assert "value: _CalculatorModule._ValueModule.ValueClient" in stub_content
+        assert "value: _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient" in stub_content
 
         # defFunction and getOperator return results which have .func field of type FunctionClient (nested capability)
-        assert "-> _CalculatorModule.CalculatorClient.DeffunctionResult:" in stub_content
-        assert "func: _CalculatorModule._FunctionModule.FunctionClient" in stub_content
+        assert "-> _CalculatorInterfaceModule.CalculatorClient.DeffunctionResult:" in stub_content
+        assert "func: _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient" in stub_content
 
     def test_enum_parameter_types(self, generate_calculator_stubs):
         """Test that enum parameters are typed correctly."""
@@ -201,9 +211,9 @@ class TestInterfaceMethodComplexTypes:
         assert "op: CalculatorOperatorEnum" in stub_content
 
         # Verify the Operator enum exists as plain class with instance annotation (nested)
-        assert "class _OperatorModule:" in stub_content
+        assert "class _OperatorEnumModule:" in stub_content
         # Nested: instance annotation for Calculator.Operator.add access
-        assert "    Operator: _OperatorModule" in stub_content  # Note the indentation
+        assert "    Operator: _OperatorEnumModule" in stub_content  # Note the indentation
         # Top-level: type alias for annotations
         assert 'type CalculatorOperatorEnum = int | Literal["add", "subtract", "multiply", "divide"]' in stub_content
 

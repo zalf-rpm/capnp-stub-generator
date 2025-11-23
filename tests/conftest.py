@@ -18,11 +18,13 @@ GENERATED_DIR = TESTS_DIR / "_generated"
 BASIC_SCHEMAS_DIR = SCHEMAS_DIR / "basic"
 EXAMPLES_SCHEMAS_DIR = SCHEMAS_DIR / "examples"
 ZALFMAS_SCHEMAS_DIR = SCHEMAS_DIR / "zalfmas"
+CAPNP_SCHEMAS_DIR = SCHEMAS_DIR / "capnp"
 
 # Generated output subdirectories
 BASIC_GENERATED_DIR = GENERATED_DIR / "basic"
 EXAMPLES_GENERATED_DIR = GENERATED_DIR / "examples"
 ZALFMAS_GENERATED_DIR = GENERATED_DIR / "zalfmas"
+CAPNP_GENERATED_DIR = GENERATED_DIR / "capnp"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -110,6 +112,25 @@ def generate_all_stubs():
     if result.returncode != 0:
         logger.error(f"Failed to generate zalfmas schemas:\n{result.stderr}")
         pytest.fail(f"Zalfmas schema generation failed: {result.stderr}")
+
+    logger.info(f"Generating capnp schemas from {CAPNP_SCHEMAS_DIR}")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "capnp_stub_generator",
+            "-p",
+            str(CAPNP_SCHEMAS_DIR),
+            "-o",
+            str(CAPNP_GENERATED_DIR),
+            "-r",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.error(f"Failed to generate capnp schemas:\n{result.stderr}")
+        pytest.fail(f"Capnp schema generation failed: {result.stderr}")
 
     logger.info("✓ All test stubs generated successfully")
 

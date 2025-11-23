@@ -48,9 +48,9 @@ class TestStructGenerationContext:
         # Verify generated names - with Protocol structure
         assert context.reader_type_name == "PersonReader"
         assert context.builder_type_name == "PersonBuilder"
-        # Scoped names use Protocol naming: Company.Person -> Company._PersonModule
-        assert context.scoped_reader_type_name == "Company._PersonModule.Reader"
-        assert context.scoped_builder_type_name == "Company._PersonModule.Builder"
+        # Scoped names use Protocol naming: Company.Person -> Company._PersonStructModule
+        assert context.scoped_reader_type_name == "Company._PersonStructModule.Reader"
+        assert context.scoped_builder_type_name == "Company._PersonStructModule.Builder"
 
     def test_create_with_empty_generic_params(self):
         """Test context creation with no generic parameters."""
@@ -77,9 +77,9 @@ class TestStructGenerationContext:
             schema=mock_schema, type_name="Inner", new_type=mock_new_type, registered_params=[]
         )
 
-        # With Protocol structure: Outer.Middle.Inner -> Outer.Middle._InnerModule
-        assert context.scoped_reader_type_name == "Outer.Middle._InnerModule.Reader"
-        assert context.scoped_builder_type_name == "Outer.Middle._InnerModule.Builder"
+        # With Protocol structure: Outer.Middle.Inner -> Outer.Middle._InnerStructModule
+        assert context.scoped_reader_type_name == "Outer.Middle._InnerStructModule.Reader"
+        assert context.scoped_builder_type_name == "Outer.Middle._InnerStructModule.Builder"
 
 
 class TestStructFieldsCollection:
@@ -221,7 +221,7 @@ class TestInterfaceGenerationContext:
 
         assert context.schema == mock_schema
         assert context.type_name == "Calculator"
-        assert context.protocol_class_name == "_CalculatorModule"
+        assert context.protocol_class_name == "_CalculatorInterfaceModule"
         assert context.client_type_name == "CalculatorClient"
         assert context.registered_type == mock_type
         assert context.base_classes == base_classes
@@ -243,7 +243,7 @@ class TestInterfaceGenerationContext:
 
         assert context.base_classes == []
         assert context.type_name == "SimpleInterface"
-        assert context.protocol_class_name == "_SimpleInterfaceModule"
+        assert context.protocol_class_name == "_SimpleInterfaceInterfaceModule"
 
 
 class TestMethodInfo:
@@ -567,7 +567,7 @@ class TestInterfaceDTOIntegration:
 
         # Verify everything works together
         assert context.type_name == "Calculator"
-        assert context.protocol_class_name == "_CalculatorModule"
+        assert context.protocol_class_name == "_CalculatorInterfaceModule"
         assert method_info.method_name == "add"
         assert "int | None = None" in method_collection.client_method_lines[0]
         assert server_collection.has_methods() is True

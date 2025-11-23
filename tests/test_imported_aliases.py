@@ -14,14 +14,16 @@ def test_imported_type_aliases_used(zalfmas_stubs):
 
     # Find AdminClient
     client_match = re.search(
-        r"class AdminClient\(_IdentifiableModule.IdentifiableClient\):(.*?)(?=\nclass _|\Z)", content, re.DOTALL
+        r"class AdminClient\(_IdentifiableInterfaceModule.IdentifiableClient\):(.*?)(?=\nclass _|\Z)",
+        content,
+        re.DOTALL,
     )
     assert client_match, "AdminClient class not found"
     client_content = client_match.group(1)
 
     # Find addCategory method
     # Should use IdInformationReader or IdInformationBuilder (or dict)
-    # Currently it might be using _IdInformationModule.Reader/Builder
+    # Currently it might be using _IdInformationStructModule.Reader/Builder
 
     # We expect: category: IdInformationReader | dict[str, Any] | None = None
     # Or: category: IdInformationBuilder | dict[str, Any] | None = None
@@ -32,7 +34,7 @@ def test_imported_type_aliases_used(zalfmas_stubs):
     params = method_match.group(1)
 
     # Check for alias usage
-    # Note: IdInformation is imported as _IdInformationModule in the file usually
+    # Note: IdInformation is imported as _IdInformationStructModule in the file usually
     # But we want to see IdInformationReader/Builder if possible
 
     # If the alias is used, it should be imported.
@@ -47,7 +49,7 @@ def test_imported_type_aliases_used(zalfmas_stubs):
     assert "IdInformationReader" in content, "IdInformationReader should be imported/used"
 
     # Check usage in addCategory
-    # It might be _IdInformationModule | dict... because for Client methods we accept Reader/Builder/Dict
+    # It might be _IdInformationStructModule | dict... because for Client methods we accept Reader/Builder/Dict
     # But for specific types we prefer aliases.
 
     # Actually, for client methods, we usually take `Reader | Builder | dict`.
@@ -56,8 +58,8 @@ def test_imported_type_aliases_used(zalfmas_stubs):
     # Let's check the generated signature
     print(f"addCategory params: {params}")
 
-    # We want to avoid `_IdInformationModule.Reader`
-    assert "_IdInformationModule.Reader" not in params, "Should use IdInformationReader alias"
+    # We want to avoid `_IdInformationStructModule.Reader`
+    assert "_IdInformationStructModule.Reader" not in params, "Should use IdInformationReader alias"
     assert "IdInformationReader" in params, "Should use IdInformationReader alias"
 
 
@@ -72,7 +74,9 @@ def test_imported_return_type_aliases(zalfmas_stubs):
 
     # Find AdminClient
     client_match = re.search(
-        r"class AdminClient\(_IdentifiableModule.IdentifiableClient\):(.*?)(?=\nclass _|\Z)", content, re.DOTALL
+        r"class AdminClient\(_IdentifiableInterfaceModule.IdentifiableClient\):(.*?)(?=\nclass _|\Z)",
+        content,
+        re.DOTALL,
     )
     assert client_match, "AdminClient class not found"
     client_content = client_match.group(1)

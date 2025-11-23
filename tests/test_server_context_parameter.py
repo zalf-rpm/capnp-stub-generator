@@ -65,20 +65,20 @@ class TestServerContextParameter:
 
         import re
 
-        # Test _CalculatorModule._FunctionModule.call
+        # Test _CalculatorInterfaceModule._FunctionInterfaceModule.call
         # Function is now an interface module inheriting from _InterfaceModule
-        # Look for the _FunctionModule section (it's nested inside _CalculatorModule)
+        # Look for the _FunctionInterfaceModule section (it's nested inside _CalculatorInterfaceModule)
         function_section = re.search(
-            r"class _FunctionModule\(_InterfaceModule\):.*?(?=\n    Function:)", content, re.DOTALL
+            r"class _FunctionInterfaceModule\(_InterfaceModule\):.*?(?=\n    Function:)", content, re.DOTALL
         )
-        assert function_section, "_CalculatorModule._FunctionModule not found"
+        assert function_section, "_CalculatorInterfaceModule._FunctionInterfaceModule not found"
 
         server_call = re.search(
             r"class Server\(_DynamicCapabilityServer\):.*?def call\(([^)]+(?:\)[^)]*)*)\)",
             function_section.group(0),
             re.DOTALL,
         )
-        assert server_call, "_CalculatorModule._FunctionModule.Server.call not found"
+        assert server_call, "_CalculatorInterfaceModule._FunctionInterfaceModule.Server.call not found"
 
         call_sig = server_call.group(1)
         # Verify order: self, params, _context, **kwargs
@@ -111,7 +111,9 @@ class TestContextTypeHints:
 
         context_type = match.group(1)
         assert "CallContext" in context_type, f"_context should have CallContext type, got: {context_type}"
-        assert "_CalculatorModule._ValueModule" in context_type, f"CallContext should be scoped, got: {context_type}"
+        assert "_CalculatorInterfaceModule._ValueInterfaceModule" in context_type, (
+            f"CallContext should be scoped, got: {context_type}"
+        )
 
 
 def test_server_context_parameter_summary(generate_calculator_stubs):

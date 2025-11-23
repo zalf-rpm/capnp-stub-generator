@@ -15,8 +15,8 @@ def test_void_methods_return_result_protocol(tmp_path: Path):
     # close() should return Client.CloseResult (which is Awaitable[None])
     # Results are now nested inside Client classes
     assert (
-        "def close(self) -> _ChannelModule._ReaderModule.ReaderClient.CloseResult:" in content
-        or "def close(self) -> _ChannelModule._WriterModule.WriterClient.CloseResult:" in content
+        "def close(self) -> _ChannelInterfaceModule._ReaderInterfaceModule.ReaderClient.CloseResult:" in content
+        or "def close(self) -> _ChannelInterfaceModule._WriterInterfaceModule.WriterClient.CloseResult:" in content
     ), "Void methods should return nested Client.Result protocol for promise pipelining"
 
     # CloseRequest should exist at module level
@@ -33,8 +33,8 @@ def test_void_method_send_returns_result(tmp_path: Path):
     # CloseRequest.send() should return Client.CloseResult (consistent with non-void methods)
     assert "class CloseRequest(Protocol):" in content
     assert (
-        "def send(self) -> _ChannelModule._ReaderModule.ReaderClient.CloseResult:" in content
-        or "def send(self) -> _ChannelModule._WriterModule.WriterClient.CloseResult:" in content
+        "def send(self) -> _ChannelInterfaceModule._ReaderInterfaceModule.ReaderClient.CloseResult:" in content
+        or "def send(self) -> _ChannelInterfaceModule._WriterInterfaceModule.WriterClient.CloseResult:" in content
     ), "send() for void methods should return nested Client.CloseResult (awaitable)"
 
 
@@ -72,12 +72,12 @@ def test_comparison_with_non_void_methods(tmp_path: Path):
     # read() returns Client.ReadResult (which is Awaitable) - using Protocol naming
     # Results are now nested inside Client classes
     assert "def read(" in content
-    assert ") -> _ChannelModule._ReaderModule.ReaderClient.ReadResult:" in content
+    assert ") -> _ChannelInterfaceModule._ReaderInterfaceModule.ReaderClient.ReadResult:" in content
 
     # close() also returns nested Client.Result (CloseResult which is Awaitable[None])
     assert (
-        "def close(self) -> _ChannelModule._ReaderModule.ReaderClient.CloseResult:" in content
-        or "def close(self) -> _ChannelModule._WriterModule.WriterClient.CloseResult:" in content
+        "def close(self) -> _ChannelInterfaceModule._ReaderInterfaceModule.ReaderClient.CloseResult:" in content
+        or "def close(self) -> _ChannelInterfaceModule._WriterInterfaceModule.WriterClient.CloseResult:" in content
     )
 
     print("✅ Consistent void/non-void method patterns with nested Results!")

@@ -75,7 +75,7 @@ class TestNestedResultStructure:
 
         # Client methods should return Client.Result
         assert "def evaluate(" in content
-        assert "-> _CalculatorModule.CalculatorClient.EvaluateResult:" in content
+        assert "-> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in content
 
     def test_request_send_returns_client_result(self, calculator_stubs):
         """Test that Request.send() returns Client.Result."""
@@ -84,7 +84,7 @@ class TestNestedResultStructure:
 
         # Request.send() should return Client.Result
         assert "class EvaluateRequest(Protocol):" in content
-        assert "def send(self) -> _CalculatorModule.CalculatorClient.EvaluateResult:" in content
+        assert "def send(self) -> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in content
 
     def test_callcontext_results_points_to_server_result(self, calculator_stubs):
         """Test that CallContext.results points to Server.Result."""
@@ -94,7 +94,7 @@ class TestNestedResultStructure:
         # CallContext.results should point to Server.Result
         assert "class EvaluateCallContext(Protocol):" in content
         assert "@property" in content
-        assert "def results(self) -> _CalculatorModule.Server.EvaluateResult: ..." in content
+        assert "def results(self) -> _CalculatorInterfaceModule.Server.EvaluateResult: ..." in content
 
     def test_result_tuple_stays_under_server(self, calculator_stubs):
         """Test that ResultTuple (NamedTuple) stays under Server."""
@@ -125,7 +125,7 @@ class TestNestedResultsAtDeeperLevels:
         content = stub_file.read_text()
 
         # Value.read() should return ValueClient.ReadResult
-        assert "def read(self) -> _CalculatorModule._ValueModule.ValueClient.ReadResult:" in content
+        assert "def read(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in content
 
     def test_nested_interface_server_result(self, calculator_stubs):
         """Test nested interface Server has Result nested."""
@@ -134,7 +134,7 @@ class TestNestedResultsAtDeeperLevels:
 
         # ValueModule.Server should have ReadResult nested
         # Just check the nested path exists in content
-        assert "_ValueModule.Server.ReadResult" in content, "ReadResult should be nested in ValueModule.Server"
+        assert "_ValueInterfaceModule.Server.ReadResult" in content, "ReadResult should be nested in ValueModule.Server"
 
     def test_nested_interface_request_send(self, calculator_stubs):
         """Test nested interface Request.send() returns nested Client.Result."""
@@ -143,7 +143,7 @@ class TestNestedResultsAtDeeperLevels:
 
         # ReadRequest.send() should return ValueClient.ReadResult
         assert "class ReadRequest(Protocol):" in content
-        assert "def send(self) -> _CalculatorModule._ValueModule.ValueClient.ReadResult:" in content
+        assert "def send(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in content
 
     def test_nested_interface_callcontext(self, calculator_stubs):
         """Test nested interface CallContext.results points to nested Server.Result."""
@@ -153,7 +153,7 @@ class TestNestedResultsAtDeeperLevels:
         # ReadCallContext.results should point to Server.ReadResult
         assert "class ReadCallContext(Protocol):" in content
         assert "@property" in content
-        assert "def results(self) -> _CalculatorModule._ValueModule.Server.ReadResult: ..." in content
+        assert "def results(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.Server.ReadResult: ..." in content
 
 
 class TestAnyPointerTypeDifferences:

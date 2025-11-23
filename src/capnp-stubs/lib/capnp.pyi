@@ -11,6 +11,9 @@ from collections.abc import (
 from contextlib import AbstractContextManager, asynccontextmanager
 from typing import IO, Any, Literal, overload
 
+from tests._generated.capnp.schema_capnp import FieldReader as _StructSchemaField
+from tests._generated.capnp.schema_capnp import NodeReader as _NodeReader
+
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 # Generated imports for project-specific types
 from tests._generated.examples.calculator import calculator_capnp  # type: ignore[import-not-found]
@@ -93,26 +96,30 @@ class KjException(Exception):
         """Convert to a more specific Python exception if appropriate."""
         ...
 
-class _StructSchemaField:
-    proto: _DynamicStructReader
-    schema: _StructSchema
+# class _StructSchemaField:
+#     proto: _DynamicStructReader
+#     schema: _StructSchema
 
-class _NodeReader:
-    displayName: str
-    id: int
-    isConst: bool
-    isEnum: bool
-    isInterface: bool
-    isStruct: bool
-    nestedNodes: Any
-    node: _DynamicStructReader
-    scopeId: int
+# class _NestedNodeReader:
+#     id: int
+#     name: str
+#
+# class _NodeReader(_DynamicStructReader):
+#     displayName: str
+#     id: int
+#     isConst: bool
+#     isEnum: bool
+#     isInterface: bool
+#     isStruct: bool
+#     nestedNodes: list[_NestedNodeReader]
+#     node: _NodeReader
+#     scopeId: int
 
 class _ParsedSchema:
     @property
-    def node(self) -> _DynamicStructReader: ...
+    def node(self) -> _NodeReader: ...
     def get_proto(self) -> _DynamicStructReader: ...
-    def get_nested(self, name: str) -> Any: ...
+    def get_nested(self, name: str) -> _ParsedSchema: ...
     def as_const_value(self) -> Any: ...
     def as_enum(self) -> _EnumSchema: ...
     def as_interface(self) -> _InterfaceSchema: ...
@@ -126,7 +133,7 @@ class _StructSchema:
     union_fields: tuple[str, ...]
 
     @property
-    def node(self) -> _DynamicStructReader: ...
+    def node(self) -> _NodeReader: ...
     def as_const_value(self) -> Any: ...
     def as_enum(self) -> _EnumSchema: ...
     def as_interface(self) -> _InterfaceSchema: ...
@@ -426,13 +433,15 @@ class _DynamicObjectReader:
     AnyPointer can be cast to different pointer types (struct, list, text, interface).
     """
     @overload
-    def as_interface(self, schema: restorer_capnp._AnyTesterModule) -> restorer_capnp.AnyTesterClient: ...
+    def as_interface(self, schema: restorer_capnp._AnyTesterInterfaceModule) -> restorer_capnp.AnyTesterClient: ...
     @overload
-    def as_interface(self, schema: restorer_capnp._BagModule) -> restorer_capnp.BagClient: ...
+    def as_interface(self, schema: restorer_capnp._BagInterfaceModule) -> restorer_capnp.BagClient: ...
     @overload
-    def as_interface(self, schema: restorer_capnp._RestorerModule) -> restorer_capnp.RestorerClient: ...
+    def as_interface(self, schema: restorer_capnp._RestorerInterfaceModule) -> restorer_capnp.RestorerClient: ...
     @overload
-    def as_interface(self, schema: single_value_capnp._SingleValueModule) -> single_value_capnp.SingleValueClient: ...
+    def as_interface(
+        self, schema: single_value_capnp._SingleValueInterfaceModule
+    ) -> single_value_capnp.SingleValueClient: ...
     @overload
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
@@ -463,10 +472,10 @@ class _DynamicObjectReader:
         ...
     @overload
     def as_struct(
-        self, schema: restorer_capnp._RestorerModule._RestoreParamsModule
+        self, schema: restorer_capnp._RestorerInterfaceModule._RestoreParamsStructModule
     ) -> restorer_capnp.RestoreParamsReader: ...
     @overload
-    def as_struct(self, schema: single_value_capnp._MyStructModule) -> single_value_capnp.MyStructReader: ...
+    def as_struct(self, schema: single_value_capnp._MyStructStructModule) -> single_value_capnp.MyStructReader: ...
     @overload
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
@@ -618,7 +627,7 @@ class _DynamicStructReader:
     @property
     def schema(self) -> _StructSchema: ...
     @property
-    def list(self) -> _DynamicListReader: ...
+    def list(self) -> _ListSchema: ...
     @property
     def struct(self) -> _DynamicStructReader: ...
     @property
@@ -928,7 +937,7 @@ class _EnumSchema:
     """
 
     enumerants: dict[str, int]
-    node: _DynamicStructReader
+    node: _NodeReader
 
 class _InterfaceMethod:
     param_type: _StructSchema
@@ -945,7 +954,7 @@ class _InterfaceSchema:
     method_names_inherited: set[str]
     methods: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
     methods_inherited: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
-    node: _DynamicStructReader  # The raw schema node
+    node: _NodeReader  # The raw schema node
     superclasses: list[Any]  # List of parent interface schemas
 
 class _ListSchema:
@@ -953,23 +962,6 @@ class _ListSchema:
 
     Can be instantiated to create list schemas for different element types.
     """
-    def elementType(
-        self,
-    ) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
-        """The schema of the element type of this list.
-
-        Returns:
-            Schema of the list element type:
-            - _StructSchema for struct elements
-            - _EnumSchema for enum elements
-            - _InterfaceSchema for interface elements
-            - _ListSchema for nested list elements
-
-        Raises:
-            KjException: When the element type is a primitive type (Int32, Text, Bool, etc.)
-                with message "Schema type is unknown"
-        """
-        ...
 
     def __init__(
         self,
@@ -986,6 +978,25 @@ class _ListSchema:
                 - A primitive type (_SchemaType, e.g., capnp.types.Int8)
                 - Any object with a .schema attribute
                 - None (creates uninitialized schema)
+        """
+        ...
+
+    @property
+    def elementType(
+        self,
+    ) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
+        """The schema of the element type of this list.
+
+        Returns:
+            Schema of the list element type:
+            - _StructSchema for struct elements
+            - _EnumSchema for enum elements
+            - _InterfaceSchema for interface elements
+            - _ListSchema for nested list elements
+
+        Raises:
+            KjException: When the element type is a primitive type (Int32, Text, Bool, etc.)
+                with message "Schema type is unknown"
         """
         ...
 
@@ -1078,21 +1089,25 @@ class _CapabilityClient:
     """
 
     @overload
-    def cast_as(self, schema: calculator_capnp._CalculatorModule) -> calculator_capnp.CalculatorClient: ...
+    def cast_as(self, schema: calculator_capnp._CalculatorInterfaceModule) -> calculator_capnp.CalculatorClient: ...
     @overload
     def cast_as(
-        self, schema: calculator_capnp._CalculatorModule._FunctionModule
+        self, schema: calculator_capnp._CalculatorInterfaceModule._FunctionInterfaceModule
     ) -> calculator_capnp.FunctionClient: ...
     @overload
-    def cast_as(self, schema: calculator_capnp._CalculatorModule._ValueModule) -> calculator_capnp.ValueClient: ...
+    def cast_as(
+        self, schema: calculator_capnp._CalculatorInterfaceModule._ValueInterfaceModule
+    ) -> calculator_capnp.ValueClient: ...
     @overload
-    def cast_as(self, schema: restorer_capnp._AnyTesterModule) -> restorer_capnp.AnyTesterClient: ...
+    def cast_as(self, schema: restorer_capnp._AnyTesterInterfaceModule) -> restorer_capnp.AnyTesterClient: ...
     @overload
-    def cast_as(self, schema: restorer_capnp._BagModule) -> restorer_capnp.BagClient: ...
+    def cast_as(self, schema: restorer_capnp._BagInterfaceModule) -> restorer_capnp.BagClient: ...
     @overload
-    def cast_as(self, schema: restorer_capnp._RestorerModule) -> restorer_capnp.RestorerClient: ...
+    def cast_as(self, schema: restorer_capnp._RestorerInterfaceModule) -> restorer_capnp.RestorerClient: ...
     @overload
-    def cast_as(self, schema: single_value_capnp._SingleValueModule) -> single_value_capnp.SingleValueClient: ...
+    def cast_as(
+        self, schema: single_value_capnp._SingleValueInterfaceModule
+    ) -> single_value_capnp.SingleValueClient: ...
     @overload
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
@@ -1613,8 +1628,6 @@ class _DynamicListReader:
     Provides read-only list-like interface.
     """
 
-    elementType: Any
-
     def __len__(self) -> int: ...
     def __getitem__(self, index: int) -> Any: ...
     def __iter__(self) -> Iterator[Any]: ...
@@ -1890,9 +1903,9 @@ __all__ = [
     "_EventLoop",
     "_InterfaceMethod",
     "_InterfaceModule",
+    "_InterfaceSchema",
     "_ListSchema",
     "_MallocMessageBuilder",
-    "_NodeReader",
     "_PackedFdMessageReader",
     "_ParsedSchema",
     "_PyCustomMessageBuilder",
@@ -1903,4 +1916,5 @@ __all__ = [
     "_init_capnp_api",
     "_write_message_to_fd",
     "_write_packed_message_to_fd",
+    "_EnumSchema",
 ]

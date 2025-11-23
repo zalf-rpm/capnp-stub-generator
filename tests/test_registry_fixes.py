@@ -10,7 +10,7 @@ def test_server_named_tuple_interface_type(zalfmas_stubs):
 
     # Find Server section
     server_match = re.search(
-        r"class Server\(_IdentifiableModule.Server\):(.*?)(?=\n\s+class AdminClient)", content, re.DOTALL
+        r"class Server\(_IdentifiableInterfaceModule.Server\):(.*?)(?=\n\s+class AdminClient)", content, re.DOTALL
     )
     assert server_match, "Server class not found"
     server_content = server_match.group(1)
@@ -21,10 +21,10 @@ def test_server_named_tuple_interface_type(zalfmas_stubs):
     tuple_content = tuple_match.group(1)
 
     # Check registry field
-    # Should be: registry: _RegistryModule.RegistryClient | _RegistryModule.Server
+    # Should be: registry: _RegistryInterfaceModule.RegistryClient | _RegistryInterfaceModule.Server
     assert (
-        "registry: _RegistryModule.RegistryClient | _RegistryModule.Server" in tuple_content
-        or "registry: _RegistryModule.Server | _RegistryModule.RegistryClient" in tuple_content
+        "registry: _RegistryInterfaceModule.RegistryClient | _RegistryInterfaceModule.Server" in tuple_content
+        or "registry: _RegistryInterfaceModule.Server | _RegistryInterfaceModule.RegistryClient" in tuple_content
     ), f"Expected RegistryClient | Server in Tuple, got: {tuple_content}"
 
 
@@ -35,7 +35,7 @@ def test_list_of_structs_not_any(zalfmas_stubs):
 
     # Find RegistryClient
     client_match = re.search(
-        r"class RegistryClient\(_IdentifiableModule.IdentifiableClient\):(.*?)(?=\n\n|\Z)", content, re.DOTALL
+        r"class RegistryClient\(_IdentifiableInterfaceModule.IdentifiableClient\):(.*?)(?=\n\n|\Z)", content, re.DOTALL
     )
     assert client_match, "RegistryClient class not found"
     client_content = client_match.group(1)
@@ -65,7 +65,9 @@ def test_list_of_interfaces_types(zalfmas_stubs):
     # Capture until the next top-level class definition (which starts with "class _") or end of file
     # AdminClient is indented, so "class _" at start of line indicates end of AdminClient's parent module or next module
     client_match = re.search(
-        r"class AdminClient\(_IdentifiableModule.IdentifiableClient\):(.*?)(?=\nclass _|\Z)", content, re.DOTALL
+        r"class AdminClient\(_IdentifiableInterfaceModule.IdentifiableClient\):(.*?)(?=\nclass _|\Z)",
+        content,
+        re.DOTALL,
     )
     assert client_match, "AdminClient class not found"
     client_content = client_match.group(1)

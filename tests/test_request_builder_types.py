@@ -184,7 +184,7 @@ class TestRequestBuilderFieldAccess:
         stub_content = stub_file.read_text()
 
         # With Protocol structure, check for TypeAlias
-        assert "ExpressionBuilder = _ExpressionModule.Builder" in stub_content
+        assert "ExpressionBuilder = _ExpressionStructModule.Builder" in stub_content
 
         # Should have init overload for "call" that returns Call.Builder
         assert "def init(self" in stub_content and 'Literal["call"]' in stub_content
@@ -194,29 +194,34 @@ class TestRequestMethodReturnsRequest:
     """Test that *_request() methods return proper request types."""
 
     def test_evaluate_request_method_returns_evaluate_request(self, generate_calculator_stubs):
-        """Test that evaluate_request() returns _CalculatorModule.EvaluateRequest."""
+        """Test that evaluate_request() returns _CalculatorInterfaceModule.EvaluateRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
         # Check for method name and return type (allowing for kwargs parameters)
-        assert "def evaluate_request(" in stub_content and ") -> _CalculatorModule.EvaluateRequest:" in stub_content
+        assert (
+            "def evaluate_request(" in stub_content
+            and ") -> _CalculatorInterfaceModule.EvaluateRequest:" in stub_content
+        )
 
     def test_deffunction_request_method_returns_deffunction_request(self, generate_calculator_stubs):
-        """Test that defFunction_request() returns _CalculatorModule.DeffunctionRequest."""
+        """Test that defFunction_request() returns _CalculatorInterfaceModule.DeffunctionRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
         assert (
-            "def defFunction_request(" in stub_content and ") -> _CalculatorModule.DeffunctionRequest:" in stub_content
+            "def defFunction_request(" in stub_content
+            and ") -> _CalculatorInterfaceModule.DeffunctionRequest:" in stub_content
         )
 
     def test_getoperator_request_method_returns_getoperator_request(self, generate_calculator_stubs):
-        """Test that getOperator_request() returns _CalculatorModule.GetoperatorRequest."""
+        """Test that getOperator_request() returns _CalculatorInterfaceModule.GetoperatorRequest."""
         stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
         stub_content = stub_file.read_text()
 
         assert (
-            "def getOperator_request(" in stub_content and ") -> _CalculatorModule.GetoperatorRequest:" in stub_content
+            "def getOperator_request(" in stub_content
+            and ") -> _CalculatorInterfaceModule.GetoperatorRequest:" in stub_content
         )
 
 

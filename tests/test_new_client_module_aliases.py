@@ -1,7 +1,7 @@
 """Test suite for _new_client method parameter types using correct module aliases.
 
 This validates that _new_client methods use proper Protocol module aliases
-(e.g., _HolderModule.Server, _IdentifiableModule.Server) instead of
+(e.g., _HolderModule.Server, _IdentifiableInterfaceModule.Server) instead of
 user-facing type names (e.g., Holder.Server, Identifiable.Server).
 """
 
@@ -25,7 +25,8 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
 
     # Calculator._new_client should accept _DynamicCapabilityServer
     assert (
-        "def _new_client(self, server: _DynamicCapabilityServer) -> _CalculatorModule.CalculatorClient:" in content
+        "def _new_client(self, server: _DynamicCapabilityServer) -> _CalculatorInterfaceModule.CalculatorClient:"
+        in content
     ), "_new_client should use _DynamicCapabilityServer"
 
 
@@ -37,13 +38,14 @@ def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs):
 
     # Identifiable._new_client should accept _DynamicCapabilityServer
     assert (
-        "def _new_client(self, server: _DynamicCapabilityServer) -> _IdentifiableModule.IdentifiableClient:" in content
+        "def _new_client(self, server: _DynamicCapabilityServer) -> _IdentifiableInterfaceModule.IdentifiableClient:"
+        in content
     ), "Identifiable._new_client should use _DynamicCapabilityServer"
 
     # Holder._new_client should accept _DynamicCapabilityServer
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _HolderModule.HolderClient:" in content, (
-        "Holder._new_client should use _DynamicCapabilityServer"
-    )
+    assert (
+        "def _new_client(self, server: _DynamicCapabilityServer) -> _HolderInterfaceModule.HolderClient:" in content
+    ), "Holder._new_client should use _DynamicCapabilityServer"
 
     # IdentifiableHolder extends both Identifiable and Holder
     # Its _new_client should accept _DynamicCapabilityServer
@@ -60,15 +62,15 @@ def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs):
 
     for line in new_client_lines:
         # None of the parameter types should use user-facing names without proper module prefix
-        # The pattern "Holder.Server" without "_HolderModule" is incorrect
-        # The pattern "Identifiable.Server" without "_IdentifiableModule" is incorrect
+        # The pattern "Holder.Server" without "_HolderInterfaceModule" is incorrect
+        # The pattern "Identifiable.Server" without "_IdentifiableInterfaceModule" is incorrect
         if "Holder.Server" in line:
-            assert "_HolderModule.Server" in line, (
-                f"Found incorrect Holder.Server (should be _HolderModule.Server) in: {line}"
+            assert "_HolderInterfaceModule.Server" in line, (
+                f"Found incorrect Holder.Server (should be _HolderInterfaceModule.Server) in: {line}"
             )
         if "Identifiable.Server" in line:
-            assert "_IdentifiableModule.Server" in line, (
-                f"Found incorrect Identifiable.Server (should be _IdentifiableModule.Server) in: {line}"
+            assert "_IdentifiableInterfaceModule.Server" in line, (
+                f"Found incorrect Identifiable.Server (should be _IdentifiableInterfaceModule.Server) in: {line}"
             )
 
 
@@ -94,9 +96,9 @@ def test_new_client_return_types_use_client_aliases(zalfmas_stubs):
     content = stub_file.read_text()
 
     # _new_client should return Client types
-    assert "_IdentifiableModule.IdentifiableClient:" in content
-    assert "_HolderModule.HolderClient:" in content
-    assert "_IdentifiableHolderModule.IdentifiableHolderClient:" in content
+    assert "_IdentifiableInterfaceModule.IdentifiableClient:" in content
+    assert "_HolderInterfaceModule.HolderClient:" in content
+    assert "_IdentifiableHolderInterfaceModule.IdentifiableHolderClient:" in content
 
 
 if __name__ == "__main__":

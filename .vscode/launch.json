@@ -5,13 +5,13 @@
             "name": "Python: CLI Debugger",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/capnp_stub_generator/__main__.py",
+            "program": "${workspaceFolder}/src/capnp_stub_generator/__main__.py",
             "console": "integratedTerminal",
             "args": [
                 "-I",
-                "${workspaceFolder}/tests/zalfmas_capnp_schemas",
+                "${workspaceFolder}/tests/schemas/zalfmas",
                 "-p",
-                "${workspaceFolder}/tests/zalfmas_capnp_schemas/fbp.capnp",
+                "${workspaceFolder}/tests/schemas/zalfmas/fbp.capnp",
                 "-o",
                 "${workspaceFolder}/tests/_generated/zalfmas",
             ]

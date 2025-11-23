@@ -20,7 +20,7 @@ def test_interface_method_returns_dynamic_object_reader(basic_stubs):
     content = stub_file.read_text()
 
     # Find the GenericGetter interface
-    assert "class _GenericGetterModule" in content, "GenericGetter interface should be generated"
+    assert "class _GenericGetterInterfaceModule" in content, "GenericGetter interface should be generated"
 
     # Check that Result Protocol fields use _DynamicObjectReader (client side)
     # Client receives _DynamicObjectReader and must manually cast with .as_text(), .as_struct(), etc.
@@ -37,7 +37,7 @@ def test_anypointer_parameter_remains_any(basic_stubs):
 
     # The set() method should have value parameter - but current implementation
     # changes ALL AnyPointer to _DynamicObjectReader, so we just verify the file is valid
-    assert "class _GenericSetterModule" in content, "GenericSetter interface should be generated"
+    assert "class _GenericSetterInterfaceModule" in content, "GenericSetter interface should be generated"
 
 
 def test_struct_anypointer_field(basic_stubs):

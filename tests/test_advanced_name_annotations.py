@@ -13,8 +13,8 @@ def test_name_annotations(basic_stubs):
 
     # The Python API uses the original names from the schema, not the C++ annotations
     # With _StructModule structure, check for the module and annotation
-    assert "class _BadNameModule(_StructModule):" in content, "BadName _StructModule should use original name"
-    assert "BadName: _BadNameModule" in content, "BadName annotation should exist"
+    assert "class _BadNameStructModule(_StructModule):" in content, "BadName _StructModule should use original name"
+    assert "BadName: _BadNameStructModule" in content, "BadName annotation should exist"
 
     # Check that the struct has the expected fields (using original names)
     assert "union {" in content or "def badField(self)" in content or "def alt(self)" in content, (
@@ -27,12 +27,12 @@ def test_name_annotations(basic_stubs):
     found_oops_enum = False
 
     for line in lines:
-        if "class _BadNameModule(_StructModule):" in line:
+        if "class _BadNameStructModule(_StructModule):" in line:
             in_badname = True
-        elif in_badname and line.startswith("class ") and "_BadNameModule" not in line and "Oops" not in line:
+        elif in_badname and line.startswith("class ") and "_BadNameStructModule" not in line and "Oops" not in line:
             in_badname = False
 
-        if in_badname and "class _OopsModule:" in line:
+        if in_badname and "class _OopsEnumModule:" in line:
             found_oops_enum = True
             break
 

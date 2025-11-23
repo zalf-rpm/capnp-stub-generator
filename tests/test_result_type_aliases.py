@@ -22,17 +22,17 @@ def test_result_type_aliases_point_to_client_nested_types(calculator_stubs):
     content = stub_file.read_text()
 
     # Result types should point to Client.Result (not Server.Result)
-    assert "type EvaluateResult = _CalculatorModule.CalculatorClient.EvaluateResult" in content, (
+    assert "type EvaluateResult = _CalculatorInterfaceModule.CalculatorClient.EvaluateResult" in content, (
         "EvaluateResult should point to CalculatorClient.EvaluateResult"
     )
 
-    assert "type ReadResult = _CalculatorModule._ValueModule.ValueClient.ReadResult" in content, (
+    assert "type ReadResult = _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult" in content, (
         "ReadResult should point to ValueClient.ReadResult"
     )
 
-    assert "type CallResult = _CalculatorModule._FunctionModule.FunctionClient.CallResult" in content, (
-        "CallResult should point to FunctionClient.CallResult"
-    )
+    assert (
+        "type CallResult = _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient.CallResult" in content
+    ), "CallResult should point to FunctionClient.CallResult"
 
 
 def test_result_type_aliases_alongside_builder_reader(calculator_stubs):
@@ -125,7 +125,7 @@ def test_result_type_alias_usage_in_type_hints(calculator_stubs):
     # The type aliases should be at module level, making them usable:
     # def my_function() -> EvaluateResult: ...
     # This is verified by the presence of the type alias definition
-    assert "type EvaluateResult = _CalculatorModule.CalculatorClient.EvaluateResult" in content
+    assert "type EvaluateResult = _CalculatorInterfaceModule.CalculatorClient.EvaluateResult" in content
 
     # And the actual Result class should be nested in Client
     assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in content

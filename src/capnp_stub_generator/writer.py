@@ -10,10 +10,10 @@ import os.path
 import pathlib
 from collections.abc import Sequence
 from copy import copy
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import capnp
-from capnp.lib.capnp import _DynamicStructReader, _EnumSchema, _InterfaceSchema, _ParsedSchema, _StructSchema
+from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _ParsedSchema, _StructSchema
 
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
@@ -27,6 +27,11 @@ from capnp_stub_generator.writer_dto import (
     StructFieldsCollection,
     StructGenerationContext,
 )
+
+if TYPE_CHECKING:
+    from capnp.lib.capnp import _CapnpModuleType
+
+    from tests._generated.capnp.schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
 
 capnp.remove_import_hook()
 
@@ -69,7 +74,7 @@ class Writer:
 
     def __init__(
         self,
-        module: capnp.lib.capnp._CapnpModuleType,
+        module: _CapnpModuleType,
         module_registry: capnp_types.ModuleRegistryType,
         output_directory: str | None = None,
         import_paths: list[str] | None = None,
@@ -82,16 +87,16 @@ class Writer:
             output_directory (str | None): The directory where output files are written, if different from schema location.
             import_paths (list[str] | None): Additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).
         """
-        self.scope = Scope(name="", id=module.schema.node.id, parent=None, return_scope=None)
+        self.scope: Scope = Scope(name="", id=module.schema.node.id, parent=None, return_scope=None)
         self.scopes_by_id: dict[int, Scope] = {self.scope.id: self.scope}
 
-        self._module = module
-        self._module_registry = module_registry
-        self._output_directory = pathlib.Path(output_directory) if output_directory else None
-        self._import_paths = [pathlib.Path(p) for p in import_paths] if import_paths else []
+        self._module: _CapnpModuleType = module
+        self._module_registry: capnp_types.ModuleRegistryType = module_registry
+        self._output_directory: pathlib.Path | None = pathlib.Path(output_directory) if output_directory else None
+        self._import_paths: list[pathlib.Path] = [pathlib.Path(p) for p in import_paths] if import_paths else []
 
         if self._module.__file__:
-            self._module_path = pathlib.Path(self._module.__file__)
+            self._module_path: pathlib.Path = pathlib.Path(self._module.__file__)
 
         else:
             raise ValueError("The module has no file path attached to it.")
@@ -122,18 +127,41 @@ class Writer:
         self._all_type_aliases: dict[str, tuple[str, str] | tuple[str, str, list[str]]] = {}
 
         # Track if we need _DynamicObjectReader augmentation (for AnyPointer in interface returns)
-        self._needs_dynamic_object_reader_augmentation = False
+        self._needs_dynamic_object_reader_augmentation: bool = False
 
         # Track if we need AnyPointer type alias (for generic parameter fields)
-        self._needs_anypointer_alias = False
-        self._needs_capability_alias = False
-        self._needs_anystruct_alias = False
-        self._needs_anylist_alias = False
+        self._needs_anypointer_alias: bool = False
+        self._needs_capability_alias: bool = False
+        self._needs_anystruct_alias: bool = False
+        self._needs_anylist_alias: bool = False
 
         # Track generated list types to avoid duplicates
         self._generated_list_types: set[str] = set()
 
-        self.docstring = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
+        self.docstring: str = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
+
+    def _extract_name_from_protocol(self, protocol_name: str) -> str:
+        """Extract user-facing name from Protocol name.
+
+        Handles:
+        - _{Name}StructModule -> {Name}
+        - _{Name}InterfaceModule -> {Name}
+        - _{Name}EnumModule -> {Name}
+        - _{Name}Module -> {Name} (legacy/base)
+        """
+        if not protocol_name.startswith("_"):
+            return protocol_name
+
+        if protocol_name.endswith("StructModule"):
+            return protocol_name[1:-12]
+        elif protocol_name.endswith("InterfaceModule"):
+            return protocol_name[1:-15]
+        elif protocol_name.endswith("EnumModule"):
+            return protocol_name[1:-10]
+        elif protocol_name.endswith("Module"):
+            return protocol_name[1:-6]
+
+        return protocol_name
 
     def _build_nested_builder_type(self, base_type: str) -> str:
         """Convert a type name to its Builder form using nested class syntax.
@@ -167,11 +195,11 @@ class Writer:
             The flat Builder alias name if the type is defined in this module (e.g., "ExpressionBuilder"),
             or None if the type is imported from another module
         """
-        # Extract the last component (e.g., "_ExpressionModule")
+        # Extract the last component (e.g., "_ExpressionStructModule")
         last_part = module_type.split(".")[-1]
         # Remove "_" prefix and "Module" suffix to get the base name
-        if last_part.startswith("_") and last_part.endswith("Module"):
-            base_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+        if last_part.startswith("_"):
+            base_name = self._extract_name_from_protocol(last_part)
             alias_name = helper.new_builder_flat(base_name)
             # Check if this alias is defined in the current module
             if alias_name in self._all_type_aliases:
@@ -191,11 +219,11 @@ class Writer:
             The flat Reader alias name if the type is defined in this module (e.g., "ExpressionReader"),
             or None if the type is imported from another module
         """
-        # Extract the last component (e.g., "_ExpressionModule")
+        # Extract the last component (e.g., "_ExpressionStructModule")
         last_part = module_type.split(".")[-1]
         # Remove "_" prefix and "Module" suffix to get the base name
-        if last_part.startswith("_") and last_part.endswith("Module"):
-            base_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+        if last_part.startswith("_"):
+            base_name = self._extract_name_from_protocol(last_part)
             alias_name = helper.new_reader_flat(base_name)
             # Check if this alias is defined in the current module
             if alias_name in self._all_type_aliases:
@@ -215,11 +243,11 @@ class Writer:
             The flat Client alias name if the type is defined in this module (e.g., "ValueClient"),
             or None if the type is imported from another module
         """
-        # Extract the last component (e.g., "_ValueModule")
+        # Extract the last component (e.g., "_ValueInterfaceModule")
         last_part = module_type.split(".")[-1]
         # Remove "_" prefix and "Module" suffix to get the base name
-        if last_part.startswith("_") and last_part.endswith("Module"):
-            base_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+        if last_part.startswith("_"):
+            base_name = self._extract_name_from_protocol(last_part)
             alias_name = f"{base_name}Client"
             # Check if this alias is defined in the current module
             if alias_name in self._all_type_aliases:
@@ -247,11 +275,11 @@ class Writer:
             "Gateway" -> "Gateway"
         """
         parts = path.split(".")
-        runtime_parts = []
+        runtime_parts: list[str] = []
         for part in parts:
-            if part.startswith("_") and part.endswith("Module"):
+            if part.startswith("_"):
                 # Strip "_" prefix and "Module" suffix to get user-facing name
-                runtime_parts.append(part[1:-6])
+                runtime_parts.append(self._extract_name_from_protocol(part))
             else:
                 runtime_parts.append(part)
         return ".".join(runtime_parts)
@@ -879,8 +907,6 @@ class Writer:
     def _gen_struct_base_class(
         self,
         slot_fields: list[helper.TypeHintedVariable],
-        init_choices: list[InitChoice],
-        schema: _StructSchema,
         reader_type_name: str,
         builder_type_name: str,
     ):
@@ -958,7 +984,6 @@ class Writer:
         slot_fields: list[helper.TypeHintedVariable],
         init_choices: list[InitChoice],
         list_init_choices: list[tuple[str, str]],
-        builder_type_name: str,
         reader_type_name: str,
         schema: _StructSchema,
     ):
@@ -1009,7 +1034,7 @@ class Writer:
         Returns:
             list[str]: List of base interface module class names (e.g., ["_IdentifiableModule"]).
         """
-        base_classes = []
+        base_classes: list[str] = []
 
         # Process interface inheritance (extends)
         if schema.node.which() == "interface":
@@ -1030,7 +1055,7 @@ class Writer:
                     # Superclass not yet registered - try to generate it first
                     try:
                         # Try to find and generate the superclass from the module registry
-                        for module_id, (path, module) in self._module_registry.items():
+                        for module_id, (_, module) in self._module_registry.items():
                             if module_id == superclass.id:
                                 # Found the superclass module, generate it
                                 self.generate_nested(module.schema)
@@ -1045,7 +1070,7 @@ class Writer:
                                 break
 
                             # Check if it's a nested type in the module
-                            def find_nested_schema(schema_obj, target_id):
+                            def find_nested_schema(schema_obj: _ParsedSchema, target_id: int) -> _ParsedSchema | None:
                                 for nested_node in schema_obj.node.nestedNodes:
                                     if nested_node.id == target_id:
                                         return schema_obj.get_nested(nested_node.name)
@@ -1084,16 +1109,16 @@ class Writer:
         """
         # Build runtime path for this interface (handles nested interfaces)
         # Use self.scope.trace to get the full path including current interface
-        runtime_path = []
+        runtime_path: list[str] = []
         for s in self.scope.trace:
             if s.is_root:
                 continue
             # Convert Protocol name back to runtime name
-            # e.g., "_CalculatorModule" -> "Calculator"
+            # e.g., "_CalculatorStructModule" -> "Calculator"
             runtime_name = s.name
-            if runtime_name.startswith("_") and runtime_name.endswith("Module"):
+            if runtime_name.startswith("_"):
                 # Strip underscore prefix and Module suffix to get user-facing name
-                runtime_name = runtime_name[1:-6]  # Remove "_" and "Module"
+                runtime_name = self._extract_name_from_protocol(runtime_name)
             runtime_path.append(runtime_name)
 
         # Save current interface scope before generating nested types
@@ -1114,7 +1139,7 @@ class Writer:
         # Restore interface scope after generating nested types
         self.scope = interface_scope
 
-    def _add_new_client_method(self, name: str, schema: _InterfaceSchema, client_return_type: str | None = None):
+    def _add_new_client_method(self, name: str, client_return_type: str | None = None):
         """Add _new_client() class method to create capability client from Server.
 
         Args:
@@ -1154,7 +1179,7 @@ class Writer:
 
     # ===== Slot Generation Methods =====
 
-    def _generate_list_class(self, type_reader: _DynamicStructReader) -> tuple[str, str, str]:
+    def _generate_list_class(self, type_reader: TypeReader) -> tuple[str, str, str]:
         """Generate a specific List class for the given list type reader.
 
         Args:
@@ -1192,9 +1217,9 @@ class Writer:
             # Base name for list class (sanitize dots)
             # Use only the last component to avoid scoped names in list class
             last_component = struct_name.split(".")[-1]
-            if last_component.startswith("_") and last_component.endswith("Module"):
-                # Clean up protocol names: _CalculatorModule -> Calculator
-                base_name = last_component[1:-6]
+            if last_component.startswith("_"):
+                # Clean up protocol names: _CalculatorStructModule -> Calculator
+                base_name = self._extract_name_from_protocol(last_component)
             else:
                 base_name = last_component
 
@@ -1240,8 +1265,8 @@ class Writer:
                 # Try to extract from protocol name
                 parts = interface_name.split(".")
                 last = parts[-1]
-                if last.startswith("_") and last.endswith("Module"):
-                    client_alias = f"{last[1:-6]}Client"
+                if last.startswith("_"):
+                    client_alias = f"{self._extract_name_from_protocol(last)}Client"
                 else:
                     client_alias = f"{interface_name}Client"
 
@@ -1316,9 +1341,8 @@ class Writer:
 
     def gen_slot(
         self,
-        raw_field: Any,
-        field: Any,
-        new_type: CapnpType,
+        raw_field: FieldReader,
+        field: FieldReader,
         init_choices: list[InitChoice],
         list_init_choices: list[tuple[str, str]] | None = None,
     ) -> helper.TypeHintedVariable | None:
@@ -1338,7 +1362,7 @@ class Writer:
         field_slot_type = field.slot.type.which()
 
         if field_slot_type == capnp_types.CapnpElementType.LIST:
-            hinted_variable = self.gen_list_slot(field, raw_field.schema)
+            hinted_variable = self.gen_list_slot(field)
             # Track list fields for init() overloads
             if list_init_choices is not None and hinted_variable:
                 # Get the Builder type for the list
@@ -1369,7 +1393,7 @@ class Writer:
                 hinted_variable.add_reader_from_primary_type()
 
         elif field_slot_type == capnp_types.CapnpElementType.ANY_POINTER:
-            hinted_variable = self.gen_any_pointer_slot(field, new_type)
+            hinted_variable = self.gen_any_pointer_slot(field)
 
         elif field_slot_type == capnp_types.CapnpElementType.INTERFACE:
             # Interfaces are represented as Protocols; expose attribute with Protocol type
@@ -1383,20 +1407,20 @@ class Writer:
             except Exception:
                 type_name = "Any"
                 self._add_typing_import("Union")
-            # For interfaces, type_name from get_type_name is now the Protocol name (_<Name>Module)
-            # E.g., "_HeartbeatModule" or "Calculator._FunctionModule"
+            # For interfaces, type_name from get_type_name is now the Protocol name (_<Name>InterfaceModule)
+            # E.g., "_HeartbeatInterfaceModule" or "Calculator._FunctionInterfaceModule"
             if type_name != "Any":
-                # Protocol name is already in _<Name>Module format
+                # Protocol name is already in _<Name>InterfaceModule format
                 protocol_type_name = type_name
 
                 # Extract user-facing name and build nested Client reference
-                # E.g., "_HeartbeatModule" -> "_HeartbeatModule.HeartbeatClient"
-                # E.g., "Calculator._FunctionModule" -> "Calculator._FunctionModule.FunctionClient"
+                # E.g., "_HeartbeatInterfaceModule" -> "_HeartbeatInterfaceModule.HeartbeatClient"
+                # E.g., "Calculator._FunctionInterfaceModule" -> "Calculator._FunctionInterfaceModule.FunctionClient"
                 parts = type_name.split(".")
-                last_part = parts[-1]  # "_HeartbeatModule"
-                # Extract base name: "_HeartbeatModule" -> "Heartbeat"
-                if last_part.startswith("_") and last_part.endswith("Module"):
-                    user_facing_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+                last_part = parts[-1]  # "_HeartbeatInterfaceModule"
+                # Extract base name: "_HeartbeatInterfaceModule" -> "Heartbeat"
+                if last_part.startswith("_"):
+                    user_facing_name = self._extract_name_from_protocol(last_part)
                     client_type = f"{protocol_type_name}.{user_facing_name}Client"
                 else:
                     # Fallback for edge cases
@@ -1418,8 +1442,7 @@ class Writer:
 
     def gen_list_slot(
         self,
-        field: capnp._DynamicStructReader,
-        schema: capnp._ListSchema,
+        field: FieldReader,
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `list`.
 
@@ -1431,7 +1454,7 @@ class Writer:
             helper.TypeHintedVariable: The extracted hinted variable object.
         """
         # Generate the specific list class
-        list_class_name, reader_alias, builder_alias = self._generate_list_class(field.slot.type)
+        _, reader_alias, builder_alias = self._generate_list_class(field.slot.type)
 
         # Create TypeHintedVariable
         # Primary type is Reader (for read-only access)
@@ -1464,11 +1487,11 @@ class Writer:
             helper.sanitize_name(field.name), [helper.TypeHint(python_type_name, primary=True)]
         )
 
-    def gen_enum_slot(self, field: capnp._DynamicStructReader, schema: _EnumSchema) -> helper.TypeHintedVariable:
+    def gen_enum_slot(self, field: FieldReader, schema: _StructSchema) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `enum`.
 
         Args:
-            field (_DynamicStructReader): The field reader.
+            field (FieldReader): The field reader.
             schema (_EnumSchema): The schema of the field.
 
         Returns:
@@ -1497,7 +1520,7 @@ class Writer:
 
     def gen_struct_slot(
         self,
-        field: capnp._DynamicStructReader,
+        field: FieldReader,
         schema: _StructSchema,
         init_choices: list[InitChoice],
     ) -> helper.TypeHintedVariable:
@@ -1515,7 +1538,7 @@ class Writer:
             # Try to register as an import first, then generate if needed
             imported = self.register_import(schema)
             if imported is None:
-                self.gen_struct(schema)
+                _ = self.gen_struct(schema)
 
         type_name = self.get_type_name(field.slot.type)
         init_choices.append((helper.sanitize_name(field.name), type_name))
@@ -1529,13 +1552,11 @@ class Writer:
             pass
         return helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
 
-    def gen_any_pointer_slot(
-        self, field: capnp._DynamicStructReader, new_type: CapnpType
-    ) -> helper.TypeHintedVariable | None:
+    def gen_any_pointer_slot(self, field: FieldReader) -> helper.TypeHintedVariable | None:
         """Generate a slot, which contains an `any_pointer` object.
 
         Args:
-            field (_DynamicStructReader): The field reader.
+            field (FieldReader): The field reader.
             new_type (CapnpType): The new type that was registered previously.
 
         Returns:
@@ -1662,8 +1683,8 @@ class Writer:
         # Get the user-facing enum name
         name = helper.get_display_name(schema)
 
-        # Create Enum class name (e.g., _TestEnumModule)
-        enum_class_name = f"_{name}Module"
+        # Create Enum class name (e.g., _TestEnumEnumModule)
+        enum_class_name = f"_{name}EnumModule"
 
         # No special imports needed - just a plain class
         self._add_enum_import()
@@ -1685,10 +1706,10 @@ class Writer:
         flat_name = name
         s = enum_parent_scope
         while s and not s.is_root:
-            # s.name is like _CalculatorModule
+            # s.name is like _CalculatorStructModule
             # Extract Calculator
-            if s.name.startswith("_") and s.name.endswith("Module"):
-                part = s.name[1:-6]
+            if s.name.startswith("_"):
+                part = self._extract_name_from_protocol(s.name)
             else:
                 part = s.name
             flat_name = f"{part}{flat_name}"
@@ -1766,7 +1787,7 @@ class Writer:
             type_name = helper.get_display_name(schema)
 
         # Create _StructModule class declaration
-        protocol_class_name = f"_{type_name}Module"
+        protocol_class_name = f"_{type_name}StructModule"
         protocol_declaration = helper.new_class_declaration(protocol_class_name, parameters=["_StructModule"])
 
         # Create scope using the Protocol class name
@@ -1788,9 +1809,8 @@ class Writer:
 
     def _resolve_nested_schema(
         self,
-        nested_node: Any,
+        nested_node: NestedNodeReader,
         parent_schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema,
-        parent_type_name: str,
     ) -> _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema | None:
         """Resolve a nested schema from a nested node, with fallback strategies.
 
@@ -1826,7 +1846,7 @@ class Writer:
             logger.debug(f"Could not resolve nested node {nested_node.name}: {e}")
             return None
 
-    def _generate_nested_types(self, schema: _StructSchema, type_name: str) -> None:
+    def _generate_nested_types(self, schema: _StructSchema) -> None:
         """Generate all nested types (structs, enums, interfaces) within this struct.
 
         Nested types must be generated before processing fields so they're available
@@ -1837,16 +1857,15 @@ class Writer:
             type_name: The name of the parent type (for error messages and fallback)
         """
         for nested_node in schema.node.nestedNodes:
-            nested_schema = self._resolve_nested_schema(nested_node, schema, type_name)
+            nested_schema = self._resolve_nested_schema(nested_node, schema)
             if nested_schema:
                 # Don't catch exceptions - let them propagate for debugging
                 self.generate_nested(nested_schema)
 
     def _process_slot_field(
         self,
-        field: Any,
-        raw_field: Any,
-        context: StructGenerationContext,
+        field: FieldReader,
+        raw_field: FieldReader,
         fields_collection: StructFieldsCollection,
     ) -> None:
         """Process a SLOT field and add to collection.
@@ -1860,7 +1879,6 @@ class Writer:
         slot_field = self.gen_slot(
             raw_field,
             field,
-            context.new_type,
             fields_collection.init_choices,
             fields_collection.list_init_choices,
         )
@@ -1870,8 +1888,8 @@ class Writer:
 
     def _process_group_field(
         self,
-        field: Any,
-        raw_field: Any,
+        field: FieldReader,
+        raw_field: FieldReader,
         fields_collection: StructFieldsCollection,
     ) -> None:
         """Process a GROUP field and add to collection.
@@ -1884,7 +1902,13 @@ class Writer:
             fields_collection: The collection to add the field to
         """
         # Capitalize first letter for group type name
-        group_name = field.name[0].upper() + field.name[1:]
+        # Always scope group type name to parent to avoid collisions
+        # e.g. Node.struct -> NodeStruct, Type.struct -> TypeStruct
+        # e.g. Person.address -> PersonAddress, Company.address -> CompanyAddress
+        parent_protocol = self.scope.name
+        parent_name = self._extract_name_from_protocol(parent_protocol)
+        group_name = f"{parent_name}{field.name[0].upper() + field.name[1:]}"
+
         assert group_name != field.name
 
         # Generate the group struct recursively
@@ -1931,7 +1955,7 @@ class Writer:
             field_type = field.which()
 
             if field_type == capnp_types.CapnpFieldType.SLOT:
-                self._process_slot_field(field, raw_field, context, fields_collection)
+                self._process_slot_field(field, raw_field, fields_collection)
             elif field_type == capnp_types.CapnpFieldType.GROUP:
                 self._process_group_field(field, raw_field, fields_collection)
             else:
@@ -1993,14 +2017,12 @@ class Writer:
         self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
 
         # Use flat aliases for return types
-        builder_return_type = context.builder_type_name
         reader_return_type = context.reader_type_name
 
         self._gen_struct_builder_class(
             fields_collection.slot_fields,
             fields_collection.init_choices,
             fields_collection.list_init_choices,
-            builder_return_type,
             reader_return_type,
             context.schema,
         )
@@ -2016,7 +2038,7 @@ class Writer:
         """Generate _StructModule with nested Reader and Builder classes, plus TypeAlias declarations.
 
         This generates:
-        1. The _<Name>Module class (inheriting from _StructModule) with nested Reader and Builder classes
+        1. The _<Name>StructModule class (inheriting from _StructModule) with nested Reader and Builder classes
         2. TypeAlias declarations for <Name>Reader and <Name>Builder
         3. For top-level structs: TypeAlias for <Name> pointing to the Module
         4. For nested structs: attribute annotation linking to the Module
@@ -2026,7 +2048,7 @@ class Writer:
             fields_collection: Processed fields and init choices
             protocol_declaration: The Module class declaration string
         """
-        protocol_class_name = f"_{context.type_name}Module"
+        protocol_class_name = f"_{context.type_name}StructModule"
         is_nested = self.scope.parent and not self.scope.parent.is_root
 
         # Add Protocol class declaration to parent scope
@@ -2045,8 +2067,6 @@ class Writer:
         # Generate base Protocol methods (static methods, to_dict, etc.)
         self._gen_struct_base_class(
             fields_collection.slot_fields,
-            fields_collection.init_choices,
-            context.schema,
             context.reader_type_name,
             builder_return_type_for_base,
         )
@@ -2059,8 +2079,10 @@ class Writer:
         if is_nested:
             # Add aliases for Reader and Builder at current scope for nested types
             # Use type statement (PEP 695) for consistency
-            self.scope.add(f"type {context.reader_type_name} = {protocol_class_name}.Reader")
-            self.scope.add(f"type {context.builder_type_name} = {protocol_class_name}.Builder")
+            # Use the registered type's scope to ensure it goes to the right place (parent scope)
+            target_scope = context.new_type.scope if context.new_type.scope else self.scope
+            target_scope.add(f"type {context.reader_type_name} = {protocol_class_name}.Reader")
+            target_scope.add(f"type {context.builder_type_name} = {protocol_class_name}.Builder")
 
         # Track for top-level TypeAliases (both nested and top-level)
         # Use scoped names which include the full path (e.g., "_PersonModule._PhoneNumberModule.Reader")
@@ -2106,7 +2128,7 @@ class Writer:
         self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
 
         # Phase 2: Generate nested types (must be done before field processing)
-        self._generate_nested_types(schema, context.type_name)
+        self._generate_nested_types(schema)
 
         # Phase 3: Process all struct fields
         fields_collection = self._process_struct_fields(schema, context)
@@ -2137,9 +2159,9 @@ class Writer:
         # Get display name
         name = helper.get_display_name(schema)
 
-        # Register type with Protocol name (_<Name>Module) for correct internal references
+        # Register type with Protocol name (_<Name>InterfaceModule) for correct internal references
         # This ensures get_type_name() returns the Protocol name, not the user-facing name
-        protocol_name = f"_{name}Module"
+        protocol_name = f"_{name}InterfaceModule"
         parent_scope = self.scopes_by_id.get(schema.node.scopeId, self.scope.root)
         registered_type = self.register_type(schema.node.id, schema, name=protocol_name, scope=parent_scope)
 
@@ -2175,11 +2197,11 @@ class Writer:
                 if s.is_root:
                     continue
                 # Map Protocol scope names back to runtime names
-                # E.g., "_MetadataModule" -> "Metadata"
+                # E.g., "_MetadataStructModule" -> "Metadata"
                 runtime_name = s.name
-                if runtime_name.endswith("Module"):
+                if runtime_name.startswith("_"):
                     # Strip "_" prefix and "Module" suffix for struct Protocols
-                    runtime_name = runtime_name[1:-6]  # Remove leading "_" and trailing "Module"
+                    runtime_name = self._extract_name_from_protocol(runtime_name)
                 runtime_iface = getattr(runtime_iface, runtime_name)
 
             iface_schema = cast(_InterfaceSchema, runtime_iface.schema)
@@ -2278,10 +2300,10 @@ class Writer:
             # Handle INTERFACE: use Client alias if available
             elif field_type == capnp_types.CapnpElementType.INTERFACE:
                 # Extract interface name for the Client alias
-                # base_type is like "_IdentifiableModule" or "_ParentModule._NestedInterfaceModule"
+                # base_type is like "_IdentifiableInterfaceModule" or "_ParentStructModule._NestedInterfaceModule"
                 last_part = base_type.split(".")[-1]
-                if last_part.startswith("_") and last_part.endswith("Module"):
-                    interface_name = last_part[1:-6]  # Remove "_" prefix and "Module" suffix
+                if last_part.startswith("_"):
+                    interface_name = self._extract_name_from_protocol(last_part)
                     client_alias = f"{interface_name}Client"
                 else:
                     client_alias = None
@@ -2345,8 +2367,8 @@ class Writer:
     def _get_client_type_name_from_interface_path(self, interface_path: str) -> str:
         """Extract client type name from interface path.
 
-        E.g., "_HolderModule" -> "HolderClient"
-              "_CalculatorModule._FunctionModule" -> "FunctionClient"
+        E.g., "_HolderInterfaceModule" -> "HolderClient"
+              "_CalculatorInterfaceModule._FunctionInterfaceModule" -> "FunctionClient"
 
         Args:
             interface_path: The full interface path
@@ -2354,10 +2376,10 @@ class Writer:
         Returns:
             The client type name
         """
-        # Get the last component: "_HolderModule" -> "_HolderModule"
+        # Get the last component: "_HolderInterfaceModule" -> "_HolderInterfaceModule"
         last_component = interface_path.split(".")[-1]
-        # Remove "_" prefix and "Module" suffix: "_HolderModule" -> "Holder"
-        name = last_component.replace("_", "").replace("Module", "")
+        # Remove "_" prefix and "Module" suffix: "_HolderInterfaceModule" -> "Holder"
+        name = self._extract_name_from_protocol(last_component)
         # Add "Client" suffix: "Holder" -> "HolderClient"
         return f"{name}Client"
 
@@ -2375,7 +2397,7 @@ class Writer:
         Returns:
             List of (field_name, list_builder_type) tuples
         """
-        list_params = []
+        list_params: list[tuple[str, str]] = []
 
         if method_info.param_schema is None:
             return list_params
@@ -2475,7 +2497,7 @@ class Writer:
             List of lines for the Request Protocol class
         """
         request_class_name = f"{helper.sanitize_name(method_info.method_name).title()}Request"
-        lines = []
+        lines: list[str] = []
 
         # Class declaration
         lines.append(f"class {request_class_name}(Protocol):")
@@ -2613,12 +2635,12 @@ class Writer:
                                     field_type = f"{builder_type} | {reader_type}"
                         elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                             # For interface types, use the nested Client class
-                            # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
+                            # field_type is Protocol name like "_ReaderInterfaceModule" or "_ChannelStructModule._ReaderInterfaceModule"
                             parts = field_type.split(".")
                             last_part = parts[-1]
-                            if last_part.startswith("_") and last_part.endswith("Module"):
-                                # Extract user-facing name: "_ReaderModule" -> "Reader"
-                                user_facing_name = last_part[1:-6]
+                            if last_part.startswith("_"):
+                                # Extract user-facing name: "_ReaderInterfaceModule" -> "Reader"
+                                user_facing_name = self._extract_name_from_protocol(last_part)
                                 client_type = f"{field_type}.{user_facing_name}Client"
                                 server_type = f"{field_type}.Server"
                             else:
@@ -2759,12 +2781,12 @@ class Writer:
                                 init_fields.append((rf, builder_type))
                     elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                         # For interface types, use the nested Client class
-                        # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
+                        # field_type is Protocol name like "_ReaderInterfaceModule" or "_ChannelStructModule._ReaderInterfaceModule"
                         parts = field_type.split(".")
                         last_part = parts[-1]
-                        if last_part.startswith("_") and last_part.endswith("Module"):
-                            # Extract user-facing name: "_ReaderModule" -> "Reader"
-                            user_facing_name = last_part[1:-6]
+                        if last_part.startswith("_"):
+                            # Extract user-facing name: "_ReaderInterfaceModule" -> "Reader"
+                            user_facing_name = self._extract_name_from_protocol(last_part)
                             client_type = f"{field_type}.{user_facing_name}Client"
                             server_type = f"{field_type}.Server"
                         else:
@@ -2965,12 +2987,12 @@ class Writer:
                 # For interfaces in NamedTuples, server returns Interface.Server
                 elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
                     # For interface types, use the nested Client class
-                    # field_type is Protocol name like "_ReaderModule" or "_ChannelModule._ReaderModule"
+                    # field_type is Protocol name like "_ReaderInterfaceModule" or "_ChannelStructModule._ReaderInterfaceModule"
                     parts = field_type.split(".")
                     last_part = parts[-1]
-                    if last_part.startswith("_") and last_part.endswith("Module"):
-                        # Extract user-facing name: "_ReaderModule" -> "Reader"
-                        user_facing_name = last_part[1:-6]
+                    if last_part.startswith("_"):
+                        # Extract user-facing name: "_ReaderInterfaceModule" -> "Reader"
+                        user_facing_name = self._extract_name_from_protocol(last_part)
                         client_type = f"{field_type}.{user_facing_name}Client"
                         server_type = f"{field_type}.Server"
                     else:
@@ -3332,7 +3354,7 @@ class Writer:
 
             # Get struct name for Builder type generation
             # Use get_type_by_id to ensure the type is generated and get its Protocol name
-            # e.g. "_IdInformationModule"
+            # e.g. "_IdInformationStructModule"
             if method_info.result_schema is None:
                 raise ValueError("Result schema is None for direct struct return")
 
@@ -3396,7 +3418,7 @@ class Writer:
             for superclass in interface_node.superclasses:
                 try:
                     superclass_type = self.get_type_by_id(superclass.id)
-                    # superclass_type.name is now the Protocol name (e.g., "_IdentifiableModule")
+                    # superclass_type.name is now the Protocol name (e.g., "_IdentifiableInterfaceModule")
                     # Use it directly instead of adding another Module suffix
                     protocol_name = superclass_type.name
                     if superclass_type.scope and not superclass_type.scope.is_root:
@@ -3552,7 +3574,7 @@ class Writer:
         if server_collection.has_methods() or server_base_classes:
             # _new_client returns nested Client class
             nested_client_name = f"{context.protocol_class_name}.{context.client_type_name}"
-            self._add_new_client_method(context.type_name, context.schema, client_return_type=nested_client_name)
+            self._add_new_client_method(context.type_name, client_return_type=nested_client_name)
 
         # Phase 4: Generate Server class inside interface Protocol
         self._generate_server_class(context, server_collection, server_result_collection)
@@ -3573,7 +3595,7 @@ class Writer:
 
             # Track this interface for cast_as overloads with inheritance info
             # Store Protocol path (for parameter type) and Client TypeAlias (for return type)
-            # Protocol path: e.g., "_CalculatorModule" or "_CalculatorModule._FunctionModule"
+            # Protocol path: e.g., "_CalculatorInterfaceModule" or "_CalculatorInterfaceModule._FunctionInterfaceModule"
             protocol_path = context.registered_type.scoped_name
 
             # Client TypeAlias: Use flat name (e.g., "FunctionClient" not "Calculator.FunctionClient")
@@ -3585,15 +3607,15 @@ class Writer:
             base_client_names = []
             for server_base in server_base_classes:
                 if ".Server" in server_base:
-                    # Extract protocol name: _IdentifiableModule.Server -> _IdentifiableModule
+                    # Extract protocol name: _IdentifiableInterfaceModule.Server -> _IdentifiableInterfaceModule
                     protocol_name = server_base.replace(".Server", "")
                     # Get user-facing interface name from protocol name
-                    interface_name = protocol_name.split(".")[-1].replace("_", "").replace("Module", "")
+                    interface_name = self._extract_name_from_protocol(protocol_name.split(".")[-1])
                     # Use flat Client TypeAlias name
                     base_client_names.append(f"{interface_name}Client")
 
             # Store: protocol_path -> (client_alias, base_clients)
-            # e.g., "_CalculatorModule._FunctionModule" -> ("FunctionClient", [])
+            # e.g., "_CalculatorInterfaceModule._FunctionInterfaceModule" -> ("FunctionClient", [])
             self._all_interfaces[protocol_path] = (client_full_name, base_client_names)
             self._all_interfaces[protocol_path] = (client_full_name, base_client_names)
 
@@ -3718,11 +3740,11 @@ class Writer:
         has_parent_clients = False
         for server_base in server_base_classes:
             # Extract protocol name from Server type and build Client type
-            # e.g., "_IdentifiableModule.Server" -> "_IdentifiableModule.IdentifiableClient"
+            # e.g., "_IdentifiableInterfaceModule.Server" -> "_IdentifiableInterfaceModule.IdentifiableClient"
             if ".Server" in server_base:
                 protocol_name = server_base.replace(".Server", "")
-                # Extract interface name from protocol name: _IdentifiableModule -> Identifiable
-                interface_name = protocol_name.split(".")[-1].replace("_", "").replace("Module", "")
+                # Extract interface name from protocol name: _IdentifiableInterfaceModule -> Identifiable
+                interface_name = self._extract_name_from_protocol(protocol_name.split(".")[-1])
                 client_base_classes.append(f"{protocol_name}.{interface_name}Client")
                 has_parent_clients = True
 
@@ -3877,23 +3899,23 @@ class Writer:
             # For structs, import the Protocol class for type references
             node_type = schema.node.which()
             if node_type not in (capnp_types.CapnpElementType.ENUM, capnp_types.CapnpElementType.INTERFACE):
-                protocol_root_name = f"_{root_name}Module"
+                protocol_root_name = f"_{root_name}StructModule"
                 self._add_import(f"from {python_import_path} import {protocol_root_name}")
                 # Register with Protocol-based path: replace ALL struct names with Protocol names
                 # E.g., "Params.OrganicFertilization.OrganicMatterParameters"
-                # becomes "_ParamsModule._OrganicFertilizationModule._OrganicMatterParametersModule"
+                # becomes "_ParamsStructModule._OrganicFertilizationStructModule._OrganicMatterParametersStructModule"
                 parts = definition_name.split(".")
-                protocol_parts = [f"_{part}Module" for part in parts]
+                protocol_parts = [f"_{part}StructModule" for part in parts]
                 protocol_definition_name = ".".join(protocol_parts)
                 return self.register_type(schema.node.id, schema, name=protocol_definition_name, scope=self.scope.root)
             else:
                 # Import only the root parent for enums/interfaces
                 if node_type == capnp_types.CapnpElementType.INTERFACE:
                     # For nested interfaces, register with Protocol name
-                    # E.g., "Channel.Reader" -> "Channel._ReaderModule"
+                    # E.g., "Channel.Reader" -> "Channel._ReaderInterfaceModule"
                     parts = definition_name.split(".")
                     last_part = parts[-1]
-                    parts[-1] = f"_{last_part}Module"
+                    parts[-1] = f"_{last_part}InterfaceModule"
                     protocol_definition_name = ".".join(parts)
                     self._add_import(f"from {python_import_path} import {root_name}")
                     return self.register_type(
@@ -3911,7 +3933,7 @@ class Writer:
             ):
                 if node_type == capnp_types.CapnpElementType.INTERFACE:
                     # For interfaces, import the Protocol class, the TypeAlias, and the Client alias
-                    protocol_name = f"_{definition_name}Module"
+                    protocol_name = f"_{definition_name}InterfaceModule"
                     client_name = f"{definition_name}Client"
                     self._add_import(
                         f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}"
@@ -3928,9 +3950,9 @@ class Writer:
                     self._add_import(f"from {python_import_path} import {alias_name}")
                     return self.register_type(schema.node.id, schema, name=alias_name, scope=self.scope.root)
             else:
-                # Structs: import the Protocol class (_<Name>Module) for internal type references
+                # Structs: import the Protocol class (_<Name>StructModule) for internal type references
                 # The TypeAlias can be accessed if needed, but internal references use the Protocol
-                protocol_name = f"_{definition_name}Module"
+                protocol_name = f"_{definition_name}StructModule"
                 reader_alias = f"{definition_name}Reader"
                 builder_alias = f"{definition_name}Builder"
 
@@ -4002,7 +4024,7 @@ class Writer:
         # Try to find the type in other modules
         for module_id, (_, module) in self._module_registry.items():
             # Helper to search recursively
-            def find_schema_by_id(schema_obj: Any, target_id: int) -> Any | None:
+            def find_schema_by_id(schema_obj: _ParsedSchema, target_id: int) -> _ParsedSchema | None:
                 if schema_obj.node.id == target_id:
                     return schema_obj
                 for nested_node in schema_obj.node.nestedNodes:
@@ -4033,7 +4055,7 @@ class Writer:
     def new_scope(
         self,
         name: str,
-        node: Any,
+        node: NodeReader,
         scope_heading: str = "",
         register: bool = True,
         parent_scope: Scope | None = None,
@@ -4121,7 +4143,7 @@ class Writer:
 
         self.scope = self.scope.return_scope
 
-    def get_type_name(self, type_reader: _DynamicStructReader) -> str:
+    def get_type_name(self, type_reader: TypeReader) -> str:
         """Extract the type name from a type reader.
 
         The output type name is prepended by the scope name, if there is a parent scope.
@@ -4162,18 +4184,18 @@ class Writer:
             type_name = element_type.name
 
         elif type_reader_type == capnp_types.CapnpElementType.ENUM:
-            element_type = self.get_type_by_id(cast(int, type_reader.enum.typeId))
+            element_type = self.get_type_by_id(type_reader.enum.typeId)
             type_name = element_type.name
 
         elif type_reader_type == capnp_types.CapnpElementType.LIST:
             # Recursively get the element type and wrap it in Sequence
-            element_type_name = self.get_type_name(cast(_DynamicStructReader, type_reader.list.elementType))
+            element_type_name = self.get_type_name(type_reader.list.elementType)
             self._add_typing_import("Sequence")
             type_name = f"Sequence[{element_type_name}]"
             element_type = None  # List itself doesn't have an element_type in our registry
 
         elif type_reader_type == capnp_types.CapnpElementType.INTERFACE:
-            type_id = cast(int, type_reader.interface.typeId)
+            type_id = type_reader.interface.typeId
             if not self.is_type_id_known(type_id):
                 # Try to generate the interface before using it
                 try:
@@ -4283,9 +4305,9 @@ class Writer:
                     full_protocol = protocol_name
 
                 # Extract user-facing name from Protocol name
-                # e.g., "_GenericGetterModule" -> "GenericGetter"
-                if protocol_name.startswith("_") and protocol_name.endswith("Module"):
-                    user_facing = protocol_name[1:-6]
+                # e.g., "_GenericGetterInterfaceModule" -> "GenericGetter"
+                if protocol_name.startswith("_"):
+                    user_facing = self._extract_name_from_protocol(protocol_name)
                     client_type = f"{full_protocol}.{user_facing}Client"
                 else:
                     client_type = f"{full_protocol}Client"
@@ -4449,11 +4471,11 @@ class Writer:
         for scope in self.scopes_by_id.values():
             if scope.parent is not None and scope.parent.is_root:
                 # For the .py runtime binding, use the original name, not the Protocol name
-                # Convert "_<Name>Module" back to "<Name>" for structs
+                # Convert "_<Name>StructModule" back to "<Name>" for structs
                 runtime_name = scope.name
-                if runtime_name.startswith("_") and runtime_name.endswith("Module"):
+                if runtime_name.startswith("_"):
                     # This is a struct Protocol, extract the original name
-                    runtime_name = runtime_name[1:-6]  # Remove leading "_" and trailing "Module"
+                    runtime_name = self._extract_name_from_protocol(runtime_name)
                 out.append(f"{runtime_name} = capnp.load(module_file, imports=import_path).{runtime_name}")
 
         # Add Server.InfoResult NamedTuples for interfaces

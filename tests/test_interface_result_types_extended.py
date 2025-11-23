@@ -10,12 +10,12 @@ def test_registry_result_type(zalfmas_stubs):
     content = stub_file.read_text()
 
     # Find AdminClient
-    # AdminClient is inside _AdminModule.
-    # It ends before "Admin: _AdminModule" which is at the end of _AdminModule block (actually Admin: _AdminModule is after _AdminModule class)
+    # AdminClient is inside _AdminInterfaceModule.
+    # It ends before "Admin: _AdminInterfaceModule" which is at the end of _AdminInterfaceModule block (actually Admin: _AdminInterfaceModule is after _AdminInterfaceModule class)
 
     # Let's capture until the end of the file or a clear marker
     client_match = re.search(
-        r"class AdminClient\(_IdentifiableModule.IdentifiableClient\):(.*?)(?=Admin: _AdminModule|\Z)",
+        r"class AdminClient\(_IdentifiableInterfaceModule.IdentifiableClient\):(.*?)(?=Admin: _AdminInterfaceModule|\Z)",
         content,
         re.DOTALL,
     )
@@ -42,9 +42,9 @@ def test_registry_result_type(zalfmas_stubs):
     result_content = result_match.group(1)
 
     # Check registry field
-    # Should be: registry: _RegistryModule.RegistryClient
+    # Should be: registry: _RegistryInterfaceModule.RegistryClient
     # Currently failing as: registry: Any
-    assert "registry: _RegistryModule.RegistryClient" in result_content, (
+    assert "registry: _RegistryInterfaceModule.RegistryClient" in result_content, (
         f"Expected RegistryClient, got: {result_content}"
     )
 
@@ -56,7 +56,7 @@ def test_server_registry_result_type(zalfmas_stubs):
 
     # Find Server
     server_match = re.search(
-        r"class Server\(_IdentifiableModule.Server\):(.*?)(?=\n\s+class AdminClient)", content, re.DOTALL
+        r"class Server\(_IdentifiableInterfaceModule.Server\):(.*?)(?=\n\s+class AdminClient)", content, re.DOTALL
     )
     assert server_match, "Server class not found"
     server_content = server_match.group(1)
@@ -81,5 +81,5 @@ def test_server_registry_result_type(zalfmas_stubs):
 
     # Check types in getter/setter
     # The exact order might vary, so check for presence of types
-    assert "_RegistryModule.Server" in result_content
-    assert "_RegistryModule.RegistryClient" in result_content
+    assert "_RegistryInterfaceModule.Server" in result_content
+    assert "_RegistryInterfaceModule.RegistryClient" in result_content

@@ -9,6 +9,7 @@ import os.path
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Set
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -268,7 +269,7 @@ def _build_module_imports(
         break
 
     # Collect all module names from interfaces and dynamic object types
-    all_qualified_names = set()
+    all_qualified_names: Set[str] = set()
 
     # From interfaces
     for interface_name in interfaces.keys():
@@ -283,7 +284,7 @@ def _build_module_imports(
         all_qualified_names.add(protocol_name)
 
     # Build module imports
-    module_imports = {}
+    module_imports: dict[str, str] = {}
     for qualified_name in all_qualified_names:
         parts = qualified_name.split(".")
 
@@ -366,7 +367,7 @@ def _augment_capnp_pyi(
     sorted_interfaces = _sort_interfaces_by_inheritance(interfaces)
 
     # Build the overloads (insert before the existing cast_as method)
-    overload_lines = []
+    overload_lines: list[str] = []
 
     for interface_name, client_name in sorted_interfaces:
         # interface_name is like "calculator.calculator_capnp.Calculator" or
@@ -509,7 +510,7 @@ def _augment_dynamic_object_reader(
     # Sort struct types by inheritance/specificity (same heuristic as interfaces)
     # Build a pseudo-inheritance structure based on nesting
     # More dots = more nested = more specific = higher "depth"
-    struct_overloads = []
+    struct_overloads: list[str] = []
 
     # Sort structs: prioritize by depth (more nested first), then alphabetically
     # This matches the interface sorting pattern where more specific types come first
@@ -554,8 +555,16 @@ def _augment_dynamic_object_reader(
             last_module = return_parts[-2]  # "_AvgSoilTempModule"
 
             # Convert _XxxModule to Xxx
-            if last_module.startswith("_") and last_module.endswith("Module"):
-                struct_name = last_module[1:-6]  # "AvgSoilTemp"
+            if last_module.startswith("_"):
+                if last_module.endswith("StructModule"):
+                    struct_name = last_module[1:-12]  # Strip _ and StructModule
+                elif last_module.endswith("InterfaceModule"):
+                    struct_name = last_module[1:-15]  # Strip _ and InterfaceModule
+                elif last_module.endswith("Module"):
+                    struct_name = last_module[1:-6]  # Strip _ and Module (fallback)
+                else:
+                    struct_name = last_module[1:]  # Just strip _
+
                 alias_name = f"{struct_name}{reader_builder}"  # "AvgSoilTempReader"
                 clean_return = f"{module_name}.{alias_name}"
             else:
@@ -588,7 +597,7 @@ def _augment_dynamic_object_reader(
     if interface_map:
         sorted_interface_names = _sort_interfaces_by_inheritance(interface_map)
         # Build the sorted list
-        sorted_interface_types = []
+        sorted_interface_types: list[tuple[str, str]] = []
         for iface_name, _ in sorted_interface_names:
             # Find the corresponding entry in interface_types
             for proto, client in interface_types:
@@ -599,7 +608,7 @@ def _augment_dynamic_object_reader(
         # Fallback to path depth sorting if no inheritance info
         sorted_interface_types = sorted(interface_types, key=lambda x: (-x[0].count("."), x[0]))
 
-    interface_overloads = []
+    interface_overloads: list[str] = []
     for protocol_name, client_type in sorted_interface_types:
         # Extract module-relative names
         param_parts = protocol_name.split(".")
@@ -673,7 +682,7 @@ def validate_with_pyright(output_directories: set[str]) -> None:
         PyrightValidationError: If pyright finds any type errors.
     """
     # Collect all .pyi files from output directories
-    stub_files = []
+    stub_files: list[str] = []
     for output_dir in output_directories:
         for root, _, files in os.walk(output_dir):
             for file in files:

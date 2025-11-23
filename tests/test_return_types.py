@@ -89,7 +89,7 @@ class TestInterfaceReturnTypes:
         content = interface_stub_file.read_text()
 
         # Should have the interface module inheriting from _InterfaceModule
-        assert "class _GreeterModule(_InterfaceModule):" in content, "Should have interface module"
+        assert "class _GreeterInterfaceModule(_InterfaceModule):" in content, "Should have interface module"
 
         # Should have the Client class inheriting from _DynamicCapabilityClient
         assert "class GreeterClient(_DynamicCapabilityClient):" in content, "Should have Client class"
@@ -103,7 +103,7 @@ class TestInterfaceReturnTypes:
         content = interface_stub_file.read_text()
 
         # Should have interface module and Client class
-        assert "class _GreeterModule(_InterfaceModule):" in content
+        assert "class _GreeterInterfaceModule(_InterfaceModule):" in content
         assert "class GreeterClient(_DynamicCapabilityClient):" in content
 
         # Client methods should not reference non-existent Builder/Reader types
