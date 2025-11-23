@@ -317,7 +317,7 @@ def _build_module_imports(
     ]
     for capnp_module_name in sorted(module_imports.keys()):
         from_path = module_imports[capnp_module_name]
-        import_lines.append(f"from {from_path} import {capnp_module_name}  # type: ignore[import-not-found]")
+        import_lines.append(f"from {from_path} import {capnp_module_name}")
 
     # Insert the imports after the existing imports
     lines[import_end_idx:import_end_idx] = import_lines
@@ -743,15 +743,14 @@ def format_outputs(raw_input: str, is_pyi: bool) -> str:
         try:
             # Run ruff check --fix to fix import ordering and other issues
             subprocess.run(
-                ["ruff", "check", "--fix", "--select", "I", str(temp_path)],
+                ["ruff", "check", "--fix", str(temp_path)],
                 capture_output=True,
                 check=False,  # Don't raise on non-zero exit
             )
 
             # Run ruff format with very large line length (320 is max) to prevent wrapping
-            # This keeps pyright ignore comments on the correct lines
             subprocess.run(
-                ["ruff", "format", "--line-length", "320", str(temp_path)],
+                ["ruff", "format", str(temp_path)],
                 capture_output=True,
                 check=True,
             )

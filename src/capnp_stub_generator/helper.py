@@ -158,11 +158,11 @@ class TypeHintedVariable:
     type_hints: list[TypeHint]
     default: str = ""
     nesting_depth: int = 0
-    _is_generic_param: bool = field(default=False, init=False)
-    _is_any_pointer: bool = field(default=False, init=False)
-    _is_any_list: bool = field(default=False, init=False)
-    _is_any_struct: bool = field(default=False, init=False)
-    _is_capability: bool = field(default=False, init=False)
+    is_generic_param: bool = field(default=False, init=False)
+    is_any_pointer: bool = field(default=False, init=False)
+    is_any_list: bool = field(default=False, init=False)
+    is_any_struct: bool = field(default=False, init=False)
+    is_capability: bool = field(default=False, init=False)
 
     def __post_init__(self):
         """Sanity check for provided type hints."""
@@ -289,7 +289,7 @@ class TypeHintedVariable:
     def has_type_hint_with_affix(self, affix: str) -> bool:
         """Assess, whether or not the variable has a type hint with the provided affix."""
         try:
-            self.get_type_hint_for_affix(affix)
+            _ = self.get_type_hint_for_affix(affix)
 
         except KeyError:
             return False
@@ -439,7 +439,13 @@ def new_decorator(name: str, parameters: Sequence[TypeHintedVariable | str] | No
         return f"@{name}"
 
 
-def new_property(name: str, return_type: str, with_setter: bool = False, setter_type: str | None = None) -> list[str]:
+def new_property(
+    name: str,
+    return_type: str,
+    with_setter: bool = False,
+    setter_type: str | None = None,
+    add_override: bool = False,
+) -> list[str]:
     """Create a property declaration.
 
     Includes special handling for reserved pycapnp runtime introspection names.
@@ -449,22 +455,24 @@ def new_property(name: str, return_type: str, with_setter: bool = False, setter_
         return_type (str): The property's return type.
         with_setter (bool): Whether to include a setter.
         setter_type (str | None): The setter's parameter type (if different from return_type).
+        add_override (bool): Whether to add @override decorator (placed after @property).
 
     Returns:
         list[str]: Lines to be added (decorator + function, and optionally setter).
     """
-    # Reserved names in pycapnp's _DynamicStructReader/_DynamicStructBuilder that conflict
-    # These are runtime introspection attributes exposed in pycapnp-stubs that shouldn't
-    # conflict with actual Cap'n Proto field names, but pyright treats them as conflicts
-    PYCAPNP_RESERVED_NAMES = {"struct", "list", "enum", "interface", "slot", "name", "schema"}
-
     lines: list[str] = []
 
-    lines.extend(["@property", f"def {name}(self) -> {return_type}: ..."])
+    lines.append("@property")
+    if add_override:
+        lines.append("@override")
+    lines.append(f"def {name}(self) -> {return_type}: ...")
 
     if with_setter:
+        lines.append(f"@{name}.setter")
+        if add_override:
+            lines.append("@override")
         param_type = setter_type if setter_type is not None else return_type
-        lines.extend([f"@{name}.setter", f"def {name}(self, value: {param_type}) -> None: ..."])
+        lines.append(f"def {name}(self, value: {param_type}) -> None: ...")
 
     return lines
 

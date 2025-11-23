@@ -92,22 +92,26 @@ class _StructSchemaField:
     proto: _DynamicStructReader
     schema: _StructSchema
 
-class _NodeReader:
+class _NestedNodeReader:
+    id: int
+    name: str
+
+class _NodeReader(_DynamicStructReader):
     displayName: str
     id: int
     isConst: bool
     isEnum: bool
     isInterface: bool
     isStruct: bool
-    nestedNodes: Any
-    node: _DynamicStructReader
+    nestedNodes: list[_NestedNodeReader]
+    node: _NodeReader
     scopeId: int
 
 class _ParsedSchema:
     @property
-    def node(self) -> _DynamicStructReader: ...
+    def node(self) -> _NodeReader: ...
     def get_proto(self) -> _DynamicStructReader: ...
-    def get_nested(self, name: str) -> Any: ...
+    def get_nested(self, name: str) -> _ParsedSchema: ...
     def as_const_value(self) -> Any: ...
     def as_enum(self) -> _EnumSchema: ...
     def as_interface(self) -> _InterfaceSchema: ...
@@ -121,7 +125,7 @@ class _StructSchema:
     union_fields: tuple[str, ...]
 
     @property
-    def node(self) -> _DynamicStructReader: ...
+    def node(self) -> _NodeReader: ...
     def as_const_value(self) -> Any: ...
     def as_enum(self) -> _EnumSchema: ...
     def as_interface(self) -> _InterfaceSchema: ...
@@ -593,23 +597,11 @@ class _DynamicStructReader:
     """
 
     @property
-    def slot(self) -> _DynamicStructReader: ...
-    @property
     def schema(self) -> _StructSchema: ...
-    @property
-    def list(self) -> _DynamicListReader: ...
-    @property
-    def struct(self) -> _DynamicStructReader: ...
-    @property
-    def enum(self) -> _DynamicStructReader: ...
-    @property
-    def interface(self) -> _DynamicStructReader: ...
     @property
     def is_root(self) -> bool: ...
     @property
     def total_size(self) -> _MessageSize: ...
-    @property
-    def name(self) -> str: ...
     def which(self) -> str:
         """Return the name of the currently set union field.
 
@@ -698,10 +690,12 @@ class _DynamicStructBuilder:
         print(getattr(person, 'field-with-hyphens'))
     """
 
-    schema: _StructSchema
-    is_root: bool  # True if this is the root struct of a message
-    total_size: Any  # Message size information
-
+    @property
+    def schema(self) -> _StructSchema: ...
+    @property
+    def is_root(self) -> bool: ...
+    @property
+    def total_size(self) -> _MessageSize: ...
     @property
     def name(self) -> str: ...
     def which(self) -> str:
@@ -907,7 +901,7 @@ class _EnumSchema:
     """
 
     enumerants: dict[str, int]
-    node: _DynamicStructReader
+    node: _NodeReader
 
 class _InterfaceMethod:
     param_type: _StructSchema
@@ -924,7 +918,7 @@ class _InterfaceSchema:
     method_names_inherited: set[str]
     methods: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
     methods_inherited: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
-    node: _DynamicStructReader  # The raw schema node
+    node: _NodeReader  # The raw schema node
     superclasses: list[Any]  # List of parent interface schemas
 
 class _ListSchema:
