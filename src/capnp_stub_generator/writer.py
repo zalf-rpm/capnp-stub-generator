@@ -684,12 +684,6 @@ class Writer:
             if mode == "reader":
                 field_type = self._get_reader_property_type(field_copy)
                 should_override = slot_field.name in {
-                    "struct",
-                    "list",
-                    "enum",
-                    "interface",
-                    "slot",
-                    "name",
                     "schema",
                 }
                 for line in helper.new_property(slot_field.name, field_type, add_override=should_override):
@@ -697,7 +691,9 @@ class Writer:
 
             elif mode == "builder":
                 getter_type, setter_type = self._get_builder_property_types(field_copy)
-                should_override = slot_field.name in {"name"}
+                should_override = slot_field.name in {
+                    "schema",
+                }
                 for line in helper.new_property(
                     slot_field.name,
                     getter_type,
@@ -1503,11 +1499,11 @@ class Writer:
 
         return hinted_variable
 
-    def gen_python_type_slot(self, field: capnp._DynamicStructReader, field_type: str) -> helper.TypeHintedVariable:
+    def gen_python_type_slot(self, field: FieldReader, field_type: str) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a regular Python type.
 
         Args:
-            field (_DynamicStructReader): The field reader.
+            field (FieldReader): The field reader.
             field_type (str): The (primitive) type of the slot.
 
         Returns:

@@ -149,7 +149,7 @@ class _StructModule:
         self,
         num_first_segment_words: int | None = None,
         allocate_seg_callable: Callable[[int], bytearray] | None = None,
-        **kwargs: Any,
+        **kwargs: dict[str, Any],
     ) -> _DynamicStructBuilder:
         """Create a new in-memory message builder for this struct type.
 
@@ -546,7 +546,7 @@ class _DynamicObjectBuilder:
         """
         ...
 
-    def init_as_list(self, schema: Any, size: int) -> _DynamicListBuilder:
+    def init_as_list(self, schema: _ListSchema, size: int) -> _DynamicListBuilder:
         """Initialize this AnyPointer as a list of the given size.
 
         Args:
@@ -696,8 +696,6 @@ class _DynamicStructBuilder:
     def is_root(self) -> bool: ...
     @property
     def total_size(self) -> _MessageSize: ...
-    @property
-    def name(self) -> str: ...
     def which(self) -> str:
         """Return the name of the currently set union field.
 
@@ -773,7 +771,7 @@ class _DynamicStructBuilder:
         """
         ...
 
-    def init_resizable_list(self, field: str) -> _DynamicListBuilder:
+    def init_resizable_list(self, field: Any) -> _DynamicListBuilder:
         """Initialize a resizable list field (for lists of structs).
 
         This version of init returns a _DynamicResizableListBuilder that allows
@@ -926,24 +924,6 @@ class _ListSchema:
 
     Can be instantiated to create list schemas for different element types.
     """
-    def elementType(
-        self,
-    ) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
-        """The schema of the element type of this list.
-
-        Returns:
-            Schema of the list element type:
-            - _StructSchema for struct elements
-            - _EnumSchema for enum elements
-            - _InterfaceSchema for interface elements
-            - _ListSchema for nested list elements
-
-        Raises:
-            KjException: When the element type is a primitive type (Int32, Text, Bool, etc.)
-                with message "Schema type is unknown"
-        """
-        ...
-
     def __init__(
         self,
         schema: (_StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema | _SchemaType | Any | None) = None,
@@ -959,6 +939,24 @@ class _ListSchema:
                 - A primitive type (_SchemaType, e.g., capnp.types.Int8)
                 - Any object with a .schema attribute
                 - None (creates uninitialized schema)
+        """
+        ...
+    @property
+    def elementType(
+        self,
+    ) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
+        """The schema of the element type of this list.
+
+        Returns:
+            Schema of the list element type:
+            - _StructSchema for struct elements
+            - _EnumSchema for enum elements
+            - _InterfaceSchema for interface elements
+            - _ListSchema for nested list elements
+
+        Raises:
+            KjException: When the element type is a primitive type (Int32, Text, Bool, etc.)
+                with message "Schema type is unknown"
         """
         ...
 
@@ -1027,7 +1025,7 @@ class _DynamicCapabilityClient(_CapabilityClient):
 
     @property
     def schema(self) -> _InterfaceSchema: ...
-    def upcast(self, schema: Any) -> _DynamicCapabilityClient:
+    def upcast(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Upcast this capability to a parent interface type.
 
         Args:
@@ -1567,9 +1565,6 @@ class _DynamicListReader:
 
     Provides read-only list-like interface.
     """
-
-    elementType: Any
-
     def __len__(self) -> int: ...
     def __getitem__(self, index: int) -> Any: ...
     def __iter__(self) -> Iterator[Any]: ...
@@ -1606,9 +1601,8 @@ class _EnumModule:
     Instances of this class are what you get when you access an enum from
     a loaded schema.
     """
-
-    schema: _EnumSchema
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+    @property
+    def schema(self) -> _EnumSchema: ...
 
 class _InterfaceModule:
     """Module/class for a generated interface.
@@ -1713,7 +1707,9 @@ class AsyncIoStream:
     """
 
     @staticmethod
-    async def create_connection(host: str | None = None, port: int | None = None, **kwargs: Any) -> AsyncIoStream:
+    async def create_connection(
+        host: str | None = None, port: int | None = None, **kwargs: dict[str, Any]
+    ) -> AsyncIoStream:
         """Create an async TCP connection.
 
         Args:
@@ -1727,7 +1723,7 @@ class AsyncIoStream:
         ...
 
     @staticmethod
-    async def create_unix_connection(path: str | None = None, **kwargs: Any) -> AsyncIoStream:
+    async def create_unix_connection(path: str | None = None, **kwargs: dict[str, Any]) -> AsyncIoStream:
         """Create an async Unix domain socket connection.
 
         Args:
@@ -1744,7 +1740,7 @@ class AsyncIoStream:
         callback: Callable[[AsyncIoStream], Awaitable[None]],
         host: str | None = None,
         port: int | None = None,
-        **kwargs: Any,
+        **kwargs: dict[str, Any],
     ) -> _Server:
         """Create an async TCP server.
 
@@ -1763,7 +1759,7 @@ class AsyncIoStream:
     async def create_unix_server(
         callback: Callable[[AsyncIoStream], Awaitable[None]],
         path: str | None = None,
-        **kwargs: Any,
+        **kwargs: dict[str, Any],
     ) -> _Server:
         """Create an async Unix domain socket server.
 
@@ -1843,6 +1839,8 @@ __all__ = [
     "_DynamicStructBuilder",
     "_DynamicStructReader",
     "_EventLoop",
+    "_EnumSchema",
+    "_InterfaceSchema",
     "_InterfaceMethod",
     "_InterfaceModule",
     "_ListSchema",
