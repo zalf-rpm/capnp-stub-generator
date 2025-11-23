@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 import os.path
 import pathlib
-from collections.abc import Sequence
 from copy import copy
 from typing import TYPE_CHECKING, Literal
 
@@ -400,8 +399,6 @@ class Writer:
             scope = self.scope
         return ".".join(s.name for s in scope.trace if not s.is_root)
 
-    # ===== Static Method Generators =====
-
     def _create_capnp_limit_params(self) -> list[helper.TypeHintedVariable]:
         """Create standard Cap'n Proto traversal and nesting limit parameters.
 
@@ -514,57 +511,6 @@ class Writer:
                 return_type=scoped_reader_type,
             )
         )
-
-    def _add_static_method(
-        self,
-        name: str,
-        parameters: Sequence[helper.TypeHintedVariable | str] | None = None,
-        return_type: str | None = None,
-        decorators: list[str] | None = None,
-        add_override: bool = False,
-    ) -> None:
-        """Add a static method to the current scope.
-
-        This is a convenience method that combines decorator and function generation.
-        Always adds @staticmethod, plus any additional decorators specified.
-
-        Args:
-            name: The method name
-            parameters: Method parameters (TypeHintedVariable list or string list)
-            return_type: Method return type (None if no return type)
-            decorators: Additional decorators to add before @staticmethod
-                       (e.g., ["contextmanager"] for from_bytes)
-            add_override: Whether to add @override decorator
-
-        Examples:
-            # Simple static method
-            self._add_static_method("write", [file_param])
-
-            # Static method with return type
-            self._add_static_method("new_message", params, "MyStruct.Builder")
-
-            # Static method with additional decorator
-            self._add_static_method(
-                "from_bytes",
-                [data_param, ...],
-                "Iterator[MyStruct.Reader]",
-                decorators=["contextmanager"]
-            )
-        """
-        # Add @override if requested (goes before other decorators)
-        if add_override:
-            self.scope.add(helper.new_decorator("override"))
-
-        # Add any additional decorators first (they go above @staticmethod)
-        if decorators:
-            for decorator in decorators:
-                self.scope.add(helper.new_decorator(decorator))
-
-        # Add @staticmethod decorator
-        self.scope.add(helper.new_decorator("staticmethod"))
-
-        # Add the function definition
-        self.scope.add(helper.new_function(name, parameters, return_type))
 
     def _get_reader_property_type(self, field: helper.TypeHintedVariable) -> str:
         """Determine the property type for Reader class fields.

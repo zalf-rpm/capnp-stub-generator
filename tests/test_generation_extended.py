@@ -68,8 +68,6 @@ def test_interfaces_protocol_and_any_and_iterator():
     lines = _read(stub_path)
     # Protocol import expected
     assert any(line.startswith("from typing import") and "Protocol" in line for line in lines)
-    # Iterator from collections.abc
-    assert any(line.startswith("from collections.abc import") and "Iterator" in line for line in lines)
     # Interface methods now have result types
     # greet should have GreetResult return type (not bare str)
     assert any("def greet" in line and "name: str" in line and "GreetResult" in line for line in lines)

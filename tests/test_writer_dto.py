@@ -129,7 +129,6 @@ class TestStructFieldsCollection:
         collection = StructFieldsCollection()
         collection.add_slot_field(Mock(spec=helper.TypeHintedVariable))
         collection.add_init_choice("field1", "Type1")
-        # collection.add_list_init_choice("field2", "Type2") # Removed
 
         repr_str = repr(collection)
 
@@ -150,10 +149,8 @@ class TestStructFieldsCollection:
         collection.add_slot_field(field1)
         collection.add_init_choice("address", "Address")
         collection.add_slot_field(field2)
-        # collection.add_list_init_choice("emails", "str") # Removed
         collection.add_slot_field(field3)
         collection.add_init_choice("company", "Company")
-        # collection.add_list_init_choice("phones", "PhoneNumber") # Removed
 
         # Verify final state
         assert len(collection.slot_fields) == 3
@@ -578,7 +575,6 @@ class TestInterfaceDTOIntegration:
 
         # Process multiple methods
         for method_name in ["add", "subtract", "multiply"]:
-            method_collection = MethodSignatureCollection(method_name)
             # method_collection.set_server_method(...) # Removed
             server_collection.add_server_method(f"    def {method_name}(self, context: Any) -> int: ...")
 

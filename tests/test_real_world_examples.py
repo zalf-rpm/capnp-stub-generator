@@ -149,9 +149,6 @@ class TestExampleFunctionality:
         if not example.python_files:
             return
 
-        # Get generated directory
-        generated_dir = example.generated_dir
-
         # Run pyright on each python file
         # We need to set PYTHONPATH to include the generated stubs
         # The examples use 'from _generated.examples.xxx import xxx_capnp'

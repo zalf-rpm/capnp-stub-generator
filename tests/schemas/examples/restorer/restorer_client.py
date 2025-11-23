@@ -57,10 +57,10 @@ async def main():
     # It should be _DynamicObjectReader
     assert "DynamicObjectReader" in str(type(s_result.s))
     # We can cast it to a struct if we want, but for now just checking the type returned
-    s_typed = s_result.s.as_struct(restorer_capnp.Restorer.RestoreParams.schema)
+    _ = s_result.s.as_struct(restorer_capnp.Restorer.RestoreParams.schema)
 
     # Test AnyList
-    l_result = await tester.getAnyList()
+    _ = await tester.getAnyList()
     # If server doesn't set it, it might be None or empty
     # print(f"AnyList type: {type(l_result.l)}")
     # assert "DynamicObjectReader" in str(type(l_result.l))

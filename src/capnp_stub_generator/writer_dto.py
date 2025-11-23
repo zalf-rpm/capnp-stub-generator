@@ -172,18 +172,6 @@ class StructFieldsCollection:
         """
         self.init_choices.append((field_name, type_name))
 
-    def add_list_init_choice(self, field_name: str, builder_type: str) -> None:
-        """Add an init choice for list fields.
-
-        List init choices are used to generate overloaded init() methods that
-        return the specific List Builder type.
-
-        Args:
-            field_name: The name of the list field
-            builder_type: The Builder type for the list (e.g. "_Int32List.Builder")
-        """
-        self.list_init_choices.append((field_name, builder_type))
-
     @override
     def __repr__(self) -> str:
         """Return a readable representation for debugging."""
