@@ -9,6 +9,7 @@ from collections.abc import (
     Sequence,
 )
 from contextlib import AbstractContextManager, asynccontextmanager
+from ssl import SSLContext
 from typing import IO, Any, Literal, overload
 
 from .._internal import CapnpModule as _CapnpModule
@@ -149,7 +150,7 @@ class _StructModule:
         self,
         num_first_segment_words: int | None = None,
         allocate_seg_callable: Callable[[int], bytearray] | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> _DynamicStructBuilder:
         """Create a new in-memory message builder for this struct type.
 
@@ -1708,7 +1709,11 @@ class AsyncIoStream:
 
     @staticmethod
     async def create_connection(
-        host: str | None = None, port: int | None = None, **kwargs: dict[str, Any]
+        host: str | None = None,
+        port: int | None = None,
+        ssl: SSLContext | None = None,
+        ssl_handshake_timeout: int | None = None,
+        **kwargs: Any,
     ) -> AsyncIoStream:
         """Create an async TCP connection.
 
@@ -1723,7 +1728,7 @@ class AsyncIoStream:
         ...
 
     @staticmethod
-    async def create_unix_connection(path: str | None = None, **kwargs: dict[str, Any]) -> AsyncIoStream:
+    async def create_unix_connection(path: str | None = None, **kwargs: Any) -> AsyncIoStream:
         """Create an async Unix domain socket connection.
 
         Args:
@@ -1740,7 +1745,7 @@ class AsyncIoStream:
         callback: Callable[[AsyncIoStream], Awaitable[None]],
         host: str | None = None,
         port: int | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> _Server:
         """Create an async TCP server.
 
@@ -1759,7 +1764,7 @@ class AsyncIoStream:
     async def create_unix_server(
         callback: Callable[[AsyncIoStream], Awaitable[None]],
         path: str | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> _Server:
         """Create an async Unix domain socket server.
 

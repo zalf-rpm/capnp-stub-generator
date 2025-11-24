@@ -16,7 +16,7 @@ def test_both_method_variants_exist(calculator_stubs):
     # Regular method with individual parameters (single line signature)
     assert "def evaluate(self, expression: ExpressionReader, _context:" in content
     assert "_context: _CalculatorInterfaceModule.Server.EvaluateCallContext" in content
-    assert "**kwargs: dict[str, Any]" in content
+    assert "**kwargs: Any" in content
 
     # _context variant with only context parameter
     assert "def evaluate_context(self, context: _CalculatorInterfaceModule.Server.EvaluateCallContext)" in content

@@ -3042,7 +3042,7 @@ class Writer:
         param_parts = ["self"]
         param_parts.extend([p.to_server_param() for p in parameters])
         param_parts.append(f"_context: {context_type}")
-        param_parts.append("**kwargs: dict[str, Any]")
+        param_parts.append("**kwargs: Any")
         param_str = ", ".join(param_parts)
 
         # Determine return type

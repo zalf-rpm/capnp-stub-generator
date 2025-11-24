@@ -114,7 +114,7 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines):
     # Server parameters remain required for type safety
     # CallContext is now inside Server, so reference is _CalculatorInterfaceModule._FunctionInterfaceModule.Server.CallCallContext
     server_call_found = (
-        "def call(self, params: Float64ListReader, _context: _CalculatorInterfaceModule._FunctionInterfaceModule.Server.CallCallContext, **kwargs: dict[str, Any])"
+        "def call(self, params: Float64ListReader, _context: _CalculatorInterfaceModule._FunctionInterfaceModule.Server.CallCallContext, **kwargs: Any)"
         in content
     )
 
