@@ -3808,7 +3808,10 @@ class Writer:
             try:
                 self.generate_nested(self._module.schema.get_nested(node.name))
             except Exception as e:
-                logger.warning(f"Could not generate nested node '{node.name}': {e}")
+                # capnpc may omit unused nodes from imported schemas in the CodeGeneratorRequest.
+                # This results in "no schema node loaded" errors when trying to access them.
+                # These are harmless if the nodes are indeed unused, so we log as debug.
+                logger.debug(f"Could not generate nested node '{node.name}': {e}")
 
     def register_import(
         self, schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema
