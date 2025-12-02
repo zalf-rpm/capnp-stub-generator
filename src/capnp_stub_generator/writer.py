@@ -3777,22 +3777,22 @@ class Writer:
 
         elif node_type == "struct":
             # Both _ParsedSchema and _StructSchema have as_struct()
-            if isinstance(schema, _ParsedSchema):
-                _ = self.gen_struct(schema.as_struct())
+            if getattr(schema, "as_struct", None):
+                _ = self.gen_struct(schema.as_struct())  # pyright: ignore[reportAttributeAccessIssue]
             elif isinstance(schema, _StructSchema):
                 _ = self.gen_struct(schema)
 
         elif node_type == "enum":
             # Only _ParsedSchema has as_enum()
-            if isinstance(schema, _ParsedSchema):
-                _ = self.gen_enum(schema.as_enum())
+            if getattr(schema, "as_enum", None):
+                _ = self.gen_enum(schema.as_enum())  # pyright: ignore[reportAttributeAccessIssue]
             elif isinstance(schema, _EnumSchema):
                 _ = self.gen_enum(schema)
 
         elif node_type == "interface":
             # Only _ParsedSchema has as_interface()
-            if isinstance(schema, _ParsedSchema):
-                _ = self.gen_interface(schema.as_interface())
+            if getattr(schema, "as_interface", None):
+                _ = self.gen_interface(schema.as_interface())  # pyright: ignore[reportAttributeAccessIssue]
             elif isinstance(schema, _InterfaceSchema):
                 _ = self.gen_interface(schema)
 
@@ -3805,7 +3805,10 @@ class Writer:
     def generate_all_nested(self):
         """Generate types for all nested nodes, recursively."""
         for node in self._module.schema.node.nestedNodes:
-            self.generate_nested(self._module.schema.get_nested(node.name))
+            try:
+                self.generate_nested(self._module.schema.get_nested(node.name))
+            except Exception as e:
+                logger.warning(f"Could not generate nested node '{node.name}': {e}")
 
     def register_import(
         self, schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema

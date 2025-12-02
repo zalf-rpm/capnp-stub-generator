@@ -963,6 +963,34 @@ def run(args: argparse.Namespace, root_directory: str):
         root_directory,
     )
 
+    run_from_modules(
+        module_registry,
+        output_dir,
+        absolute_import_paths,
+        skip_pyright,
+        getattr(args, "augment_capnp_stubs", False),
+        common_base,
+    )
+
+
+def run_from_modules(
+    module_registry: ModuleRegistryType,
+    output_dir: str,
+    import_paths: list[str],
+    skip_pyright: bool,
+    augment_capnp_stubs: bool,
+    common_base: str | None = None,
+) -> None:
+    """Run stub generation from pre-loaded modules.
+
+    Args:
+        module_registry: Registry of loaded modules.
+        output_dir: Output directory for stubs.
+        import_paths: Import paths for resolving absolute imports.
+        skip_pyright: Whether to skip pyright validation.
+        augment_capnp_stubs: Whether to augment capnp-stubs package.
+        common_base: Common base directory for preserving structure.
+    """
     # Track output directories for py.typed marker
     output_directories_used = set()
 
@@ -1017,7 +1045,7 @@ def run(args: argparse.Namespace, root_directory: str):
             module_registry,
             os.path.join(output_directory, output_file_name),
             output_dir_to_pass,
-            absolute_import_paths,
+            import_paths,
             module_path_prefix,
         )
 
@@ -1044,7 +1072,7 @@ def run(args: argparse.Namespace, root_directory: str):
                 f.write("")  # Empty file as per PEP 561
 
     # Augment capnp-stubs with cast_as overloads if requested
-    if args.augment_capnp_stubs:
+    if augment_capnp_stubs:
         source_stubs_path = find_capnp_stubs_package()
         if source_stubs_path:
             # Combine all interfaces from all directories

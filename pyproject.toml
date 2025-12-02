@@ -26,6 +26,7 @@ Issues = "https://github.com/zalf-rpm/capnp-stub-generator/issues"
 
 [project.scripts]
 capnp-stub-generator = "capnp_stub_generator.cli:main"
+capnpc-stub-generator = "capnp_stub_generator.capnpc_plugin:main"
 
 [tool.setuptools]
 packages = ["capnp_stub_generator"]
