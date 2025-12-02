@@ -126,21 +126,6 @@ def main():
         except Exception as e:
             logging.warning(f"Failed to load schema for file {path} (id={file_id}): {e}")
 
-    # Calculate common base from requested files to preserve directory structure
-    paths = [rf.filename for rf in request.requestedFiles]
-    common_base = None
-    if paths:
-        try:
-            common_base = os.path.commonpath(paths)
-            # If common_base is a file (single file input), use its directory
-            # We can't check os.path.isfile(common_base) because files might not exist relative to CWD
-            # But if common_base is in paths, it's a file path
-            if common_base in paths:
-                common_base = os.path.dirname(common_base)
-        except ValueError:
-            # Mix of absolute and relative paths or different drives
-            common_base = None
-
     # Run generation
     try:
         run_from_modules(
@@ -149,7 +134,7 @@ def main():
             import_paths,
             skip_pyright,
             augment_capnp_stubs,
-            common_base=common_base,
+            preserve_path_structure=True,
         )
     except Exception as e:
         logging.error(f"Generation failed: {e}", exc_info=True)

@@ -980,6 +980,7 @@ def run_from_modules(
     skip_pyright: bool,
     augment_capnp_stubs: bool,
     common_base: str | None = None,
+    preserve_path_structure: bool = False,
 ) -> None:
     """Run stub generation from pre-loaded modules.
 
@@ -990,6 +991,7 @@ def run_from_modules(
         skip_pyright: Whether to skip pyright validation.
         augment_capnp_stubs: Whether to augment capnp-stubs package.
         common_base: Common base directory for preserving structure.
+        preserve_path_structure: Whether to preserve the full path structure of input files.
     """
     # Track output directories for py.typed marker
     output_directories_used = set()
@@ -1003,9 +1005,20 @@ def run_from_modules(
 
     for path, module in module_registry.values():
         if output_dir:
-            abs_path = os.path.abspath(path)
-
-            if common_base:
+            if preserve_path_structure:
+                # Use the path as provided, treating it as relative to output_dir
+                # If absolute, strip root to avoid writing outside output_dir
+                rel_path = path
+                if os.path.isabs(rel_path):
+                    rel_path = rel_path.lstrip(os.sep)
+                    # Handle Windows drive letters if needed (simple check)
+                    if ":" in rel_path:
+                        rel_path = rel_path.split(":", 1)[1].lstrip(os.sep)
+                
+                rel_dir = os.path.dirname(rel_path)
+                output_directory = os.path.join(output_dir, rel_dir)
+            elif common_base:
+                abs_path = os.path.abspath(path)
                 # Calculate relative path from common base
                 rel_path = os.path.relpath(abs_path, common_base)
                 rel_dir = os.path.dirname(rel_path)
