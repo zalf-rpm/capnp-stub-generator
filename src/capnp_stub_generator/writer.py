@@ -35,7 +35,7 @@ from capnp_stub_generator.writer_dto import (
 if TYPE_CHECKING:
     from capnp.lib.capnp import _CapnpModuleType  # pyright: ignore[reportPrivateUsage]
 
-    from tests._generated.capnp.schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
+    from ..schema.schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
 
 capnp.remove_import_hook()
 
