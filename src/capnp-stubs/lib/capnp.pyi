@@ -103,21 +103,134 @@ class _Schema:
     """
     def as_const_value(self) -> Any: ...
     @property
-    def node(self) -> _NodeReader: ...
+    def node(self) -> _DynamicStructReader: ...
     def as_enum(self) -> _EnumSchema: ...
     def as_interface(self) -> _InterfaceSchema: ...
     def as_struct(self) -> _StructSchema: ...
-    def get_proto(self) -> _DynamicStructReader: ...
+    def get_proto(self) -> _NodeReader: ...
 
 class _ParsedSchema(_Schema):
     def get_nested(self, name: str) -> _ParsedSchema: ...
 
 class _StructSchema(_Schema):
-    fields: dict[str, _StructSchemaField]
-    fieldnames: tuple[str, ...]
-    fields_list: list[_StructSchemaField]
-    non_union_fields: tuple[str, ...]
-    union_fields: tuple[str, ...]
+    @property
+    def fieldnames(self) -> tuple[str, ...]:
+        """A tuple of the field names in the struct."""
+        ...
+
+    @property
+    def union_fields(self) -> tuple[str, ...]:
+        """A tuple of the field names in the struct."""
+        ...
+
+    @property
+    def non_union_fields(self) -> tuple[str, ...]:
+        """A tuple of the field names in the struct."""
+        ...
+
+    @property
+    def fields(self) -> dict[str, _StructSchemaField]:
+        """All of the _StructSchemaField in this schema as a dict"""
+        ...
+
+    @property
+    def fields_list(self) -> list[_StructSchemaField]:
+        """All of the _StructSchemaField in this schema as a list"""
+        ...
+
+class _EnumSchema:
+    """Schema for enum types.
+
+    Provides access to enum schema information.
+    Only accessible from capnp.lib.capnp, not from capnp directly.
+    """
+
+    @property
+    def enumerants(self) -> dict[str, int]:
+        """The list of enumerants as a dictionary"""
+        ...
+
+    @property
+    def node(self) -> _DynamicStructReader:
+        """The raw schema node"""
+        ...
+
+class _InterfaceSchema:
+    """Schema for interface types, parameterized by the interface type.
+
+    Provides access to interface schema information.
+    Only accessible from capnp.lib.capnp, not from capnp directly.
+    """
+
+    @property
+    def method_names(self) -> tuple[str, ...]:
+        """A tuple of the function names in the interface."""
+        ...
+
+    @property
+    def method_names_inherited(self) -> set[str]:
+        """A set of the function names in the interface, including inherited methods"""
+        ...
+
+    @property
+    def methods(self) -> dict[str, _InterfaceMethod]:
+        """A mapping of method names to their respective _InterfaceMethod"""
+        ...
+
+    @property
+    def methods_inherited(self) -> dict[str, _InterfaceMethod]:
+        """A mapping of method names to their respective _InterfaceMethod, including inherited methods"""
+        ...
+
+    @property
+    def superclasses(self) -> list[Any]:
+        """A list of superclasses for this interface"""
+        ...
+    @property
+    def node(self) -> _DynamicStructReader:
+        """The raw schema node"""
+        ...
+
+class _ListSchema:
+    """Schema for list types.
+
+    Can be instantiated to create list schemas for different element types.
+    """
+    def __init__(
+        self,
+        schema: (_StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema | _SchemaType | None) = None,
+    ) -> None:
+        """Create a list schema for the given element type.
+
+        Args:
+            schema: Element type schema. Can be:
+                - A struct schema (_StructSchema or StructSchema)
+                - An enum schema (_EnumSchema)
+                - An interface schema (_InterfaceSchema)
+                - Another list schema (_ListSchema) for nested lists
+                - A primitive type (_SchemaType, e.g., capnp.types.Int8)
+                - Any object with a .schema attribute
+                - None (creates uninitialized schema)
+        """
+        ...
+    @property
+    def elementType(
+        self,
+    ) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
+        """The schema of the element type of this list.
+
+        Returns:
+            Schema of the list element type:
+            - _StructSchema for struct elements
+            - _EnumSchema for enum elements
+            - _InterfaceSchema for interface elements
+            - _ListSchema for nested list elements
+
+        Raises:
+            KjException: When the element type is a primitive type (Int32, Text, Bool, etc.)
+                with message "Schema type is unknown"
+        """
+        ...
 
 class _StructModule:
     """Module/class for a generated struct type.
@@ -898,74 +1011,9 @@ class _DynamicStructBuilder:
         """
         ...
 
-class _EnumSchema:
-    """Schema for enum types.
-
-    Provides access to enum schema information.
-    Only accessible from capnp.lib.capnp, not from capnp directly.
-    """
-
-    enumerants: dict[str, int]
-    node: _NodeReader
-
 class _InterfaceMethod:
     param_type: _StructSchema
     result_type: _StructSchema
-
-class _InterfaceSchema:
-    """Schema for interface types, parameterized by the interface type.
-
-    Provides access to interface schema information.
-    Only accessible from capnp.lib.capnp, not from capnp directly.
-    """
-
-    method_names: tuple[str, ...]
-    method_names_inherited: set[str]
-    methods: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
-    methods_inherited: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
-    node: _NodeReader  # The raw schema node
-    superclasses: list[Any]  # List of parent interface schemas
-
-class _ListSchema:
-    """Schema for list types.
-
-    Can be instantiated to create list schemas for different element types.
-    """
-    def __init__(
-        self,
-        schema: (_StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema | _SchemaType | Any | None) = None,
-    ) -> None:
-        """Create a list schema for the given element type.
-
-        Args:
-            schema: Element type schema. Can be:
-                - A struct schema (_StructSchema or StructSchema)
-                - An enum schema (_EnumSchema)
-                - An interface schema (_InterfaceSchema)
-                - Another list schema (_ListSchema) for nested lists
-                - A primitive type (_SchemaType, e.g., capnp.types.Int8)
-                - Any object with a .schema attribute
-                - None (creates uninitialized schema)
-        """
-        ...
-    @property
-    def elementType(
-        self,
-    ) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
-        """The schema of the element type of this list.
-
-        Returns:
-            Schema of the list element type:
-            - _StructSchema for struct elements
-            - _EnumSchema for enum elements
-            - _InterfaceSchema for interface elements
-            - _ListSchema for nested list elements
-
-        Raises:
-            KjException: When the element type is a primitive type (Int32, Text, Bool, etc.)
-                with message "Schema type is unknown"
-        """
-        ...
 
 # RPC Request/Response Types
 class _Request(_DynamicStructBuilder):
@@ -1623,6 +1671,7 @@ class _EnumModule:
     Instances of this class are what you get when you access an enum from
     a loaded schema.
     """
+    def __init__(self, schema: _EnumSchema, name: str) -> None: ...
     def __getattr__(self, name: str) -> Any: ...
     def __setattr__(self, name: str, value: Any) -> None: ...
     @property
@@ -1884,4 +1933,5 @@ __all__ = [
     "_write_message_to_fd",
     "_write_packed_message_to_fd",
     "_SchemaType",
+    "_Schema",
 ]
