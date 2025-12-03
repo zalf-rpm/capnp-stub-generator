@@ -12,7 +12,12 @@ from copy import copy
 from typing import TYPE_CHECKING, Literal
 
 import capnp
-from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _ParsedSchema, _StructSchema
+from capnp.lib.capnp import (
+    _EnumSchema,
+    _InterfaceSchema,
+    _ParsedSchema,
+    _StructSchema,
+)
 
 from capnp_stub_generator import capnp_types, helper
 from capnp_stub_generator.scope import CapnpType, NoParentError, Scope

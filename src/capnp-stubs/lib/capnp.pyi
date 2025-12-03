@@ -9,6 +9,7 @@ from collections.abc import (
     Sequence,
 )
 from contextlib import AbstractContextManager, asynccontextmanager
+from ssl import SSLContext
 from typing import IO, Any, Literal, overload
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
@@ -25,7 +26,6 @@ from .._internal import (
 from ..schema_capnp import FieldReader as _StructSchemaField
 from ..schema_capnp import NestedNodeReader as _NestedNodeReader
 from ..schema_capnp import NodeReader as _NodeReader
-from ..schema_capnp import TypeReader as _SchemaType
 
 type AnyPointer = (
     str
@@ -96,6 +96,10 @@ class KjException(Exception):
     def _to_python(self) -> Exception:
         """Convert to a more specific Python exception if appropriate."""
         ...
+
+class _InterfaceMethod:
+    param_type: _StructSchema
+    result_type: _StructSchema
 
 class _Schema:
     """
@@ -242,7 +246,7 @@ class _StructModule:
     Nested types (structs, enums, interfaces) are accessed as attributes, not methods.
     """
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+    def __init__(self, schema: _StructSchema, name: str) -> None: ...
     def __getattr__(self, name: str) -> Any: ...
     def __setattr__(self, name: str, value: Any) -> None: ...
     @property
@@ -251,7 +255,7 @@ class _StructModule:
         self,
         num_first_segment_words: int | None = None,
         allocate_seg_callable: Callable[[int], bytearray] | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> _DynamicStructBuilder:
         """Create a new in-memory message builder for this struct type.
 
@@ -1011,10 +1015,6 @@ class _DynamicStructBuilder:
         """
         ...
 
-class _InterfaceMethod:
-    param_type: _StructSchema
-    result_type: _StructSchema
-
 # RPC Request/Response Types
 class _Request(_DynamicStructBuilder):
     """RPC request builder.
@@ -1418,7 +1418,7 @@ class SchemaLoader:
 
     Wraps capnproto/c++/src/capnp/schema-loader.h directly.
     """
-    def get(self, id_: int) -> _StructSchema:
+    def get(self, id_: int) -> _Schema:
         """Get a schema by its ID.
 
         Args:
@@ -1428,17 +1428,17 @@ class SchemaLoader:
             The schema with the given ID
         """
         ...
-    def load(self, reader: _NodeReader) -> _StructSchema:
+    def load(self, reader: _NodeReader) -> _Schema:
         """Load a schema from a reader.
 
         Args:
-            reader: _NodeReader containing schema data
+            reader: DynamicStructReader containing schema data
 
         Returns:
             Loaded schema
         """
         ...
-    def load_dynamic(self, reader: _DynamicStructReader) -> _StructSchema:
+    def load_dynamic(self, reader: _DynamicStructReader) -> _Schema:
         """Load a schema dynamically from a reader.
 
         Args:
@@ -1565,6 +1565,13 @@ _global_schema_parser: SchemaParser | None
 Note: This is actually defined in capnp.lib.capnp but referenced at module level
 in some internal code like pickle_helper.py.
 """
+
+class _SchemaType:
+    """Internal schema type representation.
+
+    This class represents Cap'n Proto primitive types.
+    Instances are used for type comparisons and type checking.
+    """
 
 class _DynamicListBuilder:
     """List builder type returned by init() for list fields.
@@ -1783,7 +1790,11 @@ class AsyncIoStream:
 
     @staticmethod
     async def create_connection(
-        host: str | None = None, port: int | None = None, **kwargs: dict[str, Any]
+        host: str | None = None,
+        port: int | None = None,
+        ssl: SSLContext | None = None,
+        ssl_handshake_timeout: int | None = None,
+        **kwargs: Any,
     ) -> AsyncIoStream:
         """Create an async TCP connection.
 
@@ -1798,7 +1809,7 @@ class AsyncIoStream:
         ...
 
     @staticmethod
-    async def create_unix_connection(path: str | None = None, **kwargs: dict[str, Any]) -> AsyncIoStream:
+    async def create_unix_connection(path: str | None = None, **kwargs: Any) -> AsyncIoStream:
         """Create an async Unix domain socket connection.
 
         Args:
@@ -1815,7 +1826,7 @@ class AsyncIoStream:
         callback: Callable[[AsyncIoStream], Awaitable[None]],
         host: str | None = None,
         port: int | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> _Server:
         """Create an async TCP server.
 
@@ -1834,7 +1845,7 @@ class AsyncIoStream:
     async def create_unix_server(
         callback: Callable[[AsyncIoStream], Awaitable[None]],
         path: str | None = None,
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> _Server:
         """Create an async Unix domain socket server.
 
@@ -1932,6 +1943,5 @@ __all__ = [
     "_init_capnp_api",
     "_write_message_to_fd",
     "_write_packed_message_to_fd",
-    "_SchemaType",
     "_Schema",
 ]

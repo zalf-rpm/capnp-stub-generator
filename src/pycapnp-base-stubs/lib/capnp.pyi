@@ -992,7 +992,6 @@ class _DynamicStructBuilder:
         """
         ...
 
-
 # RPC Request/Response Types
 class _Request(_DynamicStructBuilder):
     """RPC request builder.
@@ -1374,7 +1373,7 @@ class SchemaLoader:
 
     Wraps capnproto/c++/src/capnp/schema-loader.h directly.
     """
-    def get(self, id_: int) -> _StructSchema:
+    def get(self, id_: int) -> _Schema:
         """Get a schema by its ID.
 
         Args:
@@ -1384,7 +1383,7 @@ class SchemaLoader:
             The schema with the given ID
         """
         ...
-    def load(self, reader: _NodeReader) -> _StructSchema:
+    def load(self, reader: _NodeReader) -> _Schema:
         """Load a schema from a reader.
 
         Args:
@@ -1394,7 +1393,7 @@ class SchemaLoader:
             Loaded schema
         """
         ...
-    def load_dynamic(self, reader: _DynamicStructReader) -> _StructSchema:
+    def load_dynamic(self, reader: _DynamicStructReader) -> _Schema:
         """Load a schema dynamically from a reader.
 
         Args:
