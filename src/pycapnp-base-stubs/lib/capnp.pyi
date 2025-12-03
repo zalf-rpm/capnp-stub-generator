@@ -17,6 +17,9 @@ from .._internal import CapnpTypesModule as _CapnpTypesModule
 from .._internal import (
     Server as _Server,
 )
+from ..schema_capnp import FieldReader as _StructSchemaField
+from ..schema_capnp import NestedNodeReader as _NestedNodeReader
+from ..schema_capnp import NodeReader as _NodeReader
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 type AnyPointer = (
@@ -89,50 +92,6 @@ class KjException(Exception):
         """Convert to a more specific Python exception if appropriate."""
         ...
 
-class _StructSchemaField:
-    proto: _DynamicStructReader
-    schema: _StructSchema
-
-class _NestedNodeReader:
-    id: int
-    name: str
-
-class _NodeReader(_DynamicStructReader):
-    displayName: str
-    id: int
-    isConst: bool
-    isEnum: bool
-    isInterface: bool
-    isStruct: bool
-    nestedNodes: list[_NestedNodeReader]
-    node: _NodeReader
-    scopeId: int
-
-class _ParsedSchema:
-    @property
-    def node(self) -> _NodeReader: ...
-    def get_proto(self) -> _DynamicStructReader: ...
-    def get_nested(self, name: str) -> _ParsedSchema: ...
-    def as_const_value(self) -> Any: ...
-    def as_enum(self) -> _EnumSchema: ...
-    def as_interface(self) -> _InterfaceSchema: ...
-    def as_struct(self) -> _StructSchema: ...
-
-class _StructSchema:
-    fields: dict[str, _StructSchemaField]
-    fieldnames: tuple[str, ...]
-    fields_list: list[_StructSchemaField]
-    non_union_fields: tuple[str, ...]
-    union_fields: tuple[str, ...]
-
-    @property
-    def node(self) -> _NodeReader: ...
-    def as_const_value(self) -> Any: ...
-    def as_enum(self) -> _EnumSchema: ...
-    def as_interface(self) -> _InterfaceSchema: ...
-    def as_struct(self) -> _StructSchema: ...
-    def get_proto(self) -> _DynamicStructReader: ...
-
 class _StructModule:
     """Module/class for a generated struct type.
 
@@ -144,6 +103,8 @@ class _StructModule:
     """
 
     def __init__(self, schema: _StructSchema, name: str) -> None: ...
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
     @property
     def schema(self) -> _StructSchema: ...
     def new_message(
@@ -892,6 +853,28 @@ class _DynamicStructBuilder:
         """
         ...
 
+class _Schema:
+    """
+    Base class for _StructSchema
+    """
+    def as_const_value(self) -> Any: ...
+    @property
+    def node(self) -> _NodeReader: ...
+    def as_enum(self) -> _EnumSchema: ...
+    def as_interface(self) -> _InterfaceSchema: ...
+    def as_struct(self) -> _StructSchema: ...
+    def get_proto(self) -> _DynamicStructReader: ...
+
+class _ParsedSchema(_Schema):
+    def get_nested(self, name: str) -> _ParsedSchema: ...
+
+class _StructSchema(_Schema):
+    fields: dict[str, _StructSchemaField]
+    fieldnames: tuple[str, ...]
+    fields_list: list[_StructSchemaField]
+    non_union_fields: tuple[str, ...]
+    union_fields: tuple[str, ...]
+
 class _EnumSchema:
     """Schema for enum types.
 
@@ -901,10 +884,6 @@ class _EnumSchema:
 
     enumerants: dict[str, int]
     node: _NodeReader
-
-class _InterfaceMethod:
-    param_type: _StructSchema
-    result_type: _StructSchema
 
 class _InterfaceSchema:
     """Schema for interface types, parameterized by the interface type.
@@ -919,6 +898,10 @@ class _InterfaceSchema:
     methods_inherited: dict[str, _InterfaceMethod]  # Maps method name to _InterfaceMethod object
     node: _NodeReader  # The raw schema node
     superclasses: list[Any]  # List of parent interface schemas
+
+class _InterfaceMethod:
+    param_type: _StructSchema
+    result_type: _StructSchema
 
 class _ListSchema:
     """Schema for list types.
@@ -1352,7 +1335,7 @@ class SchemaLoader:
             The schema with the given ID
         """
         ...
-    def load(self, reader: _DynamicStructReader) -> _StructSchema:
+    def load(self, reader: _NodeReader) -> _StructSchema:
         """Load a schema from a reader.
 
         Args:
@@ -1602,6 +1585,8 @@ class _EnumModule:
     Instances of this class are what you get when you access an enum from
     a loaded schema.
     """
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
     @property
     def schema(self) -> _EnumSchema: ...
 
@@ -1618,6 +1603,8 @@ class _InterfaceModule:
     """
 
     def __init__(self, schema: _InterfaceSchema, name: str) -> None: ...
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
     @property
     def schema(self) -> _InterfaceSchema: ...
     def _new_client(self, server: _DynamicCapabilityServer) -> _DynamicCapabilityClient:
@@ -1851,6 +1838,7 @@ __all__ = [
     "_ListSchema",
     "_MallocMessageBuilder",
     "_NodeReader",
+    "_NestedNodeReader",
     "_PackedFdMessageReader",
     "_ParsedSchema",
     "_PyCustomMessageBuilder",
