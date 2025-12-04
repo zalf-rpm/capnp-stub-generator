@@ -6,7 +6,7 @@ import dataclasses
 import logging
 from typing import Literal, override
 
-from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _ParsedSchema, _StructSchema
+from capnp_stub_generator import capnp_types
 
 from .helper import TypeHintedVariable
 
@@ -138,7 +138,7 @@ class CapnpType:
         scope (Scope):
     """
 
-    schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema | None
+    schema: capnp_types.SchemaType | None
     name: str
     scope: Scope
 

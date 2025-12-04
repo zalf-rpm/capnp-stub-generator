@@ -8,7 +8,7 @@ from copy import copy
 from dataclasses import dataclass, field
 from typing import override
 
-from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _ParsedSchema, _StructSchema
+from capnp_stub_generator.capnp_types import SchemaType
 
 BUILDER_NAME = "Builder"
 READER_NAME = "Reader"
@@ -499,7 +499,7 @@ def new_class_declaration(name: str, parameters: Sequence[str] | None = None) ->
         return f"class {name}:"
 
 
-def get_display_name(schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema) -> str:
+def get_display_name(schema: SchemaType) -> str:
     """Extract the display name from a schema.
 
     Args:

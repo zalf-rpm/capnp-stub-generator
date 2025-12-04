@@ -14,8 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import capnp
+from capnp.lib.capnp import _ParsedSchema
 
-from capnp_stub_generator.capnp_types import ModuleRegistryType
+from capnp_stub_generator import capnp_types
+from capnp_stub_generator.capnp_types import SchemaRegistryType
 from capnp_stub_generator.helper import replace_capnp_suffix
 from capnp_stub_generator.writer import Writer
 
@@ -155,10 +157,6 @@ def augment_capnp_stubs_with_overloads(
         interfaces: Dictionary mapping interface names to (client_name, base_client_names) tuples.
         dynamic_object_types: Dictionary with "structs" and "interfaces" keys containing type tuples.
     """
-    if not interfaces and not dynamic_object_types.get("structs") and not dynamic_object_types.get("interfaces"):
-        logger.info("No interfaces or _DynamicObjectReader types found, skipping capnp-stubs augmentation.")
-        return
-
     # Create destination path for augmented stubs
     dest_stubs_path = os.path.join(augmented_stubs_dir, "capnp-stubs")
 
@@ -167,6 +165,22 @@ def augment_capnp_stubs_with_overloads(
         shutil.rmtree(dest_stubs_path)
     shutil.copytree(source_stubs_path, dest_stubs_path)
     logger.info(f"Copied capnp-stubs to: {dest_stubs_path}")
+
+    # Copy the schema directory if it exists (sibling to source_stubs_path)
+    source_schema_path = os.path.join(os.path.dirname(source_stubs_path), "schema")
+    dest_schema_path = os.path.join(augmented_stubs_dir, "schema")
+
+    if os.path.isdir(source_schema_path):
+        if os.path.exists(dest_schema_path):
+            shutil.rmtree(dest_schema_path)
+        shutil.copytree(source_schema_path, dest_schema_path)
+        logger.info(f"Copied schema stubs to: {dest_schema_path}")
+    else:
+        logger.warning(f"Schema stubs not found at: {source_schema_path}")
+
+    if not interfaces and not dynamic_object_types.get("structs") and not dynamic_object_types.get("interfaces"):
+        logger.info("No interfaces or _DynamicObjectReader types found, skipping capnp-stubs augmentation.")
+        return
 
     # Path to lib/capnp.pyi
     capnp_pyi_path = os.path.join(dest_stubs_path, "lib", "capnp.pyi")
@@ -773,28 +787,36 @@ def format_outputs(raw_input: str, is_pyi: bool) -> str:
         return raw_input
 
 
-def generate_stubs(
-    module: capnp.lib.capnp._CapnpModuleType,
-    module_registry: ModuleRegistryType,
+def _generate_stubs_from_schema(
+    schema: _ParsedSchema,
+    file_path: str,
+    module_registry: capnp_types.SchemaRegistryType,
     output_file_path: str,
     output_directory: str | None = None,
     import_paths: list[str] | None = None,
     module_path_prefix: str | None = None,
 ) -> tuple[dict[str, tuple[str, list[str]]], tuple[list[tuple[str, str]], list[tuple[str, str]]]]:
-    """Entry-point for generating *.pyi stubs from a module definition.
+    """Internal function for generating *.pyi stubs from schema information.
 
     Args:
-        module (ModuleType): The module to generate stubs for.
-        module_registry (ModuleRegistryType): A registry of all detected modules.
-        output_file_path (str): The name of the output stub files, without file extension.
-        output_directory (str | None): The directory where output files are written, if different from schema location.
-        import_paths (list[str] | None): Additional import paths for resolving absolute imports.
-        module_path_prefix (str | None): Prefix for module path (e.g., "calculator" for subdirectory structure).
+        schema: The root schema to parse and write stubs for.
+        file_path: Path to the schema file.
+        module_registry: A registry of all detected schemas.
+        output_file_path: The name of the output stub files, without file extension.
+        output_directory: The directory where output files are written, if different from schema location.
+        import_paths: Additional import paths for resolving absolute imports.
+        module_path_prefix: Prefix for module path (e.g., "calculator" for subdirectory structure).
 
     Returns:
-        dict[str, tuple[str, list[str]]]: Dictionary mapping interface names to (client_name, base_client_names) tuples.
+        Dictionary mapping interface names to (client_name, base_client_names) tuples.
     """
-    writer = Writer(module, module_registry, output_directory=output_directory, import_paths=import_paths)
+    writer = Writer(
+        schema=schema,
+        file_path=file_path,
+        module_registry=module_registry,
+        output_directory=output_directory,
+        import_paths=import_paths,
+    )
     writer.generate_all_nested()
 
     for outputs, suffix, is_pyi in zip((writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), (True, False)):
@@ -892,7 +914,7 @@ def extract_base_from_pattern(pattern: str) -> str:
 def run(args: argparse.Namespace, root_directory: str):
     """Run the stub generator on a set of paths that point to *.capnp schemas.
 
-    Uses `generate_stubs` on each input file.
+    Loads schemas and calls `run_from_schemas` for generation.
 
     Args:
         args (argparse.Namespace): The arguments that were passed when calling the stub generator.
@@ -948,12 +970,13 @@ def run(args: argparse.Namespace, root_directory: str):
     # Convert import paths to absolute paths relative to root_directory
     absolute_import_paths = [os.path.join(root_directory, p) for p in import_paths]
 
+    # Load schemas directly into schema registry
     parser = capnp.SchemaParser()
-    module_registry: ModuleRegistryType = {}
+    schema_registry: SchemaRegistryType = {}
 
     for path in valid_paths:
         module = parser.load(path, imports=absolute_import_paths)
-        module_registry[module.schema.node.id] = (path, module)
+        schema_registry[module.schema.node.id] = (path, module.schema)
 
     # Determine the common base path for preserving directory structure
     common_base = _determine_output_directory_structure(
@@ -963,8 +986,8 @@ def run(args: argparse.Namespace, root_directory: str):
         root_directory,
     )
 
-    run_from_modules(
-        module_registry,
+    run_from_schemas(
+        schema_registry,
         output_dir,
         absolute_import_paths,
         skip_pyright,
@@ -973,8 +996,8 @@ def run(args: argparse.Namespace, root_directory: str):
     )
 
 
-def run_from_modules(
-    module_registry: ModuleRegistryType,
+def run_from_schemas(
+    schema_registry: SchemaRegistryType,
     output_dir: str,
     import_paths: list[str],
     skip_pyright: bool,
@@ -982,10 +1005,10 @@ def run_from_modules(
     common_base: str | None = None,
     preserve_path_structure: bool = False,
 ) -> None:
-    """Run stub generation from pre-loaded modules.
+    """Run stub generation from pre-loaded schemas.
 
     Args:
-        module_registry: Registry of loaded modules.
+        schema_registry: Registry of loaded schemas.
         output_dir: Output directory for stubs.
         import_paths: Import paths for resolving absolute imports.
         skip_pyright: Whether to skip pyright validation.
@@ -1003,7 +1026,9 @@ def run_from_modules(
     # Track all _DynamicObjectReader types by output directory
     all_dynamic_object_types_by_dir: dict[str, dict[str, list[tuple[str, str]]]] = {}
 
-    for path, module in module_registry.values():
+    for path, schema in schema_registry.values():
+        file_path = path
+
         if output_dir:
             if preserve_path_structure:
                 # Use the path as provided, treating it as relative to output_dir
@@ -1014,7 +1039,7 @@ def run_from_modules(
                     # Handle Windows drive letters if needed (simple check)
                     if ":" in rel_path:
                         rel_path = rel_path.split(":", 1)[1].lstrip(os.sep)
-                
+
                 rel_dir = os.path.dirname(rel_path)
                 output_directory = os.path.join(output_dir, rel_dir)
             elif common_base:
@@ -1053,13 +1078,14 @@ def run_from_modules(
         schema_directory = os.path.dirname(path)
         output_dir_to_pass = output_directory if output_directory != schema_directory else None
 
-        module_interfaces, dynamic_object_types = generate_stubs(
-            module,
-            module_registry,
-            os.path.join(output_directory, output_file_name),
-            output_dir_to_pass,
-            import_paths,
-            module_path_prefix,
+        module_interfaces, dynamic_object_types = _generate_stubs_from_schema(
+            schema=schema,
+            file_path=file_path,
+            module_registry=schema_registry,
+            output_file_path=os.path.join(output_directory, output_file_name),
+            output_directory=output_dir_to_pass,
+            import_paths=import_paths,
+            module_path_prefix=module_path_prefix,
         )
 
         # Collect interfaces for this output directory
@@ -1099,12 +1125,12 @@ def run_from_modules(
                 all_dynamic_object_types["structs"].extend(types_dict["structs"])
                 all_dynamic_object_types["interfaces"].extend(types_dict["interfaces"])
 
-            # Determine where to place augmented stubs (beside output directories, not inside)
-            # If output_dir is specified, place augmented stubs beside it
+            # Determine where to place augmented stubs (inside output directory)
+            # If output_dir is specified, place augmented stubs inside it
             # Otherwise, pick a common parent directory of all output directories
             if output_dir:
-                # Place augmented stubs in the parent directory of output_dir
-                augmented_stubs_dir = os.path.dirname(os.path.abspath(output_dir))
+                # Place augmented stubs in the output_dir itself
+                augmented_stubs_dir = os.path.abspath(output_dir)
             else:
                 # Find common parent of all output directories
                 output_dirs_list = list(output_directories_used)

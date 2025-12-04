@@ -33,8 +33,6 @@ from capnp_stub_generator.writer_dto import (
 )
 
 if TYPE_CHECKING:
-    from capnp.lib.capnp import _CapnpModuleType  # pyright: ignore[reportPrivateUsage]
-
     from ..schema.schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
 
 capnp.remove_import_hook()
@@ -79,32 +77,31 @@ class Writer:
 
     def __init__(
         self,
-        module: _CapnpModuleType,
-        module_registry: capnp_types.ModuleRegistryType,
+        schema: _ParsedSchema,
+        file_path: str,
+        module_registry: capnp_types.SchemaRegistryType,
         output_directory: str | None = None,
         import_paths: list[str] | None = None,
     ):
-        """Initialize the stub writer with a module definition.
+        """Initialize the stub writer with schema information.
 
         Args:
-            module (ModuleType): The module definition to parse and write a stub for.
-            module_registry (ModuleRegistryType): The module registry, for finding dependencies between loaded modules.
-            output_directory (str | None): The directory where output files are written, if different from schema location.
-            import_paths (list[str] | None): Additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).
+            schema: The root schema to parse and write stubs for.
+                Can be _ParsedSchema (from parser.load) or SchemaProxy (from plugin).
+            file_path: Path to the schema file (e.g., "path/to/schema.capnp").
+            module_registry: The schema registry, for finding dependencies between loaded schemas.
+            output_directory: The directory where output files are written, if different from schema location.
+            import_paths: Additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).
         """
-        self.scope: Scope = Scope(name="", id=module.schema.node.id, parent=None, return_scope=None)
+        self.scope: Scope = Scope(name="", id=schema.node.id, parent=None, return_scope=None)
         self.scopes_by_id: dict[int, Scope] = {self.scope.id: self.scope}
 
-        self._module: _CapnpModuleType = module
-        self._module_registry: capnp_types.ModuleRegistryType = module_registry
+        self._schema: _ParsedSchema = schema
+        self._module_registry: capnp_types.SchemaRegistryType = module_registry
         self._output_directory: pathlib.Path | None = pathlib.Path(output_directory) if output_directory else None
         self._import_paths: list[pathlib.Path] = [pathlib.Path(p) for p in import_paths] if import_paths else []
 
-        if self._module.__file__:
-            self._module_path: pathlib.Path = pathlib.Path(self._module.__file__)
-
-        else:
-            raise ValueError("The module has no file path attached to it.")
+        self._module_path: pathlib.Path = pathlib.Path(file_path)
 
         self._imports: list[str] = []
         self._add_import("from __future__ import annotations")
@@ -324,12 +321,12 @@ class Writer:
     @property
     def full_display_name(self) -> str:
         """The base name of this writer's target module."""
-        return self._module.schema.node.displayName
+        return self._schema.node.displayName
 
     @property
     def display_name(self) -> str:
         """The base name of this writer's target module."""
-        return pathlib.Path(self._module.schema.node.displayName).name
+        return pathlib.Path(self._schema.node.displayName).name
 
     @property
     def imports(self) -> list[str]:
@@ -1037,10 +1034,10 @@ class Writer:
                     # Superclass not yet registered - try to generate it first
                     try:
                         # Try to find and generate the superclass from the module registry
-                        for module_id, (_, module) in self._module_registry.items():
+                        for module_id, (_, registry_schema) in self._module_registry.items():
                             if module_id == superclass.id:
-                                # Found the superclass module, generate it
-                                self.generate_nested(module.schema)
+                                # Found the superclass schema, generate it
+                                self.generate_nested(registry_schema)
                                 superclass_type = self.get_type_by_id(superclass.id)
                                 # superclass_type.name is now the interface module name
                                 protocol_name = superclass_type.name
@@ -1051,13 +1048,15 @@ class Writer:
                                 base_classes.append(base_protocol)
                                 break
 
-                            # Check if it's a nested type in the module
-                            def find_nested_schema(schema_obj: _ParsedSchema, target_id: int) -> _ParsedSchema | None:
+                            # Check if it's a nested type in the schema
+                            def find_nested_schema(
+                                schema_obj: _ParsedSchema, target_id: int
+                            ) -> capnp_types.SchemaType | None:
                                 for nested_node in schema_obj.node.nestedNodes:
                                     if nested_node.id == target_id:
-                                        return schema_obj.get_nested(nested_node.name)
+                                        return schema_obj.get_nested(nested_node.name)  # type: ignore[union-attr]
                                     try:
-                                        nested_schema = schema_obj.get_nested(nested_node.name)
+                                        nested_schema = schema_obj.get_nested(nested_node.name)  # type: ignore[union-attr]
                                         result = find_nested_schema(nested_schema, target_id)
                                         if result:
                                             return result
@@ -1065,7 +1064,7 @@ class Writer:
                                         pass
                                 return None
 
-                            found_schema = find_nested_schema(module.schema, superclass.id)
+                            found_schema = find_nested_schema(registry_schema, superclass.id)
                             if found_schema:
                                 self.generate_nested(found_schema)
                                 superclass_type = self.get_type_by_id(superclass.id)
@@ -1097,7 +1096,7 @@ class Writer:
                 # Get the nested schema using schema traversal
                 # We use _get_parsed_schema_for_scope(self.scope) to get the _ParsedSchema for the interface.
                 parsed_interface = self._get_parsed_schema_for_scope(self.scope)
-                nested_schema = parsed_interface.get_nested(nested_node.name)
+                nested_schema = parsed_interface.get_nested(nested_node.name)  # type: ignore[union-attr]
 
                 self.generate_nested(nested_schema)
             except Exception as e:  # pragma: no cover
@@ -1499,7 +1498,7 @@ class Writer:
     def gen_struct_slot(
         self,
         field: FieldReader,
-        schema: _StructSchema,
+        schema: capnp_types.SchemaType,
         init_choices: list[InitChoice],
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `struct`.
@@ -1515,7 +1514,7 @@ class Writer:
         if not self.is_type_id_known(schema.node.id):
             # Try to register as an import first, then generate if needed
             imported = self.register_import(schema)
-            if imported is None:
+            if imported is None and isinstance(schema, _StructSchema):
                 _ = self.gen_struct(schema)
 
         type_name = self.get_type_name(field.slot.type)
@@ -1677,7 +1676,12 @@ class Writer:
             enum_parent_scope = self.scope
 
         # Create new scope for the Enum
-        _ = self.new_scope(enum_class_name, schema.node, scope_heading=enum_declaration, parent_scope=enum_parent_scope)
+        _ = self.new_scope(
+            enum_class_name,
+            schema.node,
+            scope_heading=enum_declaration,
+            parent_scope=enum_parent_scope,
+        )
 
         # Construct flat alias name for nested enums to avoid "Variable not allowed" errors
         # e.g. CalculatorOperatorEnum
@@ -1786,11 +1790,11 @@ class Writer:
         return context, protocol_declaration
 
     def _get_parsed_schema_for_scope(self, scope: Scope) -> _ParsedSchema:
-        """Get the _ParsedSchema corresponding to the given scope by traversing from root.
+        """Get the schema corresponding to the given scope by traversing from root.
 
         This avoids using runtime getattr traversal which is not type-safe.
         """
-        current = self._module.schema
+        current = self._schema
         trace = scope.trace
 
         # If trace is empty or just root, return root schema
@@ -1804,7 +1808,7 @@ class Writer:
             found = False
             for nested in current.node.nestedNodes:
                 if nested.id == s.id:
-                    current = current.get_nested(nested.name)
+                    current = current.get_nested(nested.name)  # type: ignore[union-attr]
                     found = True
                     break
             if not found:
@@ -1819,8 +1823,8 @@ class Writer:
     def _resolve_nested_schema(
         self,
         nested_node: NestedNodeReader,
-        parent_schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema,
-    ) -> _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema | None:
+        parent_schema: capnp_types.SchemaType,
+    ) -> capnp_types.SchemaType | None:
         """Resolve a nested schema from a nested node.
 
         Args:
@@ -1841,7 +1845,7 @@ class Writer:
             # (This assumption holds for _generate_nested_types usage)
             if self.scope.id == parent_schema.node.id:
                 parsed_parent = self._get_parsed_schema_for_scope(self.scope)
-                return parsed_parent.get_nested(nested_node.name)
+                return parsed_parent.get_nested(nested_node.name)  # type: ignore[union-attr]
         except Exception as e:
             logger.debug(f"Could not resolve nested node {nested_node.name} via schema traversal: {e}")
 
@@ -3628,9 +3632,6 @@ class Writer:
         if not self.scope.lines:
             self.scope.add("...")
 
-        # Close interface Protocol scope
-        self.return_from_scope()
-
         # Phase 6: Add type annotations and aliases at the recorded parent scope
         # Annotation for the interface module (better matches runtime behavior)
         type_alias_scope.add(f"{context.type_name}: {context.protocol_class_name}")
@@ -3681,6 +3682,9 @@ class Writer:
 
             # Track for top-level TypeAlias
             self._all_type_aliases[server_alias_name] = (server_alias_path, "Server")
+
+        # Return from the interface Protocol scope
+        self.return_from_scope()
 
         return context.registered_type
 
@@ -3761,66 +3765,66 @@ class Writer:
             # Empty client class (inherits everything from superclasses and has no Results)
             self.scope.add("    ...")
 
-    def generate_nested(self, schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema) -> None:
+    def generate_nested(self, schema: capnp_types.SchemaType) -> None:
         """Generate the type for a nested schema.
 
         Args:
             schema (SchemaType): The schema to generate types for.
+                Can be _ParsedSchema, _StructSchema, _EnumSchema, _InterfaceSchema,
+                _Schema, or a SchemaProxy wrapper.
 
         Raises:
             AssertionError: If the schema belongs to an unknown type.
         """
-        if self.is_type_id_known(schema.node.id):
+        if isinstance(schema, _EnumSchema):
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_enum(schema)
+            return
+        elif isinstance(schema, _InterfaceSchema):
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_interface(schema)
+            return
+        elif isinstance(schema, _StructSchema):
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_struct(schema)
             return
 
-        node_type = schema.node.which()
-
-        if node_type == "const":
+        # Generate based on node type
+        if schema.node.which() == "const":
             # Const schemas are always _ParsedSchema
-            if isinstance(schema, _ParsedSchema):
+            if not self.is_type_id_known(schema.node.id):
                 self.gen_const(schema)
 
-        elif node_type == "struct":
-            # Both _ParsedSchema and _StructSchema have as_struct()
-            if getattr(schema, "as_struct", None):
-                _ = self.gen_struct(schema.as_struct())  # pyright: ignore[reportAttributeAccessIssue]
-            elif isinstance(schema, _StructSchema):
-                _ = self.gen_struct(schema)
-
-        elif node_type == "enum":
-            # Only _ParsedSchema has as_enum()
-            if getattr(schema, "as_enum", None):
-                _ = self.gen_enum(schema.as_enum())  # pyright: ignore[reportAttributeAccessIssue]
-            elif isinstance(schema, _EnumSchema):
-                _ = self.gen_enum(schema)
-
-        elif node_type == "interface":
-            # Only _ParsedSchema has as_interface()
-            if getattr(schema, "as_interface", None):
-                _ = self.gen_interface(schema.as_interface())  # pyright: ignore[reportAttributeAccessIssue]
-            elif isinstance(schema, _InterfaceSchema):
-                _ = self.gen_interface(schema)
-
-        elif node_type == "annotation":
-            logger.warning("Skipping annotation: not implemented.")
-
+        elif schema.node.which() == "struct":
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_struct(schema.as_struct())
+        elif schema.node.which() == "enum":
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_enum(schema.as_enum())
+        elif schema.node.which() == "interface":
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_interface(schema.as_interface())  # type: ignore[union-attr]
+        elif schema.node.which() == "file":
+            # File nodes are skipped - they're just containers
+            logger.debug(f"Skipping file node: {schema.node.displayName}")
+            return
         else:
-            raise AssertionError(node_type)
+            # Unknown node type (annotation, etc.)
+            logger.warning(f"Skipping unknown node type '{schema.node.which()}': {schema.node.displayName}")
+            return
 
     def generate_all_nested(self):
         """Generate types for all nested nodes, recursively."""
-        for node in self._module.schema.node.nestedNodes:
+        for node in self._schema.node.nestedNodes:
             try:
-                self.generate_nested(self._module.schema.get_nested(node.name))
+                self.generate_nested(self._schema.get_nested(node.name))  # type: ignore[union-attr]
             except Exception as e:
                 # capnpc may omit unused nodes from imported schemas in the CodeGeneratorRequest.
                 # This results in "no schema node loaded" errors when trying to access them.
                 # These are harmless if the nodes are indeed unused, so we log as debug.
                 logger.debug(f"Could not generate nested node '{node.name}': {e}")
 
-    def register_import(
-        self, schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema
-    ) -> CapnpType | None:
+    def register_import(self, schema: capnp_types.SchemaType) -> CapnpType | None:
         """Determine, whether a schema is imported from the base module.
 
         If so, the type definition that the schema contains, is added to the type registry.
@@ -3854,7 +3858,7 @@ class Writer:
                         return True
                     # Recursively search deeper by getting the nested schema
                     try:
-                        nested_schema = schema_obj.get_nested(nested_node.name)
+                        nested_schema = schema_obj.get_nested(nested_node.name)  # type: ignore[union-attr]
                         if search_nested_nodes(nested_schema, target_id):
                             return True
                     except Exception:
@@ -3862,8 +3866,8 @@ class Writer:
                         pass
                 return False
 
-            for _, (path, module) in self._module_registry.items():
-                if search_nested_nodes(module.schema, schema.node.id):
+            for _, (path, registry_schema) in self._module_registry.items():
+                if search_nested_nodes(registry_schema, schema.node.id):
                     matching_path = pathlib.Path(path)
                     break
 
@@ -3895,8 +3899,10 @@ class Writer:
             root_name = definition_name.split(".")[0]
 
             # For structs, import the Protocol class for type references
-            node_type = schema.node.which()
-            if node_type not in (capnp_types.CapnpElementType.ENUM, capnp_types.CapnpElementType.INTERFACE):
+            # Determine node type
+            # _DynamicStructReader
+
+            if schema.node.which() == capnp_types.CapnpElementType.STRUCT:
                 protocol_root_name = f"_{root_name}StructModule"
                 self._add_import(f"from {python_import_path} import {protocol_root_name}")
                 # Register with Protocol-based path: replace ALL struct names with Protocol names
@@ -3908,7 +3914,7 @@ class Writer:
                 return self.register_type(schema.node.id, schema, name=protocol_definition_name, scope=self.scope.root)
             else:
                 # Import only the root parent for enums/interfaces
-                if node_type == capnp_types.CapnpElementType.INTERFACE:
+                if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
                     # For nested interfaces, register with Protocol name
                     # E.g., "Channel.Reader" -> "Channel._ReaderInterfaceModule"
                     parts = definition_name.split(".")
@@ -3923,30 +3929,22 @@ class Writer:
                     self._add_import(f"from {python_import_path} import {root_name}")
                     return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
         else:
-            # Regular non-nested import
-            node_type = schema.node.which()
-            if node_type in (
-                capnp_types.CapnpElementType.ENUM,
-                capnp_types.CapnpElementType.INTERFACE,
-            ):
-                if node_type == capnp_types.CapnpElementType.INTERFACE:
-                    # For interfaces, import the Protocol class, the TypeAlias, and the Client alias
-                    protocol_name = f"_{definition_name}InterfaceModule"
-                    client_name = f"{definition_name}Client"
-                    self._add_import(
-                        f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}"
-                    )
+            if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+                # For interfaces, import the Protocol class, the TypeAlias, and the Client alias
+                protocol_name = f"_{definition_name}InterfaceModule"
+                client_name = f"{definition_name}Client"
+                self._add_import(f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}")
 
-                    # Track imported aliases
-                    self._imported_aliases.add(client_name)
+                # Track imported aliases
+                self._imported_aliases.add(client_name)
 
-                    # Register with Protocol name for internal type references
-                    return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
-                else:
-                    # Enums just need the enum itself
-                    alias_name = f"{definition_name}Enum"
-                    self._add_import(f"from {python_import_path} import {alias_name}")
-                    return self.register_type(schema.node.id, schema, name=alias_name, scope=self.scope.root)
+                # Register with Protocol name for internal type references
+                return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
+            elif schema.node.which() == capnp_types.CapnpElementType.ENUM:
+                # Enums just need the enum itself
+                alias_name = f"{definition_name}Enum"
+                self._add_import(f"from {python_import_path} import {alias_name}")
+                return self.register_type(schema.node.id, schema, name=alias_name, scope=self.scope.root)
             else:
                 # Structs: import the Protocol class (_<Name>StructModule) for internal type references
                 # The TypeAlias can be accessed if needed, but internal references use the Protocol
@@ -3966,7 +3964,7 @@ class Writer:
     def register_type(
         self,
         type_id: int,
-        schema: _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema,
+        schema: capnp_types.SchemaType,
         name: str = "",
         scope: Scope | None = None,
     ) -> CapnpType:
@@ -3991,6 +3989,7 @@ class Writer:
             raise ValueError(f"No valid scope was found for registering the type '{name}'.")
 
         self.type_map[type_id] = retval = CapnpType(schema=schema, name=name, scope=scope)
+
         return retval
 
     def is_type_id_known(self, type_id: int) -> bool:
@@ -4020,7 +4019,7 @@ class Writer:
             return self.type_map[type_id]
 
         # Try to find the type in other modules
-        for module_id, (_, module) in self._module_registry.items():
+        for module_id, (_, schema) in self._module_registry.items():
             # Helper to search recursively
             def find_schema_by_id(schema_obj: _ParsedSchema, target_id: int) -> _ParsedSchema | None:
                 if schema_obj.node.id == target_id:
@@ -4035,11 +4034,11 @@ class Writer:
                         pass
                 return None
 
-            found_schema = find_schema_by_id(module.schema, type_id)
+            found_schema = find_schema_by_id(schema, type_id)
             if found_schema:
                 # Found it!
                 # If it's in the current module, generate it
-                if module_id == self._module.schema.node.id:
+                if module_id == self._schema.node.id:
                     self.generate_nested(found_schema)
                 else:
                     # If it's in another module, register it as an import
@@ -4105,6 +4104,7 @@ class Writer:
         # Use word boundary to avoid matching "class TestSturdyRef" when looking for "class TestSturdyRefHostId"
         # Search from the END to find the most recently added class with this name
         scope_heading_pattern = f"class {self.scope.name}"
+        logger.debug(f"  Looking for pattern: '{scope_heading_pattern}' in {len(self.scope.parent.lines)} parent lines")
         heading_index = None
         for i in range(len(self.scope.parent.lines) - 1, -1, -1):
             line = self.scope.parent.lines[i]
@@ -4169,10 +4169,10 @@ class Writer:
                 # Try to generate the struct before using it
                 try:
                     # Use capnp's internal method to get the schema by ID
-                    all_nested = list(self._module.schema.node.nestedNodes)
+                    all_nested = list(self._schema.node.nestedNodes)
                     for nested_node in all_nested:
                         if nested_node.id == type_id:
-                            nested_schema = self._module.schema.get_nested(nested_node.name)
+                            nested_schema = self._schema.get_nested(nested_node.name)  # type: ignore[union-attr]
                             self.generate_nested(nested_schema)
                             break
                 except Exception as e:
@@ -4197,10 +4197,10 @@ class Writer:
             if not self.is_type_id_known(type_id):
                 # Try to generate the interface before using it
                 try:
-                    all_nested = list(self._module.schema.node.nestedNodes)
+                    all_nested = list(self._schema.node.nestedNodes)
                     for nested_node in all_nested:
                         if nested_node.id == type_id:
-                            nested_schema = self._module.schema.get_nested(nested_node.name)
+                            nested_schema = self._schema.get_nested(nested_node.name)  # type: ignore[union-attr]
                             self.generate_nested(nested_schema)
                             break
                 except Exception as e:
@@ -4249,27 +4249,26 @@ class Writer:
         # Get the set of type IDs that are actually DEFINED (not just imported) in this module
         # by checking the nested nodes of the root schema
         defined_type_ids = set()
-        if self._module and hasattr(self._module, "schema"):
-            module_schema = self._module.schema
+        module_schema = self._schema
 
-            # Recursively collect all nested type IDs defined in this module
-            def collect_nested_ids(schema: _ParsedSchema) -> set[int]:
-                """Recursively collect all nested type IDs from a schema."""
-                ids: set[int] = {schema.node.id}
-                for nested in schema.node.nestedNodes:
-                    try:
-                        nested_schema = schema.get_nested(nested.name)
-                        ids.update(collect_nested_ids(nested_schema))
-                    except Exception:
-                        # If we can't get the nested schema, skip it
-                        pass
-                return ids
+        # Recursively collect all nested type IDs defined in this module
+        def collect_nested_ids(schema: _ParsedSchema) -> set[int]:
+            """Recursively collect all nested type IDs from a schema."""
+            ids: set[int] = {schema.node.id}
+            for nested in schema.node.nestedNodes:
+                try:
+                    nested_schema = schema.get_nested(nested.name)  # type: ignore[union-attr]
+                    ids.update(collect_nested_ids(nested_schema))
+                except Exception:
+                    # If we can't get the nested schema, skip it
+                    pass
+            return ids
 
-            try:
-                defined_type_ids: set[int] = collect_nested_ids(module_schema)
-            except Exception:
-                # If collection fails, fall back to including all types
-                pass
+        try:
+            defined_type_ids: set[int] = collect_nested_ids(module_schema)
+        except Exception:
+            # If collection fails, fall back to including all types
+            pass
 
         for type_id, capnp_type in self.type_map.items():
             if capnp_type.schema is None:
@@ -4324,7 +4323,12 @@ class Writer:
         Returns:
             str: The output string.
         """
-        assert self.scope.is_root
+        # Ensure we're at root scope before dumping
+        if not self.scope.is_root:
+            logger.warning(f"Scope not at root when dumping! name='{self.scope.name}', forcing return to root")
+            # Force return to root
+            while self.scope.return_scope is not None:
+                self.scope = self.scope.return_scope
 
         out: list[str] = []
         out.append(self.docstring)
@@ -4399,7 +4403,12 @@ class Writer:
         Returns:
             str: The output string.
         """
-        assert self.scope.is_root
+        # Ensure we're at root scope before dumping
+        if not self.scope.is_root:
+            logger.warning(f"Scope not at root when dumping .py! name='{self.scope.name}', forcing return to root")
+            # Force return to root
+            while self.scope.return_scope is not None:
+                self.scope = self.scope.return_scope
 
         out: list[str] = []
         out.append(self.docstring)

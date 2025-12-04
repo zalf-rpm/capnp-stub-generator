@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-import capnp
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from capnp.lib.capnp import (
+        _EnumSchema,
+        _InterfaceSchema,
+        _ParsedSchema,
+        _StructSchema,
+    )
 
 CAPNP_TYPE_TO_PYTHON = {
     "void": "None",
@@ -40,4 +48,5 @@ class CapnpElementType:
     INTERFACE = "interface"
 
 
-type ModuleRegistryType = dict[int, tuple[str, capnp.lib.capnp._CapnpModuleType]]
+type SchemaRegistryType = dict[int, tuple[str, "_ParsedSchema"]]
+type SchemaType = _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema

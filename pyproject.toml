@@ -39,6 +39,7 @@ reportPropertyTypeMismatch = "none"
 [tool.poetry]
 packages = [
   { include = "capnp_stub_generator", from = "src" },
+  { include = "schema", from = "src" },
   { include = "tests" },
 ]
 
