@@ -103,6 +103,11 @@ class Writer:
 
         self._module_path: pathlib.Path = pathlib.Path(file_path)
 
+        # Build a flat mapping of all schemas by ID for nested type resolution
+        # This eliminates the need for get_nested() method
+        self._schemas_by_id: dict[int, capnp_types.SchemaType] = {}
+        self._build_schema_id_mapping()
+
         self._imports: list[str] = []
         self._add_import("from __future__ import annotations")
         self._add_import(
@@ -141,6 +146,88 @@ class Writer:
         self._generated_list_types: set[str] = set()
 
         self.docstring: str = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
+
+    def _build_schema_id_mapping(self) -> None:
+        """Build a flat mapping of all schemas by their ID.
+
+        This recursively walks through all schemas in the registry and their nested nodes,
+        creating a lookup table that allows finding any schema by ID without using get_nested().
+        """
+
+        def add_schema_and_nested(schema: capnp_types.SchemaType) -> None:
+            """Recursively add a schema and all its nested schemas to the mapping."""
+            schema_id = schema.node.id
+            if schema_id in self._schemas_by_id:
+                return  # Already processed
+
+            self._schemas_by_id[schema_id] = schema
+
+            # Process all nested nodes
+            for nested_node in schema.node.nestedNodes:
+                nested_id = nested_node.id
+                if nested_id in self._schemas_by_id:
+                    continue  # Already processed
+
+                # Try to get the nested schema
+                try:
+                    # Check if it's in the registry first
+                    if nested_id in self._module_registry:
+                        _, nested_schema = self._module_registry[nested_id]
+                        add_schema_and_nested(nested_schema)
+                    else:
+                        # It's a nested type within this schema
+                        # We need to construct it from the node
+                        # For SchemaLoader-based schemas, we can use the loader
+                        # For _ParsedSchema, we can use get_nested
+                        if hasattr(schema, "get_nested"):
+                            nested_schema = schema.get_nested(nested_node.name)  # type: ignore[union-attr]
+                            add_schema_and_nested(nested_schema)
+                        else:
+                            # Schema doesn't support get_nested - log and skip
+                            logger.debug(
+                                f"Cannot resolve nested schema {nested_node.name} (id={hex(nested_id)}) - schema type {type(schema)} doesn't support get_nested"
+                            )
+                except Exception as e:
+                    logger.debug(f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}): {e}")
+
+        # Add the root schema
+        add_schema_and_nested(self._schema)
+
+        # Add all schemas from the module registry
+        for schema_id, (_, schema) in self._module_registry.items():
+            add_schema_and_nested(schema)
+
+        logger.debug(f"Built schema ID mapping with {len(self._schemas_by_id)} schemas")
+        if len(self._schemas_by_id) == 0:
+            logger.warning("Schema ID mapping is empty! This will result in empty stubs.")
+            logger.warning(f"Root schema ID: {hex(self._schema.node.id)}")
+            logger.warning(f"Module registry has {len(self._module_registry)} entries")
+        elif len(self._schemas_by_id) < 3 and len(self._module_registry) > 5:
+            logger.warning(
+                f"Schema ID mapping seems incomplete: {len(self._schemas_by_id)} schemas from {len(self._module_registry)} registry entries"
+            )
+
+    def _get_nested_schema(
+        self, parent_schema: capnp_types.SchemaType, nested_name: str
+    ) -> capnp_types.SchemaType | None:
+        """Get a nested schema by name from a parent schema.
+
+        This replaces direct calls to schema.get_nested() by looking up the nested
+        schema in our ID mapping.
+
+        Args:
+            parent_schema: The parent schema containing the nested type
+            nested_name: The name of the nested type to find
+
+        Returns:
+            The nested schema, or None if not found
+        """
+        # Find the nested node by name
+        for nested_node in parent_schema.node.nestedNodes:
+            if nested_node.name == nested_name:
+                # Look up in our schema ID mapping
+                return self._schemas_by_id.get(nested_node.id)
+        return None
 
     def _extract_name_from_protocol(self, protocol_name: str) -> str:
         """Extract user-facing name from Protocol name.
@@ -1050,18 +1137,22 @@ class Writer:
 
                             # Check if it's a nested type in the schema
                             def find_nested_schema(
-                                schema_obj: _ParsedSchema, target_id: int
+                                schema_obj: capnp_types.SchemaType, target_id: int
                             ) -> capnp_types.SchemaType | None:
+                                # First check if it's directly in our schema ID mapping
+                                if target_id in self._schemas_by_id:
+                                    return self._schemas_by_id[target_id]
+
+                                # Otherwise recursively search nested nodes
                                 for nested_node in schema_obj.node.nestedNodes:
                                     if nested_node.id == target_id:
-                                        return schema_obj.get_nested(nested_node.name)  # type: ignore[union-attr]
-                                    try:
-                                        nested_schema = schema_obj.get_nested(nested_node.name)  # type: ignore[union-attr]
+                                        return self._schemas_by_id.get(target_id)
+                                    # Recursively search in the nested schema
+                                    nested_schema = self._schemas_by_id.get(nested_node.id)
+                                    if nested_schema:
                                         result = find_nested_schema(nested_schema, target_id)
                                         if result:
                                             return result
-                                    except Exception:
-                                        pass
                                 return None
 
                             found_schema = find_nested_schema(registry_schema, superclass.id)
@@ -1093,12 +1184,14 @@ class Writer:
 
         for nested_node in schema.node.nestedNodes:
             try:
-                # Get the nested schema using schema traversal
-                # We use _get_parsed_schema_for_scope(self.scope) to get the _ParsedSchema for the interface.
-                parsed_interface = self._get_parsed_schema_for_scope(self.scope)
-                nested_schema = parsed_interface.get_nested(nested_node.name)  # type: ignore[union-attr]
-
-                self.generate_nested(nested_schema)
+                # Get the nested schema from our ID mapping
+                nested_schema = self._schemas_by_id.get(nested_node.id)
+                if nested_schema:
+                    self.generate_nested(nested_schema)
+                else:
+                    logger.debug(
+                        f"Could not find nested type {nested_node.name} (id={hex(nested_node.id)}) in schema mapping"
+                    )
             except Exception as e:  # pragma: no cover
                 logger.debug(f"Could not generate nested type {nested_node.name}: {e}")
 
@@ -1789,7 +1882,7 @@ class Writer:
 
         return context, protocol_declaration
 
-    def _get_parsed_schema_for_scope(self, scope: Scope) -> _ParsedSchema:
+    def _get_parsed_schema_for_scope(self, scope: Scope) -> capnp_types.SchemaType:
         """Get the schema corresponding to the given scope by traversing from root.
 
         This avoids using runtime getattr traversal which is not type-safe.
@@ -1804,19 +1897,16 @@ class Writer:
         # Skip root and traverse down
         # Note: trace[0] is root. We start from trace[1].
         for s in trace[1:]:
-            # Find nested node with s.id
-            found = False
-            for nested in current.node.nestedNodes:
-                if nested.id == s.id:
-                    current = current.get_nested(nested.name)  # type: ignore[union-attr]
-                    found = True
-                    break
-            if not found:
+            # Find nested schema by scope ID in our schema mapping
+            nested_schema = self._schemas_by_id.get(s.id)
+            if nested_schema:
+                current = nested_schema
+            else:
                 # This might happen if the scope is not strictly following the schema nesting
                 # (e.g. Builder/Reader scopes which are artificial)
                 # But for finding nested types, we should be in a schema scope.
                 # If we can't find it, we can't resolve nested types via schema.
-                raise ValueError(f"Could not find scope {s.name} (id={s.id}) in schema")
+                raise ValueError(f"Could not find scope {s.name} (id={hex(s.id)}) in schema mapping")
 
         return current
 
@@ -1834,22 +1924,8 @@ class Writer:
         Returns:
             The nested schema or None if it cannot be resolved
         """
-        if isinstance(parent_schema, _ParsedSchema):
-            return parent_schema.get_nested(nested_node.name)
-
-        # For other schema types (_StructSchema, etc.), they don't have get_nested.
-        # But we can find the corresponding _ParsedSchema by traversing from root
-        # using the current scope (which should match parent_schema).
-        try:
-            # Verify that parent_schema matches current scope
-            # (This assumption holds for _generate_nested_types usage)
-            if self.scope.id == parent_schema.node.id:
-                parsed_parent = self._get_parsed_schema_for_scope(self.scope)
-                return parsed_parent.get_nested(nested_node.name)  # type: ignore[union-attr]
-        except Exception as e:
-            logger.debug(f"Could not resolve nested node {nested_node.name} via schema traversal: {e}")
-
-        return None
+        # Look up the nested schema by ID in our schema mapping
+        return self._schemas_by_id.get(nested_node.id)
 
     def _generate_nested_types(self, schema: _StructSchema) -> None:
         """Generate all nested types (structs, enums, interfaces) within this struct.
@@ -3817,7 +3893,11 @@ class Writer:
         """Generate types for all nested nodes, recursively."""
         for node in self._schema.node.nestedNodes:
             try:
-                self.generate_nested(self._schema.get_nested(node.name))  # type: ignore[union-attr]
+                nested_schema = self._schemas_by_id.get(node.id)
+                if nested_schema:
+                    self.generate_nested(nested_schema)
+                else:
+                    logger.debug(f"Could not find nested schema {node.name} (id={hex(node.id)}) in schema mapping")
             except Exception as e:
                 # capnpc may omit unused nodes from imported schemas in the CodeGeneratorRequest.
                 # This results in "no schema node loaded" errors when trying to access them.
@@ -4020,19 +4100,10 @@ class Writer:
 
         # Try to find the type in other modules
         for module_id, (_, schema) in self._module_registry.items():
-            # Helper to search recursively
-            def find_schema_by_id(schema_obj: _ParsedSchema, target_id: int) -> _ParsedSchema | None:
-                if schema_obj.node.id == target_id:
-                    return schema_obj
-                for nested_node in schema_obj.node.nestedNodes:
-                    try:
-                        nested_schema = schema_obj.get_nested(nested_node.name)
-                        found = find_schema_by_id(nested_schema, target_id)
-                        if found:
-                            return found
-                    except Exception:
-                        pass
-                return None
+            # Helper to search recursively using schema ID mapping
+            def find_schema_by_id(schema_obj: capnp_types.SchemaType, target_id: int) -> capnp_types.SchemaType | None:
+                # Use our schema ID mapping instead of get_nested
+                return self._schemas_by_id.get(target_id)
 
             found_schema = find_schema_by_id(schema, type_id)
             if found_schema:

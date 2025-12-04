@@ -1004,17 +1004,20 @@ def run_from_schemas(
     augment_capnp_stubs: bool,
     common_base: str | None = None,
     preserve_path_structure: bool = False,
+    file_schemas_only: set[int] | None = None,
 ) -> None:
     """Run stub generation from pre-loaded schemas.
 
     Args:
-        schema_registry: Registry of loaded schemas.
+        schema_registry: Registry of loaded schemas (may include nested types).
         output_dir: Output directory for stubs.
         import_paths: Import paths for resolving absolute imports.
         skip_pyright: Whether to skip pyright validation.
         augment_capnp_stubs: Whether to augment capnp-stubs package.
         common_base: Common base directory for preserving structure.
         preserve_path_structure: Whether to preserve the full path structure of input files.
+        file_schemas_only: Optional set of schema IDs to generate stubs for (file-level only).
+            If None, generates stubs for all schemas in registry.
     """
     # Track output directories for py.typed marker
     output_directories_used = set()
@@ -1026,8 +1029,19 @@ def run_from_schemas(
     # Track all _DynamicObjectReader types by output directory
     all_dynamic_object_types_by_dir: dict[str, dict[str, list[tuple[str, str]]]] = {}
 
-    for path, schema in schema_registry.values():
+    for schema_id, (path, schema) in schema_registry.items():
+        # Skip nested schemas if file_schemas_only is specified
+        if file_schemas_only is not None and schema_id not in file_schemas_only:
+            logger.debug(f"Skipping nested schema {schema.node.displayName} (not a file-level schema)")
+            continue
+
         file_path = path
+
+        # Debug: log what we're processing
+        logger.debug(f"Processing schema {schema.node.displayName} from {path}")
+        logger.debug(f"  Schema ID: {hex(schema.node.id)}")
+        logger.debug(f"  Nested nodes in schema: {len(schema.node.nestedNodes)}")
+        logger.debug(f"  Total schemas in registry: {len(schema_registry)}")
 
         if output_dir:
             if preserve_path_structure:
