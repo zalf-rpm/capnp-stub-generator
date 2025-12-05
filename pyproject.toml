@@ -40,6 +40,7 @@ reportPropertyTypeMismatch = "none"
 packages = [
   { include = "capnp_stub_generator", from = "src" },
   { include = "schema_capnp", from = "src" },
+  { include = "capnp-stubs", from = "src" },
   { include = "tests" },
 ]
 

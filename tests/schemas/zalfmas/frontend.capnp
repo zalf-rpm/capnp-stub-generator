@@ -5,6 +5,9 @@ using Persistent = import "persistence.capnp".Persistent;
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::frontend");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.frontend");
+
 using Go = import "/capnp/go.capnp";
 $Go.package("frontend");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/frontend");

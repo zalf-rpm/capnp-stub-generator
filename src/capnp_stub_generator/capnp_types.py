@@ -48,5 +48,4 @@ class CapnpElementType:
     INTERFACE = "interface"
 
 
-type SchemaRegistryType = dict[int, tuple[str, "_ParsedSchema"]]
 type SchemaType = _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema

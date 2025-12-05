@@ -3,6 +3,9 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::climate");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.climate");
+
 using Go = import "/capnp/go.capnp";
 $Go.package("climate");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/climate");

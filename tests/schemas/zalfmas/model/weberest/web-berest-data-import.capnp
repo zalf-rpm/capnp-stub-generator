@@ -3,6 +3,9 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::model::weberest");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.model.weberest");
+
 using Java = import "/capnp/java.capnp";
 $Java.package("de.zalf.mas");
 $Java.outerClassname("WebBerestDWDImport");

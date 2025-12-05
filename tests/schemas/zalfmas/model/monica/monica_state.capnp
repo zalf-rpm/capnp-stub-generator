@@ -3,6 +3,9 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::model::monica");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.model.monica");
+
 using Go = import "/capnp/go.capnp";
 $Go.package("monica");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/model/monica");

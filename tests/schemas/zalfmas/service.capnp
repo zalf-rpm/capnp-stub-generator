@@ -3,6 +3,9 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::service");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.service");
+
 using Go = import "/capnp/go.capnp";
 $Go.package("service");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/service");

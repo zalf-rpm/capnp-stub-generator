@@ -17,8 +17,6 @@ from pathlib import Path
 import capnp
 from capnp.lib.capnp import _ParsedSchema
 
-from capnp_stub_generator import capnp_types
-from capnp_stub_generator.capnp_types import SchemaRegistryType
 from capnp_stub_generator.helper import replace_capnp_suffix
 from capnp_stub_generator.writer import Writer
 
@@ -791,7 +789,8 @@ def format_outputs(raw_input: str, is_pyi: bool) -> str:
 def _generate_stubs_from_schema(
     schema: _ParsedSchema,
     file_path: str,
-    module_registry: capnp_types.SchemaRegistryType,
+    schema_loader: capnp.SchemaLoader,
+    file_id_to_path: dict[int, str],
     output_file_path: str,
     output_directory: str | None = None,
     import_paths: list[str] | None = None,
@@ -803,7 +802,8 @@ def _generate_stubs_from_schema(
     Args:
         schema: The root schema to parse and write stubs for.
         file_path: Path to the schema file.
-        module_registry: A registry of all detected schemas.
+        schema_loader: SchemaLoader instance with all nodes loaded.
+        file_id_to_path: Mapping of schema IDs to file paths.
         output_file_path: The name of the output stub files, without file extension.
         output_directory: The directory where output files are written, if different from schema location.
         import_paths: Additional import paths for resolving absolute imports.
@@ -816,7 +816,8 @@ def _generate_stubs_from_schema(
     writer = Writer(
         schema=schema,
         file_path=file_path,
-        module_registry=module_registry,
+        schema_loader=schema_loader,
+        file_id_to_path=file_id_to_path,
         output_directory=output_directory,
         import_paths=import_paths,
         schema_base_directory=schema_base_directory,
@@ -913,139 +914,6 @@ def extract_base_from_pattern(pattern: str) -> str:
         base = os.path.dirname(base)
 
     return base
-
-
-def _load_schemas_via_capnp_compile(
-    schema_paths: list[str],
-    import_paths: list[str],
-) -> tuple[SchemaRegistryType, set[int]]:
-    """Load schemas by invoking capnp compile to get CodeGeneratorRequest.
-
-    This ensures all schemas including groups in unions are available.
-
-    Args:
-        schema_paths: List of .capnp file paths to compile
-        import_paths: List of import search paths
-
-    Returns:
-        Tuple of (schema_registry, file_schema_ids)
-        - schema_registry: Dict mapping schema_id -> (path, schema)
-        - file_schema_ids: Set of IDs for file-level schemas (not nested)
-    """
-    from schema_capnp import schema_capnp
-
-    # Build capnp compile command
-    cmd = ["capnp", "compile", "-o-"]
-
-    # Add import paths
-    for import_path in import_paths:
-        cmd.extend(["-I", import_path])
-
-    # Add schema files
-    cmd.extend(schema_paths)
-
-    logger.debug(f"Running: {' '.join(cmd)}")
-
-    # Run capnp compile
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        check=False,
-    )
-
-    if result.returncode != 0:
-        error_msg = result.stderr.decode("utf-8") if result.stderr else "Unknown error"
-        raise RuntimeError(f"capnp compile failed: {error_msg}")
-
-    # Parse CodeGeneratorRequest (output from capnp compile -o- is unpacked binary)
-    # Keep the message in memory by writing to temp file and reading it back
-    # We need to keep the file and message reader alive for the entire generation process
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as tmp_file:
-        tmp_file.write(result.stdout)
-        tmp_path = tmp_file.name
-
-    try:
-        # Open file and keep it open to keep message data valid
-        request_file = open(tmp_path, "rb")
-        request_reader = schema_capnp.CodeGeneratorRequest.read(request_file)
-
-        # Create SchemaLoader and load all nodes
-        loader = capnp.SchemaLoader()
-        node_count = len(list(request_reader.nodes))
-        logger.info(f"Loading {node_count} nodes from capnp compile output")
-
-        for node in request_reader.nodes:
-            try:
-                loader.load_dynamic(node)
-                logger.debug(f"Loaded node: {node.displayName} (id={hex(node.id)}, which={node.which()})")
-            except Exception as e:
-                logger.warning(f"Failed to load node {node.displayName}: {e}")
-
-        # Build file ID to path mapping
-        file_id_to_path: dict[int, str] = {}
-        for rf in request_reader.requestedFiles:
-            file_id_to_path[rf.id] = rf.filename
-            for imp in rf.imports:
-                # Resolve import path
-                if imp.name.startswith("/"):
-                    path = imp.name[1:]
-                else:
-                    path = os.path.normpath(os.path.join(os.path.dirname(rf.filename), imp.name))
-                file_id_to_path[imp.id] = path
-
-        # Populate schema registry with ALL nodes
-        schema_registry: SchemaRegistryType = {}
-
-        for node in request_reader.nodes:
-            try:
-                schema = loader.get(node.id)
-
-                # Determine path for this node
-                if node.id in file_id_to_path:
-                    path = file_id_to_path[node.id]
-                else:
-                    # Nested schema - extract file from displayName
-                    display_name = node.displayName
-                    if ":" in display_name:
-                        file_part = display_name.split(":")[0]
-                        # Find matching file
-                        path = file_part
-                        for file_id, file_path in file_id_to_path.items():
-                            if file_path.endswith(file_part):
-                                path = file_path
-                                break
-                    else:
-                        path = display_name
-
-                schema_registry[node.id] = (path, schema)
-                logger.debug(f"Added schema {node.displayName} (id={hex(node.id)}) to registry")
-
-            except Exception as e:
-                logger.warning(f"Could not add schema for node {node.displayName} (id={hex(node.id)}): {e}")
-
-        # Track file-level schema IDs
-        file_schema_ids = set(file_id_to_path.keys())
-
-        logger.info(f"Loaded {len(schema_registry)} schemas ({len(file_schema_ids)} file-level)")
-
-        # Return tuple of (schema_registry, file_schema_ids, cleanup_callback)
-        # Caller must call cleanup_callback when done
-        def cleanup():
-            request_file.close()
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
-
-        return schema_registry, file_schema_ids, cleanup
-
-    except Exception:
-        # Clean up on error
-        try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
-        raise
 
 
 def run(args: argparse.Namespace, root_directory: str):
@@ -1199,7 +1067,8 @@ main()
 
 
 def run_from_schemas(
-    schema_registry: SchemaRegistryType,
+    schema_loader: capnp.SchemaLoader,
+    file_id_to_path: dict[int, str],
     output_dir: str,
     import_paths: list[str],
     skip_pyright: bool,
@@ -1211,7 +1080,8 @@ def run_from_schemas(
     """Run stub generation from pre-loaded schemas.
 
     Args:
-        schema_registry: Registry of loaded schemas (may include nested types).
+        schema_loader: SchemaLoader instance with all nodes loaded.
+        file_id_to_path: Mapping of schema IDs to file paths.
         output_dir: Output directory for stubs.
         import_paths: Import paths for resolving absolute imports.
         skip_pyright: Whether to skip pyright validation.
@@ -1219,7 +1089,7 @@ def run_from_schemas(
         common_base: Common base directory for preserving structure.
         preserve_path_structure: Whether to preserve the full path structure of input files.
         file_schemas_only: Optional set of schema IDs to generate stubs for (file-level only).
-            If None, generates stubs for all schemas in registry.
+            If None, generates stubs for all schemas in file_id_to_path.
     """
     # Track output directories for py.typed marker
     output_directories_used = set()
@@ -1231,10 +1101,16 @@ def run_from_schemas(
     # Track all _DynamicObjectReader types by output directory
     all_dynamic_object_types_by_dir: dict[str, dict[str, list[tuple[str, str]]]] = {}
 
-    for schema_id, (path, schema) in schema_registry.items():
+    for schema_id, path in file_id_to_path.items():
         # Skip nested schemas if file_schemas_only is specified
         if file_schemas_only is not None and schema_id not in file_schemas_only:
-            logger.debug(f"Skipping nested schema {schema.node.displayName} (not a file-level schema)")
+            continue
+
+        # Get schema from loader
+        try:
+            schema = schema_loader.get(schema_id)
+        except Exception as e:
+            logger.warning(f"Could not load schema {hex(schema_id)} from {path}: {e}")
             continue
 
         file_path = path
@@ -1243,9 +1119,34 @@ def run_from_schemas(
         logger.debug(f"Processing schema {schema.node.displayName} from {path}")
         logger.debug(f"  Schema ID: {hex(schema.node.id)}")
         logger.debug(f"  Nested nodes in schema: {len(schema.node.nestedNodes)}")
-        logger.debug(f"  Total schemas in registry: {len(schema_registry)}")
 
-        if output_dir:
+        # Create a temporary writer just to extract Python module annotation
+        from capnp_stub_generator.writer import Writer
+
+        temp_writer = Writer(
+            schema=schema,
+            file_path=path,
+            schema_loader=schema_loader,
+            file_id_to_path=file_id_to_path,
+            output_directory=output_dir,
+            import_paths=import_paths,
+            schema_base_directory=output_dir if output_dir else os.path.dirname(path),
+        )
+
+        # Check if schema has Python module annotation
+        python_module_path = temp_writer._python_module_path
+
+        if output_dir and python_module_path:
+            # Use module annotation to determine output structure
+            # Convert "mas.schema.climate" -> "mas/schema"
+            module_parts = python_module_path.split(".")
+            module_dir = os.path.join(*module_parts[:-1]) if len(module_parts) > 1 else ""
+
+            output_directory = os.path.join(output_dir, module_dir) if module_dir else output_dir
+            os.makedirs(output_directory, exist_ok=True)
+
+            logger.info(f"Using Python module annotation: {python_module_path} -> {output_directory}")
+        elif output_dir:
             if preserve_path_structure:
                 # Use the path as provided, treating it as relative to output_dir
                 # If absolute, strip root to avoid writing outside output_dir
@@ -1297,7 +1198,8 @@ def run_from_schemas(
         module_interfaces, dynamic_object_types = _generate_stubs_from_schema(
             schema=schema,
             file_path=file_path,
-            module_registry=schema_registry,
+            schema_loader=schema_loader,
+            file_id_to_path=file_id_to_path,
             output_file_path=os.path.join(output_directory, output_file_name),
             output_directory=output_dir_to_pass,
             import_paths=import_paths,
@@ -1320,12 +1222,28 @@ def run_from_schemas(
             all_dynamic_object_types_by_dir[output_directory]["interfaces"].extend(interface_types)
 
     # Create py.typed marker and __init__.py in each output directory to make them packages
+    # Also create __init__.py files for all parent directories
     for output_directory in output_directories_used:
         # Create __init__.py to make it a package (needed for relative imports)
         init_path = os.path.join(output_directory, "__init__.py")
         if not os.path.exists(init_path):
             with open(init_path, "w", encoding="utf8") as f:
                 f.write("# Auto-generated package initialization\n")
+
+        # Create __init__.py files for all parent directories up to output_dir
+        if output_dir:
+            current_dir = os.path.dirname(output_directory)
+            output_dir_abs = os.path.abspath(output_dir)
+            while current_dir and os.path.abspath(current_dir) != output_dir_abs:
+                parent_init = os.path.join(current_dir, "__init__.py")
+                if not os.path.exists(parent_init):
+                    with open(parent_init, "w", encoding="utf8") as f:
+                        f.write("# Auto-generated package initialization\n")
+                    logger.debug(f"Created __init__.py at {current_dir}")
+                current_dir = os.path.dirname(current_dir)
+                # Safety check to avoid infinite loop
+                if len(current_dir) >= len(output_dir_abs):
+                    break
 
     # Copy bundled schema module once at the top level (common parent or output_dir)
     # This avoids duplicating the schema module in each subdirectory

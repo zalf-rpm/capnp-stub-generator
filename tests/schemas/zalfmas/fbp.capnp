@@ -3,6 +3,9 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::fbp");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.fbp");
+
 using Go = import "/capnp/go.capnp";
 $Go.package("fbp");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/fbp");

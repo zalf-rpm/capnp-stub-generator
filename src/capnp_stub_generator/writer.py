@@ -79,7 +79,8 @@ class Writer:
         self,
         schema: _ParsedSchema,
         file_path: str,
-        module_registry: capnp_types.SchemaRegistryType,
+        schema_loader: capnp.SchemaLoader,
+        file_id_to_path: dict[int, str],
         output_directory: str | None = None,
         import_paths: list[str] | None = None,
         schema_base_directory: str | None = None,
@@ -88,9 +89,9 @@ class Writer:
 
         Args:
             schema: The root schema to parse and write stubs for.
-                Can be _ParsedSchema (from parser.load) or SchemaProxy (from plugin).
             file_path: Path to the schema file (e.g., "path/to/schema.capnp").
-            module_registry: The schema registry, for finding dependencies between loaded schemas.
+            schema_loader: SchemaLoader instance with all nodes loaded.
+            file_id_to_path: Mapping of schema IDs to file paths for resolving imports.
             output_directory: The directory where output files are written, if different from schema location.
             import_paths: Additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).
             schema_base_directory: The base directory where schema module is located (for relative imports).
@@ -99,7 +100,8 @@ class Writer:
         self.scopes_by_id: dict[int, Scope] = {self.scope.id: self.scope}
 
         self._schema: _ParsedSchema = schema
-        self._module_registry: capnp_types.SchemaRegistryType = module_registry
+        self._schema_loader: capnp.SchemaLoader = schema_loader
+        self._file_id_to_path: dict[int, str] = file_id_to_path
         self._output_directory: pathlib.Path | None = pathlib.Path(output_directory) if output_directory else None
         self._import_paths: list[pathlib.Path] = [pathlib.Path(p) for p in import_paths] if import_paths else []
         self._schema_base_directory: pathlib.Path | None = (
@@ -107,6 +109,10 @@ class Writer:
         )
 
         self._module_path: pathlib.Path = pathlib.Path(file_path)
+
+        # Python module annotation ID (from python.capnp: annotation module(file): Text)
+        self._python_module_annotation_id = 0x8C5EA3FEE3B0F96C
+        self._python_module_path: str | None = self._get_python_module_annotation()
 
         # Build a flat mapping of all schemas by ID for nested type resolution
         # This eliminates the need for get_nested() method
@@ -152,12 +158,80 @@ class Writer:
 
         self.docstring: str = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
+    def _get_python_module_annotation(self) -> str | None:
+        """Extract Python module path from $Python.module() annotation.
+
+        Returns:
+            The Python module path (e.g., "mas.schema.climate") or None if not present.
+        """
+        try:
+            for annotation in self._schema.node.annotations:
+                if annotation.id == self._python_module_annotation_id:
+                    if annotation.value.which() == "text":
+                        module_path = annotation.value.text
+                        logger.info(f"Found Python module annotation: {module_path}")
+                        return module_path
+        except Exception as e:
+            logger.debug(f"Error reading Python module annotation: {e}")
+        return None
+
+    def get_module_based_output_path(self, output_dir: pathlib.Path, base_name: str) -> pathlib.Path:
+        """Calculate the output path based on Python module annotation.
+
+        If a Python module annotation is present (e.g., "mas.schema.climate"),
+        converts it to a directory path (e.g., "mas/schema/climate_capnp.pyi").
+
+        Args:
+            output_dir: Base output directory.
+            base_name: Base name for the output file (e.g., "climate").
+
+        Returns:
+            Full path where the stub should be written.
+        """
+        if self._python_module_path:
+            # Convert module path to directory structure
+            # "mas.schema.climate" -> "mas/schema"
+            module_parts = self._python_module_path.split(".")
+            module_dir = pathlib.Path(*module_parts)
+
+            # Create the full output path
+            output_path = output_dir / module_dir / f"{base_name}_capnp.pyi"
+
+            logger.debug(f"Module-based output: {self._python_module_path} -> {output_path}")
+            return output_path
+        else:
+            # Fallback: use base_name directly in output_dir
+            return output_dir / f"{base_name}.pyi"
+
+    def get_python_module_for_schema(self, schema_id: int) -> str | None:
+        """Get the Python module path for a schema by ID.
+
+        Looks up the schema in the loader and extracts its Python module annotation.
+
+        Args:
+            schema_id: The schema ID to look up.
+
+        Returns:
+            The Python module path (e.g., "mas.schema.common") or None if not found.
+        """
+        try:
+            schema = self._schema_loader.get(schema_id)
+            for annotation in schema.node.annotations:
+                if annotation.id == self._python_module_annotation_id:
+                    if annotation.value.which() == "text":
+                        return annotation.value.text
+        except Exception as e:
+            logger.debug(f"Error reading Python module annotation from schema {hex(schema_id)}: {e}")
+
+        return None
+
     def _build_schema_id_mapping(self) -> None:
         """Build a flat mapping of all schemas by their ID.
 
-        This recursively walks through all schemas in the registry and their nested nodes,
-        creating a lookup table that allows finding any schema by ID without using get_nested().
-        Also includes schemas referenced by group fields.
+        This walks through ALL schemas available in the loader, including:
+        - The root schema
+        - All nested nodes recursively
+        - Schemas from other files (for cross-file references)
         """
 
         def add_schema_and_nested(schema: capnp_types.SchemaType) -> None:
@@ -174,61 +248,114 @@ class Writer:
                 if nested_id in self._schemas_by_id:
                     continue  # Already processed
 
-                # Try to get the nested schema
+                # Try to get the nested schema from the loader
                 try:
-                    # Check if it's in the registry first
-                    if nested_id in self._module_registry:
-                        _, nested_schema = self._module_registry[nested_id]
-                        add_schema_and_nested(nested_schema)
-                    else:
-                        # It's a nested type within this schema
-                        # We need to construct it from the node
-                        # For SchemaLoader-based schemas, we can use the loader
-                        # For _ParsedSchema, we can use get_nested
-                        if hasattr(schema, "get_nested"):
-                            nested_schema = schema.get_nested(nested_node.name)  # type: ignore[union-attr]
-                            add_schema_and_nested(nested_schema)
-                        else:
-                            # Schema doesn't support get_nested - log and skip
-                            logger.debug(
-                                f"Cannot resolve nested schema {nested_node.name} (id={hex(nested_id)}) - schema type {type(schema)} doesn't support get_nested"
-                            )
+                    nested_schema = self._schema_loader.get(nested_id)
+                    add_schema_and_nested(nested_schema)
                 except Exception as e:
                     logger.debug(f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}): {e}")
 
-            # Also collect schemas referenced by group fields (unions/groups)
-            # Groups are NOT listed as nested nodes but are referenced by fields
+            # Also collect schemas referenced by struct fields
+            # This includes groups, and field types (structs, interfaces, lists of structs, etc.)
             if schema.node.which() == capnp_types.CapnpElementType.STRUCT:
                 for field in schema.node.struct.fields:
+                    # Handle group fields (unions/groups)
                     if field.which() == "group":
                         group_id = field.group.typeId
                         if group_id not in self._schemas_by_id:
-                            # Try to get the group schema from the registry
-                            if group_id in self._module_registry:
-                                _, group_schema = self._module_registry[group_id]
+                            try:
+                                group_schema = self._schema_loader.get(group_id)
                                 add_schema_and_nested(group_schema)
-                            else:
+                            except Exception as e:
                                 logger.warning(
-                                    f"Group field {field.name} references schema {hex(group_id)} not in registry - this will cause RPC issues!"
+                                    f"Group field {field.name} references schema {hex(group_id)} not in loader: {e}"
                                 )
+                    # Handle slot fields that reference other types
+                    elif field.which() == "slot":
+                        slot = field.slot
+                        type_node = slot.type
+                        
+                        # Recursively extract type IDs from complex types
+                        def collect_type_ids(type_obj):
+                            """Extract all schema IDs referenced by a type."""
+                            type_which = type_obj.which()
+                            
+                            if type_which == "struct":
+                                return [type_obj.struct.typeId]
+                            elif type_which == "interface":
+                                return [type_obj.interface.typeId]
+                            elif type_which == "list":
+                                return collect_type_ids(type_obj.list.elementType)
+                            elif type_which == "enum":
+                                return [type_obj.enum.typeId]
+                            elif type_which == "anyPointer":
+                                # Handle anyPointer with implicit/explicit params
+                                if type_obj.anyPointer.which() == "implicitMethodParameter":
+                                    return []
+                                elif type_obj.anyPointer.which() == "unconstrained":
+                                    return []
+                                # Could have other anyPointer variants
+                                return []
+                            return []
+                        
+                        referenced_ids = collect_type_ids(type_node)
+                        for ref_id in referenced_ids:
+                            if ref_id not in self._schemas_by_id:
+                                try:
+                                    ref_schema = self._schema_loader.get(ref_id)
+                                    add_schema_and_nested(ref_schema)
+                                except Exception as e:
+                                    logger.debug(
+                                        f"Could not load referenced type {hex(ref_id)} for field {field.name}: {e}"
+                                    )
 
-        # Add the root schema
+            # Also collect schemas referenced by interface methods (params and results)
+            # Interface method param and result structs are implicit and not listed as nested nodes
+            if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+                for method in schema.node.interface.methods:
+                    # Collect param struct
+                    param_id = method.paramStructType
+                    if param_id not in self._schemas_by_id:
+                        try:
+                            param_schema = self._schema_loader.get(param_id)
+                            add_schema_and_nested(param_schema)
+                        except Exception as e:
+                            logger.debug(
+                                f"Could not load param struct for method {method.name} (id={hex(param_id)}): {e}"
+                            )
+
+                    # Collect result struct
+                    result_id = method.resultStructType
+                    if result_id not in self._schemas_by_id:
+                        try:
+                            result_schema = self._schema_loader.get(result_id)
+                            add_schema_and_nested(result_schema)
+                        except Exception as e:
+                            logger.debug(
+                                f"Could not load result struct for method {method.name} (id={hex(result_id)}): {e}"
+                            )
+
+        # Add the root schema and all its references
         add_schema_and_nested(self._schema)
 
-        # Add all schemas from the module registry
-        # This is critical because it includes group/union schemas that aren't in nestedNodes
-        for schema_id, (_, schema) in self._module_registry.items():
-            add_schema_and_nested(schema)
+        # Add schemas from imported files (not all files, just imports)
+        # Check if the root schema has imports
+        if hasattr(self._schema.node, 'imports'):
+            for import_ref in self._schema.node.imports:
+                import_id = import_ref.id
+                if import_id in self._file_id_to_path:
+                    try:
+                        imported_file_schema = self._schema_loader.get(import_id)
+                        # Add the imported file and its nested types
+                        # This ensures types from imported files are available for cross-file references
+                        add_schema_and_nested(imported_file_schema)
+                    except Exception as e:
+                        logger.debug(f"Could not load imported file schema {hex(import_id)}: {e}")
 
         logger.debug(f"Built schema ID mapping with {len(self._schemas_by_id)} schemas")
         if len(self._schemas_by_id) == 0:
             logger.warning("Schema ID mapping is empty! This will result in empty stubs.")
             logger.warning(f"Root schema ID: {hex(self._schema.node.id)}")
-            logger.warning(f"Module registry has {len(self._module_registry)} entries")
-        elif len(self._schemas_by_id) < 3 and len(self._module_registry) > 5:
-            logger.warning(
-                f"Schema ID mapping seems incomplete: {len(self._schemas_by_id)} schemas from {len(self._module_registry)} registry entries"
-            )
 
     def _get_nested_schema(
         self, parent_schema: capnp_types.SchemaType, nested_name: str
@@ -1143,53 +1270,17 @@ class Writer:
                 except KeyError:
                     # Superclass not yet registered - try to generate it first
                     try:
-                        # Try to find and generate the superclass from the module registry
-                        for module_id, (_, registry_schema) in self._module_registry.items():
-                            if module_id == superclass.id:
-                                # Found the superclass schema, generate it
-                                self.generate_nested(registry_schema)
-                                superclass_type = self.get_type_by_id(superclass.id)
-                                # superclass_type.name is now the interface module name
-                                protocol_name = superclass_type.name
-                                if superclass_type.scope and not superclass_type.scope.is_root:
-                                    base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
-                                else:
-                                    base_protocol = protocol_name
-                                base_classes.append(base_protocol)
-                                break
-
-                            # Check if it's a nested type in the schema
-                            def find_nested_schema(
-                                schema_obj: capnp_types.SchemaType, target_id: int
-                            ) -> capnp_types.SchemaType | None:
-                                # First check if it's directly in our schema ID mapping
-                                if target_id in self._schemas_by_id:
-                                    return self._schemas_by_id[target_id]
-
-                                # Otherwise recursively search nested nodes
-                                for nested_node in schema_obj.node.nestedNodes:
-                                    if nested_node.id == target_id:
-                                        return self._schemas_by_id.get(target_id)
-                                    # Recursively search in the nested schema
-                                    nested_schema = self._schemas_by_id.get(nested_node.id)
-                                    if nested_schema:
-                                        result = find_nested_schema(nested_schema, target_id)
-                                        if result:
-                                            return result
-                                return None
-
-                            found_schema = find_nested_schema(registry_schema, superclass.id)
-                            if found_schema:
-                                self.generate_nested(found_schema)
-                                superclass_type = self.get_type_by_id(superclass.id)
-                                # superclass_type.name is now the interface module name
-                                protocol_name = superclass_type.name
-                                if superclass_type.scope and not superclass_type.scope.is_root:
-                                    base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
-                                else:
-                                    base_protocol = protocol_name
-                                base_classes.append(base_protocol)
-                                break
+                        # Try to get the superclass schema from the loader
+                        superclass_schema = self._schema_loader.get(superclass.id)
+                        self.generate_nested(superclass_schema)
+                        superclass_type = self.get_type_by_id(superclass.id)
+                        # superclass_type.name is now the interface module name
+                        protocol_name = superclass_type.name
+                        if superclass_type.scope and not superclass_type.scope.is_root:
+                            base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
+                        else:
+                            base_protocol = protocol_name
+                        base_classes.append(base_protocol)
                     except Exception as e:
                         logger.debug(f"Could not resolve superclass {superclass.id}: {e}")
 
@@ -3948,31 +4039,33 @@ class Writer:
         common_path: str
         matching_path: pathlib.Path | None = None
 
-        # First check if this schema is a top-level module in the registry
-        if schema.node.id in self._module_registry:
-            matching_path = pathlib.Path(self._module_registry[schema.node.id][0])
+        # First check if this schema is in the file_id_to_path mapping
+        if schema.node.id in self._file_id_to_path:
+            matching_path = pathlib.Path(self._file_id_to_path[schema.node.id])
         else:
-            # Find the path of the parent module, from which this schema is imported.
-            # We need to search recursively through nested nodes since schemas can be deeply nested
+            # Find the path by checking which file contains this schema as a nested node
             def search_nested_nodes(schema_obj: _ParsedSchema, target_id: int) -> bool:
                 """Recursively search for a target ID in nested nodes."""
                 for nested_node in schema_obj.node.nestedNodes:
                     if nested_node.id == target_id:
                         return True
-                    # Recursively search deeper by getting the nested schema
+                    # Recursively search deeper by getting the nested schema from loader
                     try:
-                        nested_schema = schema_obj.get_nested(nested_node.name)  # type: ignore[union-attr]
+                        nested_schema = self._schema_loader.get(nested_node.id)
                         if search_nested_nodes(nested_schema, target_id):
                             return True
                     except Exception:
-                        # If we can't get nested schema, just continue
                         pass
                 return False
 
-            for _, (path, registry_schema) in self._module_registry.items():
-                if search_nested_nodes(registry_schema, schema.node.id):
-                    matching_path = pathlib.Path(path)
-                    break
+            for file_id, path in self._file_id_to_path.items():
+                try:
+                    file_schema = self._schema_loader.get(file_id)
+                    if search_nested_nodes(file_schema, schema.node.id):
+                        matching_path = pathlib.Path(path)
+                        break
+                except Exception:
+                    pass
 
         # Since this is an import, there must be a parent module.
         assert matching_path is not None, f"The module named {module_name} was not provided to the stub generator."
@@ -4106,6 +4199,37 @@ class Writer:
         """
         return type_id in self.type_map
 
+    def _is_schema_in_current_module(self, schema: capnp_types.SchemaType) -> bool:
+        """Check if a schema belongs to the current module.
+
+        Args:
+            schema: The schema to check.
+
+        Returns:
+            True if the schema is in the current module, False otherwise.
+        """
+        # Check if it's the root schema
+        if schema.node.id == self._schema.node.id:
+            return True
+
+        # Check if it's a direct nested node
+        for nested in self._schema.node.nestedNodes:
+            if nested.id == schema.node.id:
+                return True
+
+        # Recursively check nested nodes
+        def check_nested(parent_schema: capnp_types.SchemaType, target_id: int) -> bool:
+            for nested_node in parent_schema.node.nestedNodes:
+                if nested_node.id == target_id:
+                    return True
+                # Check deeper
+                nested_schema = self._schemas_by_id.get(nested_node.id)
+                if nested_schema and check_nested(nested_schema, target_id):
+                    return True
+            return False
+
+        return check_nested(self._schema, schema.node.id)
+
     def get_type_by_id(self, type_id: int) -> CapnpType:
         """Look up a type in the type registry, by means of its ID.
 
@@ -4121,25 +4245,19 @@ class Writer:
         if self.is_type_id_known(type_id):
             return self.type_map[type_id]
 
-        # Try to find the type in other modules
-        for module_id, (_, schema) in self._module_registry.items():
-            # Helper to search recursively using schema ID mapping
-            def find_schema_by_id(schema_obj: capnp_types.SchemaType, target_id: int) -> capnp_types.SchemaType | None:
-                # Use our schema ID mapping instead of get_nested
-                return self._schemas_by_id.get(target_id)
+        # Try to find the type in the schema ID mapping
+        found_schema = self._schemas_by_id.get(type_id)
+        if found_schema:
+            # Found it!
+            # If it's in the current module, generate it
+            if self._is_schema_in_current_module(found_schema):
+                self.generate_nested(found_schema)
+            else:
+                # If it's in another module, register it as an import
+                _ = self.register_import(found_schema)
 
-            found_schema = find_schema_by_id(schema, type_id)
-            if found_schema:
-                # Found it!
-                # If it's in the current module, generate it
-                if module_id == self._schema.node.id:
-                    self.generate_nested(found_schema)
-                else:
-                    # If it's in another module, register it as an import
-                    _ = self.register_import(found_schema)
-
-                if self.is_type_id_known(type_id):
-                    return self.type_map[type_id]
+            if self.is_type_id_known(type_id):
+                return self.type_map[type_id]
 
         raise KeyError(f"The type ID '{type_id} was not found in the type registry.'")
 
@@ -4564,6 +4682,9 @@ class Writer:
         out.append(f"    {repr(root_b64)},  # {self._schema.node.displayName}")
 
         # Add all other schemas from our mapping
+        # We embed all schemas to ensure all dependencies are available at runtime.
+        # Trying to track only "necessary" schemas is error-prone because schemas can reference
+        # each other in complex ways (interface methods, const values, group fields, etc.)
         seen_ids = {self._schema.node.id}
         for schema_id, schema in self._schemas_by_id.items():
             if schema_id not in seen_ids:

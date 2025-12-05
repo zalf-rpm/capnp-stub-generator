@@ -3,6 +3,9 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::crop");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.crop");
+
 using Go = import "/capnp/go.capnp";
 $Go.package("crop");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/crop");

@@ -3,6 +3,9 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::storage");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.storage");
+
 using Go = import "/capnp/go.capnp";
 $Go.package("storage");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/storage");

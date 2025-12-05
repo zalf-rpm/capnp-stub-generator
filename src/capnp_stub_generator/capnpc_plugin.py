@@ -39,7 +39,6 @@ def main():
     import_paths = []
 
     # Load all nodes from the request into the schema loader
-    # This provides access to all schemas by ID without needing source files
     loader = capnp.SchemaLoader()
     logging.info(f"Loading {len(request.nodes)} nodes from CodeGeneratorRequest")
     for node in request.nodes:
@@ -49,10 +48,9 @@ def main():
         except Exception as e:
             logging.warning(f"Failed to load node {node.displayName}: {e}")
 
-    schema_registry = {}
     file_id_to_path = {}
 
-    # Map file IDs to paths for the registry
+    # Map file IDs to paths
     for rf in request.requestedFiles:
         file_id_to_path[rf.id] = rf.filename
         for imp in rf.imports:
@@ -65,37 +63,6 @@ def main():
                 path = os.path.normpath(os.path.join(os.path.dirname(rf.filename), imp.name))
             file_id_to_path[imp.id] = path
 
-    # Populate schema registry with ALL nodes (including nested types)
-    # This is critical: the Writer needs all schemas in the registry to build its ID mapping
-    # Since SchemaLoader doesn't support get_nested(), we must pre-populate everything
-    for node in request.nodes:
-        try:
-            schema = loader.get(node.id)
-            # Use the node's displayName to construct a path
-            # For nested types, displayName is like "file.capnp:Struct.NestedType"
-            if node.id in file_id_to_path:
-                # This is a file-level schema
-                path = file_id_to_path[node.id]
-            else:
-                # This is a nested schema - find its parent file
-                display_name = node.displayName
-                if ":" in display_name:
-                    file_part = display_name.split(":")[0]
-                    # Find a file that matches this
-                    path = file_part  # Fallback
-                    for file_id, file_path in file_id_to_path.items():
-                        if file_path.endswith(file_part):
-                            path = file_path
-                            break
-                else:
-                    path = display_name
-
-            schema_registry[node.id] = (path, schema)
-            logging.debug(f"Added schema {node.displayName} (id={hex(node.id)}) to registry")
-        except Exception as e:
-            logging.debug(f"Could not add schema for node {node.displayName} (id={hex(node.id)}): {e}")
-
-    logging.info(f"Schema registry has {len(schema_registry)} total schemas")
     logging.info(f"Will generate stubs for {len(file_id_to_path)} files")
 
     # Run generation
@@ -104,7 +71,8 @@ def main():
         file_schema_ids = set(file_id_to_path.keys())
 
         run_from_schemas(
-            schema_registry,
+            loader,
+            file_id_to_path,
             output_dir,
             import_paths,
             skip_pyright,

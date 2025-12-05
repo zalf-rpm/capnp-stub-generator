@@ -3,6 +3,9 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("mas::schema::grid");
 
+using Python = import "/capnp/python.capnp";
+$Python.module("mas.schema.grid");
+
 using Go = import "/capnp/go.capnp";
 $Go.package("grid");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/grid");
