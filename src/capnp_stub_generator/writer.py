@@ -4530,18 +4530,18 @@ class Writer:
                 parent_count = rel_path.count("..")
 
                 if parent_count == 0:
-                    # Same level: from .schema import schema_capnp
-                    out.append("from .schema import schema_capnp")
+                    # Same level: from .schema_capnp import schema_capnp
+                    out.append("from .schema_capnp import schema_capnp")
                 else:
-                    # Go up: from ..schema import schema_capnp or from ...schema import schema_capnp
+                    # Go up: from ..schema_capnp import schema_capnp or from ...schema_capnp import schema_capnp
                     dots = "." * (parent_count + 1)
-                    out.append(f"from {dots}schema import schema_capnp")
+                    out.append(f"from {dots}schema_capnp import schema_capnp")
             except Exception:
                 # Fallback to same-level relative import
-                out.append("from .schema import schema_capnp")
+                out.append("from .schema_capnp import schema_capnp")
         else:
             # No directory info, use same-level relative import
-            out.append("from .schema import schema_capnp")
+            out.append("from .schema_capnp import schema_capnp")
 
         # Add NamedTuple import if we have server namedtuples
         if self._all_server_namedtuples:

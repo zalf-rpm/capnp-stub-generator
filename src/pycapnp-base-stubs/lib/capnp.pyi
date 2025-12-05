@@ -12,9 +12,9 @@ from contextlib import AbstractContextManager, asynccontextmanager
 from ssl import SSLContext
 from typing import IO, Any, Literal, overload
 
-from ...schema.schema_capnp import FieldReader as _StructSchemaField
-from ...schema.schema_capnp import NestedNodeReader as _NestedNodeReader
-from ...schema.schema_capnp import NodeReader as _NodeReader
+from ...schema_capnp.schema_capnp import FieldReader as _StructSchemaField
+from ...schema_capnp.schema_capnp import NestedNodeReader as _NestedNodeReader
+from ...schema_capnp.schema_capnp import NodeReader as _NodeReader
 from .._internal import CapnpModule as _CapnpModule
 from .._internal import CapnpTypesModule as _CapnpTypesModule
 from .._internal import (

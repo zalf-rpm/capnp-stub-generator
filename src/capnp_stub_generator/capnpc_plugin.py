@@ -9,7 +9,7 @@ import sys
 import capnp
 
 from capnp_stub_generator.run import run_from_schemas
-from schema import schema_capnp
+from schema_capnp import schema_capnp
 
 
 def main():

@@ -167,9 +167,9 @@ def augment_capnp_stubs_with_overloads(
     shutil.copytree(source_stubs_path, dest_stubs_path)
     logger.info(f"Copied capnp-stubs to: {dest_stubs_path}")
 
-    # Copy the schema directory if it exists (sibling to source_stubs_path)
-    source_schema_path = os.path.join(os.path.dirname(source_stubs_path), "schema")
-    dest_schema_path = os.path.join(augmented_stubs_dir, "schema")
+    # Copy the schema_capnp directory if it exists (sibling to source_stubs_path)
+    source_schema_path = os.path.join(os.path.dirname(source_stubs_path), "schema_capnp")
+    dest_schema_path = os.path.join(augmented_stubs_dir, "schema_capnp")
 
     if os.path.isdir(source_schema_path):
         if os.path.exists(dest_schema_path):
@@ -932,7 +932,7 @@ def _load_schemas_via_capnp_compile(
         - schema_registry: Dict mapping schema_id -> (path, schema)
         - file_schema_ids: Set of IDs for file-level schemas (not nested)
     """
-    from schema import schema_capnp
+    from schema_capnp import schema_capnp
 
     # Build capnp compile command
     cmd = ["capnp", "compile", "-o-"]
@@ -1331,7 +1331,7 @@ def run_from_schemas(
     # This avoids duplicating the schema module in each subdirectory
     source_stubs_path = find_capnp_stubs_package()
     if source_stubs_path:
-        source_schema_path = os.path.join(os.path.dirname(source_stubs_path), "schema")
+        source_schema_path = os.path.join(os.path.dirname(source_stubs_path), "schema_capnp")
 
         # Determine top-level directory for schema
         if output_dir:
@@ -1345,8 +1345,8 @@ def run_from_schemas(
             else:
                 schema_dest_dir = os.path.commonpath([os.path.abspath(d) for d in output_dirs_list])
 
-        # Copy to 'schema' directory at top level
-        dest_schema_path = os.path.join(schema_dest_dir, "schema")
+        # Copy to 'schema_capnp' directory at top level
+        dest_schema_path = os.path.join(schema_dest_dir, "schema_capnp")
 
         if os.path.isdir(source_schema_path):
             if os.path.exists(dest_schema_path):
