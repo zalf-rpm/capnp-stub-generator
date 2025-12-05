@@ -31,7 +31,7 @@ def main():
     # capnpc changes the working directory to the output directory.
     output_dir = os.getcwd()
 
-    # Enable bundling by default and disable pyright validation
+    # Enable bundling by default - augment_capnp_stubs is now always on for self-contained output
     skip_pyright = True
     augment_capnp_stubs = True
 

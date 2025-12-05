@@ -8,6 +8,7 @@ import logging
 import os.path
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Set
 from dataclasses import dataclass
@@ -795,6 +796,7 @@ def _generate_stubs_from_schema(
     output_directory: str | None = None,
     import_paths: list[str] | None = None,
     module_path_prefix: str | None = None,
+    schema_base_directory: str | None = None,
 ) -> tuple[dict[str, tuple[str, list[str]]], tuple[list[tuple[str, str]], list[tuple[str, str]]]]:
     """Internal function for generating *.pyi stubs from schema information.
 
@@ -806,6 +808,7 @@ def _generate_stubs_from_schema(
         output_directory: The directory where output files are written, if different from schema location.
         import_paths: Additional import paths for resolving absolute imports.
         module_path_prefix: Prefix for module path (e.g., "calculator" for subdirectory structure).
+        schema_base_directory: The base directory where schema module is located (for relative imports).
 
     Returns:
         Dictionary mapping interface names to (client_name, base_client_names) tuples.
@@ -816,6 +819,7 @@ def _generate_stubs_from_schema(
         module_registry=module_registry,
         output_directory=output_directory,
         import_paths=import_paths,
+        schema_base_directory=schema_base_directory,
     )
     writer.generate_all_nested()
 
@@ -911,10 +915,144 @@ def extract_base_from_pattern(pattern: str) -> str:
     return base
 
 
+def _load_schemas_via_capnp_compile(
+    schema_paths: list[str],
+    import_paths: list[str],
+) -> tuple[SchemaRegistryType, set[int]]:
+    """Load schemas by invoking capnp compile to get CodeGeneratorRequest.
+
+    This ensures all schemas including groups in unions are available.
+
+    Args:
+        schema_paths: List of .capnp file paths to compile
+        import_paths: List of import search paths
+
+    Returns:
+        Tuple of (schema_registry, file_schema_ids)
+        - schema_registry: Dict mapping schema_id -> (path, schema)
+        - file_schema_ids: Set of IDs for file-level schemas (not nested)
+    """
+    from schema import schema_capnp
+
+    # Build capnp compile command
+    cmd = ["capnp", "compile", "-o-"]
+
+    # Add import paths
+    for import_path in import_paths:
+        cmd.extend(["-I", import_path])
+
+    # Add schema files
+    cmd.extend(schema_paths)
+
+    logger.debug(f"Running: {' '.join(cmd)}")
+
+    # Run capnp compile
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        error_msg = result.stderr.decode("utf-8") if result.stderr else "Unknown error"
+        raise RuntimeError(f"capnp compile failed: {error_msg}")
+
+    # Parse CodeGeneratorRequest (output from capnp compile -o- is unpacked binary)
+    # Keep the message in memory by writing to temp file and reading it back
+    # We need to keep the file and message reader alive for the entire generation process
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as tmp_file:
+        tmp_file.write(result.stdout)
+        tmp_path = tmp_file.name
+
+    try:
+        # Open file and keep it open to keep message data valid
+        request_file = open(tmp_path, "rb")
+        request_reader = schema_capnp.CodeGeneratorRequest.read(request_file)
+
+        # Create SchemaLoader and load all nodes
+        loader = capnp.SchemaLoader()
+        node_count = len(list(request_reader.nodes))
+        logger.info(f"Loading {node_count} nodes from capnp compile output")
+
+        for node in request_reader.nodes:
+            try:
+                loader.load_dynamic(node)
+                logger.debug(f"Loaded node: {node.displayName} (id={hex(node.id)}, which={node.which()})")
+            except Exception as e:
+                logger.warning(f"Failed to load node {node.displayName}: {e}")
+
+        # Build file ID to path mapping
+        file_id_to_path: dict[int, str] = {}
+        for rf in request_reader.requestedFiles:
+            file_id_to_path[rf.id] = rf.filename
+            for imp in rf.imports:
+                # Resolve import path
+                if imp.name.startswith("/"):
+                    path = imp.name[1:]
+                else:
+                    path = os.path.normpath(os.path.join(os.path.dirname(rf.filename), imp.name))
+                file_id_to_path[imp.id] = path
+
+        # Populate schema registry with ALL nodes
+        schema_registry: SchemaRegistryType = {}
+
+        for node in request_reader.nodes:
+            try:
+                schema = loader.get(node.id)
+
+                # Determine path for this node
+                if node.id in file_id_to_path:
+                    path = file_id_to_path[node.id]
+                else:
+                    # Nested schema - extract file from displayName
+                    display_name = node.displayName
+                    if ":" in display_name:
+                        file_part = display_name.split(":")[0]
+                        # Find matching file
+                        path = file_part
+                        for file_id, file_path in file_id_to_path.items():
+                            if file_path.endswith(file_part):
+                                path = file_path
+                                break
+                    else:
+                        path = display_name
+
+                schema_registry[node.id] = (path, schema)
+                logger.debug(f"Added schema {node.displayName} (id={hex(node.id)}) to registry")
+
+            except Exception as e:
+                logger.warning(f"Could not add schema for node {node.displayName} (id={hex(node.id)}): {e}")
+
+        # Track file-level schema IDs
+        file_schema_ids = set(file_id_to_path.keys())
+
+        logger.info(f"Loaded {len(schema_registry)} schemas ({len(file_schema_ids)} file-level)")
+
+        # Return tuple of (schema_registry, file_schema_ids, cleanup_callback)
+        # Caller must call cleanup_callback when done
+        def cleanup():
+            request_file.close()
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+        return schema_registry, file_schema_ids, cleanup
+
+    except Exception:
+        # Clean up on error
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+        raise
+
+
 def run(args: argparse.Namespace, root_directory: str):
     """Run the stub generator on a set of paths that point to *.capnp schemas.
 
-    Loads schemas and calls `run_from_schemas` for generation.
+    Now uses capnp compile with the plugin to ensure all schemas including
+    groups in unions are properly handled.
 
     Args:
         args (argparse.Namespace): The arguments that were passed when calling the stub generator.
@@ -967,33 +1105,97 @@ def run(args: argparse.Namespace, root_directory: str):
     # The `valid_paths` contain the automatically detected search paths, except for specifically excluded paths.
     valid_paths = search_paths - excluded_paths
 
+    if not valid_paths:
+        logger.warning("No schema files found to process")
+        return
+
     # Convert import paths to absolute paths relative to root_directory
     absolute_import_paths = [os.path.join(root_directory, p) for p in import_paths]
 
-    # Load schemas directly into schema registry
-    parser = capnp.SchemaParser()
-    schema_registry: SchemaRegistryType = {}
+    # Use capnp compile with our plugin to generate stubs
+    # This ensures all schemas including groups in unions are properly embedded
+    logger.info(f"Compiling {len(valid_paths)} schema(s) using capnp compile plugin")
 
-    for path in valid_paths:
-        module = parser.load(path, imports=absolute_import_paths)
-        schema_registry[module.schema.node.id] = (path, module.schema)
+    # Create output directory if specified
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
-    # Determine the common base path for preserving directory structure
-    common_base = _determine_output_directory_structure(
-        output_dir,
-        paths,
-        valid_paths,
-        root_directory,
-    )
+    # Create a wrapper script to invoke our plugin
+    with tempfile.NamedTemporaryFile(mode="w", suffix="_capnpc", delete=False) as wrapper:
+        plugin_path = os.path.join(os.path.dirname(__file__), "capnpc_plugin.py")
+        wrapper.write(f"""#!/usr/bin/env {sys.executable}
+import sys
+sys.path.insert(0, {repr(os.path.dirname(os.path.dirname(__file__)))})
+from capnp_stub_generator.capnpc_plugin import main
+main()
+""")
+        wrapper_path = wrapper.name
 
-    run_from_schemas(
-        schema_registry,
-        output_dir,
-        absolute_import_paths,
-        skip_pyright,
-        getattr(args, "augment_capnp_stubs", False),
-        common_base,
-    )
+    # Make wrapper executable
+    os.chmod(wrapper_path, 0o755)
+
+    try:
+        # Determine source prefix for output structure
+        if output_dir:
+            # Calculate common base for preserving directory structure
+            common_base = _determine_output_directory_structure(
+                output_dir,
+                paths,
+                valid_paths,
+                root_directory,
+            )
+            src_prefix = common_base if common_base else root_directory
+        else:
+            # Generate stubs next to source files - use parent of first schema
+            src_prefix = os.path.dirname(list(valid_paths)[0])
+
+        # Build capnp compile command
+        cmd = ["capnp", "compile"]
+
+        if src_prefix:
+            cmd.append(f"--src-prefix={src_prefix}")
+
+        # Add output specification
+        output_spec = output_dir if output_dir else "."
+        cmd.append(f"-o{wrapper_path}:{output_spec}")
+
+        # Add import paths
+        for import_path in absolute_import_paths:
+            cmd.extend(["-I", import_path])
+
+        # Add schema files
+        cmd.extend(list(valid_paths))
+
+        logger.debug(f"Running: {' '.join(cmd)}")
+
+        # Run capnp compile
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            logger.error(f"capnp compile failed:\n{result.stderr}")
+            sys.exit(1)
+
+        logger.info(f"✓ Generated stubs for {len(valid_paths)} schema(s)")
+
+        # Run pyright validation if requested
+        if not skip_pyright:
+            output_directories = {output_dir} if output_dir else {os.path.dirname(p) for p in valid_paths}
+            try:
+                validate_with_pyright(output_directories)
+            except PyrightValidationError as e:
+                logger.error(str(e))
+                sys.exit(1)
+
+    finally:
+        # Clean up wrapper script
+        try:
+            os.unlink(wrapper_path)
+        except Exception:
+            pass
 
 
 def run_from_schemas(
@@ -1100,6 +1302,7 @@ def run_from_schemas(
             output_directory=output_dir_to_pass,
             import_paths=import_paths,
             module_path_prefix=module_path_prefix,
+            schema_base_directory=output_dir if output_dir else output_directory,
         )
 
         # Collect interfaces for this output directory
@@ -1116,50 +1319,84 @@ def run_from_schemas(
             all_dynamic_object_types_by_dir[output_directory]["structs"].extend(struct_types)
             all_dynamic_object_types_by_dir[output_directory]["interfaces"].extend(interface_types)
 
-    # Create py.typed marker in each output directory to mark the package as typed (PEP 561)
+    # Create py.typed marker and __init__.py in each output directory to make them packages
     for output_directory in output_directories_used:
+        # Create py.typed marker
         py_typed_path = os.path.join(output_directory, "py.typed")
-        # Create an empty py.typed file if it doesn't exist
         if not os.path.exists(py_typed_path):
             with open(py_typed_path, "w", encoding="utf8") as f:
                 f.write("")  # Empty file as per PEP 561
 
-    # Augment capnp-stubs with cast_as overloads if requested
-    if augment_capnp_stubs:
-        source_stubs_path = find_capnp_stubs_package()
-        if source_stubs_path:
-            # Combine all interfaces from all directories
-            all_interfaces = {}
-            for interfaces in all_interfaces_by_dir.values():
-                all_interfaces.update(interfaces)
+        # Create __init__.py to make it a package (needed for relative imports)
+        init_path = os.path.join(output_directory, "__init__.py")
+        if not os.path.exists(init_path):
+            with open(init_path, "w", encoding="utf8") as f:
+                f.write("# Auto-generated package initialization\n")
 
-            # Combine all _DynamicObjectReader types from all directories
-            all_dynamic_object_types = {"structs": [], "interfaces": []}
-            for types_dict in all_dynamic_object_types_by_dir.values():
-                all_dynamic_object_types["structs"].extend(types_dict["structs"])
-                all_dynamic_object_types["interfaces"].extend(types_dict["interfaces"])
+    # Copy bundled schema module once at the top level (common parent or output_dir)
+    # This avoids duplicating the schema module in each subdirectory
+    source_stubs_path = find_capnp_stubs_package()
+    if source_stubs_path:
+        source_schema_path = os.path.join(os.path.dirname(source_stubs_path), "schema")
 
-            # Determine where to place augmented stubs (inside output directory)
-            # If output_dir is specified, place augmented stubs inside it
-            # Otherwise, pick a common parent directory of all output directories
-            if output_dir:
-                # Place augmented stubs in the output_dir itself
-                augmented_stubs_dir = os.path.abspath(output_dir)
-            else:
-                # Find common parent of all output directories
-                output_dirs_list = list(output_directories_used)
-                if len(output_dirs_list) == 1:
-                    augmented_stubs_dir = output_dirs_list[0]
-                else:
-                    augmented_stubs_dir = os.path.commonpath([os.path.abspath(d) for d in output_dirs_list])
-
-            # Use the absolute path to output_dir for import path calculation
-            actual_output_dir = os.path.abspath(output_dir) if output_dir else list(output_directories_used)[0]
-            augment_capnp_stubs_with_overloads(
-                source_stubs_path, augmented_stubs_dir, actual_output_dir, all_interfaces, all_dynamic_object_types
-            )
+        # Determine top-level directory for schema
+        if output_dir:
+            # Use the output_dir as top level
+            schema_dest_dir = os.path.abspath(output_dir)
         else:
-            logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found in sys.path")
+            # Find common parent of all output directories
+            output_dirs_list = list(output_directories_used)
+            if len(output_dirs_list) == 1:
+                schema_dest_dir = output_dirs_list[0]
+            else:
+                schema_dest_dir = os.path.commonpath([os.path.abspath(d) for d in output_dirs_list])
+
+        # Copy to 'schema' directory at top level
+        dest_schema_path = os.path.join(schema_dest_dir, "schema")
+
+        if os.path.isdir(source_schema_path):
+            if os.path.exists(dest_schema_path):
+                shutil.rmtree(dest_schema_path)
+            shutil.copytree(source_schema_path, dest_schema_path)
+            logger.info(f"Copied schema module to top level: {dest_schema_path}")
+        else:
+            logger.warning(f"Schema module not found at: {source_schema_path}")
+
+    # Augment capnp-stubs with cast_as overloads (now default behavior)
+    source_stubs_path = find_capnp_stubs_package()
+    if source_stubs_path and augment_capnp_stubs:
+        # Combine all interfaces from all directories
+        all_interfaces = {}
+        for interfaces in all_interfaces_by_dir.values():
+            all_interfaces.update(interfaces)
+
+        # Combine all _DynamicObjectReader types from all directories
+        all_dynamic_object_types = {"structs": [], "interfaces": []}
+        for types_dict in all_dynamic_object_types_by_dir.values():
+            all_dynamic_object_types["structs"].extend(types_dict["structs"])
+            all_dynamic_object_types["interfaces"].extend(types_dict["interfaces"])
+
+        # Determine where to place augmented stubs (inside output directory)
+        # If output_dir is specified, place augmented stubs inside it
+        # Otherwise, pick a common parent directory of all output directories
+        if output_dir:
+            # Place augmented stubs in the output_dir itself
+            augmented_stubs_dir = os.path.abspath(output_dir)
+        else:
+            # Find common parent of all output directories
+            output_dirs_list = list(output_directories_used)
+            if len(output_dirs_list) == 1:
+                augmented_stubs_dir = output_dirs_list[0]
+            else:
+                augmented_stubs_dir = os.path.commonpath([os.path.abspath(d) for d in output_dirs_list])
+
+        # Use the absolute path to output_dir for import path calculation
+        actual_output_dir = os.path.abspath(output_dir) if output_dir else list(output_directories_used)[0]
+        augment_capnp_stubs_with_overloads(
+            source_stubs_path, augmented_stubs_dir, actual_output_dir, all_interfaces, all_dynamic_object_types
+        )
+    elif augment_capnp_stubs:
+        logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found")
 
     # Validate generated stubs with pyright (unless disabled)
     if not skip_pyright:

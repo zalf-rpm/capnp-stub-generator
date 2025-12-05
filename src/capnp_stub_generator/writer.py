@@ -82,6 +82,7 @@ class Writer:
         module_registry: capnp_types.SchemaRegistryType,
         output_directory: str | None = None,
         import_paths: list[str] | None = None,
+        schema_base_directory: str | None = None,
     ):
         """Initialize the stub writer with schema information.
 
@@ -92,6 +93,7 @@ class Writer:
             module_registry: The schema registry, for finding dependencies between loaded schemas.
             output_directory: The directory where output files are written, if different from schema location.
             import_paths: Additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).
+            schema_base_directory: The base directory where schema module is located (for relative imports).
         """
         self.scope: Scope = Scope(name="", id=schema.node.id, parent=None, return_scope=None)
         self.scopes_by_id: dict[int, Scope] = {self.scope.id: self.scope}
@@ -100,6 +102,9 @@ class Writer:
         self._module_registry: capnp_types.SchemaRegistryType = module_registry
         self._output_directory: pathlib.Path | None = pathlib.Path(output_directory) if output_directory else None
         self._import_paths: list[pathlib.Path] = [pathlib.Path(p) for p in import_paths] if import_paths else []
+        self._schema_base_directory: pathlib.Path | None = (
+            pathlib.Path(schema_base_directory) if schema_base_directory else None
+        )
 
         self._module_path: pathlib.Path = pathlib.Path(file_path)
 
@@ -152,6 +157,7 @@ class Writer:
 
         This recursively walks through all schemas in the registry and their nested nodes,
         creating a lookup table that allows finding any schema by ID without using get_nested().
+        Also includes schemas referenced by group fields.
         """
 
         def add_schema_and_nested(schema: capnp_types.SchemaType) -> None:
@@ -190,10 +196,27 @@ class Writer:
                 except Exception as e:
                     logger.debug(f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}): {e}")
 
+            # Also collect schemas referenced by group fields (unions/groups)
+            # Groups are NOT listed as nested nodes but are referenced by fields
+            if schema.node.which() == capnp_types.CapnpElementType.STRUCT:
+                for field in schema.node.struct.fields:
+                    if field.which() == "group":
+                        group_id = field.group.typeId
+                        if group_id not in self._schemas_by_id:
+                            # Try to get the group schema from the registry
+                            if group_id in self._module_registry:
+                                _, group_schema = self._module_registry[group_id]
+                                add_schema_and_nested(group_schema)
+                            else:
+                                logger.warning(
+                                    f"Group field {field.name} references schema {hex(group_id)} not in registry - this will cause RPC issues!"
+                                )
+
         # Add the root schema
         add_schema_and_nested(self._schema)
 
         # Add all schemas from the module registry
+        # This is critical because it includes group/union schemas that aren't in nestedNodes
         for schema_id, (_, schema) in self._module_registry.items():
             add_schema_and_nested(schema)
 
@@ -4471,6 +4494,9 @@ class Writer:
     def dumps_py(self) -> str:
         """Generates string output for the *.py stub file that handles the import of capnproto schemas.
 
+        The generated .py file embeds the .capnp source file, making it completely
+        self-contained and independent of external .capnp files.
+
         Returns:
             str: The output string.
         """
@@ -4483,78 +4509,118 @@ class Writer:
 
         out: list[str] = []
         out.append(self.docstring)
-        out.append("import os")
+        out.append("")
+        out.append("import base64")
+        out.append("")
         out.append("import capnp")
+        out.append("from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule")
+
+        # Calculate relative import for schema module based on nesting depth
+        # Schema module is at the base directory level (e.g., output_dir/schema/)
+        # Generated files might be nested (e.g., output_dir/subdir/file_capnp.py)
+        if self._output_directory and self._schema_base_directory:
+            try:
+                # Calculate how many levels deep the output file is
+                output_path = self._output_directory.resolve()
+                schema_base = self._schema_base_directory.resolve()
+
+                # Get relative path from output directory to schema base
+                rel_path = os.path.relpath(schema_base, output_path)
+                # Count parent directories (..)
+                parent_count = rel_path.count("..")
+
+                if parent_count == 0:
+                    # Same level: from .schema import schema_capnp
+                    out.append("from .schema import schema_capnp")
+                else:
+                    # Go up: from ..schema import schema_capnp or from ...schema import schema_capnp
+                    dots = "." * (parent_count + 1)
+                    out.append(f"from {dots}schema import schema_capnp")
+            except Exception:
+                # Fallback to same-level relative import
+                out.append("from .schema import schema_capnp")
+        else:
+            # No directory info, use same-level relative import
+            out.append("from .schema import schema_capnp")
 
         # Add NamedTuple import if we have server namedtuples
         if self._all_server_namedtuples:
             out.append("from typing import NamedTuple")
 
+        out.append("")
         out.append("capnp.remove_import_hook()")
-        out.append("here = os.path.dirname(os.path.abspath(__file__))")
+        out.append("")
 
-        # Determine where the .capnp file is relative to the generated .py file
-        if self._output_directory:
-            # Output is in a different directory from the schema
-            # Calculate relative path from output directory to schema file
-            try:
-                rel_to_schema = os.path.relpath(self._module_path, self._output_directory)
-                out.append(f'module_file = os.path.abspath(os.path.join(here, "{rel_to_schema}"))')
-            except (ValueError, OSError):
-                # Fallback for different drives on Windows
-                out.append(f'module_file = "{self._module_path.as_posix()}"')
-        else:
-            # Output is in the same directory as the schema (default behavior)
-            out.append(f'module_file = os.path.abspath(os.path.join(here, "{self.display_name}"))')
+        # Embed schemas as binary and manually build module structure
+        # This replicates SchemaParser's behavior using SchemaLoader
+        import base64
 
-        # Build import_path with relative paths to imported modules
-        import_paths = ["here"]
-        seen_rel_paths = {".", ""}
+        out.append("# Embedded compiled schemas (base64-encoded)")
+        out.append("_SCHEMA_NODES = [")
 
-        # Determine the reference point for import paths
-        # If output_directory is set, we need paths relative to where the generated file will be
-        # Otherwise, paths relative to where the schema file is
-        reference_dir = self._output_directory if self._output_directory else self._module_path.parent
+        # Add root schema first
+        root_bytes = self._schema.node.as_builder().to_bytes_packed()
+        root_b64 = base64.b64encode(root_bytes).decode("ascii")
+        out.append(f"    {repr(root_b64)},  # {self._schema.node.displayName}")
 
-        def add_path(path_dir: pathlib.Path) -> None:
-            """Add a path to import_paths if it's unique."""
-            try:
-                # Calculate relative path from reference directory to import path
-                rel_path = os.path.relpath(path_dir, reference_dir)
+        # Add all other schemas from our mapping
+        seen_ids = {self._schema.node.id}
+        for schema_id, schema in self._schemas_by_id.items():
+            if schema_id not in seen_ids:
+                try:
+                    schema_bytes = schema.node.as_builder().to_bytes_packed()
+                    schema_b64 = base64.b64encode(schema_bytes).decode("ascii")
+                    out.append(f"    {repr(schema_b64)},  # {schema.node.displayName}")
+                    seen_ids.add(schema_id)
+                except Exception as e:
+                    logger.debug(f"Could not serialize schema {hex(schema_id)}: {e}")
 
-                # Only add if it's not the same directory (not just ".") and not already added
-                if rel_path not in seen_rel_paths:
-                    seen_rel_paths.add(rel_path)
-                    # Wrap in abspath for cleaner debugging as requested
-                    import_paths.append(f'os.path.abspath(os.path.join(here, "{rel_path}"))')
-            except (ValueError, OSError):
-                # If relative path calculation fails (e.g., different drives on Windows), skip
-                pass
+        out.append("]")
+        out.append("")
 
-        # Add import paths from CLI (-I flags) - these take precedence
-        if self._import_paths:
-            for import_path_dir in sorted(self._import_paths):
-                add_path(import_path_dir)
+        # Load schemas and build module structure
+        out.append("# Load schemas and build module structure")
+        out.append("_loader = capnp.SchemaLoader()")
+        out.append("for _schema_b64 in _SCHEMA_NODES:")
+        out.append("    _schema_data = base64.b64decode(_schema_b64)")
+        out.append("    _node_reader = schema_capnp.Node.from_bytes_packed(_schema_data)")
+        out.append("    _loader.load_dynamic(_node_reader)")
+        out.append("")
 
-        # Add paths to imported modules (schemas that import each other)
-        if self._imported_module_paths:
-            for imported_path in sorted(self._imported_module_paths):
-                add_path(imported_path.parent)
+        # Build module structure recursively (mimics SchemaParser's _load function)
+        out.append("def _build_module(schema, module_dict):")
+        out.append("    proto = schema.get_proto()")
+        out.append("    for nested_node in proto.nestedNodes:")
+        out.append("        nested_schema = _loader.get(nested_node.id)")
+        out.append("        nested_proto = nested_schema.get_proto()")
+        out.append("        if nested_proto.isStruct:")
+        out.append(
+            "            module_dict[nested_node.name] = _StructModule(nested_schema.as_struct(), nested_node.name)"
+        )
+        out.append("        elif nested_proto.isInterface:")
+        out.append(
+            "            module_dict[nested_node.name] = _InterfaceModule(nested_schema.as_interface(), nested_node.name)"
+        )
+        out.append("        elif nested_proto.isEnum:")
+        out.append("            module_dict[nested_node.name] = _EnumModule(nested_schema.as_enum(), nested_node.name)")
+        out.append("        elif nested_proto.isConst:")
+        out.append("            module_dict[nested_node.name] = nested_schema.as_const_value()")
+        out.append("        if nested_proto.isStruct or nested_proto.isInterface:")
+        out.append("            if hasattr(module_dict[nested_node.name], '__dict__'):")
+        out.append("                _build_module(nested_schema, module_dict[nested_node.name].__dict__)")
+        out.append("")
+        out.append(f"_file_schema = _loader.get({hex(self._schema.node.id)})")
+        out.append("_module_dict = {}")
+        out.append("_build_module(_file_schema, _module_dict)")
+        out.append("")
 
-        # Always add the schema's own directory to import path
-        add_path(self._module_path.parent)
-
-        out.append(f"import_path = [{', '.join(import_paths)}]")
-
+        # Expose top-level types from the built module dict
         for scope in self.scopes_by_id.values():
             if scope.parent is not None and scope.parent.is_root:
-                # For the .py runtime binding, use the original name, not the Protocol name
-                # Convert "_<Name>StructModule" back to "<Name>" for structs
                 runtime_name = scope.name
                 if runtime_name.startswith("_"):
-                    # This is a struct Protocol, extract the original name
                     runtime_name = self._extract_name_from_protocol(runtime_name)
-                out.append(f"{runtime_name} = capnp.load(module_file, imports=import_path).{runtime_name}")
+                out.append(f"{runtime_name} = _module_dict['{runtime_name}']")
 
         # Add Server.InfoResult NamedTuples for interfaces
         if self._all_server_namedtuples:

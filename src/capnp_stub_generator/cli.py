@@ -94,11 +94,11 @@ def setup_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--augment-capnp-stubs",
+        "--no-augment-capnp-stubs",
         dest="augment_capnp_stubs",
-        default=False,
-        action="store_true",
-        help="augment installed capnp-stubs package with cast_as() overloads and copy to output directory.",
+        default=True,
+        action="store_false",
+        help="disable augmenting capnp-stubs package with cast_as() overloads (enabled by default for self-contained output).",
     )
 
     _add_recursive_argument(parser)
