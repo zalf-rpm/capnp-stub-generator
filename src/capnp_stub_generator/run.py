@@ -1321,12 +1321,6 @@ def run_from_schemas(
 
     # Create py.typed marker and __init__.py in each output directory to make them packages
     for output_directory in output_directories_used:
-        # Create py.typed marker
-        py_typed_path = os.path.join(output_directory, "py.typed")
-        if not os.path.exists(py_typed_path):
-            with open(py_typed_path, "w", encoding="utf8") as f:
-                f.write("")  # Empty file as per PEP 561
-
         # Create __init__.py to make it a package (needed for relative imports)
         init_path = os.path.join(output_directory, "__init__.py")
         if not os.path.exists(init_path):
