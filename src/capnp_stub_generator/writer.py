@@ -16,6 +16,7 @@ from capnp.lib.capnp import (
     _EnumSchema,
     _InterfaceSchema,
     _ParsedSchema,
+    _Schema,
     _StructSchema,
 )
 
@@ -33,7 +34,7 @@ from capnp_stub_generator.writer_dto import (
 )
 
 if TYPE_CHECKING:
-    from ..schema.schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
+    from schema_capnp.schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
 
 capnp.remove_import_hook()
 
@@ -77,7 +78,7 @@ class Writer:
 
     def __init__(
         self,
-        schema: _ParsedSchema,
+        schema: _ParsedSchema | _Schema,
         file_path: str,
         schema_loader: capnp.SchemaLoader,
         file_id_to_path: dict[int, str],
@@ -100,7 +101,7 @@ class Writer:
         self.scope: Scope = Scope(name="", id=schema.node.id, parent=None, return_scope=None)
         self.scopes_by_id: dict[int, Scope] = {self.scope.id: self.scope}
 
-        self._schema: _ParsedSchema = schema
+        self._schema: _ParsedSchema | _Schema = schema
         self._schema_loader: capnp.SchemaLoader = schema_loader
         self._file_id_to_path: dict[int, str] = file_id_to_path
         self._output_directory: pathlib.Path | None = pathlib.Path(output_directory) if output_directory else None
@@ -1877,11 +1878,11 @@ class Writer:
         self._add_typing_import("Any")
         return helper.TypeHintedVariable(helper.sanitize_name(field.name), [helper.TypeHint("Any", primary=True)])
 
-    def gen_const(self, schema: _ParsedSchema) -> None:
+    def gen_const(self, schema: _ParsedSchema | _Schema) -> None:
         """Generate a `const` object.
 
         Args:
-            schema (_ParsedSchema): The schema to generate the `const` object out of.
+            schema (_ParsedSchema | _Schema): The schema to generate the `const` object out of.
 
         """
         assert schema.node.which() == capnp_types.CapnpElementType.CONST
@@ -4141,7 +4142,7 @@ class Writer:
             matching_path = pathlib.Path(self._file_id_to_path[schema.node.id])
         else:
             # Find the path by checking which file contains this schema as a nested node
-            def search_nested_nodes(schema_obj: _ParsedSchema, target_id: int) -> bool:
+            def search_nested_nodes(schema_obj: _ParsedSchema | _Schema, target_id: int) -> bool:
                 """Recursively search for a target ID in nested nodes."""
                 for nested_node in schema_obj.node.nestedNodes:
                     if nested_node.id == target_id:
@@ -4211,7 +4212,10 @@ class Writer:
                 relative_import_path = matching_path.relative_to(common_path)
 
                 # Shape the relative path to a relative Python import statement.
-                python_import_path = "." * len(relative_module_path.parents) + helper.replace_capnp_suffix(
+                # Since pycapnp 2.0+ generates stubs in module folders (e.g., schema_capnp/__init__.pyi),
+                # we need an extra level to go up from __init__.pyi to its parent directory
+                dots_count = len(relative_module_path.parents) + 1
+                python_import_path = "." * dots_count + helper.replace_capnp_suffix(
                     ".".join(relative_import_path.parts),
                 )
 

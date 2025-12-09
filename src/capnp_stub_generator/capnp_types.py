@@ -9,6 +9,7 @@ if TYPE_CHECKING:
         _EnumSchema,
         _InterfaceSchema,
         _ParsedSchema,
+        _Schema,
         _StructSchema,
     )
 
@@ -48,4 +49,4 @@ class CapnpElementType:
     INTERFACE = "interface"
 
 
-type SchemaType = _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema
+type SchemaType = _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema | _Schema

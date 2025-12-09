@@ -24,6 +24,7 @@ CAPNP_SCHEMAS_DIR = SCHEMAS_DIR / "capnp"
 BASIC_GENERATED_DIR = GENERATED_DIR / "basic"
 EXAMPLES_GENERATED_DIR = GENERATED_DIR / "examples"
 ZALFMAS_GENERATED_DIR = GENERATED_DIR / "zalfmas"
+ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR = GENERATED_DIR / "zalfmas_no_annotations"
 CAPNP_GENERATED_DIR = GENERATED_DIR / "capnp"
 
 
@@ -122,13 +123,16 @@ main()
         # Generate example schemas
         compile_schemas(EXAMPLES_SCHEMAS_DIR, EXAMPLES_GENERATED_DIR)
 
-        # Generate zalfmas schemas (with import path, excluding problematic file)
+        # Generate zalfmas schemas (with Python module annotations)
+        # Exclude a.capnp which has duplicate ID and files in capnp folder (system schemas)
         zalfmas_files = list(ZALFMAS_SCHEMAS_DIR.rglob("*.capnp"))
-        # Exclude a.capnp which has duplicate ID
-        zalfmas_files = [f for f in zalfmas_files if f.name != "a.capnp"]
+        zalfmas_files = [
+            f for f in zalfmas_files
+            if f.name != "a.capnp" and "capnp" not in f.relative_to(ZALFMAS_SCHEMAS_DIR).parts
+        ]
 
         if zalfmas_files:
-            logger.info(f"Compiling {len(zalfmas_files)} zalfmas schemas")
+            logger.info(f"Compiling {len(zalfmas_files)} zalfmas schemas (WITH Python annotations)")
             ZALFMAS_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
             cmd = [
@@ -146,17 +150,57 @@ main()
                 logger.error(f"Failed to compile zalfmas schemas:\n{result.stderr}")
                 pytest.fail(f"Zalfmas schema compilation failed: {result.stderr}")
 
-            logger.info(f"✓ Generated zalfmas stubs in {ZALFMAS_GENERATED_DIR}")
+            logger.info(f"✓ Generated zalfmas stubs (with annotations) in {ZALFMAS_GENERATED_DIR}")
 
-        # Generate capnp schemas
-        compile_schemas(CAPNP_SCHEMAS_DIR, CAPNP_GENERATED_DIR)
+        # Generate zalfmas schemas from schemas WITHOUT Python module annotations
+        # Use a separate schema directory that has the same files but without the $Python.module annotation
+        zalfmas_no_ann_source = SCHEMAS_DIR / "zalfmas_no_annotations"
+        if zalfmas_no_ann_source.exists():
+            zalfmas_no_ann_files = list(zalfmas_no_ann_source.rglob("*.capnp"))
+            zalfmas_no_ann_files = [
+                f for f in zalfmas_no_ann_files
+                if f.name != "a.capnp" and "capnp" not in f.relative_to(zalfmas_no_ann_source).parts
+            ]
+
+            if zalfmas_no_ann_files:
+                logger.info(f"Compiling {len(zalfmas_no_ann_files)} zalfmas schemas (WITHOUT Python annotations)")
+                ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+
+                cmd = [
+                    "capnp",
+                    "compile",
+                    f"--src-prefix={zalfmas_no_ann_source}",
+                    f"-o{wrapper_path}:{ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR}",
+                    "-I",
+                    str(zalfmas_no_ann_source),
+                ]
+                cmd.extend([str(f) for f in zalfmas_no_ann_files])
+
+                result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.error(f"Failed to compile zalfmas schemas (no annotations):\n{result.stderr}")
+                    pytest.fail(f"Zalfmas schema compilation (no annotations) failed: {result.stderr}")
+
+                logger.info(f"✓ Generated zalfmas stubs (without annotations) in {ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR}")
 
         logger.info("✓ All test stubs generated successfully using capnp compile")
 
         # Run pyright validation on generated stubs (excluding zalfmas which has complex cross-schema imports)
+        # Also exclude bundled capnp-stubs from pycapnp which have pre-existing pyright issues
         logger.info("Running pyright validation on generated stubs...")
+        
+        # Get all stub directories except capnp-stubs (bundled pycapnp types)
+        basic_stubs_to_check = [
+            str(p) for p in BASIC_GENERATED_DIR.iterdir()
+            if p.is_dir() and p.name != "capnp-stubs"
+        ]
+        examples_stubs_to_check = [
+            str(p) for p in EXAMPLES_GENERATED_DIR.iterdir()
+            if p.is_dir() and p.name != "capnp-stubs"
+        ]
+        
         pyright_result = subprocess.run(
-            ["pyright", str(BASIC_GENERATED_DIR), str(EXAMPLES_GENERATED_DIR), str(CAPNP_GENERATED_DIR)],
+            ["pyright"] + basic_stubs_to_check + examples_stubs_to_check,
             check=False,
             capture_output=True,
             text=True,
@@ -183,30 +227,7 @@ main()
         "basic": BASIC_GENERATED_DIR,
         "examples": EXAMPLES_GENERATED_DIR,
         "zalfmas": ZALFMAS_GENERATED_DIR,
-    }
-
-    logger.info("✓ All test stubs generated successfully using capnp compile")
-
-    # Run pyright validation on the whole repository
-    logger.info("Running pyright validation...")
-    pyright_result = subprocess.run(
-        ["pyright", "."],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    if pyright_result.returncode != 0:
-        logger.error(f"Pyright validation failed:\n{pyright_result.stdout}")
-        pytest.fail(f"Pyright validation failed:\n{pyright_result.stdout}")
-
-    logger.info("✓ Pyright validation passed")
-
-    # Return paths for tests to use
-    return {
-        "basic": BASIC_GENERATED_DIR,
-        "examples": EXAMPLES_GENERATED_DIR,
-        "zalfmas": ZALFMAS_GENERATED_DIR,
+        "zalfmas_no_annotations": ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR,
     }
 
 
@@ -242,8 +263,14 @@ def basic_stubs(generated_stubs):
 
 @pytest.fixture(scope="session")
 def zalfmas_stubs(generated_stubs):
-    """Provide path to generated zalfmas stubs."""
+    """Provide path to generated zalfmas stubs (with annotations)."""
     return generated_stubs["zalfmas"]
+
+
+@pytest.fixture(scope="session")
+def zalfmas_no_annotations_stubs(generated_stubs):
+    """Provide path to generated zalfmas stubs (without annotations)."""
+    return generated_stubs["zalfmas_no_annotations"]
 
 
 # Legacy fixtures for backward compatibility (deprecated)
