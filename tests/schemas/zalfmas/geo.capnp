@@ -11,9 +11,9 @@ $Go.package("geo");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/geo");
 
 enum CoordType {
-  gk @0; # Gauss-Krüger 
+  gk @0; # Gauss-Krüger
   utm @1; # UTM
-  latlon @2; # 
+  latlon @2; #
 }
 
 struct EPSG {
@@ -79,5 +79,3 @@ struct RectBounds(CoordinateType) {
   tl @0 :CoordinateType; # top left corner
   br @1 :CoordinateType; # bottom right corner
 }
-
-

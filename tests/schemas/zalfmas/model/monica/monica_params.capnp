@@ -56,7 +56,7 @@ struct SpeciesParameters {
     stageMaxRootNConcentration                  @23 :List(Float64);
     initialOrganBiomass                         @24 :List(Float64);
     criticalOxygenContent                       @25 :List(Float64);
-	stageMobilFromStorageCoeff                  @26 :List(Float64);
+  stageMobilFromStorageCoeff                  @26 :List(Float64);
 
     abovegroundOrgan                            @27 :List(Bool);
     storageOrgan                                @28 :List(Bool);
@@ -145,8 +145,8 @@ struct CultivarParameters {
 
 struct YieldComponent {
     organId         @0 :Int64 = -1;
-	yieldPercentage @1 :Float64;
-	yieldDryMatter  @2 :Float64;
+  yieldPercentage @1 :Float64;
+  yieldDryMatter  @2 :Float64;
 }
 
 struct AutomaticHarvestParameters {
@@ -160,8 +160,8 @@ struct AutomaticHarvestParameters {
 
 struct NMinCropParameters {
     samplingDepth   @0 :Float64;
-	nTarget         @1 :Float64;
-	nTarget30       @2 :Float64;
+  nTarget         @1 :Float64;
+  nTarget30       @2 :Float64;
 }
 
 # -----------------------------------------------------------------------------
@@ -170,10 +170,10 @@ struct NMinCropParameters {
 
 #struct MineralFertilizerParameters {
 #    id          @0 :Text;
-#	name        @1 :Text;
+# name        @1 :Text;
 #    carbamid    @2 :Float64; # [%]
-#	nh4         @3 :Float64; # [%]
-#	no3         @4 :Float64; # [%]
+# nh4         @3 :Float64; # [%]
+# no3         @4 :Float64; # [%]
 #}
 
 struct NMinApplicationParameters {
@@ -206,7 +206,7 @@ struct NMinApplicationParameters {
 #struct OrganicFertilizerParameters {
 #    params  @0 :OrganicMatterParameters;
 #    id      @1 :Text;
-#	name    @2 :Text;
+# name    @2 :Text;
 #}
 
 struct CropResidueParameters {
@@ -221,22 +221,22 @@ struct CropResidueParameters {
 
 struct SoilParameters {
     soilSandContent         @0  :Float64 = -1.0;    # Soil layer's sand content [kg kg-1] //{0.4}
-	soilClayContent         @1  :Float64 = -1.0;    # Soil layer's clay content [kg kg-1] (Ton) //{0.05}
-	soilpH                  @2  :Float64 = 6.9;     # Soil pH value [] //{7.0}
-	soilStoneContent        @3  :Float64;           # Soil layer's stone content in soil [m3 m-3]
-	lambda                  @4  :Float64 = -1.0;    # Soil water conductivity coefficient [] //{0.5}
-	fieldCapacity           @5  :Float64 = -1.0;    # {0.21} [m3 m-3]
-	saturation              @6  :Float64 = -1.0;    # {0.43} [m3 m-3]
-	permanentWiltingPoint   @7  :Float64 = -1.0;    # {0.08} [m3 m-3]
-	soilTexture             @8  :Text;
-	soilAmmonium            @9  :Float64 = 0.0005;  # soil ammonium content [kg NH4-N m-3]
-	soilNitrate             @10 :Float64 = 0.005;   # soil nitrate content [kg NO3-N m-3]
-	soilCNRatio             @11 :Float64 = 10.0;
-	soilMoisturePercentFC   @12 :Float64 = 100.0;
-	soilRawDensity          @13 :Float64 = -1.0;    # [kg m-3]
-	soilBulkDensity         @14 :Float64 = -1.0;    # [kg m-3]
-	soilOrganicCarbon       @15 :Float64 = -1.0;    # [kg kg-1]
-	soilOrganicMatter       @16 :Float64 = -1.0;    # [kg kg-1]
+  soilClayContent         @1  :Float64 = -1.0;    # Soil layer's clay content [kg kg-1] (Ton) //{0.05}
+  soilpH                  @2  :Float64 = 6.9;     # Soil pH value [] //{7.0}
+  soilStoneContent        @3  :Float64;           # Soil layer's stone content in soil [m3 m-3]
+  lambda                  @4  :Float64 = -1.0;    # Soil water conductivity coefficient [] //{0.5}
+  fieldCapacity           @5  :Float64 = -1.0;    # {0.21} [m3 m-3]
+  saturation              @6  :Float64 = -1.0;    # {0.43} [m3 m-3]
+  permanentWiltingPoint   @7  :Float64 = -1.0;    # {0.08} [m3 m-3]
+  soilTexture             @8  :Text;
+  soilAmmonium            @9  :Float64 = 0.0005;  # soil ammonium content [kg NH4-N m-3]
+  soilNitrate             @10 :Float64 = 0.005;   # soil nitrate content [kg NO3-N m-3]
+  soilCNRatio             @11 :Float64 = 10.0;
+  soilMoisturePercentFC   @12 :Float64 = 100.0;
+  soilRawDensity          @13 :Float64 = -1.0;    # [kg m-3]
+  soilBulkDensity         @14 :Float64 = -1.0;    # [kg m-3]
+  soilOrganicCarbon       @15 :Float64 = -1.0;    # [kg kg-1]
+  soilOrganicMatter       @16 :Float64 = -1.0;    # [kg kg-1]
 }
 
 # -----------------------------------------------------------------------------
@@ -245,13 +245,13 @@ struct SoilParameters {
 
 #struct IrrigationParameters {
 #    nitrateConcentration @0 :Float64;   # nitrate concentration [mg dm-3]
-#	sulfateConcentration @1 :Float64;   # sulfate concentration [mg dm-3]
+# sulfateConcentration @1 :Float64;   # sulfate concentration [mg dm-3]
 #}
 
 struct AutomaticIrrigationParameters {
     params      @0 :Mgmt.Params.Irrigation.Parameters;
     amount      @1 :Float64 = 17.0;
-	threshold   @2 :Float64 = 0.35;
+  threshold   @2 :Float64 = 0.35;
 }
 
 # -----------------------------------------------------------------------------
@@ -299,9 +299,9 @@ struct MeasuredGroundwaterTableInformation {
         date    @0 :Date;
         value   @1 :Float64;
     }
-    
+
     groundwaterInformationAvailable @0 :Bool;
-	groundwaterInfo                 @1 :List(DateToValue);
+  groundwaterInfo                 @1 :List(DateToValue);
 }
 
 # -----------------------------------------------------------------------------
@@ -355,7 +355,7 @@ struct CropModuleParameters {
     growthRespirationParameter1                                     @12 :Float64;
     growthRespirationParameter2                                     @13 :Float64;
     tortuosity                                                      @14 :Float64;
-    adjustRootDepthForSoilProps                                     @15 :Bool;  
+    adjustRootDepthForSoilProps                                     @15 :Bool;
 
     experimentalEnablePhenologyWangEngelTemperatureResponse         @16 :Bool;
     experimentalEnablePhotosynthesisWangEngelTemperatureResponse    @17 :Bool;
@@ -404,7 +404,7 @@ struct SoilOrganicModuleParameters {
     somFastUtilizationEfficiency        @8  :Float64 = 0.50;        # 0.50 [], from DAISY manual 0.5
     aomSlowUtilizationEfficiency        @9  :Float64 = 0.40;        # 0.40 [], from DAISY manual original 0.13
     aomFastUtilizationEfficiency        @10 :Float64 = 0.10;        # 0.10 [], from DAISY manual original 0.69
-    aomFastMaxCtoN                      @11 :Float64 = 1000.0;      
+    aomFastMaxCtoN                      @11 :Float64 = 1000.0;
     partSOMFastToSOMSlow                @12 :Float64 = 0.30;        # 0.30 [], Bruun et al. 2003
     partSMBSlowToSOMFast                @13 :Float64 = 0.60;        # 0.60 [], from DAISY manual
     partSMBFastToSOMFast                @14 :Float64 = 0.60;        # 0.60 [], from DAISY manual
@@ -465,58 +465,58 @@ struct Voc {
 #    const kilo          :Float64 = 1000.0;
 #    const milli         :Float64 = 0.001;
 
-	# conv constants
-#	const nmol2umol     :Float64 = Voc.kilo;               # nmol to umol
-#	const umol2nmol     :Float64 = 0.001;               # (= 1.0 / NMOL2UMOL) umol to nmol
-#	const mol2mmol      :Float64 = Voc.milli;
-#	const mmol2mol      :Float64 = 1000.0;              # (= 1.0 / MOL2MMOL)
-#	const fPar          :Float64 = 0.45;                # conversion factor for global into PAR (Monteith 1965, Meek et al. 1984)
-#	const d2k           :Float64 = 273.15;              # kelvin at zero degree celsius
-#	const g2kg          :Float64 = 1000.0;              # 0.001 kg per g
-#	const umol2w        :Float64 = 4.57;                # conversion factor from Watt in umol PAR (Cox et al. 1998)
-#	const w2umol        :Float64 = 0.2188183807439825;  # (= 1.0 / UMOL2W) conversion factor from umol PAR in Watt (Cox et al. 1998)
-#	const ng2ug         :Float64 = 1000.0;              # conversion factor from nano to micro (gramm)
-#	const ug2ng         :Float64 = 0.001;                # (= 1.0 / NG2UG) 
+  # conv constants
+# const nmol2umol     :Float64 = Voc.kilo;               # nmol to umol
+# const umol2nmol     :Float64 = 0.001;               # (= 1.0 / NMOL2UMOL) umol to nmol
+# const mol2mmol      :Float64 = Voc.milli;
+# const mmol2mol      :Float64 = 1000.0;              # (= 1.0 / MOL2MMOL)
+# const fPar          :Float64 = 0.45;                # conversion factor for global into PAR (Monteith 1965, Meek et al. 1984)
+# const d2k           :Float64 = 273.15;              # kelvin at zero degree celsius
+# const g2kg          :Float64 = 1000.0;              # 0.001 kg per g
+# const umol2w        :Float64 = 4.57;                # conversion factor from Watt in umol PAR (Cox et al. 1998)
+# const w2umol        :Float64 = 0.2188183807439825;  # (= 1.0 / UMOL2W) conversion factor from umol PAR in Watt (Cox et al. 1998)
+# const ng2ug         :Float64 = 1000.0;              # conversion factor from nano to micro (gramm)
+# const ug2ng         :Float64 = 0.001;                # (= 1.0 / NG2UG)
 
-	# phys constants
-#	const rGas          :Float64 = 8.3143;              # general gas constant  [J mol-1 K-1]
+  # phys constants
+# const rGas          :Float64 = 8.3143;              # general gas constant  [J mol-1 K-1]
 
-	# chem constants
-#	const mc            :Float64 = 12.0;                # molecular weight of carbon  [g mol-1]
-#	const cIso          :Float64 = 5.0;                 # number of carbons in Isoprene (C5H8)
-#	const cMono         :Float64 = 10.0;                # number of carbons in Monoterpene (C10H16)
+  # chem constants
+# const mc            :Float64 = 12.0;                # molecular weight of carbon  [g mol-1]
+# const cIso          :Float64 = 5.0;                 # number of carbons in Isoprene (C5H8)
+# const cMono         :Float64 = 10.0;                # number of carbons in Monoterpene (C10H16)
 
-	# time constants
-#	const secInMin      :UInt8 = 60;                    # minute to seconds
-#	const minInHr       :UInt8 = 60;                    # hour to minutes
-#	const hrInDay       :UInt8 = 24;                    # day to hours
-#	const monthsInYear  :UInt8 = 12;                    # year to months
-#	const secInHr       :UInt16 = 3600;                 # hour to seconds
-#	const minInDay      :UInt16 = 1440;                 # day to minutes
-#	const secInDay      :UInt32 = 86400;                # day to seconds
+  # time constants
+# const secInMin      :UInt8 = 60;                    # minute to seconds
+# const minInHr       :UInt8 = 60;                    # hour to minutes
+# const hrInDay       :UInt8 = 24;                    # day to hours
+# const monthsInYear  :UInt8 = 12;                    # year to months
+# const secInHr       :UInt16 = 3600;                 # hour to seconds
+# const minInDay      :UInt16 = 1440;                 # day to minutes
+# const secInDay      :UInt32 = 86400;                # day to seconds
 
-	# meteo constants
-#	const po2           :Float64 = 0.208;               # volumentric percentage of oxygen in the canopy air
+  # meteo constants
+# const po2           :Float64 = 0.208;               # volumentric percentage of oxygen in the canopy air
 
-	# voc module specific constants
-#	const abso          :Float64 = 0.860;               # absorbance factor, Collatz et al. 1991 
-#	const alpha         :Float64 = 0.0027;              # light modifier, Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 0.0041, Bertin et al. 1997 f. Q.ilex: 0.00147, Harley et al. 2004 f. M.indica: 0.00145) 
-#	const beta          :Float64 = 0.09;                # monoterpene scaling factor, Guenther et al. 1995 (cit. in Guenther 1999 says this value originates from Guenther 1993) 
-#	const c1            :Float64 = 0.17650;             #fw: 0.17650e-3 in Grote et al. 2014 to preserve the constant relation to C2; #  fraction of electrons used from excess electron transport (−), from Sun et al. 2012 dataset, Grote et al. 2014 
-#	const c2            :Float64 = 0.00280;             #fw: 0.00280e-3 (umol m-2 s-1) in Grote et al. 2014; here in nmol m-2 s-1; # fraction of electrons used from photosynthetic electron transport (−),from Sun et al. 2012 dataset, Grote et al. 2014 
-#	const ceoIso        :Float64 = 2.0;                 # emission-class dependent empirical coefficient for temperature acitivity factor of isoprene from MEGAN v2.1 (Guenther et al. 2012)
-#	const ceoMono       :Float64 = 1.83;                # emission-class dependent empirical coefficient for temperature acitivity factor of a-pinene, b-pinene, oMT, Limonen, etc from MEGAN v2.1 (Guenther et al. 2012)
-#	const ct1           :Float64 = 95000.0;             # first temperature modifier (J mol-1), Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 87620, Bertin et al. 1997 f. Q.ilex: 74050, Harley et al. f. M.indica: 124600, in WIMOVAC 95100) 
-#	const ct2           :Float64 = 230000.0;            # second temperature modifier (J mol-1), Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 188200, Bertin et al. 1997 f. Q.ilex: 638600, Harley et al. f. M.indica: 254800) 
-#	const cl1           :Float64 = 1.066;               # radiation modifier, Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 1.04, Bertin et al. 1997 f. Q.ilex: 1.21, Harley et al. 2004 f. M.indica: 1.218) 
-#	const gammaMax      :Float64 = 34.0;                # saturating amount of electrons that can be supplied from other sources (μmol m−2 s−1), Sun et al. 2012 dataset, Grote et al. 2014 (delta J_sat in paper)
-#	const ppfd0         :Float64 = 1000.0;              # reference photosynthetically active quantum flux density/light density (standard conditions) (umol m-2 s-1), Guenther et al. 1993 
-#	const temp0         :Float64 = 298.15;              # (= 25.0 + D2K) reference (leaf) temperature (standard conditions) (K), Guenther et al. 1993 
-#	const topT          :Float64 = 314.0;               # temperature with maximum emission (K), Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 317, Bertin et al. 1997 f. Q.ilex: 311.6, Harley et al. f. M.indica: 313.4, in WIMOVAC 311.83) 
-#	const tRef          :Float64 = 303.15;              # (= 30.0 + D2K) reference temperature (K), Guenther et al. 1993 
-		
-	# photofarquhar specific constants
-#	const tk25 :Float64 = 298.16;
+  # voc module specific constants
+# const abso          :Float64 = 0.860;               # absorbance factor, Collatz et al. 1991
+# const alpha         :Float64 = 0.0027;              # light modifier, Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 0.0041, Bertin et al. 1997 f. Q.ilex: 0.00147, Harley et al. 2004 f. M.indica: 0.00145)
+# const beta          :Float64 = 0.09;                # monoterpene scaling factor, Guenther et al. 1995 (cit. in Guenther 1999 says this value originates from Guenther 1993)
+# const c1            :Float64 = 0.17650;             #fw: 0.17650e-3 in Grote et al. 2014 to preserve the constant relation to C2; #  fraction of electrons used from excess electron transport (−), from Sun et al. 2012 dataset, Grote et al. 2014
+# const c2            :Float64 = 0.00280;             #fw: 0.00280e-3 (umol m-2 s-1) in Grote et al. 2014; here in nmol m-2 s-1; # fraction of electrons used from photosynthetic electron transport (−),from Sun et al. 2012 dataset, Grote et al. 2014
+# const ceoIso        :Float64 = 2.0;                 # emission-class dependent empirical coefficient for temperature acitivity factor of isoprene from MEGAN v2.1 (Guenther et al. 2012)
+# const ceoMono       :Float64 = 1.83;                # emission-class dependent empirical coefficient for temperature acitivity factor of a-pinene, b-pinene, oMT, Limonen, etc from MEGAN v2.1 (Guenther et al. 2012)
+# const ct1           :Float64 = 95000.0;             # first temperature modifier (J mol-1), Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 87620, Bertin et al. 1997 f. Q.ilex: 74050, Harley et al. f. M.indica: 124600, in WIMOVAC 95100)
+# const ct2           :Float64 = 230000.0;            # second temperature modifier (J mol-1), Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 188200, Bertin et al. 1997 f. Q.ilex: 638600, Harley et al. f. M.indica: 254800)
+# const cl1           :Float64 = 1.066;               # radiation modifier, Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 1.04, Bertin et al. 1997 f. Q.ilex: 1.21, Harley et al. 2004 f. M.indica: 1.218)
+# const gammaMax      :Float64 = 34.0;                # saturating amount of electrons that can be supplied from other sources (μmol m−2 s−1), Sun et al. 2012 dataset, Grote et al. 2014 (delta J_sat in paper)
+# const ppfd0         :Float64 = 1000.0;              # reference photosynthetically active quantum flux density/light density (standard conditions) (umol m-2 s-1), Guenther et al. 1993
+# const temp0         :Float64 = 298.15;              # (= 25.0 + D2K) reference (leaf) temperature (standard conditions) (K), Guenther et al. 1993
+# const topT          :Float64 = 314.0;               # temperature with maximum emission (K), Guenther et al. 1993; (Staudt et al. 2004 f. Q.ilex: 317, Bertin et al. 1997 f. Q.ilex: 311.6, Harley et al. f. M.indica: 313.4, in WIMOVAC 311.83)
+# const tRef          :Float64 = 303.15;              # (= 30.0 + D2K) reference temperature (K), Guenther et al. 1993
+
+  # photofarquhar specific constants
+# const tk25 :Float64 = 298.16;
 
     struct Emissions {
         struct SpeciesIdToEmission {
@@ -525,147 +525,147 @@ struct Voc {
         }
 
         speciesIdToIsopreneEmission     @0 :List(SpeciesIdToEmission);  # [umol m-2Ground ts-1] isoprene emissions per timestep and plant
-		speciesIdToMonoterpeneEmission  @1 :List(SpeciesIdToEmission);  # [umol m-2Ground ts-1] monoterpene emissions per timestep and plant
+    speciesIdToMonoterpeneEmission  @1 :List(SpeciesIdToEmission);  # [umol m-2Ground ts-1] monoterpene emissions per timestep and plant
 
-		isopreneEmission                @2 :Float64;                    # [umol m-2Ground ts-1] isoprene emissions per timestep
-		monoterpeneEmission             @3 :Float64;                    # [umol m-2Ground ts-1] monoterpene emissions per timestep
+    isopreneEmission                @2 :Float64;                    # [umol m-2Ground ts-1] isoprene emissions per timestep
+    monoterpeneEmission             @3 :Float64;                    # [umol m-2Ground ts-1] monoterpene emissions per timestep
     }
 
     struct SpeciesData {
         id          @0  :UInt64;
 
-		# common
-		efMonos     @1  :Float64;               # emission rate of stored terpenes under standard conditions (ug gDW-1 h-1)
-		efMono      @2  :Float64;               # monoterpene emission rate under standard conditions (ug gDW-1 h-1)
-		efIso       @3  :Float64;               # isoprene emission rate under standard conditions (ug gDW-1 h-1)
+    # common
+    efMonos     @1  :Float64;               # emission rate of stored terpenes under standard conditions (ug gDW-1 h-1)
+    efMono      @2  :Float64;               # monoterpene emission rate under standard conditions (ug gDW-1 h-1)
+    efIso       @3  :Float64;               # isoprene emission rate under standard conditions (ug gDW-1 h-1)
 
-		# jjv
-		theta       @4  :Float64 = 0.9;         # curvature parameter
-		fage        @5  :Float64 = 1.0;         # relative decrease of emission synthesis per foliage age class
-		ctIs        @6  :Float64;               # scaling constant for temperature sensitivity of isoprene synthase.
-		ctMt        @7  :Float64;               # scaling constant for temperature sensitivity
+    # jjv
+    theta       @4  :Float64 = 0.9;         # curvature parameter
+    fage        @5  :Float64 = 1.0;         # relative decrease of emission synthesis per foliage age class
+    ctIs        @6  :Float64;               # scaling constant for temperature sensitivity of isoprene synthase.
+    ctMt        @7  :Float64;               # scaling constant for temperature sensitivity
 
-		haIs        @8  :Float64;               # activation energy for isoprene synthase (J mol-1)
-		haMt        @9  :Float64;               # activation energy for GDP synthase (J mol-1)
+    haIs        @8  :Float64;               # activation energy for isoprene synthase (J mol-1)
+    haMt        @9  :Float64;               # activation energy for GDP synthase (J mol-1)
 
-		dsIs        @10 :Float64;               # entropy term for isoprene synthase sensitivity to temperature (J:mol-1:K-1)
-		dsMt        @11 :Float64;               # entropy term for GDP synthase sensitivity to temperature (J:mol-1:K-1)
-		hdIs        @12 :Float64 = 284600.0;    # deactivation energy for isoprene synthase (J mol-1)
-		hdMt        @13 :Float64 = 284600.0;    # deactivation energy for monoterpene synthase (J mol-1)
+    dsIs        @10 :Float64;               # entropy term for isoprene synthase sensitivity to temperature (J:mol-1:K-1)
+    dsMt        @11 :Float64;               # entropy term for GDP synthase sensitivity to temperature (J:mol-1:K-1)
+    hdIs        @12 :Float64 = 284600.0;    # deactivation energy for isoprene synthase (J mol-1)
+    hdMt        @13 :Float64 = 284600.0;    # deactivation energy for monoterpene synthase (J mol-1)
 
-		hdj         @14 :Float64 = 220000.0;    # fw: "HDJ": curvature parameter of jMax (J mol-1) (Kattge et al. 2007: 200000; Farquhar et al. 1980: 220000; Harley et al. 1992: 201000) 
-		sdj         @15 :Float64 = 703.0;       # fw: "SDJ": electron transport temperature response parameter (Kattge et al. 2007: 647; Farquhar et al. 1980: 710; Harley et al. 1992: 650)
-		kc25        @16 :Float64 = 260.0;       # Michaelis-Menten constant for CO2 at 25oC (umol mol-1 ubar-1)
-		ko25        @17 :Float64 = 179.0;       # Michaelis-Menten constant for O2 at 25oC (mmol mol-1 mbar-1)
-		vcMax25     @18 :Float64 = 80.0;        # corn: 13.1 | maximum RubP saturated rate of carboxylation at 25oC for sun leaves (umol m-2 s-1)
-		qjvc        @19 :Float64 = 2.0;         # relation between maximum electron transport rate and RubP saturated rate of carboxylation (--)
+    hdj         @14 :Float64 = 220000.0;    # fw: "HDJ": curvature parameter of jMax (J mol-1) (Kattge et al. 2007: 200000; Farquhar et al. 1980: 220000; Harley et al. 1992: 201000)
+    sdj         @15 :Float64 = 703.0;       # fw: "SDJ": electron transport temperature response parameter (Kattge et al. 2007: 647; Farquhar et al. 1980: 710; Harley et al. 1992: 650)
+    kc25        @16 :Float64 = 260.0;       # Michaelis-Menten constant for CO2 at 25oC (umol mol-1 ubar-1)
+    ko25        @17 :Float64 = 179.0;       # Michaelis-Menten constant for O2 at 25oC (mmol mol-1 mbar-1)
+    vcMax25     @18 :Float64 = 80.0;        # corn: 13.1 | maximum RubP saturated rate of carboxylation at 25oC for sun leaves (umol m-2 s-1)
+    qjvc        @19 :Float64 = 2.0;         # relation between maximum electron transport rate and RubP saturated rate of carboxylation (--)
 
-		aekc        @20 :Float64 = 59356;       # for corn | activation energy for Michaelis-Menten constant for CO2 (J mol-1)
-		aeko        @21 :Float64 = 35948;       # for corn | activation energy for Michaelis-Menten constant for O2 (J mol-1)
-		aejm        @22 :Float64 = 37000;       # for corn | activation energy for electron transport (J mol-1) 
-		aevc        @23 :Float64 = 58520;       # for corn | activation energy for photosynthesis (J mol-1)
-		slaMin      @24 :Float64 = 20;          # for corn | specific leaf area under full light (m2 kg-1)
-		
-		scaleI      @25 :Float64 = 1.0;
-		scaleM      @26 :Float64 = 1.0;
+    aekc        @20 :Float64 = 59356;       # for corn | activation energy for Michaelis-Menten constant for CO2 (J mol-1)
+    aeko        @21 :Float64 = 35948;       # for corn | activation energy for Michaelis-Menten constant for O2 (J mol-1)
+    aejm        @22 :Float64 = 37000;       # for corn | activation energy for electron transport (J mol-1)
+    aevc        @23 :Float64 = 58520;       # for corn | activation energy for photosynthesis (J mol-1)
+    slaMin      @24 :Float64 = 20;          # for corn | specific leaf area under full light (m2 kg-1)
 
-		mFol        @27 :Float64;
-		# species and canopy layer specific foliage biomass(dry weight).
-		# physiology  mFol_vtfl  mFol_vtfl  double  V : F  0.0  kg : m^-2
-		# vc_OrganBiomass[LEAF]
+    scaleI      @25 :Float64 = 1.0;
+    scaleM      @26 :Float64 = 1.0;
 
-		lai         @28 :Float64;
-		# species specific leaf area index.
-		# physiology  lai_vtfl  lai_vtfl  double  V : F  0.0  m ^ 2 : m^-2
-		# CropGrowth::get_LeafAreaIndex()
+    mFol        @27 :Float64;
+    # species and canopy layer specific foliage biomass(dry weight).
+    # physiology  mFol_vtfl  mFol_vtfl  double  V : F  0.0  kg : m^-2
+    # vc_OrganBiomass[LEAF]
 
-		sla         @29 :Float64;
-		# specific foliage area (m2 kgDW-1).
-		# vegstructure  specific_foliage_area sla_vtfl  double  V : F  0.0  m ^ 2 : g : 10 ^ -3
-		# specific leaf area (pc_SpecificLeafArea / cps.cultivarParams.pc_SpecificLeafArea) pc_SpecificLeafArea[vc_DevelopmentalStage]
+    lai         @28 :Float64;
+    # species specific leaf area index.
+    # physiology  lai_vtfl  lai_vtfl  double  V : F  0.0  m ^ 2 : m^-2
+    # CropGrowth::get_LeafAreaIndex()
+
+    sla         @29 :Float64;
+    # specific foliage area (m2 kgDW-1).
+    # vegstructure  specific_foliage_area sla_vtfl  double  V : F  0.0  m ^ 2 : g : 10 ^ -3
+    # specific leaf area (pc_SpecificLeafArea / cps.cultivarParams.pc_SpecificLeafArea) pc_SpecificLeafArea[vc_DevelopmentalStage]
     }
 
     struct CPData {
         kc      @0  :Float64; # Michaelis - Menten constant for CO2 reaction of rubisco per canopy layer(umol mol - 1 ubar - 1)
-		ko      @1  :Float64; # Michaelis - Menten constant for O2 reaction of rubisco per canopy layer(umol mol - 1 ubar - 1)
-		oi      @2  :Float64; # species and layer specific intercellular concentration of CO2 (umol mol-1)
-		ci      @3  :Float64; # leaf internal O2 concentration per canopy layer(umol m - 2)
-		comp    @4  :Float64; # CO2 compensation point at 25oC per canopy layer (umol m-2)
-		vcMax   @5  :Float64; # actual activity state of rubisco  per canopy layer (umol m-2 s-1)
-		jMax    @6  :Float64; #  actual electron transport capacity per canopy layer(umol m - 2 s - 1)
-		jj      @7  :Float64; # umol m-2 s-1 ... electron provision (unit leaf area)
-		jj1000  @8  :Float64; # umol m-2 s-1 ... electron provision (unit leaf area) under normalized conditions 
-		jv      @9  :Float64; # umol m-2 s-1 ... used electron transport for photosynthesis (unit leaf area)
+    ko      @1  :Float64; # Michaelis - Menten constant for O2 reaction of rubisco per canopy layer(umol mol - 1 ubar - 1)
+    oi      @2  :Float64; # species and layer specific intercellular concentration of CO2 (umol mol-1)
+    ci      @3  :Float64; # leaf internal O2 concentration per canopy layer(umol m - 2)
+    comp    @4  :Float64; # CO2 compensation point at 25oC per canopy layer (umol m-2)
+    vcMax   @5  :Float64; # actual activity state of rubisco  per canopy layer (umol m-2 s-1)
+    jMax    @6  :Float64; #  actual electron transport capacity per canopy layer(umol m - 2 s - 1)
+    jj      @7  :Float64; # umol m-2 s-1 ... electron provision (unit leaf area)
+    jj1000  @8  :Float64; # umol m-2 s-1 ... electron provision (unit leaf area) under normalized conditions
+    jv      @9  :Float64; # umol m-2 s-1 ... used electron transport for photosynthesis (unit leaf area)
     }
 
     struct MicroClimateData
-	{
-		# common
+  {
+    # common
         rad                     @0  :Float64;
-		# radiation per canopy layer(W m - 2)
-		# microclimate  rad_fl rad_fl  double  F  0.0  W:m^-2
-		
+    # radiation per canopy layer(W m - 2)
+    # microclimate  rad_fl rad_fl  double  F  0.0  W:m^-2
+
         rad24                   @1  :Float64;
-		# radiation regime over the last 24hours(W m - 2)
-		# microclimate  rad24_fl rad24_fl  double  F  0.0  W:m^-2
-		
+    # radiation regime over the last 24hours(W m - 2)
+    # microclimate  rad24_fl rad24_fl  double  F  0.0  W:m^-2
+
         rad240                  @2  :Float64;
-		# radiation regime over the last 10days (W m-2)
-		# microclimate  rad240_fl rad240_fl  double  F  0.0  W:m^-2
-		
+    # radiation regime over the last 10days (W m-2)
+    # microclimate  rad240_fl rad240_fl  double  F  0.0  W:m^-2
+
         tFol                    @3  :Float64;
-		# foliage temperature per canopy layer(oC)
-		# microclimate  tFol_fl tFol_fl  double  F  0.0  oC
-		
+    # foliage temperature per canopy layer(oC)
+    # microclimate  tFol_fl tFol_fl  double  F  0.0  oC
+
         tFol24                  @4  :Float64;
-		# temperature regime over the last 24hours
-		# microclimate  tFol24_fl tFol24_fl  double  F  0.0  oC
-		
+    # temperature regime over the last 24hours
+    # microclimate  tFol24_fl tFol24_fl  double  F  0.0  oC
+
         tFol240                 @5  :Float64;
         # temperature regime over the last 10days
-		# microclimate  tFol240_fl tFol240_fl  double  F  0.0  oC
-		
-		#jjv
-		sunlitfoliagefraction   @6  :Float64;
-		# fraction of sunlit foliage per canopy layer
-		# microclimate  ts_sunlitfoliagefraction_fl ts_sunlitfoliagefraction_fl  double  F  0.0 ?
-		
+    # microclimate  tFol240_fl tFol240_fl  double  F  0.0  oC
+
+    #jjv
+    sunlitfoliagefraction   @6  :Float64;
+    # fraction of sunlit foliage per canopy layer
+    # microclimate  ts_sunlitfoliagefraction_fl ts_sunlitfoliagefraction_fl  double  F  0.0 ?
+
         sunlitfoliagefraction24 @7  :Float64;
         # fraction of sunlit foliage over the past 24 hours per canopy layer
-		# microclimate  sunlitfoliagefraction24_fl  sunlitfoliagefraction24_fl  double  F  0.0 ?
-		
-		co2concentration        @8  :Float64;
-	}
+    # microclimate  sunlitfoliagefraction24_fl  sunlitfoliagefraction24_fl  double  F  0.0 ?
+
+    co2concentration        @8  :Float64;
+  }
 
     struct PhotosynthT {
-		par     @0 :Float64;    # photosynthetic active radiation (umol m-2 s-1)
-		par24   @1 :Float64;    # 1 day aggregated photosynthetic active radiation (umol m-2 s-1)
-		par240  @2 :Float64;    # 10 days aggregated photosynthetic active radiation (umol m-2 s-1)
-	}
+    par     @0 :Float64;    # photosynthetic active radiation (umol m-2 s-1)
+    par24   @1 :Float64;    # 1 day aggregated photosynthetic active radiation (umol m-2 s-1)
+    par240  @2 :Float64;    # 10 days aggregated photosynthetic active radiation (umol m-2 s-1)
+  }
 
-	struct FoliageT {
-		tempK       @0 :Float64;    # foliage temperature within a canopy layer (K)
-		tempK24     @1 :Float64;    # 1 day aggregated foliage temperature within a canopy layer (K)
-		tempK240    @2 :Float64;    # 10 days aggregated foliage temperature within a canopy layer (K)
-	}
+  struct FoliageT {
+    tempK       @0 :Float64;    # foliage temperature within a canopy layer (K)
+    tempK24     @1 :Float64;    # 1 day aggregated foliage temperature within a canopy layer (K)
+    tempK240    @2 :Float64;    # 10 days aggregated foliage temperature within a canopy layer (K)
+  }
 
-	struct EnzymeActivityT {
-		efIso   @0 :Float64;    # emission factor of isoprene(ug gDW-1 h-1)
-		efMono  @1 :Float64;    # emission factor of monoterpenes (ug gDW-1 h-1)
-	}
+  struct EnzymeActivityT {
+    efIso   @0 :Float64;    # emission factor of isoprene(ug gDW-1 h-1)
+    efMono  @1 :Float64;    # emission factor of monoterpenes (ug gDW-1 h-1)
+  }
 
     struct LeafEmissionT {
-		foliageLayer    @0 :UInt16;
+    foliageLayer    @0 :UInt16;
 
-		pho             @1 :PhotosynthT;
-		fol             @2 :FoliageT;
-		enzAct          @3 :EnzymeActivityT;
-	}
+    pho             @1 :PhotosynthT;
+    fol             @2 :FoliageT;
+    enzAct          @3 :EnzymeActivityT;
+  }
 
-	struct LeafEmissions {
-		isoprene    @0 :Float64;    # isoprene emission (ug m-2ground h-1)
-		monoterp    @1 :Float64;    # monoterpene emission (ug m-2ground h-1)
-	}
+  struct LeafEmissions {
+    isoprene    @0 :Float64;    # isoprene emission (ug m-2ground h-1)
+    monoterp    @1 :Float64;    # monoterpene emission (ug m-2ground h-1)
+  }
 }
 
 struct SticsParameters {
@@ -681,12 +681,12 @@ struct SticsParameters {
     codeHourlyWfpsDenit     @9  :UInt8 = 2;
     hminn                   @10 :Float64 = 0.3;
     hoptn                   @11 :Float64 = 0.9;
-    pHminnit                @12 :Float64 = 4.0; 
+    pHminnit                @12 :Float64 = 4.0;
     pHmaxnit                @13 :Float64 = 7.2;
     nh4Min                  @14 :Float64 = 1.0;     # [mg NH4-N/kg soil]
-    pHminden                @15 :Float64 = 7.2; 
+    pHminden                @15 :Float64 = 7.2;
     pHmaxden                @16 :Float64 = 9.2;
-    wfpsc                   @17 :Float64 = 0.62; 
+    wfpsc                   @17 :Float64 = 0.62;
     tdenitoptGauss          @18 :Float64 = 47;      # [°C]
     scaleTdenitopt          @19 :Float64 = 25;      # [°C]
     kd                      @20 :Float64 = 148;     # [mg NO3-N/L]
@@ -700,12 +700,12 @@ struct SticsParameters {
     tnitmax                 @28 :Float64 = 58.0;    # [°C]
     tnitoptGauss            @29 :Float64 = 32.5;    # [°C]
     scaleTnitopt            @30 :Float64 = 16.0;    # [°C]
-    rationit                @31 :Float64 = 0.0016; 
+    rationit                @31 :Float64 = 0.0016;
     cminPdenit              @32 :Float64 = 1.0;     # [% [0-100]]
     cmaxPdenit              @33 :Float64 = 6.0;     # [% [0-100]]
     minPdenit               @34 :Float64 = 1.0;     # [mg N/Kg soil/day]
     maxPdenit               @35 :Float64 = 20.0;    # [mg N/kg soil/day]
-    ratiodenit              @36 :Float64 = 0.2; 
+    ratiodenit              @36 :Float64 = 0.2;
     profdenit               @37 :Float64 = 20;      # [cm]
     vpotdenit               @38 :Float64 = 2.0;     # [kg N/ha/day]
 }

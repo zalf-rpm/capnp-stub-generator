@@ -10,8 +10,8 @@ short_version: str
 __all__ = [
     "LIBCAPNP_VERSION",
     "LIBCAPNP_VERSION_MAJOR",
-    "LIBCAPNP_VERSION_MINOR",
     "LIBCAPNP_VERSION_MICRO",
-    "version",
+    "LIBCAPNP_VERSION_MINOR",
     "short_version",
+    "version",
 ]

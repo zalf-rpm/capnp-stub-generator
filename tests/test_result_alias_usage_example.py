@@ -20,7 +20,6 @@ just like Builder and Reader types.
 
 def example_usage():
     """Example showing the improved type annotation style."""
-
     from tests._generated.examples.calculator import calculator_capnp
 
     # Type aliases are now available at module level
@@ -36,8 +35,7 @@ def example_usage():
         print(f"Read value: {value}")
 
     def process_expression(expr: calculator_capnp.ExpressionBuilder) -> calculator_capnp.EvaluateResult:
-        """
-        Example showing Result types work alongside Builder/Reader types.
+        """Example showing Result types work alongside Builder/Reader types.
 
         All three patterns now work consistently:
         - ExpressionBuilder (struct Builder)

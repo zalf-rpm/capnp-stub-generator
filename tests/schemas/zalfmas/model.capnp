@@ -45,7 +45,6 @@ struct XYPlusResult {
   stats @1 :List(Stat); # additional results
 }
 
-
 interface ClimateInstance extends(Identifiable) {
   # an interface to run a "climate" model, which is basically using just climate data
 
@@ -56,14 +55,13 @@ interface ClimateInstance extends(Identifiable) {
   # run model on a set of time series
 }
 
-
 struct Env(RestInput) {
 
   rest @0 :RestInput;
   # rest of environment (often Common.StructuredText)
 
   timeSeries @1 :TimeSeries;
-  # climate data  
+  # climate data
 
   soilProfile @2 :SoilProfile;
   # soil profile to use for a model run
@@ -72,14 +70,12 @@ struct Env(RestInput) {
   # a list of management events
 }
 
-
 interface EnvInstance(RestInput, Output) extends(Identifiable, Persistent, Stoppable) {
   # an interface to run a model against an environment of input data
 
   run @0 (env :Env(RestInput)) -> (result :Output);
   # run a model via an input environment and return result (often as Common.StructuredText)
 }
-
 
 interface EnvInstanceProxy(RestInput, Output) extends(EnvInstance(RestInput, Output)) {
   # the EnvInstance interface with the ability to forward run messages to registered EnvInstances
@@ -92,13 +88,12 @@ interface EnvInstanceProxy(RestInput, Output) extends(EnvInstance(RestInput, Out
   # register an instance of an EnvInstance model to get jobs transparently forwarded to by the proxy
 }
 
-
 interface InstanceFactory extends(Identifiable) {
-  # interface to create unshared model instances 
+  # interface to create unshared model instances
 
   modelInfo @0 () -> IdInformation;
   # return information about the model this factory creates instances of
-  
+
   newInstance @1 () -> (instance :Identifiable);
   # return a new instance of the model
 

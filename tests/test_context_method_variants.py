@@ -74,7 +74,9 @@ def test_callcontext_void_method(basic_stubs):
 
     # Find CloseCallContext inside Reader
     close_context = re.search(
-        r"class CloseCallContext\(Protocol\):.*?(?=\n\n|\n            class |\n            def )", content, re.DOTALL
+        r"class CloseCallContext\(Protocol\):.*?(?=\n\n|\n            class |\n            def )",
+        content,
+        re.DOTALL,
     )
     assert close_context
     # Verify no results field
@@ -130,7 +132,9 @@ def test_context_methods_count(calculator_stubs):
 
     # Find all Server class methods
     server_sections = re.findall(
-        r"class Server\(Protocol\):.*?(?=\n    class [A-Z]|\nclass [A-Z]|\Z)", content, re.DOTALL
+        r"class Server\(Protocol\):.*?(?=\n    class [A-Z]|\nclass [A-Z]|\Z)",
+        content,
+        re.DOTALL,
     )
 
     for server_section in server_sections:
@@ -163,11 +167,11 @@ def test_context_method_summary():
     print("  ✓ Void methods have params but no results")
     print("  ✓ Nested interfaces have _context methods")
     print("  ✓ All interface methods have _context variants")
-    print("")
+    print()
     print("Server methods can be implemented in two ways:")
     print("  1. Regular: def method(self, param1, param2, _context, **kwargs)")
     print("  2. _context: def method_context(self, context)")
-    print("")
+    print()
     print("The _context variant provides access to context.params and context.results")
     print("for manual parameter access and result setting.")
     print("=" * 70)

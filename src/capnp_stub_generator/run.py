@@ -17,7 +17,6 @@ from pathlib import Path
 import capnp
 from capnp.lib.capnp import _ParsedSchema
 
-from capnp_stub_generator.helper import replace_capnp_suffix
 from capnp_stub_generator.writer import Writer
 
 if hasattr(capnp, "remove_import_hook"):
@@ -32,8 +31,6 @@ PY_SUFFIX = ".py"
 
 class PyrightValidationError(Exception):
     """Raised when pyright validation finds type errors in generated stubs."""
-
-    pass
 
 
 @dataclass
@@ -55,6 +52,7 @@ class InterfaceNode:
         Returns:
             Depth value where 0 = root interface (no bases),
             1+ = derived interfaces
+
         """
         if visited is None:
             visited = set()
@@ -89,6 +87,7 @@ def find_capnp_stubs_package() -> str | None:
 
     Returns:
         Path to the capnp-stubs directory, or None if not found.
+
     """
     # Get the bundled capnp-stubs from capnp-stubs directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -112,6 +111,7 @@ def _sort_interfaces_by_inheritance(interfaces: dict[str, tuple[str, list[str]]]
 
     Returns:
         Sorted list of (interface_name, client_name) tuples, most derived first
+
     """
     if not interfaces:
         return []
@@ -155,6 +155,7 @@ def augment_capnp_stubs_with_overloads(
         output_dir: The output directory where generated stubs are located (for relative import calculation).
         interfaces: Dictionary mapping interface names to (client_name, base_client_names) tuples.
         dynamic_object_types: Dictionary with "structs" and "interfaces" keys containing type tuples.
+
     """
     # Create destination path for augmented stubs
     dest_stubs_path = os.path.join(augmented_stubs_dir, "capnp-stubs")
@@ -164,6 +165,21 @@ def augment_capnp_stubs_with_overloads(
         shutil.rmtree(dest_stubs_path)
     shutil.copytree(source_stubs_path, dest_stubs_path)
     logger.info(f"Copied capnp-stubs to: {dest_stubs_path}")
+
+    # Fix schema_capnp imports to be absolute instead of relative
+    capnp_pyi_path = os.path.join(dest_stubs_path, "lib", "capnp.pyi")
+    if os.path.exists(capnp_pyi_path):
+        with open(capnp_pyi_path, encoding="utf8") as f:
+            content = f.read()
+
+        # Replace relative imports with absolute imports
+        # from ...schema_capnp.schema_capnp -> from schema_capnp.schema_capnp
+        content = content.replace("from ...schema_capnp.schema_capnp import", "from schema_capnp.schema_capnp import")
+
+        with open(capnp_pyi_path, "w", encoding="utf8") as f:
+            f.write(content)
+
+        logger.info("Fixed schema_capnp imports to be absolute")
 
     # Copy the schema_capnp directory if it exists (sibling to source_stubs_path)
     source_schema_path = os.path.join(os.path.dirname(source_stubs_path), "schema_capnp")
@@ -228,7 +244,12 @@ def augment_capnp_stubs_with_overloads(
     interface_types = dynamic_object_types.get("interfaces", [])
     if struct_types or interface_types:
         _augment_dynamic_object_reader(
-            capnp_pyi_path, output_dir, struct_types, interface_types, module_imports, interfaces
+            capnp_pyi_path,
+            output_dir,
+            struct_types,
+            interface_types,
+            module_imports,
+            interfaces,
         )
 
 
@@ -250,6 +271,7 @@ def _build_module_imports(
 
     Returns:
         Dictionary mapping module names to import paths.
+
     """
     # Find the end of ALL imports (including multi-line imports)
     import_end_idx = typing_import_idx + 1
@@ -285,7 +307,7 @@ def _build_module_imports(
     all_qualified_names: Set[str] = set()
 
     # From interfaces
-    for interface_name in interfaces.keys():
+    for interface_name in interfaces:
         all_qualified_names.add(interface_name)
 
     # From struct types
@@ -312,14 +334,18 @@ def _build_module_imports(
             continue
 
         capnp_module_name = parts[capnp_module_idx]
-        output_base_name = os.path.basename(os.path.abspath(output_dir))
 
-        # Build the from path
+        # Build the from path - use the module annotation if present (parts before _capnp)
+        # For "mas.schema.climate.climate_capnp._ClimateSensorInterfaceModule"
+        # -> from_path = "mas.schema.climate"
+        # For "basic.advanced_features_capnp._TestIfaceInterfaceModule"
+        # -> from_path = "basic"
+        # For "climate_capnp._ClimateSensorInterfaceModule" (no annotation)
+        # -> from_path = "" (direct import)
         if capnp_module_idx == 0:
-            from_path = output_base_name
+            from_path = ""  # No prefix, direct import
         else:
-            subpath = ".".join(parts[:capnp_module_idx])
-            from_path = f"{output_base_name}.{subpath}"
+            from_path = ".".join(parts[:capnp_module_idx])
 
         module_imports[capnp_module_name] = from_path
 
@@ -330,7 +356,13 @@ def _build_module_imports(
     ]
     for capnp_module_name in sorted(module_imports.keys()):
         from_path = module_imports[capnp_module_name]
-        import_lines.append(f"from {from_path} import {capnp_module_name}")
+        # Use "from X import Y" style when we have a module path
+        # e.g., "from mas.schema.climate import climate_capnp"
+        # Or direct import when no path: "import climate_capnp"
+        if from_path:
+            import_lines.append(f"from {from_path} import {capnp_module_name}")
+        else:
+            import_lines.append(f"import {capnp_module_name}")
 
     # Insert the imports after the existing imports
     lines[import_end_idx:import_end_idx] = import_lines
@@ -351,6 +383,7 @@ def _augment_capnp_pyi(
         output_dir: Output directory for calculating relative imports.
         interfaces: Dictionary mapping interface names to (client_name, base_client_names).
         module_imports: Dictionary mapping module names to import paths.
+
     """
     # Read the file again (after imports were added)
     with open(capnp_pyi_path, encoding="utf8") as f:
@@ -421,7 +454,7 @@ def _augment_capnp_pyi(
     # Add a catchall overload that matches the original function definition
     overload_lines.append("    @overload")
     overload_lines.append(
-        "    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ..."
+        "    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...",
     )
 
     # Insert overloads before the original cast_as method
@@ -452,7 +485,12 @@ def _augment_dynamic_object_reader(
         interface_types: List of (protocol_name, client_type) tuples.
         module_imports: Dictionary mapping module names to import paths.
         interfaces: Full interfaces dict for inheritance-based sorting.
+
     """
+    logger.info(
+        f"Augmenting _DynamicObjectReader with {len(struct_types)} struct types and {len(interface_types)} interface types",
+    )
+
     if not struct_types and not interface_types:
         logger.info("No _DynamicObjectReader types to augment.")
         return
@@ -515,7 +553,7 @@ def _augment_dynamic_object_reader(
 
     if as_struct_insert_idx is None or as_interface_insert_idx is None:
         logger.warning(
-            f"Could not find as_struct/as_interface methods in _DynamicObjectReader (as_struct={as_struct_insert_idx}, as_interface={as_interface_insert_idx}), skipping augmentation."
+            f"Could not find as_struct/as_interface methods in _DynamicObjectReader (as_struct={as_struct_insert_idx}, as_interface={as_interface_insert_idx}), skipping augmentation.",
         )
         return
 
@@ -592,7 +630,7 @@ def _augment_dynamic_object_reader(
     # Add catchall overload for as_struct
     struct_overloads.append("    @overload")
     struct_overloads.append(
-        "    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ..."
+        "    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...",
     )
 
     # Build overloads for as_interface (insert before the existing as_interface method)
@@ -658,7 +696,7 @@ def _augment_dynamic_object_reader(
     # Add catchall overload for as_interface
     interface_overloads.append("    @overload")
     interface_overloads.append(
-        "    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ..."
+        "    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...",
     )
 
     # Insert overloads - ensure proper ordering
@@ -693,6 +731,7 @@ def validate_with_pyright(output_directories: set[str]) -> None:
 
     Raises:
         PyrightValidationError: If pyright finds any type errors.
+
     """
     # Collect all .pyi files from output directories
     stub_files: list[str] = []
@@ -745,6 +784,7 @@ def format_outputs(raw_input: str, is_pyi: bool) -> str:
 
     Returns:
         str: The formatted outputs.
+
     """
     try:
         # Write to temporary file for ruff to process
@@ -812,6 +852,7 @@ def _generate_stubs_from_schema(
 
     Returns:
         Dictionary mapping interface names to (client_name, base_client_names) tuples.
+
     """
     writer = Writer(
         schema=schema,
@@ -833,13 +874,22 @@ def _generate_stubs_from_schema(
     logger.info("Wrote stubs to '%s(%s/%s)'.", output_file_path, PYI_SUFFIX, PY_SUFFIX)
 
     # Return interfaces found in this module (with module prefix)
-    module_name = os.path.basename(output_file_path)
-
-    # If module_path_prefix is provided, prepend it
-    if module_path_prefix:
-        full_module_name = f"{module_path_prefix}.{module_name}"
+    # If output_file_path ends with __init__, use the directory name as the module name
+    output_basename = os.path.basename(output_file_path)
+    if output_basename == "__init__":
+        # For __init__.pyi files, the module name is the directory containing it
+        # And module_path_prefix already includes this directory name if it was nested
+        # So we use module_path_prefix directly as full_module_name
+        full_module_name = (
+            module_path_prefix if module_path_prefix else os.path.basename(os.path.dirname(output_file_path))
+        )
     else:
-        full_module_name = module_name
+        # For non-__init__ files, build the full name normally
+        module_name = output_basename
+        if module_path_prefix:
+            full_module_name = f"{module_path_prefix}.{module_name}"
+        else:
+            full_module_name = module_name
 
     interfaces_with_module = {}
     for interface_name, (client_name, base_client_names) in writer._all_interfaces.items():
@@ -854,6 +904,10 @@ def _generate_stubs_from_schema(
 
     # Get _DynamicObjectReader types for augmentation tracking
     struct_types, interface_types = writer.get_dynamic_object_reader_types()
+
+    logger.debug(
+        f"Writer returned {len(struct_types)} struct types and {len(interface_types)} interface types for {full_module_name}",
+    )
 
     # Qualify the types with module prefix
     qualified_struct_types = [
@@ -879,6 +933,7 @@ def extract_base_from_pattern(pattern: str) -> str:
 
     Returns:
         The base directory path, or empty string if pattern starts with wildcard.
+
     """
     # Handle absolute vs relative paths
     is_absolute = os.path.isabs(pattern)
@@ -893,7 +948,7 @@ def extract_base_from_pattern(pattern: str) -> str:
             # For **, use the directory before it
             found_wildcard = True
             break
-        elif "*" in part or "?" in part or "[" in part:
+        if "*" in part or "?" in part or "[" in part:
             # For other wildcards, use the directory containing them
             found_wildcard = True
             break
@@ -925,6 +980,7 @@ def run(args: argparse.Namespace, root_directory: str):
     Args:
         args (argparse.Namespace): The arguments that were passed when calling the stub generator.
         root_directory (str): The directory, from which the generator is executed.
+
     """
     paths: list[str] = args.paths
     excludes: list[str] = args.excludes
@@ -982,7 +1038,7 @@ def run(args: argparse.Namespace, root_directory: str):
 
     # Use capnp compile with our plugin to generate stubs
     # This ensures all schemas including groups in unions are properly embedded
-    logger.info(f"Compiling {len(valid_paths)} schema(s) using capnp compile plugin")
+    logger.info(f"Compiling {len(valid_paths)} schema(s) using capnpc plugin")
 
     # Create output directory if specified
     if output_dir:
@@ -993,7 +1049,7 @@ def run(args: argparse.Namespace, root_directory: str):
         plugin_path = os.path.join(os.path.dirname(__file__), "capnpc_plugin.py")
         wrapper.write(f"""#!/usr/bin/env {sys.executable}
 import sys
-sys.path.insert(0, {repr(os.path.dirname(os.path.dirname(__file__)))})
+sys.path.insert(0, {os.path.dirname(os.path.dirname(__file__))!r})
 from capnp_stub_generator.capnpc_plugin import main
 main()
 """)
@@ -1039,6 +1095,7 @@ main()
         # Run capnp compile
         result = subprocess.run(
             cmd,
+            check=False,
             capture_output=True,
             text=True,
         )
@@ -1090,6 +1147,7 @@ def run_from_schemas(
         preserve_path_structure: Whether to preserve the full path structure of input files.
         file_schemas_only: Optional set of schema IDs to generate stubs for (file-level only).
             If None, generates stubs for all schemas in file_id_to_path.
+
     """
     # Track output directories for py.typed marker
     output_directories_used = set()
@@ -1138,15 +1196,30 @@ def run_from_schemas(
 
         if output_dir and python_module_path:
             # Use module annotation to determine output structure
-            # Convert "mas.schema.climate" -> "mas/schema"
+            # Convert "mas.schema.climate" -> "mas/schema/climate/climate_capnp/__init__.pyi"
+            # The module annotation should include the full module path, we add _capnp suffix
             module_parts = python_module_path.split(".")
-            module_dir = os.path.join(*module_parts[:-1]) if len(module_parts) > 1 else ""
 
-            output_directory = os.path.join(output_dir, module_dir) if module_dir else output_dir
+            # Get base name from path (e.g., "climate" from "climate.capnp")
+            base_name = os.path.splitext(os.path.basename(path))[0]
+            # Replace hyphens with underscores to make valid Python identifiers
+            base_name = base_name.replace("-", "_")
+            module_name = f"{base_name}_capnp"
+
+            # Build directory structure: mas/schema/climate/climate_capnp/
+            module_dir = os.path.join(*module_parts, module_name)
+            output_directory = os.path.join(output_dir, module_dir)
             os.makedirs(output_directory, exist_ok=True)
 
             logger.info(f"Using Python module annotation: {python_module_path} -> {output_directory}")
         elif output_dir:
+            # No Python module annotation - use flat structure but with module folder
+            # For pycapnp 2.0+, all schemas need module folders: schema_name_capnp/__init__.py
+            base_name = os.path.splitext(os.path.basename(path))[0]
+            # Replace hyphens with underscores
+            base_name = base_name.replace("-", "_")
+            module_name = f"{base_name}_capnp"
+
             if preserve_path_structure:
                 # Use the path as provided, treating it as relative to output_dir
                 # If absolute, strip root to avoid writing outside output_dir
@@ -1158,17 +1231,19 @@ def run_from_schemas(
                         rel_path = rel_path.split(":", 1)[1].lstrip(os.sep)
 
                 rel_dir = os.path.dirname(rel_path)
-                output_directory = os.path.join(output_dir, rel_dir)
+                # Add module folder
+                output_directory = os.path.join(output_dir, rel_dir, module_name)
             elif common_base:
                 abs_path = os.path.abspath(path)
                 # Calculate relative path from common base
                 rel_path = os.path.relpath(abs_path, common_base)
                 rel_dir = os.path.dirname(rel_path)
 
-                # Create output directory preserving structure
-                output_directory = os.path.join(output_dir, rel_dir)
+                # Create output directory preserving structure with module folder
+                output_directory = os.path.join(output_dir, rel_dir, module_name)
             else:
-                output_directory = output_dir
+                # Flat structure with module folder
+                output_directory = os.path.join(output_dir, module_name)
 
             os.makedirs(output_directory, exist_ok=True)
         else:
@@ -1177,7 +1252,9 @@ def run_from_schemas(
 
         output_directories_used.add(output_directory)
 
-        output_file_name = replace_capnp_suffix(os.path.basename(path))
+        # For pycapnp 2.0+, all schemas use module folders with __init__.py/__init__.pyi
+        # Whether or not they have Python annotations
+        output_file_name = "__init__"  # No suffix - will be added by _generate_stubs_from_schema
 
         # Calculate module path prefix for subdirectory structure
         # This is used for fully qualified module names in cast_as overloads
@@ -1215,35 +1292,63 @@ def run_from_schemas(
 
         # Collect _DynamicObjectReader types for this output directory
         struct_types, interface_types = dynamic_object_types
+        logger.debug(
+            f"Schema {os.path.basename(path)} returned {len(struct_types)} struct types, {len(interface_types)} interface types",
+        )
         if struct_types or interface_types:
             if output_directory not in all_dynamic_object_types_by_dir:
                 all_dynamic_object_types_by_dir[output_directory] = {"structs": [], "interfaces": []}
             all_dynamic_object_types_by_dir[output_directory]["structs"].extend(struct_types)
             all_dynamic_object_types_by_dir[output_directory]["interfaces"].extend(interface_types)
 
-    # Create py.typed marker and __init__.py in each output directory to make them packages
-    # Also create __init__.py files for all parent directories
+    # Create py.typed marker and __init__.py/__init__.pyi in each output directory to make them packages
+    # Also create __init__.py/__init__.pyi files for all parent directories
     for output_directory in output_directories_used:
-        # Create __init__.py to make it a package (needed for relative imports)
-        init_path = os.path.join(output_directory, "__init__.py")
-        if not os.path.exists(init_path):
-            with open(init_path, "w", encoding="utf8") as f:
+        # Create __init__.py and __init__.pyi to make it a package (needed for imports)
+        init_py_path = os.path.join(output_directory, "__init__.py")
+        init_pyi_path = os.path.join(output_directory, "__init__.pyi")
+
+        if not os.path.exists(init_py_path):
+            with open(init_py_path, "w", encoding="utf8") as f:
                 f.write("# Auto-generated package initialization\n")
 
-        # Create __init__.py files for all parent directories up to output_dir
+        if not os.path.exists(init_pyi_path):
+            with open(init_pyi_path, "w", encoding="utf8") as f:
+                f.write("# Auto-generated package initialization\n")
+
+        # Create __init__.py and __init__.pyi files for all parent directories up to output_dir
         if output_dir:
             current_dir = os.path.dirname(output_directory)
             output_dir_abs = os.path.abspath(output_dir)
-            while current_dir and os.path.abspath(current_dir) != output_dir_abs:
-                parent_init = os.path.join(current_dir, "__init__.py")
-                if not os.path.exists(parent_init):
-                    with open(parent_init, "w", encoding="utf8") as f:
+
+            # Walk up the directory tree
+            while current_dir:
+                current_dir_abs = os.path.abspath(current_dir)
+
+                # Stop if we've reached or passed the output_dir
+                if current_dir_abs == output_dir_abs:
+                    break
+                if not current_dir_abs.startswith(output_dir_abs):
+                    break
+
+                parent_init_py = os.path.join(current_dir, "__init__.py")
+                parent_init_pyi = os.path.join(current_dir, "__init__.pyi")
+
+                if not os.path.exists(parent_init_py):
+                    with open(parent_init_py, "w", encoding="utf8") as f:
                         f.write("# Auto-generated package initialization\n")
                     logger.debug(f"Created __init__.py at {current_dir}")
-                current_dir = os.path.dirname(current_dir)
-                # Safety check to avoid infinite loop
-                if len(current_dir) >= len(output_dir_abs):
+
+                if not os.path.exists(parent_init_pyi):
+                    with open(parent_init_pyi, "w", encoding="utf8") as f:
+                        f.write("# Auto-generated package initialization\n")
+                    logger.debug(f"Created __init__.pyi at {current_dir}")
+
+                # Move up one level
+                parent_dir = os.path.dirname(current_dir)
+                if parent_dir == current_dir:  # Reached root
                     break
+                current_dir = parent_dir
 
     # Copy bundled schema module once at the top level (common parent or output_dir)
     # This avoids duplicating the schema module in each subdirectory
@@ -1304,8 +1409,17 @@ def run_from_schemas(
 
         # Use the absolute path to output_dir for import path calculation
         actual_output_dir = os.path.abspath(output_dir) if output_dir else list(output_directories_used)[0]
+
+        logger.info(
+            f"Augmenting capnp-stubs with {len(all_interfaces)} interfaces, {len(all_dynamic_object_types.get('structs', []))} structs, {len(all_dynamic_object_types.get('interfaces', []))} interface types",
+        )
+
         augment_capnp_stubs_with_overloads(
-            source_stubs_path, augmented_stubs_dir, actual_output_dir, all_interfaces, all_dynamic_object_types
+            source_stubs_path,
+            augmented_stubs_dir,
+            actual_output_dir,
+            all_interfaces,
+            all_dynamic_object_types,
         )
     elif augment_capnp_stubs:
         logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found")
@@ -1327,6 +1441,7 @@ def _all_files_in_directory(valid_paths: set[str], directory: str) -> bool:
 
     Returns:
         True if all files (sampled) are in the directory, False otherwise
+
     """
     # Sample check (avoid checking thousands of files)
     for path in list(valid_paths)[:10]:
@@ -1351,6 +1466,7 @@ def _should_preserve_parent_directory(
 
     Returns:
         True if parent directory should be preserved
+
     """
     if not relative_bases:
         return False
@@ -1374,6 +1490,7 @@ def _fallback_common_base(valid_paths: set[str]) -> str | None:
 
     Returns:
         Common base directory or None
+
     """
     if not valid_paths:
         return None
@@ -1402,6 +1519,7 @@ def _handle_single_pattern_base(
 
     Returns:
         The base directory to use
+
     """
     # Check if we should preserve subdirectory structure
     if not relative_bases or not paths:
@@ -1440,6 +1558,7 @@ def _handle_multiple_pattern_bases(
 
     Returns:
         The common base directory to use
+
     """
     common_base = os.path.commonpath(absolute_bases)
 
@@ -1471,6 +1590,7 @@ def _calculate_common_base(
 
     Returns:
         Common base directory path, or None if not applicable
+
     """
     if not absolute_bases:
         return _fallback_common_base(valid_paths)
@@ -1504,6 +1624,7 @@ def _extract_pattern_bases(
         Tuple of (absolute_bases, relative_bases)
         - absolute_bases: Absolute path to each pattern's base directory
         - relative_bases: Relative path (for depth calculation)
+
     """
     absolute_bases = []
     relative_bases = []
@@ -1572,6 +1693,7 @@ def _determine_output_directory_structure(
 
         # Recursive glob: tests/schemas/**/*.capnp
         # Output: tests/schemas/ (preserve full structure)
+
     """
     if not output_dir or not paths:
         return None

@@ -11,14 +11,15 @@ from tests._generated.examples.calculator import calculator_capnp
 class PowerFunction(calculator_capnp.Calculator.Function.Server):
     """An implementation of the Function interface wrapping pow().  Note that
     we're implementing this on the client side and will pass a reference to
-    the server.  The server will then be able to make calls back to the client."""
+    the server.  The server will then be able to make calls back to the client.
+    """
 
     async def call(self, params, _context, **kwargs):
         """Note the **kwargs. This is very necessary to include, since
         protocols can add parameters over time. The _context parameter
         is always passed by pycapnp and contains a results attribute
-        for setting return values."""
-
+        for setting return values.
+        """
         return pow(params[0], params[1])
 
 

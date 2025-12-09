@@ -18,7 +18,7 @@ def test_interleaved_groups_union_and_nested_group_fields(dummy_stub_lines):
     lines = dummy_stub_lines
     assert any("class _TestInterleavedGroupsStructModule(_StructModule):" in line for line in lines)
     # Expect nested group names or fields plugh/xyzzy/fred across two groups (now as properties)
-    found = {name: False for name in ["plugh", "xyzzy", "fred", "waldo"]}
+    found = dict.fromkeys(["plugh", "xyzzy", "fred", "waldo"], False)
     for line in lines:
         for k in found:
             if f"def {k}(self)" in line:

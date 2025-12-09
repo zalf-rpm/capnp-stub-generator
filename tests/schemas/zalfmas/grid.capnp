@@ -22,7 +22,7 @@ enum Aggregation {
 
   none      @0;   # no aggregation/default
   avg       @8;   # average of cell values
-  wAvg      @1;   # area weighted average 
+  wAvg      @1;   # area weighted average
   iAvg      @6;   # interpolated average
   median    @9;   # median of cell values
   wMedian   @2;   # area weighted median
@@ -37,7 +37,6 @@ enum Aggregation {
   wSum      @10;  # area weighted sum
   iSum      @11;  # interpolated sum
 }
-
 
 interface Grid extends(Common.Identifiable, Persistent) {
   # interface to a grid of data
@@ -75,24 +74,24 @@ interface Grid extends(Common.Identifiable, Persistent) {
     value       @2 :Value;
   }
 
-  closestValueAt @0 (latlonCoord :Geo.LatLonCoord, 
-                     ignoreNoData :Bool = true, 
-                     resolution :Resolution, 
-                     agg :Aggregation = none, 
-                     returnRowCols :Bool = false, 
-                     includeAggParts :Bool = false) 
+  closestValueAt @0 (latlonCoord :Geo.LatLonCoord,
+                     ignoreNoData :Bool = true,
+                     resolution :Resolution,
+                     agg :Aggregation = none,
+                     returnRowCols :Bool = false,
+                     includeAggParts :Bool = false)
                      -> (val :Value, tl :RowCol, br :RowCol, aggParts :List(AggregationPart));
   # Get data at given lat/lon geo coordinate. If a resolution is given which is larger (larger number)
   # than the grids base resolution and aggregation as how to aggregate multiple values has to be given.
   # If no data values should not be ignored, then the closest no data cell will be returned.
   # If rows and cols should be returned then tl is the top left corner and br the bottom right corner the used data rectangle.
-  # If includeAggParts is true, then a list of intermediate aggregation data values is returned, as well as if 
+  # If includeAggParts is true, then a list of intermediate aggregation data values is returned, as well as if
   # agg is set to none and no aggregation can happen.
 
-  valueAt @4 (row :UInt64, col :UInt64, 
-              resolution :Resolution, 
+  valueAt @4 (row :UInt64, col :UInt64,
+              resolution :Resolution,
               agg :Aggregation = none,
-              includeAggParts :Bool = false) 
+              includeAggParts :Bool = false)
               -> (val :Value, aggParts :List(AggregationPart));
   # Get data at a particular cell identified by row and column, potentially aggregated if resolution is lower.
   # If resolution is lower, but agg is none, then val will be null or 0 default and aggParts will be returned.
@@ -117,8 +116,7 @@ interface Grid extends(Common.Identifiable, Persistent) {
 
   streamCells @6 (topLeft :RowCol, bottomRight:RowCol) -> (callback :Callback);
   # stream all cells to client in a given rectangle, top left and bottom right corner
-  # to get the whole grid, leave both corners null 
-  
+  # to get the whole grid, leave both corners null
+
   unit @7 () -> (unit :Text);
 }
-

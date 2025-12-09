@@ -30,7 +30,6 @@ struct Cluster {
     # get instance factories to all the available models on registered runtimes
   }
 
-
   interface UserMaster extends(Identifiable) {
     # entry point for users (bootstrap capability)
     # probably basically a facade around AdminMaster
@@ -39,13 +38,12 @@ struct Cluster {
     # get instance factories to all the available models to the user
   }
 
-
   interface Runtime extends(Identifiable) {
     # interface representing a runtime for models
     # could be the whole cluster (when used with SLURM), a single cluster node or a different system
     # the runtime controls the resources of a single system, but doesn't know about any particular model or it's requirements
     # -> so the Runtime holds just general information about the system, memory use, number of cores used etc.
-    
+
     registerModelInstanceFactory @0 (aModelId :Text, aFactory :ModelInstanceFactory) -> (unregister :Unregister);
     # register a model instance factory for the given model id
 
@@ -68,15 +66,14 @@ struct Cluster {
   }
 
   interface ValueHolder(T) {
-    # an interface to a remote value 
+    # an interface to a remote value
 
     value @0 () -> (val :T);
     # get the referenced value
 
-    release @1 () $Go.name("releaseValue"); 
+    release @1 () $Go.name("releaseValue");
     # release value on server side (signaling that value isn't needed anymore)
   }
-
 
   interface ModelInstanceFactory extends(Identifiable) {
     # interface to create model instances on a particular runtime
@@ -88,7 +85,7 @@ struct Cluster {
 
     modelId @4 () -> (id :Text);
     # return the id of the model this factory creates instances of
-    
+
     newInstance @0 () -> (instance :ValueHolder);
     # return a new instance of the model
 
@@ -106,7 +103,3 @@ struct Cluster {
     # return the capability holder for the given sturdyRef if available
   }
 }
-
-
-
-

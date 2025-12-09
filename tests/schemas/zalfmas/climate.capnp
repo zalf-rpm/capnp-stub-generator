@@ -19,6 +19,7 @@ using Date = import "date.capnp".Date;
 
 enum GCM {
   # global circulation models
+
   cccmaCanEsm2    @0;   # CCCma-CanESM2
   ichecEcEarth    @1;   # ICHEC-EC-EARTH
   ipslIpslCm5AMr  @2;   # IPSL-IPSL-CM5A-MR
@@ -35,7 +36,7 @@ enum GCM {
 
 enum RCM {
   # regional circulation models
-  
+
   clmcomCclm4817    @0; # CLMcom-CCLM4-8-17
   gericsRemo2015    @1; # GERICS-REMO2015
   knmiRacmo22E      @2; # KNMI-RACMO22E
@@ -51,11 +52,11 @@ enum SSP {
   ssp1 @0;  # SSP1 # SSP1: Sustainability (Taking the Green Road)
   ssp2 @1;  # SSP2 # SSP2: Middle of the Road
   ssp3 @2;  # SSP3 # SSP3: Regional Rivalry (A Rocky Road)
-  ssp4 @3;  # SSP4 # SSP4: Inequality (A Road divided)  
+  ssp4 @3;  # SSP4 # SSP4: Inequality (A Road divided)
   ssp5 @4;  # SSP5 # SSP5: Fossil-fueled Development (Taking the Highway)
 }
 
-enum RCP { 
+enum RCP {
   # Representative Concentration Pathway
 
   rcp19 @0; # RCP 1.9 # RCP 1.9 is a pathway that limits global warming to below 1.5 °C, the aspirational goal of the Paris Agreement.
@@ -72,7 +73,7 @@ struct EnsembleMember {
 
   r @0 :UInt16; # realization number
   i @1 :UInt16; # initialization method indicator
-  p @2 :UInt16; # perturbed physics number 
+  p @2 :UInt16; # perturbed physics number
   f @3 :UInt16; # forcing number
 }
 
@@ -81,12 +82,12 @@ struct Metadata {
 
   interface Supported {
     # this interface allows access to all supported Metadata elements by the implementing service
-  
+
     #struct Category
 
     categories @0 () -> (types :List(Common.IdInformation));
     # types can be things like GCMs, RCMs, SSPs, RCPs etc
-    
+
     supportedValues @ 1 (typeId :Text) -> (values :List(Common.IdInformation));
     # the values a supported type can take on
   }
@@ -101,10 +102,9 @@ struct Metadata {
     }
   }
 
-
   #struct Entry {
   #  typeId @0 :Text;
-  #  
+  #
   #  value :union {
   #    text @1 :Text;
   #    float @2 :Float64;
@@ -139,11 +139,10 @@ struct Metadata {
   interface Information {
     forOne @0 (entry :Entry) -> Common.IdInformation;
     forAll @1 () -> (all :List(Common.Pair(Entry, Common.IdInformation)));
-  }  
+  }
   info @1 :Information;
   # get id information about metadata, if available
 }
-
 
 interface Dataset extends(Common.Identifiable, Persistent) {
   # represent a set of TimeSeries
@@ -151,12 +150,12 @@ interface Dataset extends(Common.Identifiable, Persistent) {
   metadata            @0 () -> Metadata;
   # get metadata for these data
 
-  closestTimeSeriesAt @1 (latlon :Geo.LatLonCoord) -> (timeSeries :TimeSeries);  
-  # closest TimeSeries object which represents the whole time series 
+  closestTimeSeriesAt @1 (latlon :Geo.LatLonCoord) -> (timeSeries :TimeSeries);
+  # closest TimeSeries object which represents the whole time series
   # of the climate realization at the give climate coordinate
 
   timeSeriesAt        @2 (locationId :Text) -> (timeSeries :TimeSeries);
-  # return time series at location 
+  # return time series at location
 
   locations           @3 () -> (locations :List(Location));
   # all the climate locations this dataset has
@@ -171,12 +170,10 @@ interface Dataset extends(Common.Identifiable, Persistent) {
   # assumes stream returns locations always in same order
 }
 
-
 struct MetaPlusData {
   meta @0 :Metadata;
   data @1 :Dataset;
 }
-
 
 enum Element {
   tmin                                @0; # [°C] minimum temperature
@@ -199,7 +196,6 @@ enum Element {
   surfaceDownwellingLongwaveRadiation @17; # [MJ m-2] surface downwelling longwave radiation
   potET                               @18; # [mm] potential evapotranspiration
 }
-
 
 struct Location {
   # represents a particular (even virtual) climate location
@@ -224,12 +220,11 @@ struct Location {
   # custom data for this location, e.g. row/column in a grid etc.
 }
 
-
 interface TimeSeries extends(Common.Identifiable, Persistent) {
   # a series of climate elements from start to end date
 
   enum Resolution {
-    # which time resolution data may have 
+    # which time resolution data may have
     daily @0;
     hourly @1;
   }
@@ -265,7 +260,6 @@ interface TimeSeries extends(Common.Identifiable, Persistent) {
   # location of this time series
 }
 
-
 struct TimeSeriesData {
   # a complete set of time series data as plain data, useful for instance in FBP flows
 
@@ -286,9 +280,8 @@ struct TimeSeriesData {
   # resolution of the data
 }
 
-
 interface Service extends(Common.Identifiable, Persistent) {
-  # climate data service 
+  # climate data service
 
   getAvailableDatasets @0 () -> (datasets :List(MetaPlusData));
   # get a list of all available datasets
@@ -299,7 +292,6 @@ interface Service extends(Common.Identifiable, Persistent) {
   #supportedMetadata @2 () -> (cap :Metadata.Supported);
   # return a capability to an interface describing the service's supported metadata
 }
-
 
 interface CSVTimeSeriesFactory extends(Common.Identifiable) {
   # create TimeSeries capabilities from data
@@ -321,7 +313,6 @@ interface CSVTimeSeriesFactory extends(Common.Identifiable) {
   create @0 (csvData :Text, config :CSVConfig) -> (timeseries :TimeSeries, error :Text);
   # create a time series from the given structured text
 }
-
 
 interface AlterTimeSeriesWrapper extends(TimeSeries) {
   # wraps a time series, but allows to alter the data represented by the time series
@@ -349,10 +340,9 @@ interface AlterTimeSeriesWrapper extends(TimeSeries) {
   remove @3 (alteredElement :Element);
   # remove the altered element
 
-  replaceWrappedTimeSeries @4 (timeSeries :TimeSeries); 
-  # replace the wrapped time series 
+  replaceWrappedTimeSeries @4 (timeSeries :TimeSeries);
+  # replace the wrapped time series
 }
-
 
 interface AlterTimeSeriesWrapperFactory extends(Common.Identifiable) {
   # create AlterTimeSeriesWrapper capabilities from existing TimeSeries capabilities

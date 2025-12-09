@@ -19,19 +19,19 @@ async def evaluate_impl(
     """Implementation of CalculatorImpl::evaluate(), also shared by
     FunctionImpl::call().  In the latter case, `params` are the parameter
     values passed to the function; in the former case, `params` is just an
-    empty list."""
-
+    empty list.
+    """
     which = expression.which()
 
     if which == "literal":
         return expression.literal
-    elif which == "previousResult":
+    if which == "previousResult":
         return (await expression.previousResult.read()).value
-    elif which == "parameter":
+    if which == "parameter":
         assert params is not None
         assert expression.parameter < len(params)
         return params[expression.parameter]
-    elif which == "call":
+    if which == "call":
         call = expression.call
         func = call.function
 
@@ -42,12 +42,11 @@ async def evaluate_impl(
         # When the parameters are complete, call the function.
         result = await func.call(vals)
         return result.value
-    else:
-        raise ValueError("Unknown expression type: " + which)
+    raise ValueError("Unknown expression type: " + which)
 
 
 class ValueImpl(calculator_capnp.Calculator.Value.Server):
-    "Simple implementation of the Calculator.Value Cap'n Proto interface."
+    """Simple implementation of the Calculator.Value Cap'n Proto interface."""
 
     def __init__(self, value):
         self.value = value
@@ -58,7 +57,8 @@ class ValueImpl(calculator_capnp.Calculator.Value.Server):
 
 class FunctionImpl(calculator_capnp.Calculator.Function.Server):
     """Implementation of the Calculator.Function Cap'n Proto interface, where the
-    function is defined by a Calculator.Expression."""
+    function is defined by a Calculator.Expression.
+    """
 
     def __init__(self, paramCount: int, body: calculator_capnp.ExpressionReader):
         self.paramCount: int = paramCount
@@ -68,15 +68,16 @@ class FunctionImpl(calculator_capnp.Calculator.Function.Server):
         """Note that we're returning a Promise object here, and bypassing the
         helper functionality that normally sets the results struct from the
         returned object. Instead, we set _context.results directly inside of
-        another promise"""
-
+        another promise
+        """
         assert len(params) == self.paramCount
         return await evaluate_impl(self.body, params)
 
 
 class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     """Implementation of the Calculator.Function Cap'n Proto interface, wrapping
-    basic binary arithmetic operators."""
+    basic binary arithmetic operators.
+    """
 
     def __init__(self, op: calculator_capnp.CalculatorOperatorEnum):
         self.op: calculator_capnp.CalculatorOperatorEnum = op
@@ -88,18 +89,17 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
 
         if op == "add":
             return params[0] + params[1]
-        elif op == "subtract":
+        if op == "subtract":
             return params[0] - params[1]
-        elif op == "multiply":
+        if op == "multiply":
             return params[0] * params[1]
-        elif op == "divide":
+        if op == "divide":
             return params[0] / params[1]
-        else:
-            raise ValueError("Unknown operator")
+        raise ValueError("Unknown operator")
 
 
 class CalculatorImpl(calculator_capnp.Calculator.Server):
-    "Implementation of the Calculator Cap'n Proto interface."
+    """Implementation of the Calculator Cap'n Proto interface."""
 
     async def evaluate(self, expression, _context, **kwargs):
         return ValueImpl(await evaluate_impl(expression))

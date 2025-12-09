@@ -80,14 +80,13 @@ struct Layer {
   description   @2 :Text; # some human understandable description of the layer
 }
 
-
 struct Query {
   # a query tells which soil parameters are mandatory and which are optional
   # a query fails if the mandatory parameters can't be delivered
 
   struct Result {
     # tell if the query failed and return the available parameters
-    
+
     failed      @0 :Bool; # some mandatory params where not available
     mandatory   @1 :List(PropertyName); # the mandatory parameters which where available
     optional    @2 :List(PropertyName); # the optional parameters which where available
@@ -95,10 +94,10 @@ struct Query {
 
   mandatory     @0 :List(PropertyName); # these parameters are really needed
   optional      @1 :List(PropertyName); # these parameters are optional
-  
+
   onlyRawData   @2 :Bool = true;
   # just return data which are physically available from the data source
-  # if set to false, data can be generated from the raw data to allow more 
+  # if set to false, data can be generated from the raw data to allow more
   # params to be available mandatory
 }
 
@@ -140,4 +139,3 @@ interface Service extends(Identifiable, Persistent) {
   streamAllProfiles @3 Query -> (allProfiles :Stream);
   # stream all profiles to client in batches
 }
-

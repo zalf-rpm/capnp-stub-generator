@@ -60,7 +60,10 @@ class TestStructGenerationContext:
         mock_new_type.scoped_name = "Person"
 
         context = StructGenerationContext.create(
-            schema=mock_schema, type_name="Person", new_type=mock_new_type, registered_params=[]
+            schema=mock_schema,
+            type_name="Person",
+            new_type=mock_new_type,
+            registered_params=[],
         )
 
         assert context.registered_params == []
@@ -74,7 +77,10 @@ class TestStructGenerationContext:
         mock_new_type.scoped_name = "Outer.Middle.Inner"
 
         context = StructGenerationContext.create(
-            schema=mock_schema, type_name="Inner", new_type=mock_new_type, registered_params=[]
+            schema=mock_schema,
+            type_name="Inner",
+            new_type=mock_new_type,
+            registered_params=[],
         )
 
         # With Protocol structure: Outer.Middle.Inner -> Outer.Middle._InnerStructModule
@@ -428,7 +434,7 @@ class TestMethodSignatureCollection:
             [
                 "class CalculateRequest(Protocol):",
                 "    def send(self) -> Awaitable[int]: ...",
-            ]
+            ],
         )
         # collection.set_result_class([])  # Removed
         collection.set_request_helper(["def calculate_request(...) -> CalculateRequest: ..."])

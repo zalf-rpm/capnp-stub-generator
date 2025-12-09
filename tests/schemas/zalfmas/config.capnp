@@ -11,8 +11,8 @@ $Go.package("config");
 $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/config");
 
 interface Service(C) {
-    # service to supply 
+    # service to supply
 
     nextConfig @0 () -> (config :C, noFurtherConfigs :Bool = false);
-    # get next configuration 
+    # get next configuration
 }

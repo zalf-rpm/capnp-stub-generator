@@ -107,7 +107,7 @@ class TestDummyGroupsAndNested:
         lines = dummy_stub_lines
         assert any("class _TestInterleavedGroupsStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties
-        found = {name: False for name in ["plugh", "xyzzy", "fred", "waldo"]}
+        found = dict.fromkeys(["plugh", "xyzzy", "fred", "waldo"], False)
         for line in lines:
             for k in found:
                 if f"def {k}(self)" in line:

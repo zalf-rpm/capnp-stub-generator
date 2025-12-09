@@ -31,6 +31,7 @@ class Scope:
         parent (Scope | None): The direct parent scope of this scope, if there is any.
         return scope (Scope | None): The scope to which to return, when closing this one.
         lines (list[str]): The list of text lines in this scope.
+
     """
 
     name: str
@@ -75,8 +76,7 @@ class Scope:
         if not self.parents:
             return self
 
-        else:
-            return self.parents[0]
+        return self.parents[0]
 
     @property
     def is_root(self) -> bool:
@@ -93,6 +93,7 @@ class Scope:
 
         Args:
             content (str | HintedVariable): The line or variable to add. Optional, defaults to "".
+
         """
         if isinstance(content, TypeHintedVariable):
             content = str(content)
@@ -111,6 +112,7 @@ class Scope:
 
         Args:
             delimiter (Literal[".", "_"]): The delimiter to join the scope names with.
+
         """
         return delimiter.join(scope.name for scope in self.trace if (not scope.is_root) and (scope.name))
 
@@ -136,6 +138,7 @@ class CapnpType:
         schema (Any):
         name (str):
         scope (Scope):
+
     """
 
     schema: capnp_types.SchemaType | None
@@ -148,9 +151,9 @@ class CapnpType:
 
         Returns:
             str: The scoped type name.
+
         """
         if not self.scope.is_root:
             return f"{self.scope}.{self.name}"
 
-        else:
-            return self.name
+        return self.name

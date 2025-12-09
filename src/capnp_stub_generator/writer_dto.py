@@ -30,6 +30,7 @@ class StructGenerationContext:
         builder_type_name: Name of the Builder class (e.g., "PersonBuilder")
         scoped_reader_type_name: Fully qualified Reader name (e.g., "Outer.PersonReader")
         scoped_builder_type_name: Fully qualified Builder name (e.g., "Outer.PersonBuilder")
+
     """
 
     schema: _StructSchema
@@ -62,6 +63,7 @@ class StructGenerationContext:
 
         Returns:
             A fully initialized StructGenerationContext
+
         """
         from capnp_stub_generator import helper
 
@@ -106,6 +108,7 @@ class StructGenerationContext:
 
         Returns:
             A fully initialized StructGenerationContext
+
         """
         from capnp_stub_generator import helper
 
@@ -144,6 +147,7 @@ class StructFieldsCollection:
             that need init() method overloads
         list_init_choices: List of (field_name, element_type, needs_builder) tuples
             for list fields that need init() method overloads
+
     """
 
     def __init__(self) -> None:
@@ -157,6 +161,7 @@ class StructFieldsCollection:
 
         Args:
             field: The type-hinted variable representing the field
+
         """
         self.slot_fields.append(field)
 
@@ -169,6 +174,7 @@ class StructFieldsCollection:
         Args:
             field_name: The name of the field
             type_name: The type name to return (e.g., "PersonBuilder")
+
         """
         self.init_choices.append((field_name, type_name))
 
@@ -197,6 +203,7 @@ class EnumGenerationContext:
         type_name: The user-facing type name (e.g., "TestEnum")
         protocol_class_name: The Protocol class name (e.g., "_TestEnumModule")
         new_type: The registered CapnpType object
+
     """
 
     schema: _EnumSchema
@@ -220,6 +227,7 @@ class EnumGenerationContext:
 
         Returns:
             A fully initialized EnumGenerationContext
+
         """
         protocol_class_name = f"_{type_name}EnumModule"
 
@@ -246,6 +254,7 @@ class InterfaceGenerationContext:
         registered_type: The registered CapnpType object
         base_classes: List of base Protocol class names for inheritance
         parent_scope: The parent scope for this interface
+
     """
 
     schema: _InterfaceSchema
@@ -276,6 +285,7 @@ class InterfaceGenerationContext:
 
         Returns:
             A fully initialized InterfaceGenerationContext
+
         """
         protocol_class_name = f"_{type_name}InterfaceModule"
         client_type_name = f"{type_name}Client"
@@ -305,6 +315,7 @@ class MethodInfo:
         result_schema: Result struct schema (or None if unavailable)
         param_fields: List of parameter field names
         result_fields: List of result field names
+
     """
 
     method_name: str
@@ -327,6 +338,7 @@ class MethodInfo:
 
         Returns:
             A MethodInfo with all available information
+
         """
         param_schema = None
         result_schema = None
@@ -366,6 +378,7 @@ class ParameterInfo:
         client_type: Type for client method signature (may include dict unions)
         server_type: Type for server method signature (uses Reader types)
         request_type: Type for request builder (usually same as client_type)
+
     """
 
     name: str
@@ -378,24 +391,36 @@ class ParameterInfo:
 
         Returns:
             Parameter string like "name: Type | None = None"
+
         """
-        return f"{self.name}: {self.client_type} | None = None"
+        from capnp_stub_generator import helper
+
+        sanitized_name = helper.sanitize_name(self.name)
+        return f"{sanitized_name}: {self.client_type} | None = None"
 
     def to_server_param(self) -> str:
         """Format as server method parameter (required).
 
         Returns:
             Parameter string like "name: Type"
+
         """
-        return f"{self.name}: {self.server_type}"
+        from capnp_stub_generator import helper
+
+        sanitized_name = helper.sanitize_name(self.name)
+        return f"{sanitized_name}: {self.server_type}"
 
     def to_request_param(self) -> str:
         """Format as request method parameter (optional with default).
 
         Returns:
             Parameter string like "name: Type | None = None"
+
         """
-        return f"{self.name}: {self.request_type} | None = None"
+        from capnp_stub_generator import helper
+
+        sanitized_name = helper.sanitize_name(self.name)
+        return f"{sanitized_name}: {self.request_type} | None = None"
 
 
 class MethodSignatureCollection:
@@ -420,6 +445,7 @@ class MethodSignatureCollection:
         server_method_signature: Server method signature line
         uses_direct_struct_return: Flag for NamedTuple direct returns
         namedtuple_info: Tuple of (result_type, field_name, field_type) or None
+
     """
 
     method_name: str
@@ -436,6 +462,7 @@ class MethodSignatureCollection:
 
         Args:
             method_name: Name of the method being processed
+
         """
         self.method_name = method_name
         self.client_method_lines = []
@@ -451,6 +478,7 @@ class MethodSignatureCollection:
 
         Args:
             lines: List of lines for the client method
+
         """
         self.client_method_lines = lines
 
@@ -459,6 +487,7 @@ class MethodSignatureCollection:
 
         Args:
             lines: List of lines for the Request Protocol class
+
         """
         self.request_class_lines = lines
 
@@ -467,6 +496,7 @@ class MethodSignatureCollection:
 
         Args:
             lines: List of lines for the Client Result Protocol class
+
         """
         self.client_result_lines = lines
 
@@ -475,6 +505,7 @@ class MethodSignatureCollection:
 
         Args:
             lines: List of lines for the Server Result Protocol class
+
         """
         self.server_result_lines = lines
 
@@ -483,6 +514,7 @@ class MethodSignatureCollection:
 
         Args:
             lines: List of lines for the _request helper method
+
         """
         self.request_helper_lines = lines
 
@@ -508,6 +540,7 @@ class ServerMethodsCollection:
         server_methods: List of server method signature lines
         namedtuples: Dict mapping result type names to list of (field_name, field_type) tuples
         context_classes: List of context class lines (CallContext and ResultsBuilder)
+
     """
 
     server_methods: list[str]
@@ -525,6 +558,7 @@ class ServerMethodsCollection:
 
         Args:
             signature: Single-line server method signature
+
         """
         self.server_methods.append(signature)
 
@@ -534,6 +568,7 @@ class ServerMethodsCollection:
         Args:
             result_type: The result type name (used as key)
             fields: List of (field_name, field_type) tuples
+
         """
         self.namedtuples[result_type] = fields
 
@@ -542,6 +577,7 @@ class ServerMethodsCollection:
 
         Args:
             lines: List of lines for context classes
+
         """
         self.context_classes.extend(lines)
 
@@ -550,6 +586,7 @@ class ServerMethodsCollection:
 
         Returns:
             True if at least one server method exists
+
         """
         return len(self.server_methods) > 0
 

@@ -56,7 +56,9 @@ def test_server_registry_result_type(zalfmas_stubs):
 
     # Find Server
     server_match = re.search(
-        r"class Server\(_IdentifiableInterfaceModule.Server\):(.*?)(?=\n\s+class AdminClient)", content, re.DOTALL
+        r"class Server\(_IdentifiableInterfaceModule.Server\):(.*?)(?=\n\s+class AdminClient)",
+        content,
+        re.DOTALL,
     )
     assert server_match, "Server class not found"
     server_content = server_match.group(1)
@@ -64,7 +66,9 @@ def test_server_registry_result_type(zalfmas_stubs):
     # Find RegistryResult in Server
     # Now inherits from _DynamicStructBuilder
     result_match = re.search(
-        r"class RegistryResult\(_DynamicStructBuilder\):(.*?)(?=\n\s+class)", server_content, re.DOTALL
+        r"class RegistryResult\(_DynamicStructBuilder\):(.*?)(?=\n\s+class)",
+        server_content,
+        re.DOTALL,
     )
     assert result_match, "RegistryResult class not found in Server"
     result_content = result_match.group(1)

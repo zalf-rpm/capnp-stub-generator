@@ -10,7 +10,9 @@ def test_server_named_tuple_interface_type(zalfmas_stubs):
 
     # Find Server section
     server_match = re.search(
-        r"class Server\(_IdentifiableInterfaceModule.Server\):(.*?)(?=\n\s+class AdminClient)", content, re.DOTALL
+        r"class Server\(_IdentifiableInterfaceModule.Server\):(.*?)(?=\n\s+class AdminClient)",
+        content,
+        re.DOTALL,
     )
     assert server_match, "Server class not found"
     server_content = server_match.group(1)
@@ -35,7 +37,9 @@ def test_list_of_structs_not_any(zalfmas_stubs):
 
     # Find RegistryClient
     client_match = re.search(
-        r"class RegistryClient\(_IdentifiableInterfaceModule.IdentifiableClient\):(.*?)(?=\n\n|\Z)", content, re.DOTALL
+        r"class RegistryClient\(_IdentifiableInterfaceModule.IdentifiableClient\):(.*?)(?=\n\n|\Z)",
+        content,
+        re.DOTALL,
     )
     assert client_match, "RegistryClient class not found"
     client_content = client_match.group(1)

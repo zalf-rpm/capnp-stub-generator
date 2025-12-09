@@ -6,7 +6,6 @@ from pathlib import Path
 
 def test_capnpc_plugin_invocation(tmp_path, basic_stubs):
     """Test that capnpc can invoke our plugin."""
-
     # Create a wrapper script for the plugin
     plugin_name = "capnpc-stub-generator"
     plugin_path = tmp_path / plugin_name
@@ -41,7 +40,7 @@ def test_capnpc_plugin_invocation(tmp_path, basic_stubs):
 
     cmd = ["capnpc", f"-ostub-generator:{output_dir}", str(schema_path)]
 
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    result = subprocess.run(cmd, check=False, env=env, capture_output=True, text=True)
 
     if result.returncode != 0:
         print(f"capnpc stderr:\n{result.stderr}")
@@ -67,7 +66,6 @@ def test_capnpc_plugin_invocation(tmp_path, basic_stubs):
 
 def test_capnpc_plugin_bundling_options(tmp_path):
     """Test that bundling is enabled by default in plugin mode."""
-
     plugin_name = "capnpc-stub-generator"
     plugin_path = tmp_path / plugin_name
 
@@ -98,7 +96,7 @@ def test_capnpc_plugin_bundling_options(tmp_path):
 
     cmd = ["capnpc", "-ostub-generator:stubs", str(schema_path)]
 
-    result = subprocess.run(cmd, env=env, cwd=base_output_dir, capture_output=True, text=True)
+    result = subprocess.run(cmd, check=False, env=env, cwd=base_output_dir, capture_output=True, text=True)
 
     assert result.returncode == 0, f"capnpc failed: {result.stderr}"
 

@@ -33,6 +33,7 @@ use_operator_literal("divide")
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -62,6 +63,7 @@ use_operator_int(3)
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -91,6 +93,7 @@ use_operator_enum(calculator_capnp.Calculator.Operator.divide)
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -117,6 +120,7 @@ use_operator("invalid")  # type: ignore[arg-type]
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -166,6 +170,7 @@ impl3 = OperatorImpl(0)
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -203,6 +208,7 @@ result3 = process_operator(0)
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
     )

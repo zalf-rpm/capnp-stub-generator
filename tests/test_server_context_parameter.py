@@ -30,7 +30,9 @@ class TestServerContextParameter:
         import re
 
         server_methods = re.findall(
-            r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)", stub_content, re.DOTALL
+            r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)",
+            stub_content,
+            re.DOTALL,
         )
         assert server_methods, "No Server classes found in stubs"
 
@@ -51,12 +53,11 @@ class TestServerContextParameter:
                     if method_name.endswith("_context"):
                         assert "context:" in method_sig, f"Method {method_name} should have context parameter"
                         assert "CallContext" in method_sig, f"Method {method_name} context should be typed"
-                    else:
-                        # Regular server methods have _context and **kwargs
-                        # Skip if it doesn't have _context (might be other helper methods)
-                        if "_context:" in method_sig:
-                            assert "CallContext" in method_sig, f"Method {method_name} _context should be typed"
-                            assert "**kwargs" in method_sig, f"Method {method_name} should have **kwargs"
+                    # Regular server methods have _context and **kwargs
+                    # Skip if it doesn't have _context (might be other helper methods)
+                    elif "_context:" in method_sig:
+                        assert "CallContext" in method_sig, f"Method {method_name} _context should be typed"
+                        assert "**kwargs" in method_sig, f"Method {method_name} should have **kwargs"
 
     def test_context_parameter_position(self, generate_calculator_stubs):
         """Test that _context comes after regular parameters, before **kwargs."""
@@ -69,7 +70,9 @@ class TestServerContextParameter:
         # Function is now an interface module inheriting from _InterfaceModule
         # Look for the _FunctionInterfaceModule section (it's nested inside _CalculatorInterfaceModule)
         function_section = re.search(
-            r"class _FunctionInterfaceModule\(_InterfaceModule\):.*?(?=\n    Function:)", content, re.DOTALL
+            r"class _FunctionInterfaceModule\(_InterfaceModule\):.*?(?=\n    Function:)",
+            content,
+            re.DOTALL,
         )
         assert function_section, "_CalculatorInterfaceModule._FunctionInterfaceModule not found"
 

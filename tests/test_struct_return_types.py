@@ -10,14 +10,18 @@ def test_client_result_uses_reader_only(basic_stubs):
 
     # Find Client section
     client_match = re.search(
-        r"class IdentifiableClient\(_DynamicCapabilityClient\):(.*?)(?=\n\n|\Z)", content, re.DOTALL
+        r"class IdentifiableClient\(_DynamicCapabilityClient\):(.*?)(?=\n\n|\Z)",
+        content,
+        re.DOTALL,
     )
     assert client_match, "IdentifiableClient class not found"
     client_content = client_match.group(1)
 
     # Find InfoResult in Client
     result_match = re.search(
-        r"class InfoResult\(Awaitable\[InfoResult\], Protocol\):(.*?)(?=\n\s+def|\Z)", client_content, re.DOTALL
+        r"class InfoResult\(Awaitable\[InfoResult\], Protocol\):(.*?)(?=\n\s+def|\Z)",
+        client_content,
+        re.DOTALL,
     )
     assert result_match, "InfoResult class not found in IdentifiableClient"
     result_content = result_match.group(1)
@@ -34,14 +38,18 @@ def test_server_result_uses_builder_and_reader(basic_stubs):
 
     # Find Server section
     server_match = re.search(
-        r"class Server\(_DynamicCapabilityServer\):(.*?)(?=\n\s+class IdentifiableClient)", content, re.DOTALL
+        r"class Server\(_DynamicCapabilityServer\):(.*?)(?=\n\s+class IdentifiableClient)",
+        content,
+        re.DOTALL,
     )
     assert server_match, "Server class not found"
     server_content = server_match.group(1)
 
     # Find InfoResult in Server
     result_match = re.search(
-        r"class InfoResult\(Awaitable\[InfoResult\], Protocol\):(.*?)(?=\n\s+class)", server_content, re.DOTALL
+        r"class InfoResult\(Awaitable\[InfoResult\], Protocol\):(.*?)(?=\n\s+class)",
+        server_content,
+        re.DOTALL,
     )
     assert result_match, "InfoResult class not found in Server"
     result_content = result_match.group(1)
@@ -63,7 +71,9 @@ def test_server_named_tuple_has_nested_field(basic_stubs):
 
     # Find Server section
     server_match = re.search(
-        r"class Server\(_DynamicCapabilityServer\):(.*?)(?=\n\s+class IdentifiableClient)", content, re.DOTALL
+        r"class Server\(_DynamicCapabilityServer\):(.*?)(?=\n\s+class IdentifiableClient)",
+        content,
+        re.DOTALL,
     )
     assert server_match, "Server class not found"
     server_content = server_match.group(1)

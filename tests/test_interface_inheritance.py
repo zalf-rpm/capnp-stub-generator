@@ -28,7 +28,7 @@ def generated_dir():
 
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
-    yield GENERATED_DIR
+    return GENERATED_DIR
 
     # Keep generated files for inspection
     # shutil.rmtree(GENERATED_DIR)

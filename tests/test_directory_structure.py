@@ -87,9 +87,13 @@ def test_directory_structure_with_glob(temp_schema_dir, temp_output_dir):
     args = ["-p", pattern, "-o", str(temp_output_dir), "-r"]
     main(args)
 
-    # Count generated files (excluding bundled stubs)
+    # Count generated files (excluding bundled stubs and __init__.pyi files)
     generated = [
-        f for f in temp_output_dir.rglob("*.pyi") if "capnp-stubs" not in str(f) and "schema_capnp" not in str(f)
+        f
+        for f in temp_output_dir.rglob("*.pyi")
+        if "capnp-stubs" not in str(f)
+        and "schema_capnp" not in str(f)
+        and f.name != "__init__.pyi"  # Exclude auto-generated package markers
     ]
     assert len(generated) == 3  # root, sub1, deep
 
@@ -111,7 +115,7 @@ def test_single_file_no_nested_structure(temp_schema_dir, temp_output_dir):
 
 
 @pytest.mark.skip(
-    reason="Plugin-based generation requires output directory; generating next to source is not currently supported"
+    reason="Plugin-based generation requires output directory; generating next to source is not currently supported",
 )
 def test_no_output_dir_places_next_to_source(temp_schema_dir):
     """Test that without -o flag, stubs are placed next to source files."""
@@ -131,9 +135,11 @@ def test_mixed_directory_levels(temp_schema_dir, temp_output_dir):
     args = ["-p"] + schema_files + ["-o", str(temp_output_dir)]
     main(args)
 
-    # All should be generated (excluding bundled stubs)
+    # All should be generated (excluding bundled stubs and __init__.pyi)
     all_pyi = [
-        f for f in temp_output_dir.rglob("*.pyi") if "capnp-stubs" not in str(f) and "schema_capnp" not in str(f)
+        f
+        for f in temp_output_dir.rglob("*.pyi")
+        if "capnp-stubs" not in str(f) and "schema_capnp" not in str(f) and f.name != "__init__.pyi"
     ]
     assert len(all_pyi) == 3
 

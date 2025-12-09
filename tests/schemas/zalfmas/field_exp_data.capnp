@@ -238,4 +238,3 @@ struct EnvironmentModification {
   valueCO2      @2 :Int16 = -1; # EMCO2 [ppm] environment modification CO2
   notes         @3 :Text;       # EM_NOTES [text] environment modification notes
 }
-

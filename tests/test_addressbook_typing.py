@@ -42,6 +42,7 @@ alice.email = "alice@example.com"  # Should type check
     # Run pyright on the test file
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=str(TESTS_DIR),
@@ -54,7 +55,7 @@ alice.email = "alice@example.com"  # Should type check
             f"init() return type has {error_count} type errors.\n"
             f"Pyright output:\n{result.stdout}\n\n"
             f"Expected: init() should return a typed list-like object\n"
-            f"Actual: Returns Any, causing downstream type errors"
+            f"Actual: Returns Any, causing downstream type errors",
         )
 
 
@@ -84,6 +85,7 @@ bob_phones[0].number = "555-4567"
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=str(TESTS_DIR),
@@ -96,7 +98,7 @@ bob_phones[0].number = "555-4567"
             f"List element access has {error_count} type errors.\n"
             f"Pyright output:\n{result.stdout}\n\n"
             f"Expected: people[0] should be PersonBuilder\n"
-            f"Actual: Type not properly inferred"
+            f"Actual: Type not properly inferred",
         )
 
 
@@ -126,6 +128,7 @@ for person in addresses.people:
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=str(TESTS_DIR),
@@ -138,7 +141,7 @@ for person in addresses.people:
             f"List iteration has {error_count} type errors.\n"
             f"Pyright output:\n{result.stdout}\n\n"
             f"Expected: person should be PersonReader with proper fields\n"
-            f"Actual: Type not properly inferred"
+            f"Actual: Type not properly inferred",
         )
 
 
@@ -164,6 +167,7 @@ bob.employment.unemployed = None
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=str(TESTS_DIR),
@@ -176,7 +180,7 @@ bob.employment.unemployed = None
             f"Union field access has {error_count} type errors.\n"
             f"Pyright output:\n{result.stdout}\n\n"
             f"Expected: employment.school and employment.unemployed should type check\n"
-            f"Actual: Type errors in union access"
+            f"Actual: Type errors in union access",
         )
 
 
@@ -205,6 +209,7 @@ phones[1].type = "work"
 
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=str(TESTS_DIR),
@@ -217,7 +222,7 @@ phones[1].type = "work"
             f"Nested init() has {error_count} type errors.\n"
             f"Pyright output:\n{result.stdout}\n\n"
             f"Expected: phones should be typed list-like with PhoneNumberBuilder elements\n"
-            f"Actual: Type not properly inferred"
+            f"Actual: Type not properly inferred",
         )
 
 

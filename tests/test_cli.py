@@ -32,7 +32,7 @@ def temp_output_dir(tmp_path):
     """Create a temporary output directory for tests."""
     output_dir = tmp_path / "output"
     output_dir.mkdir()
-    yield output_dir
+    return output_dir
     # Cleanup is automatic with tmp_path
 
 
@@ -81,7 +81,7 @@ struct NestedStruct {
 }
 """)
 
-    yield schema_dir
+    return schema_dir
 
 
 class TestArgumentParsing:
@@ -145,7 +145,7 @@ class TestArgumentParsing:
         """Test parsing multiple arguments together."""
         parser = setup_parser()
         args = parser.parse_args(
-            ["-p", "schemas/", "-o", "output/", "-I", "/usr/include", "-r", "-e", "schemas/test.capnp"]
+            ["-p", "schemas/", "-o", "output/", "-I", "/usr/include", "-r", "-e", "schemas/test.capnp"],
         )
 
         assert args.paths == ["schemas/"]
@@ -386,7 +386,7 @@ class TestOutputDirectory:
         assert (temp_output_dir / "subdir" / "nested_capnp.pyi").exists()
 
     @pytest.mark.skip(
-        reason="Plugin-based generation requires output directory; generating next to source is not currently supported"
+        reason="Plugin-based generation requires output directory; generating next to source is not currently supported",
     )
     def test_no_output_dir_places_stubs_alongside_schemas(self, temp_schema_dir):
         """Test that without -o, stubs are placed next to schemas."""
@@ -615,7 +615,11 @@ class TestCLIInvocation:
         """Test that --help works."""
         # Try to find the installed command
         result = subprocess.run(
-            ["capnp-stub-generator", "--help"], capture_output=True, text=True, cwd=str(TESTS_DIR.parent)
+            ["capnp-stub-generator", "--help"],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=str(TESTS_DIR.parent),
         )
 
         if result.returncode != 0 and "not found" in result.stderr:
@@ -633,7 +637,7 @@ class TestCLIInvocation:
 
         cmd = ["capnp-stub-generator", "-p", str(schema_file), "-o", str(temp_output_dir)]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(temp_schema_dir.parent))
+        result = subprocess.run(cmd, check=False, capture_output=True, text=True, cwd=str(temp_schema_dir.parent))
 
         if result.returncode != 0 and "not found" in (result.stderr + result.stdout):
             pytest.skip("capnp-stub-generator command not in PATH")

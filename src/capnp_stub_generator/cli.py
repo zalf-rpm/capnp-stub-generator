@@ -2,6 +2,7 @@
 
 Notes:
     - The outputs of this generator are only compatible with pycapnp version >= 2.0.0.
+
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ def _add_recursive_argument(parser: argparse.ArgumentParser):
 
     Args:
         parser (argparse.ArgumentParser): The parser to add the argument to.
+
     """
     parser.add_argument(
         "-r",
@@ -37,6 +39,7 @@ def setup_parser() -> argparse.ArgumentParser:
 
     Returns:
         argparse.ArgumentParser: The parser after setup.
+
     """
     parser = argparse.ArgumentParser(description="Generate type hints for capnp schema files.")
 
@@ -114,6 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Returns:
         int: Error code.
+
     """
     logging.basicConfig(level=logging.INFO)
 

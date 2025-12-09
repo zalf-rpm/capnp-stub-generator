@@ -57,6 +57,7 @@ def test_assignments():
     # Run pyright
     result = subprocess.run(
         ["pyright", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
     )

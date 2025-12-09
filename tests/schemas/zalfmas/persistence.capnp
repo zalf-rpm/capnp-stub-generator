@@ -25,7 +25,6 @@ struct VatId {
   # The Vat's Curve25519 public key, interpreted as little-endian.
 }
 
-
 struct Address {
   # Taken from https://github.com/sandstorm-io/blackrock/blob/master/src/blackrock/cluster-rpc.capnp#L38
   # Address at which you might connect to a vat. Used for three-party hand-offs.
@@ -54,7 +53,6 @@ struct Address {
   port @2 :UInt16;
 }
 
-
 struct VatPath {
   # Taken from https://github.com/sandstorm-io/blackrock/blob/master/src/blackrock/cluster-rpc.capnp#L60
   # Enough information to connect to a vat securely.
@@ -65,7 +63,7 @@ struct VatPath {
 
 struct SturdyRef {
   # Adapted from https://github.com/sandstorm-io/blackrock/blob/master/src/blackrock/cluster-rpc.capnp#L67
-  # Parameterization of SturdyRef 
+  # Parameterization of SturdyRef
 
   struct Owner {
     # Owner of a SturdyRef, for sealing purposes. See discussion of sealing in
@@ -126,7 +124,7 @@ interface Persistent {
   }
 
   interface ReleaseSturdyRef {
-    release @0 () -> (success :Bool) $Go.name("releaseSR"); 
+    release @0 () -> (success :Bool) $Go.name("releaseSR");
   }
 }
 
@@ -152,7 +150,7 @@ interface HostPortResolver extends(Identifiable, Restorer) {
   # resolve an id (either base64 encoded VatId or a text alias) to a host and port
   # acts also as restorer for the registrar capabilities
 
-  interface Registrar { 
+  interface Registrar {
     # register a services base64 encoded VatId to a host and port (and optionally a plain text alias)
 
     struct RegisterParams {
@@ -208,4 +206,13 @@ interface Gateway extends(Identifiable, Restorer) {
     secsHeartbeatInterval   @2 :UInt32;
     # interval in seconds to call the heartbeat capability
   }
+}
+
+interface GatewayRegistrable {
+  # interface to register at some Gateway
+  # makes sense as long as we don't have Level 3 support
+
+  sturdyRefAtGateway @0 (gatewaySR :SturdyRef, gatewayId: Text) -> (selfAtGatewaySR :SturdyRef);
+  # let containing vat connect to gateway via given sturdy ref and
+  # return sturdy ref of self at
 }

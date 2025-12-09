@@ -147,7 +147,7 @@ class TestRequestBuilderSendMethod:
                 assert "ReadResult:" in line
                 found_send = True
                 break
-            elif in_request and line.startswith("    class ") or (in_request and line.startswith("class ")):
+            elif (in_request and line.startswith("    class ")) or (in_request and line.startswith("class ")):
                 break
 
         assert found_send, "ReadRequest should have send() method"
@@ -169,7 +169,7 @@ class TestRequestBuilderSendMethod:
                 assert "CallResult:" in line
                 found_send = True
                 break
-            elif in_request and line.startswith("    class ") or (in_request and line.startswith("class ")):
+            elif (in_request and line.startswith("    class ")) or (in_request and line.startswith("class ")):
                 break
 
         assert found_send, "CallRequest should have send() method"

@@ -35,7 +35,7 @@ def process_data(data: primitives_capnp.SimplePrimitives | str | None) -> str:
 # This should work without runtime errors
 result = process_data(None)
 assert result == "none"
-"""
+""",
     )
 
     # Run the test file - should work without errors
@@ -43,6 +43,7 @@ assert result == "none"
 
     result = subprocess.run(
         ["python", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=tmp_path,
@@ -73,7 +74,7 @@ import primitives_capnp
 def process_data(data: primitives_capnp.SimplePrimitives | str | None) -> str:
     '''Function that accepts SimplePrimitives or str or None.'''
     return "test"
-"""
+""",
     )
 
     # Run the test file - should fail with TypeError
@@ -81,6 +82,7 @@ def process_data(data: primitives_capnp.SimplePrimitives | str | None) -> str:
 
     result = subprocess.run(
         ["python", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=tmp_path,
@@ -120,7 +122,7 @@ def process_data(data: Union[primitives_capnp.SimplePrimitives, str, None]) -> s
 # This should work without runtime errors
 result = process_data("test")
 assert result == "test"
-"""
+""",
     )
 
     # Run the test file - should work without errors
@@ -128,6 +130,7 @@ assert result == "test"
 
     result = subprocess.run(
         ["python", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=tmp_path,
@@ -173,7 +176,7 @@ class DataProcessor:
 processor = DataProcessor()
 result = processor.process("test")
 assert result == "test"
-"""
+""",
     )
 
     # Run the test file - should work without errors
@@ -181,6 +184,7 @@ assert result == "test"
 
     result = subprocess.run(
         ["python", str(test_file)],
+        check=False,
         capture_output=True,
         text=True,
         cwd=tmp_path,

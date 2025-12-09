@@ -64,7 +64,6 @@ async def main():
     # If server doesn't set it, it might be None or empty
     # print(f"AnyList type: {type(l_result.l)}")
     # assert "DynamicObjectReader" in str(type(l_result.l))
-    pass
 
     # Test AnyPointer
     p_result = await tester.getAnyPointer()

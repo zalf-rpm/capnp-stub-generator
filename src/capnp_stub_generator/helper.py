@@ -25,6 +25,7 @@ def sanitize_name(name: str) -> str:
 
     Returns:
         str: The sanitized name.
+
     """
     if keyword.iskeyword(name):
         return f"{name}_"
@@ -54,6 +55,7 @@ def _build_variant_type(type_name: str, variant: str, flat: bool = False) -> str
         'MyStructBuilder'
         >>> _build_variant_type("MyStruct[T]", "Builder", flat=True)
         'MyStructBuilder[T]'
+
     """
     if flat:
         # Flat naming: MyClass -> MyClassBuilder, MyClass[T] -> MyClassBuilder[T]
@@ -61,11 +63,10 @@ def _build_variant_type(type_name: str, variant: str, flat: bool = False) -> str
             base_name, generic_part = type_name.split("[", 1)
             return f"{base_name}{variant}[{generic_part}"
         return f"{type_name}{variant}"
-    else:
-        # Nested naming: MyClass -> MyClass.Builder, MyClass[T] -> MyClass[T].Builder
-        # Generic parameters stay with the parent: MyClass[T].Builder, not MyClass.Builder[T]
-        # This is the correct Python typing pattern for nested generic classes
-        return f"{type_name}.{variant}"
+    # Nested naming: MyClass -> MyClass.Builder, MyClass[T] -> MyClass[T].Builder
+    # Generic parameters stay with the parent: MyClass[T].Builder, not MyClass.Builder[T]
+    # This is the correct Python typing pattern for nested generic classes
+    return f"{type_name}.{variant}"
 
 
 def new_builder_flat(type_name: str) -> str:
@@ -79,6 +80,7 @@ def new_builder_flat(type_name: str) -> str:
 
     Returns:
         str: The builder variant.
+
     """
     return _build_variant_type(type_name, BUILDER_NAME, flat=True)
 
@@ -94,6 +96,7 @@ def new_reader_flat(type_name: str) -> str:
 
     Returns:
         str: The reader variant.
+
     """
     return _build_variant_type(type_name, READER_NAME, flat=True)
 
@@ -110,6 +113,7 @@ def new_builder(type_name: str) -> str:
 
     Returns:
         str: The builder variant.
+
     """
     return _build_variant_type(type_name, BUILDER_NAME, flat=False)
 
@@ -137,17 +141,14 @@ class TypeHint:
         if self.flat_alias:
             full_name = self.name
         # Handle affixes for generic types: MyClass[T] + Builder -> MyClass[T].Builder
-        elif self.affix and "[" in self.name:
-            full_name = f"{self.name}.{self.affix}"
-        elif self.affix:
+        elif (self.affix and "[" in self.name) or self.affix:
             full_name = f"{self.name}.{self.affix}"
         else:
             full_name = self.name
 
         if not self.scopes:
             return full_name
-        else:
-            return f"{'.'.join(self.scopes)}.{full_name}"
+        return f"{'.'.join(self.scopes)}.{full_name}"
 
 
 @dataclass
@@ -181,6 +182,7 @@ class TypeHintedVariable:
 
         Returns:
             str: The string representation.
+
         """
         return self.typed_variable_with_full_hints
 
@@ -188,8 +190,7 @@ class TypeHintedVariable:
         if self.nesting_depth > 0:
             return f"{self.nesting_depth * 'Sequence['}{unnested_type_name}{self.nesting_depth * ']'}"
 
-        else:
-            return unnested_type_name
+        return unnested_type_name
 
     @property
     def typed_variable_with_full_hints(self) -> str:
@@ -213,6 +214,7 @@ class TypeHintedVariable:
 
         Returns:
             str: The typed variable string.
+
         """
         nested_type_name = self._nest(type_name)
         typed_variable = f"{self.name}: {nested_type_name}"
@@ -251,6 +253,7 @@ class TypeHintedVariable:
 
         Returns:
             str: The type string with nesting applied.
+
         """
         type_hints_for_affixes = self._get_type_hints_for_affixes(affixes)
         type_str = self._join_type_hints(type_hints_for_affixes)
@@ -261,6 +264,7 @@ class TypeHintedVariable:
 
         Args:
             new_type_hint (TypeHint): The type hint to add.
+
         """
         for type_hint in self.type_hints:
             if type_hint == new_type_hint:
@@ -279,6 +283,7 @@ class TypeHintedVariable:
 
         Returns:
             TypeHint: The type hint that was found.
+
         """
         for type_hint in self.type_hints:
             if type_hint.affix == affix:
@@ -314,7 +319,7 @@ class TypeHintedVariable:
                 self.primary_type_hint.name,
                 copy(self.primary_type_hint.scopes),
                 BUILDER_NAME,
-            )
+            ),
         )
 
     def add_reader_from_primary_type(self):
@@ -324,7 +329,7 @@ class TypeHintedVariable:
                 self.primary_type_hint.name,
                 copy(self.primary_type_hint.scopes),
                 READER_NAME,
-            )
+            ),
         )
 
 
@@ -341,6 +346,7 @@ def replace_capnp_suffix(original: str) -> str:
 
     Returns:
         str: The string with the replaced suffix and hyphens converted to underscores.
+
     """
     result = original
     if result.endswith(".capnp"):
@@ -360,12 +366,12 @@ def join_parameters(parameters: Sequence[TypeHintedVariable | str] | None) -> st
 
     Returns:
         str: The joined parameters.
+
     """
     if parameters:
         return ", ".join(str(p) for p in parameters if p)
 
-    else:
-        return ""
+    return ""
 
 
 def new_group(name: str, members: list[str]) -> str:
@@ -380,6 +386,7 @@ def new_group(name: str, members: list[str]) -> str:
 
     Returns:
         str: The resulting group string.
+
     """
     return f"{name}[{join_parameters(members)}]"
 
@@ -395,6 +402,7 @@ def new_type_group(name: str, types: list[str]) -> str:
 
     Returns:
         str: The resulting parameter string.
+
     """
     return new_group(name, types)
 
@@ -413,6 +421,7 @@ def new_function(
 
     Returns:
         str: The function string.
+
     """
     if return_type is None:
         return_type = "None"
@@ -431,12 +440,12 @@ def new_decorator(name: str, parameters: Sequence[TypeHintedVariable | str] | No
 
     Returns:
         str: The decorator string.
+
     """
     if parameters:
         return f"@{name}({join_parameters(parameters)})"
 
-    else:
-        return f"@{name}"
+    return f"@{name}"
 
 
 def new_property(
@@ -459,6 +468,7 @@ def new_property(
 
     Returns:
         list[str]: Lines to be added (decorator + function, and optionally setter).
+
     """
     lines: list[str] = []
 
@@ -492,11 +502,11 @@ def new_class_declaration(name: str, parameters: Sequence[str] | None = None) ->
 
     Returns:
         str: The class declaration.
+
     """
     if parameters:
         return f"class {name}({join_parameters(parameters)}):"
-    else:
-        return f"class {name}:"
+    return f"class {name}:"
 
 
 def get_display_name(schema: SchemaType) -> str:
@@ -507,5 +517,6 @@ def get_display_name(schema: SchemaType) -> str:
 
     Returns:
         str: The display name of the schema.
+
     """
     return schema.node.displayName[schema.node.displayNamePrefixLength :]

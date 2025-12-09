@@ -126,7 +126,7 @@ struct Event {
     weather                   @12;
   }
 
-  enum PhenoStage { 
+  enum PhenoStage {
     emergence @0;
     flowering @1;
     anthesis  @2;
@@ -182,22 +182,22 @@ struct Params {
   struct AutomaticSowing {
     struct AvgSoilTemp {
       soilDepthForAveraging     @0  :Float64  = 0.3;
-		  daysInSoilTempWindow      @1  :UInt16;
-		  sowingIfAboveAvgSoilTemp  @2  :Float64;
+      daysInSoilTempWindow      @1  :UInt16;
+      sowingIfAboveAvgSoilTemp  @2  :Float64;
     }
 
     sowing                      @9  :Sowing;
 
-	  minTempThreshold            @0  :Float64;
+    minTempThreshold            @0  :Float64;
     daysInTempWindow            @1  :UInt16;
     minPercentASW               @2  :Float64  = 0;
-	  maxPercentASW               @3  :Float64  = 100;
-	  max3dayPrecipSum            @4  :Float64;
-	  maxCurrentDayPrecipSum      @5  :Float64;
-	  tempSumAboveBaseTemp        @6  :Float64;
-	  baseTemp                    @7  :Float64;
+    maxPercentASW               @3  :Float64  = 100;
+    max3dayPrecipSum            @4  :Float64;
+    maxCurrentDayPrecipSum      @5  :Float64;
+    tempSumAboveBaseTemp        @6  :Float64;
+    baseTemp                    @7  :Float64;
 
-    avgSoilTemp                 @8  :AvgSoilTemp; 
+    avgSoilTemp                 @8  :AvgSoilTemp;
   }
 
   struct Harvest {
@@ -222,19 +222,19 @@ struct Params {
   struct AutomaticHarvest {
     harvest                 @5 :Harvest;
 
-	  minPercentASW           @0 :Float64;
-	  maxPercentASW           @1 :Float64           = 100;
-	  max3dayPrecipSum        @2 :Float64;
-	  maxCurrentDayPrecipSum  @3 :Float64;
-	  harvestTime             @4 :Event.PhenoStage  = maturity;
+    minPercentASW           @0 :Float64;
+    maxPercentASW           @1 :Float64           = 100;
+    max3dayPrecipSum        @2 :Float64;
+    maxCurrentDayPrecipSum  @3 :Float64;
+    harvestTime             @4 :Event.PhenoStage  = maturity;
   }
 
   struct Cutting {
-    enum CL { 
+    enum CL {
       cut   @0;
       left  @1;
     }
-	  enum Unit { 
+    enum Unit {
       percentage  @0;
       biomass     @1;
       lai         @2;
@@ -243,14 +243,14 @@ struct Params {
     struct Spec {
       organ             @0 :PlantOrgan;
       value             @1 :Float64;
-		  unit              @2 :Unit        = percentage;
-		  cutOrLeft         @3 :CL          = cut;
-      exportPercentage  @4 :Float64     = 100.0; 
+      unit              @2 :Unit        = percentage;
+      cutOrLeft         @3 :CL          = cut;
+      exportPercentage  @4 :Float64     = 100.0;
     }
 
     cuttingSpec                       @0 :List(Spec);
     cutMaxAssimilationRatePercentage  @1 :Float64 = 100.0;
-	}
+  }
 
   struct MineralFertilization {
     struct Parameters {
@@ -266,10 +266,10 @@ struct Params {
   }
 
   struct NDemandFertilization {
-	  nDemand   @0 :Float64;
+    nDemand   @0 :Float64;
     partition @1 :MineralFertilization.Parameters;
-	  depth     @2 :Float64;
-	  stage     @3 :UInt8 = 1;
+    depth     @2 :Float64;
+    stage     @3 :UInt8 = 1;
   }
 
   struct OrganicFertilization {
@@ -301,8 +301,8 @@ struct Params {
     }
 
     params        @0 :Parameters;
-	  amount        @1 :Float64;
-	  incorporation @2 :Bool = false;
+    amount        @1 :Float64;
+    incorporation @2 :Bool = false;
   }
 
   struct Tillage {
@@ -343,7 +343,7 @@ struct Params {
 #  # return list of all available mineral fertilizers with references to value holders
 #
 #  mineralFertilizer               @4 (id :Text) -> (fert :Params.MineralFertilization.Parameters);
-#  
+#
 #  #availableOrganicFertilizers    @3 () -> (entries :List(Entry(Params.OrganicFertilization.OrganicMatterParameters)));
 #  availableOrganicFertilizers    @3 () -> (entries :List(Entry));
 #  # return list of all available organic fertilizers with references to value holders
@@ -357,7 +357,6 @@ struct Params {
 #  # get organic fertilizer parameters by name/id
 #}
 
-
 interface Service extends(Common.Identifiable) {
   # management service
 
@@ -365,4 +364,3 @@ interface Service extends(Common.Identifiable) {
   # return a management at given location
 
 }
-  

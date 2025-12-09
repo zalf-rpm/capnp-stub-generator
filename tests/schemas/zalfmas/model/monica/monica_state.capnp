@@ -27,19 +27,18 @@ struct RuntimeState {
 struct CropState {
     speciesName             @1  :Text;
     cultivarName            @2  :Text;
-	seedDate                @3  :Date;
-	harvestDate             @4  :Date;
+    seedDate                @3  :Date;
+    harvestDate             @4  :Date;
     isWinterCrop            @5  :MaybeBool;
-	isPerennialCrop         @6  :MaybeBool;
-	cuttingDates            @7  :List(Date);
+    isPerennialCrop         @6  :MaybeBool;
+    cuttingDates            @7  :List(Date);
     cropParams              @8  :Params.CropParameters;
     perennialCropParams     @9  :Params.CropParameters;
     residueParams           @10 :Params.CropResidueParameters;
     crossCropAdaptionFactor @11 :Float64 = 1.0;
     automaticHarvest        @12 :Bool;
-	automaticHarvestParams  @0  :Params.AutomaticHarvestParameters;
+    automaticHarvestParams  @0  :Params.AutomaticHarvestParameters;
 }
-
 
 struct AOMProperties {
     aomSlow                 @0 :Float64;        # C content in slowly decomposing added organic matter pool [kgC m-3]
@@ -70,10 +69,8 @@ struct AOMProperties {
     aomFastDelta            @18 :Float64;       # Difference of AOM fast between to timesteps
 
     incorporation           @19 :Bool = false;  # true if organic fertilizer is added with a subsequent incorporation.
-	noVolatilization        @20 :Bool = true;   # true means it's a crop residue and won't participate in vo_volatilisation()
+  noVolatilization        @20 :Bool = true;   # true means it's a crop residue and won't participate in vo_volatilisation()
 }
-
-
 
 struct SoilColumnState {
     struct DelayedNMinApplicationParams {
@@ -143,11 +140,11 @@ struct MonicaModelState {
     soilTransport                   @13 :SoilTransportModuleState; # transport code
     currentCropModule               @15 :CropModuleState; # crop code for possibly planted crop
 
-    sumFertiliser                   @16 :Float64; 
-    sumOrgFertiliser                @17 :Float64; 
+    sumFertiliser                   @16 :Float64;
+    sumOrgFertiliser                @17 :Float64;
 
-    dailySumFertiliser              @18 :Float64; 
-    dailySumOrgFertiliser           @19 :Float64; 
+    dailySumFertiliser              @18 :Float64;
+    dailySumOrgFertiliser           @19 :Float64;
 
     dailySumOrganicFertilizerDM     @20 :Float64;
     sumOrganicFertilizerDM          @21 :Float64;
@@ -185,32 +182,32 @@ struct MonicaModelState {
 }
 
 struct CropModuleState {
-    frostKillOn                                 @0      :Bool;      
+    frostKillOn                                 @0      :Bool;
     speciesParams                               @228    :Params.SpeciesParameters;
     cultivarParams                              @229    :Params.CultivarParameters;
     residueParams                               @230    :Params.CropResidueParameters;
     isWinterCrop                                @231    :Bool;
-    vsLatitude                                  @6      :Float64;  
+    vsLatitude                                  @6      :Float64;
     abovegroundBiomass                          @7      :Float64; # old OBMAS
     abovegroundBiomassOld                       @8      :Float64; # old OBALT
     pcAbovegroundOrgan                            @9    :List(Bool); # old KOMP
-    actualTranspiration                         @10     :Float64; 
+    actualTranspiration                         @10     :Float64;
     pcAssimilatePartitioningCoeff                 @11   :List(List(Float64)); # old PRO
-    pcAssimilateReallocation                      @12   :Float64; 
-    assimilates                                 @13     :Float64; 
+    pcAssimilateReallocation                      @12   :Float64;
+    assimilates                                 @13     :Float64;
     assimilationRate                            @14     :Float64; # old AMAX
     astronomicDayLenght                         @15     :Float64; # old DL
     pcBaseDaylength                               @16   :List(Float64); # old DLBAS
     pcBaseTemperature                             @17   :List(Float64); # old BAS
     pcBeginSensitivePhaseHeatStress               @18   :Float64;
-    belowgroundBiomass                          @19     :Float64; 
+    belowgroundBiomass                          @19     :Float64;
     belowgroundBiomassOld                       @20     :Float64;
     pcCarboxylationPathway                        @21   :Int64; # old TEMPTYP
     clearDayRadiation                           @22     :Float64; # old DRC
     pcCo2Method                                   @23   :UInt8 = 3;
     criticalNConcentration                      @24     :Float64; # old GEHMIN
     pcCriticalOxygenContent                       @25   :List(Float64); # old LUKRIT
-    pcCriticalTemperatureHeatStress               @26   :Float64; 
+    pcCriticalTemperatureHeatStress               @26   :Float64;
     cropDiameter                                @27     :Float64;
     cropFrostRedux                              @28     :Float64 = 1.0;
     cropHeatRedux                               @29     :Float64 = 1.0;
@@ -234,7 +231,7 @@ struct CropModuleState {
     vmDepthGroundwaterTable                     @47     :UInt16; # old GRW
     pcDevelopmentAccelerationByNitrogenStress     @48   :UInt64;
     developmentalStage                          @49     :UInt16; # old INTWICK
-    noOfCropSteps                               @50     :UInt16; 
+    noOfCropSteps                               @50     :UInt16;
     droughtImpactOnFertility                    @51     :Float64 = 1.0;
     pcDroughtImpactOnFertilityFactor              @52   :Float64;
     pcDroughtStressThreshold                      @53   :List(Float64); # old DRYswell
@@ -267,7 +264,7 @@ struct CropModuleState {
     pcInitialKcFactor                             @79   :Float64; # old Kcini
     pcInitialOrganBiomass                         @80   :List(Float64);
     pcInitialRootingDepth                         @81   :Float64;
-    interceptionStorage                         @82     :Float64; 
+    interceptionStorage                         @82     :Float64;
     kcFactor                                    @83     :Float64 = 0.6; # old FKc
     leafAreaIndex                               @84     :Float64; # old LAI
     sunlitLeafAreaIndex                         @85     :List(Float64);
@@ -299,11 +296,11 @@ struct CropModuleState {
     nConcentrationAbovegroundBiomassOld         @110    :Float64; # old GEHALT
     pcNConcentrationB0                            @111  :Float64;
     nContentDeficit                             @112    :Float64;
-    pcNConcentrationPN                            @113  :Float64; 
+    pcNConcentrationPN                            @113  :Float64;
     pcNConcentrationRoot                        @114    :Float64; # initial value to WUGEH
     nConcentrationRoot                          @115    :Float64; # old WUGEH
     nConcentrationRootOld                       @116    :Float64; # old
-    pcNitrogenResponseOn                          @117  :Bool; 
+    pcNitrogenResponseOn                          @117  :Bool;
     pcNumberOfDevelopmentalStages                 @118  :Float64;
     pcNumberOfOrgans                              @119  :Float64; # old NRKOM
     nUptakeFromLayer                            @120    :List(Float64); # old PE
@@ -325,14 +322,14 @@ struct CropModuleState {
     pcPerennial                                   @136  :Bool;
     photoperiodicDaylength                      @137    :Float64; # old DLP
     photActRadiationMean                        @138    :Float64; # old RDN
-    pcPlantDensity                                @139  :Float64; 
-    potentialTranspiration                      @140    :Float64; 
-    referenceEvapotranspiration                 @141    :Float64; 
-    relativeTotalDevelopment                    @142    :Float64; 
-    remainingEvapotranspiration                 @143    :Float64; 
+    pcPlantDensity                                @139  :Float64;
+    potentialTranspiration                      @140    :Float64;
+    referenceEvapotranspiration                 @141    :Float64;
+    relativeTotalDevelopment                    @142    :Float64;
+    remainingEvapotranspiration                 @143    :Float64;
     reserveAssimilatePool                       @144    :Float64; # old ASPOO
-    pcResidueNRatio                               @145  :Float64; 
-    pcRespiratoryStress                           @146  :Float64; 
+    pcResidueNRatio                               @145  :Float64;
+    pcRespiratoryStress                           @146  :Float64;
     rootBiomass                                 @147    :Float64; # old WUMAS
     rootBiomassOld                              @148    :Float64; # old WUMALT
     rootDensity                                 @149    :List(Float64); # old WUDICH
@@ -359,11 +356,11 @@ struct CropModuleState {
     pcStageKcFactor                               @170  :List(Float64); # old Kc
     pcStageTemperatureSum                         @171  :List(Float64); # old TSUM
     stomataResistance                           @172    :Float64; # old RSTOM
-    pcStorageOrgan                              @173    :List(Bool);  
+    pcStorageOrgan                              @173    :List(Bool);
     storageOrgan                                @174    :UInt16 = 4;
     targetNConcentration                        @175    :Float64; # old GEHMAX
     timeStep                                    @176    :Float64 = 1.0; # old dt
-    timeUnderAnoxia                             @177    :UInt64; 
+    timeUnderAnoxia                             @177    :UInt64;
     vsTortuosity                                @178    :Float64; # old AD
     totalBiomass                                @179    :Float64;
     totalBiomassNContent                        @180    :Float64; # old PESUM
@@ -402,16 +399,16 @@ struct CropModuleState {
 
     maturityReached                             @213    :Bool;
 
-    # VOC members   
+    # VOC members
     stepSize24                                  @214    :UInt16 = 24;
     stepSize240                                 @215    :UInt16 = 240;
-    rad24                                       @216    :List(Float64); 
-    rad240                                      @217    :List(Float64);  
-    tfol24                                      @218    :List(Float64); 
-    tfol240                                     @219    :List(Float64); 
-    index24                                     @220    :UInt16; 
+    rad24                                       @216    :List(Float64);
+    rad240                                      @217    :List(Float64);
+    tfol24                                      @218    :List(Float64);
+    tfol240                                     @219    :List(Float64);
+    index24                                     @220    :UInt16;
     index240                                    @221    :UInt16;
-    full24                                      @222    :Bool; 
+    full24                                      @222    :Bool;
     full240                                     @223    :Bool;
 
     guentherEmissions                           @224    :Params.Voc.Emissions;
@@ -452,7 +449,7 @@ struct SnowModuleState {
     snowMaxAdditionalDensity                @17 :Float64;   # Maximum additional density of snow (max rho = 0.35, Karvonen)
     snowPacking                             @18 :Float64;   # Snow packing factor (calibrated by Helge Bonesmo)
     snowRetentionCapacityMin                @19 :Float64;   # Minimum liquid water retention capacity in snow [mm]
-    snowRetentionCapacityMax                @0  :Float64;  
+    snowRetentionCapacityMax                @0  :Float64;
 }
 
 struct FrostModuleState {
@@ -471,7 +468,7 @@ struct FrostModuleState {
 struct SoilMoistureModuleState {
     moduleParams                    @3  :Params.SoilMoistureModuleParameters;
     numberOfLayers                  @6  :UInt16;
-	vsNumberOfLayers                @7  :UInt16;
+  vsNumberOfLayers                @7  :UInt16;
     actualEvaporation               @8  :Float64;               # Sum of evaporation of all layers [mm]
     actualEvapotranspiration        @9  :Float64;               # Sum of evaporation and transpiration of all layers [mm]
     actualTranspiration             @10 :Float64;               # Sum of transpiration of all layers [mm]
@@ -631,4 +628,3 @@ struct ICData {
         lait            @2 :Float64;
     }
 }
-

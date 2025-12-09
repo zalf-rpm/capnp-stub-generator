@@ -8,8 +8,6 @@ This module contains internal type definitions including:
 These are imported by lib/capnp.pyi for type annotations but NOT re-exported.
 """
 
-from __future__ import annotations
-
 import asyncio
 import types
 

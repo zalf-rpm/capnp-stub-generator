@@ -19,11 +19,11 @@ enum ResultId {
     sumFertilizer               @3; # sum of applied fertilizer for that crop during growth period
     sumIrrigation               @4; # sum of used irrigation water for the crop during growth period
     primaryYieldCU              @5; # the primary yield but in GE
-}    
+}
 
 struct RestInput {
     useDevTrend         @0  :Bool = false;
-	
+
     useCO2Increase      @1  :Bool = true;
 
     dgm                 @2  :Float64 = 0;

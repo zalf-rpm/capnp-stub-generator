@@ -15,7 +15,7 @@ using Persistent = import "persistence.capnp".Persistent;
 
 interface Store extends(Common.Identifiable, Persistent) {
   # simple storage service interface
-  
+
   interface Container extends(Common.Identifiable, Persistent) {
     # a container for storing objects
 
@@ -66,7 +66,7 @@ interface Store extends(Common.Identifiable, Persistent) {
 
     export            @0 () -> (json :Text);
     # export the container (serialized as capnp JSON)
-    
+
     downloadEntries   @1 () -> (entries :List(Common.Pair(Text, Entry.Value)));
     # download all entries in the container as list of key-value pairs
 
@@ -82,7 +82,7 @@ interface Store extends(Common.Identifiable, Persistent) {
 
     addEntry          @6 (key :Text, value :Entry.Value, replaceExisting :Bool = false) -> (entry :Entry, success :Bool);
     # add a new entry, replace an existing entry if needed, return the entry and a success flag
-    
+
     removeEntry       @4 (key :Text) -> (success :Bool);
     # remove an entry from the container
 

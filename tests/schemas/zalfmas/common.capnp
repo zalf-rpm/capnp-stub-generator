@@ -81,11 +81,17 @@ struct Value {
   }
 }
 
-#interface Factory(Input, Output) {
+interface Factory(Output) extends(Identifiable) {
+  # minimal interface to produce some output
+
+  create @0 () -> (out :Output);
+}
+
+interface IOFactory(Input, Output) extends(Identifiable) {
   # minimal interface to produce some output from input
 
-#  produce @0 (in :Input) -> (out :Output);
-#}
+  produce @0 (in :Input) -> (out :Output);
+}
 
 struct Pair(F, S) {
   fst @0 :F;

@@ -40,7 +40,6 @@ interface Admin extends(Identifiable) {
   # return the registry administered by this interface
 }
 
-
 interface Registry extends(Identifiable) {
   # public registry interface for capabilities implementing at least the identifiable interface
   # the registry might make its entries persistent by wrapping the Identifiables into a persistent wrapper
@@ -63,10 +62,9 @@ interface Registry extends(Identifiable) {
   # given a NULL category id, maybe return all entries
 }
 
-
 interface Registrar extends(Identifiable) {
   # simple interface to register something
-  # use case: a registry creates a sturdy ref of a Registrar capability and 
+  # use case: a registry creates a sturdy ref of a Registrar capability and
   # this sturdy ref is used to register a service at the registry
 
   struct CrossDomainRestore {

@@ -57,7 +57,9 @@ def test_server_methods_accept_context(calculator_stub_lines):
     import re
 
     server_sections = re.findall(
-        r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)", content, re.DOTALL
+        r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)",
+        content,
+        re.DOTALL,
     )
 
     assert len(server_sections) > 0, "Should find at least one Server class"

@@ -12,6 +12,7 @@ $Go.import("github.com/zalf-rpm/mas-infrastructure/capnproto_schemas/gen/go/fbp"
 
 using Persistent = import "persistence.capnp".Persistent;
 using SturdyRef = import "persistence.capnp".SturdyRef;
+using GatewayRegistrable = import "persistence.capnp".GatewayRegistrable;
 using Common = import "common.capnp";
 using Stoppable = import "service.capnp".Stoppable;
 
@@ -19,8 +20,8 @@ struct IP {
   # an FBP information packet
 
   struct KV {
-    key @0 :Text;
-    desc 	@1 :Text; # optional human readable info on what value is
+    key   @0 :Text;
+    desc  @1 :Text; # optional human readable info on what value is
     value   @2 :AnyPointer;  # would often be a Common.Value
   }
   attributes @0 :List(KV);
@@ -67,19 +68,19 @@ interface Channel(V) extends(Common.Identifiable, Persistent) {
     closeSemantics  @1 :CloseSemantics;
     # semantics of closing the channel
 
-    channelSR       @2 :Text;
+    channelSR       @2 :SturdyRef;
     # sturdy reference to the channel
 
     channel         @5 :Channel(V);
     # capability to started channel
 
-    readerSRs       @3 :List(Text);
+    readerSRs       @3 :List(SturdyRef);
     # sturdy references to the readers
 
     readers         @6 :List(Reader);
     # list of caps to the created Readers
 
-    writerSRs       @4 :List(Text);
+    writerSRs       @4 :List(SturdyRef);
     # sturdy references to the writers
 
     writers         @7 :List(Writer);
@@ -150,8 +151,8 @@ struct PortInfos {
   struct NameAndSR {
     name        @0 :Text;
     union {
-        sr      @1 :Text;           # for single ports
-        srs     @2 :List(Text);     # for array ports
+        sr      @1 :SturdyRef;           # for single ports
+        srs     @2 :List(SturdyRef);     # for array ports
     }
   }
 
@@ -163,22 +164,12 @@ struct PortInfos {
 }
 
 struct Component {
-    interface Runnable extends(Common.Identifiable) {
-      # interface to run remote FBP component
-
-      start @0 (portInfosReaderSr :Text, name :Text) -> (success :Bool);
-      # start component with a sturdy ref to a reader of PortInfos
-      # the component will use the port infos to connect to the channels
-      # and given an optional nam
-
-      stop  @1 () -> (success :Bool);
-      # stop the component
-    }
-
     enum ComponentType {
         standard    @0; # standard FBP component
         iip         @1; # initial information packet
         subflow     @2; # represents a subflow
+        view        @3; # is a view component
+        process     @4; # is a standard FBP component, but based on Process interface
     }
 
     struct Port {
@@ -203,25 +194,68 @@ struct Component {
     inPorts       @2 :List(Port); # the components allowed input ports
     outPorts      @3 :List(Port); # the components allowed input ports
 
-    run           @4 :Runnable; # if non null, interface to runtime instance of this component
+    defaultConfig @4 :Text; # default configuration for component
 
-    defaultConfig @5 :Text; # default configuration for component
+    factory :union {
+      none        @5 :Void;               # no factory available
+      runnable    @6 :Runnable.Factory;   # factory for simple Runnable processes
+      process     @7 :Process.Factory;    # factory for Process based components
+    }
 }
 
-#interface ComponentService extends(Common.Identifiable) {
-#    # serving FBP components (meta)data and possibly capability to run a component somehow/somewhere
-#
-#    struct Entry {
-#        categoryId  @0 :Text;
-#        component   @1 :Component;
-#    }
-#
-#    categories  @2 () -> (categories :List(Common.IdInformation));
-#    # the categories the service offers
-#
-#    list        @0 () -> (entries :List(Entry));
-#    # list all available components
-#
-#    component   @1 (id :Text) -> (comp :Component);
-#    # get a component by it's id
-#}
+interface Runnable extends(Common.Identifiable) {
+  # interface to run remote FBP component
+
+  interface Factory extends(Common.Identifiable) {
+    # minimal interface to produce a Runnable instance
+
+    create @0 () -> (out :Runnable);
+  }
+
+  start @0 (portInfosReaderSr :SturdyRef, name :Text) -> (success :Bool);
+  # start component with a sturdy ref to a reader of PortInfos
+  # the component will use the port infos to connect to the channels
+  # and given an optional nam
+
+  stop  @1 () -> (success :Bool);
+  # stop the component
+}
+
+interface Process extends(Common.Identifiable, GatewayRegistrable) {
+  # bootstrap interface of a running process = instantiated component
+
+  interface Factory extends(Common.Identifiable) {
+    # minimal interface to produce a Process instance
+
+    create @0 () -> (out :Process);
+  }
+
+  inPorts @0 () -> (ports :List(Component.Port));
+  # input ports available on the process
+
+  connectInPort @1 (name :Text, sturdyRef :SturdyRef) -> (connected :Bool);
+  # connect named input port via given sturdyRef
+
+  outPorts @2 () -> (ports :List(Component.Port));
+  # output ports available on the process
+
+  connectOutPort @3 (name :Text, sturdyRef :SturdyRef) -> (connected :Bool);
+  # connect named output port via given sturdyRef
+
+  struct ConfigEntry {
+    name @0 :Text;
+    val  @1 :Common.Value;
+  }
+
+  configEntries @4 () -> (config :List(ConfigEntry));
+  # configuration data for this process
+
+  setConfigEntry @7 ConfigEntry;
+  # set configuration value
+
+  start @5 ();
+  # start process
+
+  stop @6 () -> (success :Bool);
+  # stop process
+}

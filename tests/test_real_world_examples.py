@@ -177,7 +177,7 @@ class TestExampleFunctionality:
             # Actually, pyright execution might be slow, so we should be careful.
             # But for correctness it's valuable.
 
-            result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+            result = subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
 
             # We expect success (0)
             # If it fails, print output for debugging

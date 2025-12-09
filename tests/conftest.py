@@ -62,7 +62,7 @@ def generate_all_stubs():
     with tempfile.NamedTemporaryFile(mode="w", suffix="_capnpc_python", delete=False) as wrapper:
         wrapper.write(f"""#!/usr/bin/env {sys.executable}
 import sys
-sys.path.insert(0, {repr(str(Path(__file__).parent.parent / "src"))})
+sys.path.insert(0, {str(Path(__file__).parent.parent / "src")!r})
 from capnp_stub_generator.capnpc_plugin import main
 main()
 """)
@@ -104,6 +104,7 @@ main()
 
             result = subprocess.run(
                 cmd,
+                check=False,
                 capture_output=True,
                 text=True,
             )
@@ -140,7 +141,7 @@ main()
             ]
             cmd.extend([str(f) for f in zalfmas_files])
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, check=False, capture_output=True, text=True)
             if result.returncode != 0:
                 logger.error(f"Failed to compile zalfmas schemas:\n{result.stderr}")
                 pytest.fail(f"Zalfmas schema compilation failed: {result.stderr}")
@@ -156,6 +157,7 @@ main()
         logger.info("Running pyright validation on generated stubs...")
         pyright_result = subprocess.run(
             ["pyright", str(BASIC_GENERATED_DIR), str(EXAMPLES_GENERATED_DIR), str(CAPNP_GENERATED_DIR)],
+            check=False,
             capture_output=True,
             text=True,
         )
@@ -189,6 +191,7 @@ main()
     logger.info("Running pyright validation...")
     pyright_result = subprocess.run(
         ["pyright", "."],
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -214,6 +217,7 @@ def generated_stubs(generate_all_stubs):
     Returns:
         dict: Dictionary with keys "basic", "examples", "zalfmas"
               pointing to generated stub directories.
+
     """
     return generate_all_stubs
 
@@ -270,6 +274,7 @@ def read_stub_file(stub_path: Path) -> list[str]:
 
     Returns:
         List of lines from the stub file
+
     """
     with open(stub_path) as f:
         return f.readlines()
@@ -287,6 +292,7 @@ def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
 
     Returns:
         Path to the generated .pyi file
+
     """
     # Find the schema file in any of the schema directories
     schema_path = None
@@ -317,6 +323,7 @@ def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
             "-o",
             str(output_dir),
         ],
+        check=False,
         capture_output=True,
         text=True,
     )

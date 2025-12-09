@@ -78,7 +78,7 @@ class TestRPCResultTypes:
             elif in_read_result and "value: float" in line:
                 found_value_float = True
                 break
-            elif in_read_result and line.startswith("    class ") or (in_read_result and line.startswith("class ")):
+            elif (in_read_result and line.startswith("    class ")) or (in_read_result and line.startswith("class ")):
                 break
 
         assert found_value_float, "ReadResult should have value: float field"

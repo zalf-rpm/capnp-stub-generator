@@ -30,7 +30,7 @@ def generated_zalfmas_dir():
 
     GENERATED_ZALFMAS_DIR.mkdir(parents=True, exist_ok=True)
 
-    yield GENERATED_ZALFMAS_DIR
+    return GENERATED_ZALFMAS_DIR
 
     # Keep generated files for inspection
     # shutil.rmtree(GENERATED_ZALFMAS_DIR)

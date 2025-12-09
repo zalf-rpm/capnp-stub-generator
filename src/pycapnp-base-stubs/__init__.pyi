@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # Import submodules
 from capnp import lib, version
 

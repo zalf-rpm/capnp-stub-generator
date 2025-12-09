@@ -21,7 +21,7 @@ interface Admin extends(Common.Identifiable) {
 
   setTimeout @1 (seconds :UInt64);
   # change timeout when service will stop itself
-  # within this timeout a heartbeat message has to be received 
+  # within this timeout a heartbeat message has to be received
   # or the service received a normal message
 
   stop @2 ();
@@ -34,15 +34,13 @@ interface Admin extends(Common.Identifiable) {
   # update the identity of one of the service objects
 }
 
-
 interface SimpleFactory extends(Common.Identifiable) {
   # minimal interface to create service instances
 
   create @0 () -> (caps :List(Common.Identifiable));
-  # create a service, receiving a list of capabilities 
+  # create a service, receiving a list of capabilities
   # to the services interfaces implementing the Identifiable interface
 }
-
 
 interface Factory(Payload) extends(Common.Identifiable) {
   # configurable interface to create service instances with user choosen timeout and registration capabilities
@@ -60,10 +58,10 @@ interface Factory(Payload) extends(Common.Identifiable) {
   }
 
   create @0 CreateParams -> AccessInfo;
-  # create a service with the given parameters and 
+  # create a service with the given parameters and
   # receive information how to access the service in return
 
-  serviceInterfaceNames @1 () -> (names :List(Text)); 
+  serviceInterfaceNames @1 () -> (names :List(Text));
   # return a list of the names the factory will return on a create message
   # these names are the ones to be used for the sturdy ref maps in CreateParams
 }
