@@ -10,15 +10,16 @@ from contextlib import AbstractContextManager, asynccontextmanager
 from ssl import SSLContext
 from typing import IO, Any, Literal, overload
 
+from schema_capnp.schema_capnp import FieldReader as _StructSchemaField
+from schema_capnp.schema_capnp import NestedNodeReader as _NestedNodeReader
+from schema_capnp.schema_capnp import NodeReader as _NodeReader
+
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 # Generated imports for project-specific types
 from tests._generated.examples.calculator import calculator_capnp
 from tests._generated.examples.restorer import restorer_capnp
 from tests._generated.examples.single_value import single_value_capnp
 
-from ...schema_capnp.schema_capnp import FieldReader as _StructSchemaField
-from ...schema_capnp.schema_capnp import NestedNodeReader as _NestedNodeReader
-from ...schema_capnp.schema_capnp import NodeReader as _NodeReader
 from .._internal import CapnpModule as _CapnpModule
 from .._internal import CapnpTypesModule as _CapnpTypesModule
 from .._internal import (
