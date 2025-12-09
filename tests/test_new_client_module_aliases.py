@@ -10,7 +10,7 @@ from __future__ import annotations
 
 def test_new_client_uses_module_aliases_for_current_interface(generate_calculator_stubs):
     """Test that _new_client uses module alias for the current interface's Server type."""
-    stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+    stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Value._new_client should accept _DynamicCapabilityServer
@@ -33,7 +33,7 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
 def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs):
     """Test that _new_client uses module aliases for inherited interface Server types."""
     # Use pre-generated zalfmas stubs which include common.capnp with interface inheritance
-    stub_file = zalfmas_stubs / "common_capnp.pyi"
+    stub_file = zalfmas_stubs / "common_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Identifiable._new_client should accept _DynamicCapabilityServer
@@ -76,7 +76,7 @@ def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs):
 
 def test_new_client_nested_interface_uses_full_module_path(basic_stubs):
     """Test that nested interface _new_client methods use full module path."""
-    stub_file = basic_stubs / "channel_capnp.pyi"
+    stub_file = basic_stubs / "channel_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Channel.Reader._new_client should use _DynamicCapabilityServer
@@ -92,7 +92,7 @@ def test_new_client_nested_interface_uses_full_module_path(basic_stubs):
 
 def test_new_client_return_types_use_client_aliases(zalfmas_stubs):
     """Test that _new_client return types use proper Client type aliases."""
-    stub_file = zalfmas_stubs / "common_capnp.pyi"
+    stub_file = zalfmas_stubs / "common_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # _new_client should return Client types

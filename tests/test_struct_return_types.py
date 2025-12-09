@@ -5,7 +5,7 @@ import re
 
 def test_client_result_uses_reader_only(basic_stubs):
     """Test that client result protocols use Reader types only for structs."""
-    stub_file = basic_stubs / "struct_return_capnp.pyi"
+    stub_file = basic_stubs / "struct_return_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find Client section
@@ -33,7 +33,7 @@ def test_client_result_uses_reader_only(basic_stubs):
 
 def test_server_result_uses_builder_and_reader(basic_stubs):
     """Test that server result protocols use Builder | Reader types."""
-    stub_file = basic_stubs / "struct_return_capnp.pyi"
+    stub_file = basic_stubs / "struct_return_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find Server section
@@ -60,7 +60,7 @@ def test_server_result_uses_builder_and_reader(basic_stubs):
 
 def test_server_named_tuple_has_nested_field(basic_stubs):
     """Test that server NamedTuple result has nested struct field."""
-    stub_file = basic_stubs / "struct_return_capnp.pyi"
+    stub_file = basic_stubs / "struct_return_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     import re

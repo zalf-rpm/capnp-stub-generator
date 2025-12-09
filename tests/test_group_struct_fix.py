@@ -25,7 +25,7 @@ def test_group_struct_naming(tmp_path):
 
     run(args, str(cwd))
 
-    stub_file = output_dir / "repro_group_struct_capnp.pyi"
+    stub_file = output_dir / "repro_group_struct_capnp" / "__init__.pyi"
     assert stub_file.exists()
 
     content = stub_file.read_text()

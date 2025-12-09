@@ -9,7 +9,7 @@ def test_imported_type_aliases_used(zalfmas_stubs):
     # It imports IdInformation from common_capnp
     # Admin.addCategory takes IdInformation
 
-    stub_file = zalfmas_stubs / "mas/schema/registry_capnp.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find AdminClient
@@ -69,7 +69,7 @@ def test_imported_return_type_aliases(zalfmas_stubs):
     # Admin.removeCategory returns List(Identifiable)
     # Identifiable is imported from common_capnp
 
-    stub_file = zalfmas_stubs / "mas/schema/registry_capnp.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find AdminClient

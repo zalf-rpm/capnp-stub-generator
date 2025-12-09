@@ -15,7 +15,6 @@ import capnp
 from capnp.lib.capnp import (
     _EnumSchema,
     _InterfaceSchema,
-    _ParsedSchema,
     _Schema,
     _StructSchema,
 )
@@ -78,7 +77,7 @@ class Writer:
 
     def __init__(
         self,
-        schema: _ParsedSchema | _Schema,
+        schema: _Schema,
         file_path: str,
         schema_loader: capnp.SchemaLoader,
         file_id_to_path: dict[int, str],
@@ -101,7 +100,7 @@ class Writer:
         self.scope: Scope = Scope(name="", id=schema.node.id, parent=None, return_scope=None)
         self.scopes_by_id: dict[int, Scope] = {self.scope.id: self.scope}
 
-        self._schema: _ParsedSchema | _Schema = schema
+        self._schema: _Schema = schema
         self._schema_loader: capnp.SchemaLoader = schema_loader
         self._file_id_to_path: dict[int, str] = file_id_to_path
         self._output_directory: pathlib.Path | None = pathlib.Path(output_directory) if output_directory else None
@@ -113,11 +112,10 @@ class Writer:
         self._module_path: pathlib.Path = pathlib.Path(file_path)
 
         # Python module annotation ID (from python.capnp: annotation module(file): Text)
-        self._python_module_annotation_id = 0x8C5EA3FEE3B0F96C
+        self._python_module_annotation_id: int = 0x8C5EA3FEE3B0F96C
         self._python_module_path: str | None = self._get_python_module_annotation()
 
         # Build a flat mapping of all schemas by ID for nested type resolution
-        # This eliminates the need for get_nested() method
         self._schemas_by_id: dict[int, capnp_types.SchemaType] = {}
         self._build_schema_id_mapping()
 
@@ -283,7 +281,7 @@ class Writer:
                         type_node = slot.type
 
                         # Recursively extract type IDs from complex types
-                        def collect_type_ids(type_obj):
+                        def collect_type_ids(type_obj: TypeReader) -> list[int]:  # type: ignore[no-untyped-def]
                             """Extract all schema IDs referenced by a type."""
                             type_which = type_obj.which()
 
@@ -372,8 +370,7 @@ class Writer:
     ) -> capnp_types.SchemaType | None:
         """Get a nested schema by name from a parent schema.
 
-        This replaces direct calls to schema.get_nested() by looking up the nested
-        schema in our ID mapping.
+        Looks up the nested schema in our ID mapping.
 
         Args:
             parent_schema: The parent schema containing the nested type
@@ -1889,11 +1886,11 @@ class Writer:
         self._add_typing_import("Any")
         return helper.TypeHintedVariable(helper.sanitize_name(field.name), [helper.TypeHint("Any", primary=True)])
 
-    def gen_const(self, schema: _ParsedSchema | _Schema) -> None:
+    def gen_const(self, schema: _Schema) -> None:
         """Generate a `const` object.
 
         Args:
-            schema (_ParsedSchema | _Schema): The schema to generate the `const` object out of.
+            schema (_Schema): The schema to generate the `const` object out of.
 
         """
         assert schema.node.which() == capnp_types.CapnpElementType.CONST
@@ -2092,7 +2089,6 @@ class Writer:
     def _resolve_nested_schema(
         self,
         nested_node: NestedNodeReader,
-        parent_schema: capnp_types.SchemaType,
     ) -> capnp_types.SchemaType | None:
         """Resolve a nested schema from a nested node.
 
@@ -2119,7 +2115,7 @@ class Writer:
 
         """
         for nested_node in schema.node.nestedNodes:
-            nested_schema = self._resolve_nested_schema(nested_node, schema)
+            nested_schema = self._resolve_nested_schema(nested_node)
             if nested_schema:
                 # Don't catch exceptions - let them propagate for debugging
                 self.generate_nested(nested_schema)
@@ -2442,7 +2438,15 @@ class Writer:
                     f"Generating parent interface {parent_schema.node.displayName} before nested {schema.node.displayName}",
                 )
                 # Recursively generate the parent interface first
-                self.gen_interface(parent_schema.as_interface())  # type: ignore[union-attr]
+                # Try to get it as an interface schema from the loader
+                try:
+                    interface_schema = self._schema_loader.get(parent_schema.node.id)
+                    if hasattr(interface_schema, "as_interface"):
+                        self.gen_interface(interface_schema.as_interface())
+                    elif isinstance(interface_schema, _InterfaceSchema):
+                        self.gen_interface(interface_schema)
+                except Exception as e:
+                    logger.debug(f"Could not generate parent interface: {e}")
                 # Now the parent scope should exist
                 parent_scope = self.scopes_by_id.get(schema.node.scopeId)
 
@@ -4086,7 +4090,7 @@ class Writer:
 
         Args:
             schema (SchemaType): The schema to generate types for.
-                Can be _ParsedSchema, _StructSchema, _EnumSchema, _InterfaceSchema,
+                Can be _StructSchema, _EnumSchema, _InterfaceSchema,
                 _Schema, or a SchemaProxy wrapper.
 
         Raises:
@@ -4108,7 +4112,6 @@ class Writer:
 
         # Generate based on node type
         if schema.node.which() == "const":
-            # Const schemas are always _ParsedSchema
             if not self.is_type_id_known(schema.node.id):
                 self.gen_const(schema)
 
@@ -4120,7 +4123,7 @@ class Writer:
                 _ = self.gen_enum(schema.as_enum())
         elif schema.node.which() == "interface":
             if not self.is_type_id_known(schema.node.id):
-                _ = self.gen_interface(schema.as_interface())  # type: ignore[union-attr]
+                _ = self.gen_interface(schema.as_interface())
         elif schema.node.which() == "file":
             # File nodes are skipped - they're just containers
             logger.debug(f"Skipping file node: {schema.node.displayName}")
@@ -4172,7 +4175,7 @@ class Writer:
             matching_path = pathlib.Path(self._file_id_to_path[schema.node.id])
         else:
             # Find the path by checking which file contains this schema as a nested node
-            def search_nested_nodes(schema_obj: _ParsedSchema | _Schema, target_id: int) -> bool:
+            def search_nested_nodes(schema_obj: _Schema, target_id: int) -> bool:
                 """Recursively search for a target ID in nested nodes."""
                 for nested_node in schema_obj.node.nestedNodes:
                     if nested_node.id == target_id:
@@ -4550,13 +4553,10 @@ class Writer:
             if not self.is_type_id_known(type_id):
                 # Try to generate the struct before using it
                 try:
-                    # Use capnp's internal method to get the schema by ID
-                    all_nested = list(self._schema.node.nestedNodes)
-                    for nested_node in all_nested:
-                        if nested_node.id == type_id:
-                            nested_schema = self._schema.get_nested(nested_node.name)  # type: ignore[union-attr]
-                            self.generate_nested(nested_schema)
-                            break
+                    # Look up the schema by ID in our mapping
+                    if type_id in self._schemas_by_id:
+                        nested_schema = self._schemas_by_id[type_id]
+                        self.generate_nested(nested_schema)
                 except Exception as e:
                     logger.debug(f"Could not pre-generate struct with ID {type_id}: {e}")
 
@@ -4579,12 +4579,10 @@ class Writer:
             if not self.is_type_id_known(type_id):
                 # Try to generate the interface before using it
                 try:
-                    all_nested = list(self._schema.node.nestedNodes)
-                    for nested_node in all_nested:
-                        if nested_node.id == type_id:
-                            nested_schema = self._schema.get_nested(nested_node.name)  # type: ignore[union-attr]
-                            self.generate_nested(nested_schema)
-                            break
+                    # Look up the schema by ID in our mapping
+                    if type_id in self._schemas_by_id:
+                        nested_schema = self._schemas_by_id[type_id]
+                        self.generate_nested(nested_schema)
                 except Exception as e:
                     logger.debug(f"Could not pre-generate interface with ID {type_id}: {e}")
 
@@ -4639,7 +4637,7 @@ class Writer:
         # Use _all_type_aliases which contains ONLY the types generated in this module
         for alias_name, alias_data in self._all_type_aliases.items():
             if len(alias_data) >= 2:
-                original_path, flat_name = alias_data[0], alias_data[1]
+                original_path, _ = alias_data[0], alias_data[1]
 
                 # For Reader types - could be struct or list
                 if alias_name.endswith("Reader"):
@@ -4839,7 +4837,7 @@ class Writer:
         out.append("# Build module structure inline")
 
         # Helper function to generate inline module construction code
-        def generate_module_construction(schema_node, parent_path="", indent=0):
+        def generate_module_construction(schema_node: NodeReader, parent_path: str = "", indent: int = 0):
             """Generate code to construct a module and its nested modules."""
             indent_str = ""  # No indentation since we're at module level
 

@@ -5,7 +5,7 @@ import pytest
 
 def test_dynamic_object_reader_import(basic_stubs):
     """Test that _DynamicObjectReader is imported when AnyPointer is used in interface returns."""
-    stub_file = basic_stubs / "generic_interface_capnp.pyi"
+    stub_file = basic_stubs / "generic_interface_capnp" / "__init__.pyi"
     assert stub_file.exists(), f"Stub file not found: {stub_file}"
 
     content = stub_file.read_text()
@@ -16,7 +16,7 @@ def test_dynamic_object_reader_import(basic_stubs):
 
 def test_interface_method_returns_dynamic_object_reader(basic_stubs):
     """Test that interface methods returning AnyPointer have _DynamicObjectReader on client side."""
-    stub_file = basic_stubs / "generic_interface_capnp.pyi"
+    stub_file = basic_stubs / "generic_interface_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find the GenericGetter interface
@@ -32,7 +32,7 @@ def test_interface_method_returns_dynamic_object_reader(basic_stubs):
 
 def test_anypointer_parameter_remains_any(basic_stubs):
     """Test that AnyPointer as method parameter remains as Any (not _DynamicObjectReader)."""
-    stub_file = basic_stubs / "generic_interface_capnp.pyi"
+    stub_file = basic_stubs / "generic_interface_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # The set() method should have value parameter - but current implementation
@@ -42,7 +42,7 @@ def test_anypointer_parameter_remains_any(basic_stubs):
 
 def test_struct_anypointer_field(basic_stubs):
     """Test that AnyPointer in struct fields also uses _DynamicObjectReader."""
-    stub_file = basic_stubs / "dummy_capnp.pyi"
+    stub_file = basic_stubs / "dummy_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # TestAnyPointer struct exists in dummy.capnp
@@ -54,7 +54,7 @@ def test_struct_anypointer_field(basic_stubs):
 
 def test_client_method_signature(basic_stubs):
     """Test that client methods return Result types that contain _DynamicObjectReader fields."""
-    stub_file = basic_stubs / "generic_interface_capnp.pyi"
+    stub_file = basic_stubs / "generic_interface_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Methods should return nested Client.Result
@@ -73,7 +73,7 @@ def test_client_method_signature(basic_stubs):
 
 def test_result_protocol_has_dynamic_object_reader_field(basic_stubs):
     """Test that Result Protocol classes have _DynamicObjectReader typed fields."""
-    stub_file = basic_stubs / "generic_interface_capnp.pyi"
+    stub_file = basic_stubs / "generic_interface_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # GetResult should exist and have _DynamicObjectReader field (client side)
@@ -83,7 +83,7 @@ def test_result_protocol_has_dynamic_object_reader_field(basic_stubs):
 
 def test_pyright_validation_passes(basic_stubs):
     """Test that generated stubs pass pyright validation."""
-    stub_file = basic_stubs / "generic_interface_capnp.pyi"
+    stub_file = basic_stubs / "generic_interface_capnp" / "__init__.pyi"
 
     # The conftest.py already runs pyright during stub generation
     # If we got here, pyright validation passed
@@ -100,7 +100,7 @@ def test_pyright_validation_passes(basic_stubs):
 
 def test_multiple_result_fields_with_anypointer(basic_stubs):
     """Test that methods with multiple AnyPointer result fields work correctly."""
-    stub_file = basic_stubs / "generic_interface_capnp.pyi"
+    stub_file = basic_stubs / "generic_interface_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # getMultiple() returns (first :AnyPointer, second :AnyPointer)

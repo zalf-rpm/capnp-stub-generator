@@ -5,7 +5,7 @@ import subprocess
 
 def test_any_pointer_setters(basic_stubs):
     """Test that AnyPointer fields accept various types in setters."""
-    stub_file = basic_stubs / "any_pointer_capnp.pyi"
+    stub_file = basic_stubs / "any_pointer_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Check for AnyPointer type alias

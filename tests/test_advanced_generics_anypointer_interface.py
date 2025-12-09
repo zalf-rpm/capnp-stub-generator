@@ -5,7 +5,7 @@ SCHEMAS_DIR = Path(__file__).parent / "schemas" / "basic"
 
 def test_generics_anypointer_interface(basic_stubs):
     """Test that generics with AnyPointer, generic instantiations, and interfaces are handled."""
-    stub = basic_stubs / "advanced_features_capnp.pyi"
+    stub = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     assert stub.exists(), "Stub should be generated"
 
     content = stub.read_text()

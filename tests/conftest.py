@@ -123,6 +123,10 @@ main()
         # Generate example schemas
         compile_schemas(EXAMPLES_SCHEMAS_DIR, EXAMPLES_GENERATED_DIR)
 
+        # Generate capnp schemas (c++.capnp, schema.capnp)
+        if CAPNP_SCHEMAS_DIR.exists():
+            compile_schemas(CAPNP_SCHEMAS_DIR, CAPNP_GENERATED_DIR)
+
         # Generate zalfmas schemas (with Python module annotations)
         # Exclude a.capnp which has duplicate ID and files in capnp folder (system schemas)
         zalfmas_files = list(ZALFMAS_SCHEMAS_DIR.rglob("*.capnp"))
@@ -226,6 +230,7 @@ main()
         "examples": EXAMPLES_GENERATED_DIR,
         "zalfmas": ZALFMAS_GENERATED_DIR,
         "zalfmas_no_annotations": ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR,
+        "capnp": CAPNP_GENERATED_DIR,
     }
 
 
@@ -234,7 +239,7 @@ def generated_stubs(generate_all_stubs):
     """Provide access to generated stub directories.
 
     Returns:
-        dict: Dictionary with keys "basic", "examples", "zalfmas"
+        dict: Dictionary with keys "basic", "examples", "zalfmas", "capnp"
               pointing to generated stub directories.
 
     """
@@ -271,6 +276,12 @@ def zalfmas_no_annotations_stubs(generated_stubs):
     return generated_stubs["zalfmas_no_annotations"]
 
 
+@pytest.fixture(scope="session")
+def capnp_stubs(generated_stubs):
+    """Provide path to generated capnp stubs (schema.capnp, c++.capnp)."""
+    return generated_stubs["capnp"]
+
+
 # Legacy fixtures for backward compatibility (deprecated)
 @pytest.fixture
 def generate_calculator_stubs(calculator_stubs):
@@ -281,7 +292,7 @@ def generate_calculator_stubs(calculator_stubs):
 @pytest.fixture
 def calculator_stub_lines(calculator_stubs):
     """Read calculator stub file lines."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     with open(stub_file) as f:
         return f.readlines()
 
@@ -308,8 +319,10 @@ def read_stub_file(stub_path: Path) -> list[str]:
 def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
     """Generate a stub from a schema file (for temporary test generation).
 
-    This should only be used for CLI tests or temporary validation.
+    This should only be used for tests that need custom generation.
     Most tests should use the pre-generated stubs from generate_all_stubs fixture.
+
+    Uses the run module directly.
 
     Args:
         schema_name: Name of the schema file (e.g., "calculator.capnp")
@@ -339,33 +352,36 @@ def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
     if not schema_path:
         pytest.fail(f"Schema {schema_name} not found in schema directories")
 
-    # Generate the stub
-    result = subprocess.run(
-        [
-            "capnp-stub-generator",
-            "-p",
-            str(schema_path),
-            "-o",
-            str(output_dir),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
+    # Use the run module directly
+    import argparse
+
+    from capnp_stub_generator.run import run
+
+    # Create minimal args namespace
+    args = argparse.Namespace(
+        paths=[str(schema_path)],
+        output_dir=str(output_dir),
+        excludes=[],
+        recursive=False,
+        clean=[],
+        import_paths=[],
+        skip_pyright=True,
+        augment_capnp_stubs=False,
     )
 
-    if result.returncode != 0:
-        pytest.fail(f"Failed to generate stub: {result.stderr}")
+    # Call run
+    run(args, str(schema_path.parent))
 
-    # Return path to generated .pyi file
-    stub_name = schema_path.stem + "_capnp.pyi"
-    return output_dir / stub_name
+    # Return path to generated .pyi file (as package)
+    stub_name = schema_path.stem + "_capnp"
+    return output_dir / stub_name / "__init__.pyi"
 
 
 # Specific stub fixtures for individual files
 @pytest.fixture(scope="session")
 def dummy_stub_file(basic_stubs):
-    """Provide path to dummy_capnp.pyi."""
-    return basic_stubs / "dummy_capnp.pyi"
+    """Provide path to dummy_capnp __init__.pyi."""
+    return basic_stubs / "dummy_capnp" / "__init__.pyi"
 
 
 @pytest.fixture(scope="session")

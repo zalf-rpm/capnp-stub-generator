@@ -10,8 +10,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-
-from capnp_stub_generator.cli import main
+from test_helpers import run_generator
 
 # Test directories
 TESTS_DIR = Path(__file__).parent
@@ -58,10 +57,10 @@ def test_simple_interface_inheritance(generated_dir):
 
     schema_paths = [str(f) for f in schema_files]
     args = ["-p"] + schema_paths + ["-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
-    main(args)
+    run_generator(args)
 
     # Check the generated stub (in mas/schema subdirectory due to Python module annotations)
-    stub_file = generated_dir / "mas" / "schema" / "model_capnp.pyi"
+    stub_file = generated_dir / "mas" / "schema" / "model_capnp" / "__init__.pyi"
     assert stub_file.exists(), f"Stub file was not generated at {stub_file}"
 
     content = stub_file.read_text()
@@ -107,9 +106,9 @@ def test_multiple_interface_inheritance(generated_dir):
     # Generate stub for common.capnp
     schema_file = ZALFMAS_DIR / "common.capnp"
     args = ["-p", str(schema_file), "-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
-    main(args)
+    run_generator(args)
 
-    stub_file = generated_dir / "mas" / "schema" / "common_capnp.pyi"
+    stub_file = generated_dir / "mas" / "schema" / "common_capnp" / "__init__.pyi"
     assert stub_file.exists(), "Stub file was not generated"
 
     content = stub_file.read_text()
@@ -166,9 +165,9 @@ def test_interface_with_persistent_inheritance(generated_dir):
 
     schema_paths = [str(f) for f in schema_files]
     args = ["-p"] + schema_paths + ["-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
-    main(args)
+    run_generator(args)
 
-    stub_file = generated_dir / "mas" / "schema" / "climate_capnp.pyi"
+    stub_file = generated_dir / "mas" / "schema" / "climate_capnp" / "__init__.pyi"
     assert stub_file.exists(), "Stub file was not generated"
 
     content = stub_file.read_text()
@@ -213,9 +212,9 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir):
 
     schema_paths = [str(f) for f in schema_files]
     args = ["-p"] + schema_paths + ["-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
-    main(args)
+    run_generator(args)
 
-    stub_file = generated_dir / "mas" / "schema" / "cluster_admin_service_capnp.pyi"
+    stub_file = generated_dir / "mas" / "schema" / "cluster_admin_service_capnp" / "__init__.pyi"
     assert stub_file.exists(), "Stub file was not generated"
 
     content = stub_file.read_text()
@@ -266,11 +265,11 @@ def test_interface_method_inheritance_visibility(generated_dir):
 
     schema_paths = [str(f) for f in schema_files]
     args = ["-p"] + schema_paths + ["-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
-    main(args)
+    run_generator(args)
 
     # Read both stub files
-    model_stub = (generated_dir / "mas" / "schema" / "model_capnp.pyi").read_text()
-    common_stub = (generated_dir / "mas" / "schema" / "common_capnp.pyi").read_text()
+    model_stub = (generated_dir / "mas" / "schema" / "model_capnp" / "__init__" / "__init__.pyi").read_text()
+    common_stub = (generated_dir / "mas" / "schema" / "common_capnp" / "__init__" / "__init__.pyi").read_text()
 
     # Verify Identifiable has info() method
     # This should be in the IdentifiableClient class
@@ -294,9 +293,9 @@ def test_empty_interface_with_inheritance(generated_dir):
     """
     schema_file = ZALFMAS_DIR / "common.capnp"
     args = ["-p", str(schema_file), "-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
-    main(args)
+    run_generator(args)
 
-    stub_file = generated_dir / "mas" / "schema" / "common_capnp.pyi"
+    stub_file = generated_dir / "mas" / "schema" / "common_capnp" / "__init__.pyi"
     assert stub_file.exists(), "Stub file was not generated"
 
     content = stub_file.read_text()

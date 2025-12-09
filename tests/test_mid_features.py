@@ -7,7 +7,7 @@ import pytest
 
 @pytest.fixture(scope="module")
 def mid_features_stub_lines(basic_stubs):
-    stub_path = basic_stubs / "mid_features_capnp.pyi"
+    stub_path = basic_stubs / "mid_features_capnp" / "__init__.pyi"
     with open(stub_path) as f:
         return f.readlines()
 

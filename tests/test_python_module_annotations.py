@@ -2,16 +2,16 @@
 
 from pathlib import Path
 
+from test_helpers import run_generator
+
 
 def test_module_annotation_creates_directory_structure(tmp_path):
     """Test that $Python.module() creates the correct directory structure."""
-    from capnp_stub_generator.cli import main
-
     # Use zalfmas climate schema which has $Python.module("mas.schema.climate")
     schema_path = Path("tests/schemas/zalfmas/climate.capnp")
     output_dir = tmp_path / "output"
 
-    main(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
+    run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
     # Check that the directory structure was created according to the annotation
     expected_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "__init__.pyi"
@@ -32,12 +32,10 @@ def test_module_annotation_creates_directory_structure(tmp_path):
 
 def test_module_annotation_uses_absolute_imports(tmp_path):
     """Test that stubs with $Python.module() use absolute imports."""
-    from capnp_stub_generator.cli import main
-
     schema_path = Path("tests/schemas/zalfmas/climate.capnp")
     output_dir = tmp_path / "output"
 
-    main(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
+    run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
     stub_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "__init__.pyi"
     content = stub_path.read_text()
@@ -56,50 +54,44 @@ def test_module_annotation_uses_absolute_imports(tmp_path):
 
 def test_schema_without_annotation_still_works(tmp_path):
     """Test that schemas without $Python.module() still work with relative imports."""
-    from capnp_stub_generator.cli import main
-
     # Use addressbook schema which doesn't have Python module annotations
     schema_path = Path("tests/schemas/examples/addressbook/addressbook.capnp")
     output_dir = tmp_path / "output"
 
-    main(["-p", str(schema_path), "-o", str(output_dir), "--no-pyright"])
+    run_generator(["-p", str(schema_path), "-o", str(output_dir), "--no-pyright"])
 
     # Without annotation, should create flat structure
-    expected_path = output_dir / "addressbook_capnp.pyi"
+    expected_path = output_dir / "addressbook_capnp" / "__init__.pyi"
     assert expected_path.exists(), f"Expected stub at {expected_path}"
 
 
 def test_mixed_annotated_and_non_annotated_schemas(tmp_path):
     """Test that annotated and non-annotated schemas can coexist."""
-    from capnp_stub_generator.cli import main
-
     # Generate both types of schemas, but use different import paths to avoid conflicts
     annotated_schema = Path("tests/schemas/zalfmas/date.capnp")
     non_annotated_schema = Path("tests/schemas/examples/addressbook/addressbook.capnp")
     output_dir = tmp_path / "output"
 
-    main(["-p", str(annotated_schema), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
+    run_generator(["-p", str(annotated_schema), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
-    main(["-p", str(non_annotated_schema), "-o", str(output_dir), "--no-pyright"])
+    run_generator(["-p", str(non_annotated_schema), "-o", str(output_dir), "--no-pyright"])
 
     # Annotated schema should have module structure
     annotated_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "__init__.pyi"
     assert annotated_path.exists(), "Annotated schema should use module structure"
 
     # Non-annotated schema should have flat structure
-    non_annotated_path = output_dir / "addressbook_capnp.pyi"
+    non_annotated_path = output_dir / "addressbook_capnp" / "__init__.pyi"
     assert non_annotated_path.exists(), "Non-annotated schema should use flat structure"
 
 
 def test_nested_module_paths(tmp_path):
     """Test that deeply nested module paths work correctly."""
-    from capnp_stub_generator.cli import main
-
     # date.capnp has $Python.module("mas.schema.common")
     schema_path = Path("tests/schemas/zalfmas/date.capnp")
     output_dir = tmp_path / "output"
 
-    main(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
+    run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
     expected_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "__init__.pyi"
     assert expected_path.exists(), f"Expected stub at {expected_path}"

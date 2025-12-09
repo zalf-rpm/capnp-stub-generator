@@ -1,6 +1,6 @@
 def test_advanced_constants_and_version_fields(basic_stubs):
     """Test that constants and versioned struct fields are properly generated."""
-    stub_file = basic_stubs / "advanced_features_capnp.pyi"
+    stub_file = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     assert stub_file.exists(), "Expected stub file for advanced features"
 
     content = stub_file.read_text()

@@ -13,8 +13,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-
-from capnp_stub_generator.cli import main
+from test_helpers import run_generator
 
 # Test directories
 TESTS_DIR = Path(__file__).parent
@@ -39,18 +38,8 @@ def generated_zalfmas_dir():
 def test_generate_zalfmas_stubs(generated_zalfmas_dir):
     """Test generating stubs for zalfmas schemas using recursive discovery.
 
-    This test uses the CLI with recursive search and excludes to generate stubs
+    This test uses recursive search and excludes to generate stubs
     for all valid zalfmas schemas, excluding known problematic files.
-    
-    Equivalent to running:
-    capnp-stub-generator -p zalfmas_capnp_schemas \
-                         -o _generated/zalfmas \
-                         -I zalfmas_capnp_schemas \
-                         -r \
-                         -e zalfmas_capnp_schemas/a.capnp \
-                            zalfmas_capnp_schemas/climate_data_old.capnp \
-                            zalfmas_capnp_schemas/vr.capnp \
-                            zalfmas_capnp_schemas/x.capnp
     """
     # Define files to exclude (problematic schemas that exist)
     # Note: Only a.capnp exists; the others are mentioned for documentation
@@ -63,7 +52,7 @@ def test_generate_zalfmas_stubs(generated_zalfmas_dir):
 
     # Call the CLI main function directly
     try:
-        main(args)
+        run_generator(args)
     except Exception as e:
         pytest.fail(f"Stub generation failed: {e}")
 

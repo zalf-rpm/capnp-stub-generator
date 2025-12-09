@@ -5,7 +5,7 @@ import subprocess
 
 def test_enum_type_alias_exists(calculator_stubs):
     """Test that enum type aliases are generated."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Check that the enum type alias exists (flattened name)

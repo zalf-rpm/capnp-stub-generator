@@ -5,7 +5,7 @@ from __future__ import annotations
 
 def test_complex_lists(basic_stubs):
     """Test that multi-dimensional lists are properly typed with nested Sequence types."""
-    stub = basic_stubs / "advanced_features_capnp.pyi"
+    stub = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     assert stub.exists(), "Stub should be generated"
 
     content = stub.read_text()

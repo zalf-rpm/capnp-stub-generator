@@ -7,7 +7,7 @@ from pathlib import Path
 def test_capnpc_plugin_invocation(tmp_path, basic_stubs):
     """Test that capnpc can invoke our plugin."""
     # Create a wrapper script for the plugin
-    plugin_name = "capnpc-stub-generator"
+    plugin_name = "capnpc-python"
     plugin_path = tmp_path / plugin_name
 
     # We need to make sure we use the current python environment and PYTHONPATH
@@ -35,10 +35,10 @@ def test_capnpc_plugin_invocation(tmp_path, basic_stubs):
     output_dir.mkdir()
 
     # Run capnpc
-    # capnpc -o stub-generator:{output_dir} {schema_path}
+    # capnpc -o python:{output_dir} {schema_path}
     # capnpc will change CWD to output_dir before invoking the plugin
 
-    cmd = ["capnpc", f"-ostub-generator:{output_dir}", str(schema_path)]
+    cmd = ["capnpc", f"-opython:{output_dir}", str(schema_path)]
 
     result = subprocess.run(cmd, check=False, env=env, capture_output=True, text=True)
 
@@ -47,26 +47,18 @@ def test_capnpc_plugin_invocation(tmp_path, basic_stubs):
     assert result.returncode == 0, f"capnpc failed: {result.stderr}"
 
     # Check if output was generated
-    # The plugin should generate dummy_capnp.pyi in output_dir, preserving directory structure
-    # Since we passed absolute path, it might be tricky to predict exact path if we don't know how capnpc handles it.
-    # But we saw in logs it generated 'tests/schemas/basic/dummy_capnp.pyi' relative to output.
-
-    # Let's find it
-    found_files = list(output_dir.rglob("dummy_capnp.pyi"))
+    # The plugin generates dummy_capnp as a package with __init__.pyi
+    found_files = list(output_dir.rglob("dummy_capnp/__init__.pyi"))
     assert len(found_files) > 0, f"Output file not found. Files: {list(output_dir.rglob('*'))}"
     expected_output = found_files[0]
 
     content = expected_output.read_text()
-    # if "class _TestAllTypesStructModule" not in content:
-    #     print(f"Generated content:\n{content}")
-    #     print(f"capnpc stderr:\n{result.stderr}")
-    # assert "class _TestAllTypesStructModule" in content
     assert content  # Just check it's not empty (header is present)
 
 
 def test_capnpc_plugin_bundling_options(tmp_path):
     """Test that bundling is enabled by default in plugin mode."""
-    plugin_name = "capnpc-stub-generator"
+    plugin_name = "capnpc-python"
     plugin_path = tmp_path / plugin_name
 
     python_exe = sys.executable
@@ -94,7 +86,7 @@ def test_capnpc_plugin_bundling_options(tmp_path):
     stubs_dir = base_output_dir / "stubs"
     stubs_dir.mkdir()
 
-    cmd = ["capnpc", "-ostub-generator:stubs", str(schema_path)]
+    cmd = ["capnpc", "-opython:stubs", str(schema_path)]
 
     result = subprocess.run(cmd, check=False, env=env, cwd=base_output_dir, capture_output=True, text=True)
 
@@ -102,7 +94,7 @@ def test_capnpc_plugin_bundling_options(tmp_path):
 
     # Check stubs in stubs_dir
     assert stubs_dir.exists()
-    found_files = list(stubs_dir.rglob("minimal_capnp.pyi"))
+    found_files = list(stubs_dir.rglob("minimal_capnp/__init__.pyi"))
     assert len(found_files) > 0, "Stub file not found in stubs subdir"
 
     # Check content
@@ -112,5 +104,5 @@ def test_capnpc_plugin_bundling_options(tmp_path):
     # Check bundled dependencies are now in stubs_dir (the output directory)
     # Since bundling is enabled by default, capnp-stubs should be bundled in the output dir
     assert (stubs_dir / "capnp-stubs").exists(), "capnp-stubs not bundled"
-    assert (stubs_dir / "schema").exists(), "schema not bundled"
-    assert (stubs_dir / "schema" / "schema.capnp").exists(), "schema.capnp not found"
+    assert (stubs_dir / "schema_capnp").exists(), "schema_capnp not bundled"
+    assert (stubs_dir / "schema_capnp" / "schema.capnp").exists(), "schema.capnp not found"

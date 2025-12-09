@@ -6,7 +6,7 @@ import re
 
 
 def test_top_level_union_which_literal(basic_stubs):
-    path = basic_stubs / "advanced_features_capnp.pyi"
+    path = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     with open(path, encoding="utf8") as f:
         lines = f.readlines()
     # Expect which() function for discriminant unions.
@@ -14,7 +14,7 @@ def test_top_level_union_which_literal(basic_stubs):
 
 
 def test_union_field_names_present(basic_stubs):
-    path = basic_stubs / "advanced_features_capnp.pyi"
+    path = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     with open(path, encoding="utf8") as f:
         lines = f.readlines()
     # Check representative union member names appear somewhere (future enhancement: in Literal).

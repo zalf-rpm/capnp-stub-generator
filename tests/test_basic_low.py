@@ -8,7 +8,7 @@ import pytest
 @pytest.fixture(scope="module")
 def basic_low_stub_lines(basic_stubs):
     """Read basic_low.capnp stub lines."""
-    stub_path = basic_stubs / "basic_low_capnp.pyi"
+    stub_path = basic_stubs / "basic_low_capnp" / "__init__.pyi"
     with open(stub_path, encoding="utf8") as f:
         return f.readlines()
 

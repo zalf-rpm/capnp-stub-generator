@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import capnp
-from capnp.lib.capnp import _ParsedSchema, _Schema
+from capnp.lib.capnp import _Schema
 
 from capnp_stub_generator.writer import Writer
 
@@ -900,7 +900,7 @@ def format_outputs(raw_input: str, is_pyi: bool) -> str:
 
 
 def _generate_stubs_from_schema(
-    schema: _ParsedSchema | _Schema,
+    schema: _Schema,
     file_path: str,
     schema_loader: capnp.SchemaLoader,
     file_id_to_path: dict[int, str],

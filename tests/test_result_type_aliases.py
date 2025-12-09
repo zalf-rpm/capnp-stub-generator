@@ -5,7 +5,7 @@ import pytest
 
 def test_result_type_aliases_exist(calculator_stubs):
     """Test that Result type aliases are generated at the top level."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Check for Result type aliases in the top-level section
@@ -18,7 +18,7 @@ def test_result_type_aliases_exist(calculator_stubs):
 
 def test_result_type_aliases_point_to_client_nested_types(calculator_stubs):
     """Test that Result type aliases point to Client-nested Result classes."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Result types should point to Client.Result (not Server.Result)
@@ -37,7 +37,7 @@ def test_result_type_aliases_point_to_client_nested_types(calculator_stubs):
 
 def test_result_type_aliases_alongside_builder_reader(calculator_stubs):
     """Test that Result type aliases appear alongside Builder and Reader aliases."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find the type alias section
@@ -63,7 +63,7 @@ def test_result_type_aliases_alongside_builder_reader(calculator_stubs):
 
 def test_result_type_aliases_in_sorted_order(calculator_stubs):
     """Test that Result type aliases are sorted alphabetically with other aliases."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Extract all type aliases
@@ -90,7 +90,7 @@ def test_result_type_aliases_in_sorted_order(calculator_stubs):
 def test_void_method_result_type_alias_exists(calculator_stubs):
     """Test that void methods also have Result type aliases."""
     # For the channel example with void methods
-    channel_stub = calculator_stubs.parent.parent / "basic" / "interfaces_capnp.pyi"
+    channel_stub = calculator_stubs.parent.parent / "basic" / "interfaces_capnp" / "__init__.pyi"
 
     if not channel_stub.exists():
         pytest.skip("Channel stub not available")
@@ -105,7 +105,7 @@ def test_void_method_result_type_alias_exists(calculator_stubs):
 
 def test_nested_interface_result_type_aliases(calculator_stubs):
     """Test that nested interfaces (Value, Function) have Result type aliases."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Value interface has read() -> ReadResult
@@ -119,7 +119,7 @@ def test_nested_interface_result_type_aliases(calculator_stubs):
 
 def test_result_type_alias_usage_in_type_hints(calculator_stubs):
     """Test that Result type aliases can be used in type hints (manual check)."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # The type aliases should be at module level, making them usable:
@@ -134,7 +134,7 @@ def test_result_type_alias_usage_in_type_hints(calculator_stubs):
 
 def test_result_type_count_matches_method_count(calculator_stubs):
     """Test that we have Result type aliases for all interface methods."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Count Result type aliases for Calculator methods

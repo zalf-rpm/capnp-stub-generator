@@ -18,7 +18,7 @@ class TestRPCResultTypes:
 
     def test_evaluate_returns_result_with_value_field(self, generate_calculator_stubs):
         """Test that evaluate() returns a result with .value attribute."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # Should have EvaluateResult class nested in CalculatorClient
@@ -33,7 +33,7 @@ class TestRPCResultTypes:
 
     def test_deffunction_returns_result_with_func_field(self, generate_calculator_stubs):
         """Test that defFunction() returns a result with .func attribute."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # Should have DeffunctionResult class nested in CalculatorClient
@@ -50,7 +50,7 @@ class TestRPCResultTypes:
 
     def test_getoperator_returns_result_with_func_field(self, generate_calculator_stubs):
         """Test that getOperator() returns a result with .func attribute."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # Should have GetoperatorResult class
@@ -61,7 +61,7 @@ class TestRPCResultTypes:
 
     def test_nested_interface_read_returns_result(self, generate_calculator_stubs):
         """Test that nested interface Value.read() returns result with .value."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # Should have ReadResult class
@@ -85,7 +85,7 @@ class TestRPCResultTypes:
 
     def test_nested_interface_call_returns_result(self, generate_calculator_stubs):
         """Test that nested interface Function.call() returns result with .value."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # Should have CallResult class
@@ -103,7 +103,7 @@ class TestRPCResultsAreAwaitable:
 
     def test_result_types_are_protocols(self, generate_calculator_stubs):
         """Test that result types are Protocol classes that inherit from Awaitable."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # All result types should inherit from Awaitable[Result] for promise pipelining
@@ -120,7 +120,7 @@ class TestRPCResultsAreAwaitable:
 
     def test_awaitable_imported(self, generate_calculator_stubs):
         """Test that Awaitable is imported from typing."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # Should import Awaitable
@@ -133,7 +133,7 @@ class TestEnumParametersAcceptLiterals:
 
     def test_getoperator_accepts_string_literals(self, generate_calculator_stubs):
         """Test that getOperator op parameter accepts string literals."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # getOperator should accept int | Literal[...] | None (optional) -> now uses CalculatorOperatorEnum alias
@@ -142,7 +142,7 @@ class TestEnumParametersAcceptLiterals:
 
     def test_enum_literals_match_enum_values(self, generate_calculator_stubs):
         """Test that the enum literal values match the actual enum."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # Just check that the literal types are present somewhere (client method)
@@ -150,7 +150,7 @@ class TestEnumParametersAcceptLiterals:
 
     def test_literal_imported(self, generate_calculator_stubs):
         """Test that Literal is imported."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # Should import Literal
@@ -163,7 +163,7 @@ class TestRPCResultFieldTypes:
 
     def test_interface_result_fields(self, generate_calculator_stubs):
         """Test that interface-typed result fields are correct."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # EvaluateResult.value should be _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient (nested interface type)
@@ -183,7 +183,7 @@ class TestRPCResultFieldTypes:
 
     def test_primitive_result_fields(self, generate_calculator_stubs):
         """Test that primitive-typed result fields are correct."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
         # ReadResult.value should be float (primitive type)

@@ -12,14 +12,13 @@ This is a Python stub generator that creates `.pyi` type hint files from Cap'n P
 ## Project Structure
 ```
 src/capnp_stub_generator/
-├── cli.py              # Command-line interface and argument parsing
+├── capnpc_plugin.py    # Cap'n Proto compiler plugin (entry point)
 ├── run.py              # Main execution logic and file processing
 ├── writer.py           # Core stub generation logic (main class: Writer)
 ├── writer_dto.py       # Data transfer objects for generation contexts
 ├── scope.py            # Scope management for type resolution
 ├── helper.py           # Utility functions
-├── capnp_types.py      # Type definitions and mappings
-└── __main__.py         # Entry point
+└── capnp_types.py      # Type definitions and mappings
 tests/
 ├── schemas/            # Test Cap'n Proto schemas
 │   ├── basic/          # Basic feature tests
@@ -31,23 +30,14 @@ tests/
 
 ## Running the Generator
 
-### CLI Usage
+### Plugin Usage
+The generator is designed to be used as a Cap'n Proto compiler plugin:
+
 ```bash
-capnp-stub-generator \
-    -p "path/to/schemas/**/*.capnp" \     # Schema files to process
-    -c "output/**/*_capnp.py" \            # Files to clean before generation
-    -e "**/excluded/**/*.capnp" \          # Exclude patterns
-    -I /path/to/import/roots \             # Import paths for absolute imports
-    -o output/directory \                  # Output directory (optional)
-    -r                                     # Recursive search
-    --no-pyright                           # Skip pyright validation
+capnpc -opython:/output/dir schema.capnp
 ```
 
-### Important CLI Notes
-- **Always generate all files at once** to properly resolve dependencies and imports between schemas
-- Use `-I` flag for schemas with absolute imports (e.g., `import "/capnp/c++.capnp"`)
-- Multiple `-I` paths can be specified for complex import hierarchies
-- Default behavior: stubs are generated adjacent to schema files
+This invokes the `capnpc-python` plugin which automatically generates `.pyi` stub files alongside the compiled schemas.
 - With `-o`: all stubs go to specified output directory
 
 ## Testing
@@ -128,8 +118,8 @@ Test RPC interface generation:
 #### 6. Return Type Tests
 - `test_return_types.py` - Struct return types (Base, Builder, Reader variants)
 
-#### 7. CLI Tests
-- `test_cli.py` - Comprehensive CLI argument testing (30+ tests)
+#### 7. Plugin Tests
+- `test_plugin.py` - Cap'n Proto plugin invocation tests
 - `test_directory_structure.py` - Output directory structure preservation
 
 #### 8. Real-World Tests

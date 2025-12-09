@@ -10,7 +10,7 @@ This test verifies that both variants are generated correctly.
 
 def test_both_method_variants_exist(calculator_stubs):
     """Both regular and _context variant methods should be generated."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Regular method with individual parameters (single line signature)
@@ -25,7 +25,7 @@ def test_both_method_variants_exist(calculator_stubs):
 
 def test_context_variant_signature(calculator_stubs):
     """_context methods should have correct signature."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find all _context methods
@@ -49,7 +49,7 @@ def test_context_variant_signature(calculator_stubs):
 
 def test_callcontext_has_params_and_results(calculator_stubs):
     """CallContext should have both params and results attributes."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Check a method with parameters and results
@@ -62,7 +62,7 @@ def test_callcontext_has_params_and_results(calculator_stubs):
 
 def test_callcontext_void_method(basic_stubs):
     """CallContext for void methods should have params but no results."""
-    stub_file = basic_stubs / "channel_capnp.pyi"
+    stub_file = basic_stubs / "channel_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Check void method CallContext (Reader.close is a void method)
@@ -85,7 +85,7 @@ def test_callcontext_void_method(basic_stubs):
 
 def test_nested_interface_context_methods(calculator_stubs):
     """Nested interfaces should also have _context methods."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Calculator.Value is a nested interface (now _ValueInterfaceModule inside _CalculatorInterfaceModule)
@@ -100,7 +100,7 @@ def test_nested_interface_context_methods(calculator_stubs):
 
 def test_context_method_documentation(calculator_stubs):
     """Verify the _context methods work as documented in pycapnp."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # According to documentation:
@@ -125,7 +125,7 @@ def test_context_method_documentation(calculator_stubs):
 
 def test_context_methods_count(calculator_stubs):
     """Count that all interface methods have _context variants."""
-    stub_file = calculator_stubs / "calculator_capnp.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     import re

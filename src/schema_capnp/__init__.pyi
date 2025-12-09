@@ -1,4 +1,4 @@
-"""This is an automatically generated stub for `schema.capnp`."""
+"""This is an automatically generated stub for `schema_new.capnp`."""
 
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager

@@ -17,7 +17,7 @@ class TestServerContextParameter:
 
     def test_context_is_in_stubs(self, generate_calculator_stubs):
         """Verify that generated stubs explicitly list _context with proper typing."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         assert stub_file.exists(), "Calculator stub file not generated"
 
         stub_content = stub_file.read_text()
@@ -61,7 +61,7 @@ class TestServerContextParameter:
 
     def test_context_parameter_position(self, generate_calculator_stubs):
         """Test that _context comes after regular parameters, before **kwargs."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
 
         import re
@@ -102,7 +102,7 @@ class TestContextTypeHints:
 
     def test_context_has_callcontext_type(self, generate_calculator_stubs):
         """Test that _context parameter uses CallContext types."""
-        stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
 
         # Find a server method and verify its _context type
@@ -121,7 +121,7 @@ class TestContextTypeHints:
 
 def test_server_context_parameter_summary(generate_calculator_stubs):
     """Summary test showing _context parameter is now mandatory and typed."""
-    stub_file = generate_calculator_stubs / "calculator_capnp.pyi"
+    stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     import re

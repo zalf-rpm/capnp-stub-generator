@@ -78,7 +78,7 @@ def test_interfaces_protocol_and_any_and_iterator():
 def test_imports_cross_module_reference():
     # Use pre-generated stubs from basic directory
     # Both import_base and import_user should already be generated together
-    user_stub = generated_dir / "import_user_capnp.pyi"
+    user_stub = generated_dir / "import_user_capnp" / "__init__.pyi"
     user_lines = _read(user_stub)
     # With nested structure, Shared.Reader and Shared.Builder are used
     # Reader class should return Shared.Reader

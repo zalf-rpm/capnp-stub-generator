@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from capnp.lib.capnp import (
         _EnumSchema,
         _InterfaceSchema,
-        _ParsedSchema,
         _Schema,
         _StructSchema,
     )
@@ -49,4 +48,4 @@ class CapnpElementType:
     INTERFACE = "interface"
 
 
-type SchemaType = _ParsedSchema | _StructSchema | _EnumSchema | _InterfaceSchema | _Schema
+type SchemaType = _StructSchema | _EnumSchema | _InterfaceSchema | _Schema

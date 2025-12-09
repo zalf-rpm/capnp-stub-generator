@@ -6,13 +6,13 @@ import pytest
 @pytest.fixture(scope="module")
 def dummy_stub_file(basic_stubs):
     """Get pre-generated dummy schema stub."""
-    return basic_stubs / "dummy_capnp.pyi"
+    return basic_stubs / "dummy_capnp" / "__init__.pyi"
 
 
 @pytest.fixture(scope="module")
 def interface_stub_file(basic_stubs):
     """Get pre-generated interface schema stub."""
-    return basic_stubs / "interfaces_capnp.pyi"
+    return basic_stubs / "interfaces_capnp" / "__init__.pyi"
 
 
 class TestStructReturnTypes:

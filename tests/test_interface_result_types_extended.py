@@ -6,7 +6,7 @@ import re
 def test_registry_result_type(zalfmas_stubs):
     """Test that RegistryResult has proper interface type, not Any."""
     # The Admin interface is in registry.capnp
-    stub_file = zalfmas_stubs / "registry_capnp.pyi"
+    stub_file = zalfmas_stubs / "registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find AdminClient
@@ -51,7 +51,7 @@ def test_registry_result_type(zalfmas_stubs):
 
 def test_server_registry_result_type(zalfmas_stubs):
     """Test that Server RegistryResult has proper interface type."""
-    stub_file = zalfmas_stubs / "registry_capnp.pyi"
+    stub_file = zalfmas_stubs / "registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find Server

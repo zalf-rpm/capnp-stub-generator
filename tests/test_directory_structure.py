@@ -7,8 +7,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
-from capnp_stub_generator.cli import main
+from test_helpers import run_generator
 
 
 @pytest.fixture
@@ -67,50 +66,49 @@ def test_directory_structure_preserved(temp_schema_dir, temp_output_dir):
     schema_files = [str(f) for f in temp_schema_dir.rglob("*.capnp")]
 
     # Generate stubs
-    args = ["-p"] + schema_files + ["-o", str(temp_output_dir)]
-    main(args)
+    args = ["-p"] + schema_files + ["-o", str(temp_output_dir), "--no-pyright"]
+    run_generator(args)
 
     # Verify structure is preserved
-    assert (temp_output_dir / "root_capnp.pyi").exists()
-    assert (temp_output_dir / "subdir1" / "sub1_capnp.pyi").exists()
-    assert (temp_output_dir / "subdir2" / "nested" / "deep_capnp.pyi").exists()
+    assert (temp_output_dir / "root_capnp" / "__init__.pyi").exists()
+    assert (temp_output_dir / "subdir1" / "sub1_capnp" / "__init__.pyi").exists()
+    assert (temp_output_dir / "subdir2" / "nested" / "deep_capnp" / "__init__.pyi").exists()
 
     # Verify files are not flattened
-    assert not (temp_output_dir / "sub1_capnp.pyi").exists()
-    assert not (temp_output_dir / "deep_capnp.pyi").exists()
+    assert not (temp_output_dir / "sub1_capnp" / "__init__.pyi").exists()
+    assert not (temp_output_dir / "deep_capnp" / "__init__.pyi").exists()
 
 
 def test_directory_structure_with_glob(temp_schema_dir, temp_output_dir):
     """Test directory structure preservation with glob patterns."""
     # Use glob pattern
     pattern = str(temp_schema_dir / "**" / "*.capnp")
-    args = ["-p", pattern, "-o", str(temp_output_dir), "-r"]
-    main(args)
+    args = ["-p", pattern, "-o", str(temp_output_dir), "-r", "--no-pyright"]
+    run_generator(args)
 
-    # Count generated files (excluding bundled stubs and __init__.pyi files)
-    generated = [
-        f
-        for f in temp_output_dir.rglob("*.pyi")
-        if "capnp-stubs" not in str(f)
-        and "schema_capnp" not in str(f)
-        and f.name != "__init__.pyi"  # Exclude auto-generated package markers
+    # Count generated packages (directories with __init__.pyi files)
+    generated_packages = [
+        f.parent
+        for f in temp_output_dir.rglob("*_capnp/__init__.pyi")
+        if "capnp-stubs" not in str(f) and "schema_capnp" not in str(f)
     ]
-    assert len(generated) == 3  # root, sub1, deep
+    assert len(generated_packages) == 3  # root, sub1, deep
 
     # Verify structure
-    assert any("subdir1" in str(f) for f in generated)
-    assert any("subdir2" in str(f) for f in generated)
+    package_names = [str(p.relative_to(temp_output_dir)) for p in generated_packages]
+    assert any("subdir1" in name for name in package_names)
+    assert any("subdir2" in name for name in package_names)
 
 
 def test_single_file_no_nested_structure(temp_schema_dir, temp_output_dir):
     """Test that single file doesn't create unnecessary nesting."""
     # Generate stub for single file
     schema_file = str(temp_schema_dir / "root.capnp")
-    args = ["-p", schema_file, "-o", str(temp_output_dir)]
-    main(args)
+    args = ["-p", schema_file, "-o", str(temp_output_dir), "--no-pyright"]
+    run_generator(args)
 
-    # Should be directly in output dir
-    assert (temp_output_dir / "root_capnp.pyi").exists()
+    # Should be directly in output dir (as package)
+    assert (temp_output_dir / "root_capnp" / "__init__.pyi").exists()
     assert not any((temp_output_dir / d).exists() for d in ["subdir1", "subdir2"])
 
 
@@ -121,10 +119,10 @@ def test_no_output_dir_places_next_to_source(temp_schema_dir):
     """Test that without -o flag, stubs are placed next to source files."""
     schema_file = str(temp_schema_dir / "root.capnp")
     args = ["-p", schema_file]
-    main(args)
+    run_generator(args)
 
     # Stub should be next to source
-    assert (temp_schema_dir / "root_capnp.pyi").exists()
+    assert (temp_schema_dir / "root_capnp" / "__init__.pyi").exists()
 
 
 def test_mixed_directory_levels(temp_schema_dir, temp_output_dir):
@@ -132,22 +130,18 @@ def test_mixed_directory_levels(temp_schema_dir, temp_output_dir):
     # Get all schemas
     schema_files = [str(f) for f in temp_schema_dir.rglob("*.capnp")]
 
-    args = ["-p"] + schema_files + ["-o", str(temp_output_dir)]
-    main(args)
+    args = ["-p"] + schema_files + ["-o", str(temp_output_dir), "--no-pyright"]
+    run_generator(args)
 
-    # All should be generated (excluding bundled stubs and __init__.pyi)
-    all_pyi = [
-        f
-        for f in temp_output_dir.rglob("*.pyi")
-        if "capnp-stubs" not in str(f) and "schema_capnp" not in str(f) and f.name != "__init__.pyi"
+    # All should be generated - check for package directories with __init__.pyi
+    all_packages = [
+        f.parent
+        for f in temp_output_dir.rglob("*_capnp/__init__.pyi")
+        if "capnp-stubs" not in str(f) and "schema_capnp" not in str(f)
     ]
-    assert len(all_pyi) == 3
+    assert len(all_packages) == 3
 
-    # Structure should match input
-    rel_paths_input = {str(f.relative_to(temp_schema_dir).with_suffix("")) for f in temp_schema_dir.rglob("*.capnp")}
-    rel_paths_output = {str(f.relative_to(temp_output_dir).with_suffix("")) for f in all_pyi}
-
-    # Transform _capnp suffix
-    rel_paths_output_normalized = {p.replace("_capnp", "") for p in rel_paths_output}
-
-    assert rel_paths_input == rel_paths_output_normalized
+    # Structure should match input - check for __init__.pyi in packages
+    assert (temp_output_dir / "root_capnp" / "__init__.pyi").exists()
+    assert (temp_output_dir / "subdir1" / "sub1_capnp" / "__init__.pyi").exists()
+    assert (temp_output_dir / "subdir2" / "nested" / "deep_capnp" / "__init__.pyi").exists()
