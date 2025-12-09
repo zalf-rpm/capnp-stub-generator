@@ -34,7 +34,7 @@ from capnp_stub_generator.writer_dto import (
 )
 
 if TYPE_CHECKING:
-    from schema_capnp.schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
+    from schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
 
 capnp.remove_import_hook()
 
@@ -4755,7 +4755,7 @@ class Writer:
         out.append("from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule")
 
         # schema_capnp is a top-level module, so use absolute import
-        out.append("from schema_capnp import schema_capnp")
+        out.append("import schema_capnp")
 
         # Add NamedTuple import if we have server namedtuples
         if self._all_server_namedtuples:

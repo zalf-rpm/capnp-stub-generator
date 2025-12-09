@@ -8,8 +8,8 @@ import sys
 
 import capnp
 
+import schema_capnp
 from capnp_stub_generator.run import run_from_schemas
-from schema_capnp import schema_capnp
 
 
 def main():

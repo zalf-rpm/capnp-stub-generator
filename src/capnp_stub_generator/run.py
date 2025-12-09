@@ -174,7 +174,7 @@ def augment_capnp_stubs_with_overloads(
 
         # Replace relative imports with absolute imports
         # from ...schema_capnp.schema_capnp -> from schema_capnp.schema_capnp
-        content = content.replace("from ...schema_capnp.schema_capnp import", "from schema_capnp.schema_capnp import")
+        content = content.replace("from ...schema_capnp import", "from schema_capnp import")
 
         with open(capnp_pyi_path, "w", encoding="utf8") as f:
             f.write(content)
@@ -345,7 +345,7 @@ def _build_module_imports(
             if capnp_module_idx == 0:
                 from_path = capnp_module_name
             else:
-                from_path = ".".join(parts[:capnp_module_idx + 1])
+                from_path = ".".join(parts[: capnp_module_idx + 1])
         else:
             # Normal module
             # Build the from path - use the module annotation if present (parts before _capnp)
@@ -614,8 +614,10 @@ def _augment_dynamic_object_reader(
         if protocol_capnp_idx is not None:
             start_idx = protocol_capnp_idx
             # Check for package.module pattern (e.g., schema_capnp.schema_capnp)
-            if (protocol_capnp_idx + 1 < len(protocol_parts) and 
-                protocol_parts[protocol_capnp_idx] == protocol_parts[protocol_capnp_idx + 1]):
+            if (
+                protocol_capnp_idx + 1 < len(protocol_parts)
+                and protocol_parts[protocol_capnp_idx] == protocol_parts[protocol_capnp_idx + 1]
+            ):
                 # Keep both parts for package.module pattern
                 clean_protocol = ".".join(protocol_parts[protocol_capnp_idx:])
             else:
@@ -625,8 +627,10 @@ def _augment_dynamic_object_reader(
 
         if alias_capnp_idx is not None:
             # Check for package.module pattern in alias too
-            if (alias_capnp_idx + 1 < len(alias_parts) and 
-                alias_parts[alias_capnp_idx] == alias_parts[alias_capnp_idx + 1]):
+            if (
+                alias_capnp_idx + 1 < len(alias_parts)
+                and alias_parts[alias_capnp_idx] == alias_parts[alias_capnp_idx + 1]
+            ):
                 clean_alias = ".".join(alias_parts[alias_capnp_idx:])
             else:
                 clean_alias = ".".join(alias_parts[alias_capnp_idx:])
@@ -906,7 +910,9 @@ def _generate_stubs_from_schema(
     import_paths: list[str] | None = None,
     module_path_prefix: str | None = None,
     schema_base_directory: str | None = None,
-) -> tuple[dict[str, tuple[str, list[str]]], tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]]:
+) -> tuple[
+    dict[str, tuple[str, list[str]]], tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]
+]:
     """Internal function for generating *.pyi stubs from schema information.
 
     Args:
@@ -947,19 +953,17 @@ def _generate_stubs_from_schema(
     # If output_file_path ends with __init__, use the directory name as the module name
     output_basename = os.path.basename(output_file_path)
     output_dir_path = os.path.dirname(output_file_path)
-    
+
     if output_basename == "__init__":
         # For __init__.pyi files, the module name is the directory containing it
         # And module_path_prefix already includes this directory name if it was nested
         # So we use module_path_prefix directly as full_module_name
-        full_module_name = (
-            module_path_prefix if module_path_prefix else os.path.basename(output_dir_path)
-        )
+        full_module_name = module_path_prefix if module_path_prefix else os.path.basename(output_dir_path)
     else:
         # For non-__init__ files, check if we're inside a package (has __init__.py)
         module_name = output_basename
         package_has_init = os.path.exists(os.path.join(output_dir_path, "__init__.py"))
-        
+
         # If inside a package and module name matches directory name, we need package.module syntax
         if package_has_init and module_name == os.path.basename(output_dir_path):
             # This is a module inside a package of the same name (e.g., schema_capnp/schema_capnp.pyi)

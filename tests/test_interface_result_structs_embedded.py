@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import base64
 
-from schema_capnp import schema_capnp
+import schema_capnp
 
 
 def test_interface_result_structs_are_embedded(calculator_stubs):
