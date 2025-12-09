@@ -127,8 +127,7 @@ main()
         # Exclude a.capnp which has duplicate ID and files in capnp folder (system schemas)
         zalfmas_files = list(ZALFMAS_SCHEMAS_DIR.rglob("*.capnp"))
         zalfmas_files = [
-            f for f in zalfmas_files
-            if f.name != "a.capnp" and "capnp" not in f.relative_to(ZALFMAS_SCHEMAS_DIR).parts
+            f for f in zalfmas_files if f.name != "a.capnp" and "capnp" not in f.relative_to(ZALFMAS_SCHEMAS_DIR).parts
         ]
 
         if zalfmas_files:
@@ -158,7 +157,8 @@ main()
         if zalfmas_no_ann_source.exists():
             zalfmas_no_ann_files = list(zalfmas_no_ann_source.rglob("*.capnp"))
             zalfmas_no_ann_files = [
-                f for f in zalfmas_no_ann_files
+                f
+                for f in zalfmas_no_ann_files
                 if f.name != "a.capnp" and "capnp" not in f.relative_to(zalfmas_no_ann_source).parts
             ]
 
@@ -181,24 +181,22 @@ main()
                     logger.error(f"Failed to compile zalfmas schemas (no annotations):\n{result.stderr}")
                     pytest.fail(f"Zalfmas schema compilation (no annotations) failed: {result.stderr}")
 
-                logger.info(f"✓ Generated zalfmas stubs (without annotations) in {ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR}")
+                logger.info(
+                    f"✓ Generated zalfmas stubs (without annotations) in {ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR}",
+                )
 
         logger.info("✓ All test stubs generated successfully using capnp compile")
 
         # Run pyright validation on generated stubs (excluding zalfmas which has complex cross-schema imports)
         # Also exclude bundled capnp-stubs from pycapnp which have pre-existing pyright issues
         logger.info("Running pyright validation on generated stubs...")
-        
+
         # Get all stub directories except capnp-stubs (bundled pycapnp types)
-        basic_stubs_to_check = [
-            str(p) for p in BASIC_GENERATED_DIR.iterdir()
-            if p.is_dir() and p.name != "capnp-stubs"
-        ]
+        basic_stubs_to_check = [str(p) for p in BASIC_GENERATED_DIR.iterdir() if p.is_dir() and p.name != "capnp-stubs"]
         examples_stubs_to_check = [
-            str(p) for p in EXAMPLES_GENERATED_DIR.iterdir()
-            if p.is_dir() and p.name != "capnp-stubs"
+            str(p) for p in EXAMPLES_GENERATED_DIR.iterdir() if p.is_dir() and p.name != "capnp-stubs"
         ]
-        
+
         pyright_result = subprocess.run(
             ["pyright"] + basic_stubs_to_check + examples_stubs_to_check,
             check=False,

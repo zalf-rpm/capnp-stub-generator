@@ -346,19 +346,18 @@ def _build_module_imports(
                 from_path = capnp_module_name
             else:
                 from_path = ".".join(parts[: capnp_module_idx + 1])
+        # Normal module
+        # Build the from path - use the module annotation if present (parts before _capnp)
+        # For "mas.schema.climate.climate_capnp._ClimateSensorInterfaceModule"
+        # -> from_path = "mas.schema.climate"
+        # For "basic.advanced_features_capnp._TestIfaceInterfaceModule"
+        # -> from_path = "basic"
+        # For "climate_capnp._ClimateSensorInterfaceModule" (no annotation)
+        # -> from_path = "" (direct import)
+        elif capnp_module_idx == 0:
+            from_path = ""  # No prefix, direct import
         else:
-            # Normal module
-            # Build the from path - use the module annotation if present (parts before _capnp)
-            # For "mas.schema.climate.climate_capnp._ClimateSensorInterfaceModule"
-            # -> from_path = "mas.schema.climate"
-            # For "basic.advanced_features_capnp._TestIfaceInterfaceModule"
-            # -> from_path = "basic"
-            # For "climate_capnp._ClimateSensorInterfaceModule" (no annotation)
-            # -> from_path = "" (direct import)
-            if capnp_module_idx == 0:
-                from_path = ""  # No prefix, direct import
-            else:
-                from_path = ".".join(parts[:capnp_module_idx])
+            from_path = ".".join(parts[:capnp_module_idx])
 
         # Only update if we don't have an entry yet, or if new from_path is more specific (non-empty)
         if capnp_module_name not in module_imports or (from_path and not module_imports[capnp_module_name]):
@@ -911,7 +910,8 @@ def _generate_stubs_from_schema(
     module_path_prefix: str | None = None,
     schema_base_directory: str | None = None,
 ) -> tuple[
-    dict[str, tuple[str, list[str]]], tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]
+    dict[str, tuple[str, list[str]]],
+    tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]],
 ]:
     """Internal function for generating *.pyi stubs from schema information.
 
@@ -972,12 +972,11 @@ def _generate_stubs_from_schema(
                 full_module_name = f"{module_path_prefix}.{module_name}.{module_name}"
             else:
                 full_module_name = f"{module_name}.{module_name}"
+        # Normal case
+        elif module_path_prefix:
+            full_module_name = f"{module_path_prefix}.{module_name}"
         else:
-            # Normal case
-            if module_path_prefix:
-                full_module_name = f"{module_path_prefix}.{module_name}"
-            else:
-                full_module_name = module_name
+            full_module_name = module_name
 
     interfaces_with_module = {}
     for interface_name, (client_name, base_client_names) in writer._all_interfaces.items():

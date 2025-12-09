@@ -258,7 +258,9 @@ class Writer:
                     nested_schema = self._schema_loader.get(nested_id)
                     add_schema_and_nested(nested_schema)
                 except Exception as e:
-                    logger.debug(f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}): {e}")
+                    logger.debug(
+                        f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}) for {schema.node.displayName}: {e}",
+                    )
 
             # Also collect schemas referenced by struct fields
             # This includes groups, and field types (structs, interfaces, lists of structs, etc.)
@@ -1343,11 +1345,20 @@ class Writer:
                 if nested_schema:
                     self.generate_nested(nested_schema)
                 else:
-                    logger.debug(
-                        f"Could not find nested type {nested_node.name} (id={hex(nested_node.id)}) in schema mapping",
-                    )
+                    # Try to load it from the schema loader
+                    try:
+                        nested_schema = self._schema_loader.get(nested_node.id)
+                        # Add it to our mapping for future reference
+                        self._schemas_by_id[nested_node.id] = nested_schema
+                        self.generate_nested(nested_schema)
+                    except Exception as load_error:
+                        logger.debug(
+                            f"Could not find or load nested type {nested_node.name} (id={hex(nested_node.id)}) in interface {schema.node.displayName}: {load_error}",
+                        )
             except Exception as e:  # pragma: no cover
-                logger.debug(f"Could not generate nested type {nested_node.name}: {e}")
+                logger.debug(
+                    f"Could not generate nested type {nested_node.name} in interface {schema.node.displayName}: {e}",
+                )
 
         # Restore interface scope after generating nested types
         self.scope = interface_scope
@@ -2419,13 +2430,32 @@ class Writer:
         if imported is not None:
             return None
 
+        # IMPORTANT: Ensure parent scope exists before registering this interface
+        # For nested interfaces, the parent interface must be generated first
+        parent_scope = self.scopes_by_id.get(schema.node.scopeId)
+        if parent_scope is None:
+            # Parent scope doesn't exist yet - need to generate the parent first
+            # Find the parent schema and generate it
+            parent_schema = self._schemas_by_id.get(schema.node.scopeId)
+            if parent_schema and parent_schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+                logger.debug(
+                    f"Generating parent interface {parent_schema.node.displayName} before nested {schema.node.displayName}",
+                )
+                # Recursively generate the parent interface first
+                self.gen_interface(parent_schema.as_interface())  # type: ignore[union-attr]
+                # Now the parent scope should exist
+                parent_scope = self.scopes_by_id.get(schema.node.scopeId)
+
+            # If still no parent scope, fall back to root
+            if parent_scope is None:
+                parent_scope = self.scope.root
+
         # Get display name
         name = helper.get_display_name(schema)
 
         # Register type with Protocol name (_<Name>InterfaceModule) for correct internal references
         # This ensures get_type_name() returns the Protocol name, not the user-facing name
         protocol_name = f"_{name}InterfaceModule"
-        parent_scope = self.scopes_by_id.get(schema.node.scopeId, self.scope.root)
         registered_type = self.register_type(schema.node.id, schema, name=protocol_name, scope=parent_scope)
 
         # Add typing imports
