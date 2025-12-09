@@ -4576,108 +4576,73 @@ class Writer:
 
         return type_name
 
-    def get_dynamic_object_reader_types(self) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-        """Get struct and interface types for _DynamicObjectReader augmentation.
+    def get_dynamic_object_reader_types(
+        self,
+    ) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
+        """Get struct, list, and interface types for _DynamicObjectReader augmentation.
 
-        Only returns types that are DEFINED in this module, not imported from other modules.
-        This is used by run.py to track types across modules for documentation purposes.
+        Returns type aliases that are ACTUALLY GENERATED in this module for overloads.
 
         Returns:
-            Tuple of (struct_types, interface_types) where each is a list of (protocol_name, target_type) tuples.
-            struct_types: list of (protocol_name, reader_type)
-            interface_types: list of (protocol_name, client_type)
+            Tuple of (struct_types, list_types, interface_types) where each is a list of (protocol_name, type_alias) tuples.
+            struct_types: list of (Protocol class, TypeAlias) for structs
+            list_types: list of (List class, TypeAlias) for lists
+            interface_types: list of (Protocol class, TypeAlias) for interfaces
 
         """
-        logger.debug(
-            f"get_dynamic_object_reader_types called, _needs_dynamic_object_reader_augmentation={self._needs_dynamic_object_reader_augmentation}",
-        )
-
         if not self._needs_dynamic_object_reader_augmentation:
-            return ([], [])
+            return ([], [], [])
 
         struct_types: list[tuple[str, str]] = []
+        list_types: list[tuple[str, str]] = []
         interface_types: list[tuple[str, str]] = []
 
-        # Get the set of type IDs that are actually DEFINED (not just imported) in this module
-        # by checking the nested nodes of the root schema
-        defined_type_ids = set()
-        module_schema = self._schema
+        # Track what we've already added to avoid duplicates
+        seen_structs: set[str] = set()
+        seen_lists: set[str] = set()
+        seen_interfaces: set[str] = set()
 
-        # Recursively collect all nested type IDs defined in this module
-        def collect_nested_ids(schema: _ParsedSchema) -> set[int]:
-            """Recursively collect all nested type IDs from a schema."""
-            ids: set[int] = {schema.node.id}
-            for nested in schema.node.nestedNodes:
-                try:
-                    nested_schema = schema.get_nested(nested.name)  # type: ignore[union-attr]
-                    ids.update(collect_nested_ids(nested_schema))
-                except Exception:
-                    # If we can't get the nested schema, skip it
-                    pass
-            return ids
+        # Use _all_type_aliases which contains ONLY the types generated in this module
+        for alias_name, alias_data in self._all_type_aliases.items():
+            if len(alias_data) >= 2:
+                original_path, flat_name = alias_data[0], alias_data[1]
 
-        # Don't use defined_type_ids filtering - it's unreliable
-        # Instead, we'll include all types and let pyright/mypy handle any issues
-        defined_type_ids = set()
+                # For Reader types - could be struct or list
+                if alias_name.endswith("Reader"):
+                    # Check if it's a list (contains "List" in the name)
+                    if "List" in alias_name:
+                        # List type like "BoolListReader", "PersonListReader"
+                        # original_path is like "_BoolList.Reader" or "_PersonList.Reader"
+                        if ".Reader" in original_path:
+                            list_class = original_path.replace(".Reader", "")
+                            if list_class not in seen_lists:
+                                list_types.append((list_class, alias_name))
+                                seen_lists.add(list_class)
+                    # Struct type
+                    # original_path is like "_PersonStructModule.Reader"
+                    elif ".Reader" in original_path:
+                        protocol_path = original_path.replace(".Reader", "")
+                        # Only include if it's a StructModule (not a List)
+                        if "StructModule" in protocol_path and protocol_path not in seen_structs:
+                            struct_types.append((protocol_path, alias_name))
+                            seen_structs.add(protocol_path)
 
-        struct_types_found = 0
-        interface_types_found = 0
-
-        for type_id, capnp_type in self.type_map.items():
-            if capnp_type.schema is None:
-                continue
-
-            # No filtering - include all types
-            # The type_map should only contain types relevant to this module
-
-            node_type = capnp_type.schema.node.which()
-
-            if node_type == capnp_types.CapnpElementType.STRUCT:
-                struct_types_found += 1
-                # For structs: protocol name -> Reader type
-                protocol_name = capnp_type.name
-
-                if capnp_type.scope and not capnp_type.scope.is_root:
-                    scope_path = capnp_type.scope.trace_as_str(".")
-                    full_protocol = f"{scope_path}.{protocol_name}"
-                else:
-                    full_protocol = protocol_name
-
-                reader_type = f"{full_protocol}.Reader"
-                struct_types.append((full_protocol, reader_type))
-
-            elif node_type == capnp_types.CapnpElementType.INTERFACE:
-                interface_types_found += 1
-                # For interfaces: protocol name -> Client type
-                protocol_name = capnp_type.name
-                if capnp_type.scope and not capnp_type.scope.is_root:
-                    scope_path = capnp_type.scope.trace_as_str(".")
-                    full_protocol = f"{scope_path}.{protocol_name}"
-                else:
-                    full_protocol = protocol_name
-
-                # Extract user-facing name from Protocol name
-                # e.g., "_GenericGetterInterfaceModule" -> "GenericGetter"
-                if protocol_name.startswith("_"):
-                    user_facing = self._extract_name_from_protocol(protocol_name)
-                    client_type = f"{full_protocol}.{user_facing}Client"
-                else:
-                    client_type = f"{full_protocol}Client"
-
-                interface_types.append((full_protocol, client_type))
-
-        # Sort for deterministic output
-        struct_types.sort(key=lambda x: x[0])
-        interface_types.sort(key=lambda x: x[0])
+                # For Client types (interfaces)
+                elif alias_name.endswith("Client"):
+                    if "Client" in original_path:
+                        parts = original_path.rsplit(".", 1)
+                        if len(parts) == 2:
+                            protocol_path = parts[0]
+                            # Only include InterfaceModule types
+                            if "InterfaceModule" in protocol_path and protocol_path not in seen_interfaces:
+                                interface_types.append((protocol_path, alias_name))
+                                seen_interfaces.add(protocol_path)
 
         logger.debug(
-            f"Module {self._schema.node.displayName}: Found {struct_types_found} structs, {interface_types_found} interfaces in type_map, skipped {skipped_count} imported types",
-        )
-        logger.debug(
-            f"Module {self._schema.node.displayName}: Returning {len(struct_types)} struct overloads, {len(interface_types)} interface overloads",
+            f"Module {self._schema.node.displayName}: Found {len(struct_types)} structs, {len(list_types)} lists, {len(interface_types)} interfaces",
         )
 
-        return (struct_types, interface_types)
+        return (struct_types, list_types, interface_types)
 
     def dumps_pyi(self) -> str:
         """Generates string output for the *.pyi stub file that provides type hinting.
