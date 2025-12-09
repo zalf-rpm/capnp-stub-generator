@@ -4633,33 +4633,8 @@ class Writer:
         out.append("import capnp")
         out.append("from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule")
 
-        # Calculate relative import for schema module based on nesting depth
-        # Schema module is at the base directory level (e.g., output_dir/schema/)
-        # Generated files might be nested (e.g., output_dir/subdir/file_capnp.py)
-        if self._output_directory and self._schema_base_directory:
-            try:
-                # Calculate how many levels deep the output file is
-                output_path = self._output_directory.resolve()
-                schema_base = self._schema_base_directory.resolve()
-
-                # Get relative path from output directory to schema base
-                rel_path = os.path.relpath(schema_base, output_path)
-                # Count parent directories (..)
-                parent_count = rel_path.count("..")
-
-                if parent_count == 0:
-                    # Same level: from .schema_capnp import schema_capnp
-                    out.append("from .schema_capnp import schema_capnp")
-                else:
-                    # Go up: from ..schema_capnp import schema_capnp or from ...schema_capnp import schema_capnp
-                    dots = "." * (parent_count + 1)
-                    out.append(f"from {dots}schema_capnp import schema_capnp")
-            except Exception:
-                # Fallback to same-level relative import
-                out.append("from .schema_capnp import schema_capnp")
-        else:
-            # No directory info, use same-level relative import
-            out.append("from .schema_capnp import schema_capnp")
+        # schema_capnp is a top-level module, so use absolute import
+        out.append("from schema_capnp import schema_capnp")
 
         # Add NamedTuple import if we have server namedtuples
         if self._all_server_namedtuples:
