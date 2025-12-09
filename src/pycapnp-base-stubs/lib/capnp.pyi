@@ -1894,6 +1894,7 @@ __all__ = [
     "_StreamFdMessageReader",
     "_StructModule",
     "_StructSchema",
+    "_EnumModule",
     "_StructSchemaField",
     "_init_capnp_api",
     "_write_message_to_fd",

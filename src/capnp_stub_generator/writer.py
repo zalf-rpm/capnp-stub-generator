@@ -274,12 +274,12 @@ class Writer:
                     elif field.which() == "slot":
                         slot = field.slot
                         type_node = slot.type
-                        
+
                         # Recursively extract type IDs from complex types
                         def collect_type_ids(type_obj):
                             """Extract all schema IDs referenced by a type."""
                             type_which = type_obj.which()
-                            
+
                             if type_which == "struct":
                                 return [type_obj.struct.typeId]
                             elif type_which == "interface":
@@ -297,7 +297,7 @@ class Writer:
                                 # Could have other anyPointer variants
                                 return []
                             return []
-                        
+
                         referenced_ids = collect_type_ids(type_node)
                         for ref_id in referenced_ids:
                             if ref_id not in self._schemas_by_id:
@@ -340,7 +340,7 @@ class Writer:
 
         # Add schemas from imported files (not all files, just imports)
         # Check if the root schema has imports
-        if hasattr(self._schema.node, 'imports'):
+        if hasattr(self._schema.node, "imports"):
             for import_ref in self._schema.node.imports:
                 import_id = import_ref.id
                 if import_id in self._file_id_to_path:
@@ -4708,40 +4708,58 @@ class Writer:
         out.append("    _loader.load_dynamic(_node_reader)")
         out.append("")
 
-        # Build module structure recursively (mimics SchemaParser's _load function)
-        out.append("def _build_module(schema, module_dict):")
-        out.append("    proto = schema.get_proto()")
-        out.append("    for nested_node in proto.nestedNodes:")
-        out.append("        nested_schema = _loader.get(nested_node.id)")
-        out.append("        nested_proto = nested_schema.get_proto()")
-        out.append("        if nested_proto.isStruct:")
-        out.append(
-            "            module_dict[nested_node.name] = _StructModule(nested_schema.as_struct(), nested_node.name)"
-        )
-        out.append("        elif nested_proto.isInterface:")
-        out.append(
-            "            module_dict[nested_node.name] = _InterfaceModule(nested_schema.as_interface(), nested_node.name)"
-        )
-        out.append("        elif nested_proto.isEnum:")
-        out.append("            module_dict[nested_node.name] = _EnumModule(nested_schema.as_enum(), nested_node.name)")
-        out.append("        elif nested_proto.isConst:")
-        out.append("            module_dict[nested_node.name] = nested_schema.as_const_value()")
-        out.append("        if nested_proto.isStruct or nested_proto.isInterface:")
-        out.append("            if hasattr(module_dict[nested_node.name], '__dict__'):")
-        out.append("                _build_module(nested_schema, module_dict[nested_node.name].__dict__)")
-        out.append("")
-        out.append(f"_file_schema = _loader.get({hex(self._schema.node.id)})")
-        out.append("_module_dict = {}")
-        out.append("_build_module(_file_schema, _module_dict)")
-        out.append("")
+        # Build module structure inline by traversing the schema hierarchy
+        # We build modules depth-first to ensure parents exist before children
+        out.append("# Build module structure inline")
 
-        # Expose top-level types from the built module dict
-        for scope in self.scopes_by_id.values():
-            if scope.parent is not None and scope.parent.is_root:
-                runtime_name = scope.name
-                if runtime_name.startswith("_"):
-                    runtime_name = self._extract_name_from_protocol(runtime_name)
-                out.append(f"{runtime_name} = _module_dict['{runtime_name}']")
+        # Helper function to generate inline module construction code
+        def generate_module_construction(schema_node, parent_path="", indent=0):
+            """Generate code to construct a module and its nested modules."""
+            indent_str = ""  # No indentation since we're at module level
+
+            # For each nested node in this schema
+            for nested_node in schema_node.nestedNodes:
+                nested_id = nested_node.id
+                nested_name = nested_node.name
+
+                # Skip nodes not in our schema mapping (shouldn't happen, but safe)
+                if nested_id not in self._schemas_by_id:
+                    continue
+
+                nested_schema = self._schemas_by_id[nested_id]
+                nested_node_proto = nested_schema.node
+
+                # Determine the full path to this module
+                if parent_path:
+                    full_path = f"{parent_path}.{nested_name}"
+                else:
+                    full_path = nested_name
+
+                # Generate construction code based on node type
+                node_type = nested_node_proto.which()
+
+                if node_type == capnp_types.CapnpElementType.STRUCT:
+                    out.append(
+                        f"{indent_str}{full_path} = _StructModule(_loader.get({hex(nested_id)}).as_struct(), '{nested_name}')"
+                    )
+                elif node_type == capnp_types.CapnpElementType.INTERFACE:
+                    out.append(
+                        f"{indent_str}{full_path} = _InterfaceModule(_loader.get({hex(nested_id)}).as_interface(), '{nested_name}')"
+                    )
+                elif node_type == capnp_types.CapnpElementType.ENUM:
+                    out.append(
+                        f"{indent_str}{full_path} = _EnumModule(_loader.get({hex(nested_id)}).as_enum(), '{nested_name}')"
+                    )
+                elif node_type == capnp_types.CapnpElementType.CONST:
+                    out.append(f"{indent_str}{full_path} = _loader.get({hex(nested_id)}).as_const_value()")
+
+                # Recursively generate code for nested modules
+                # Only structs and interfaces can have nested types
+                if node_type in (capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE):
+                    generate_module_construction(nested_node_proto, full_path, indent)
+
+        # Start generating from the root schema
+        generate_module_construction(self._schema.node)
 
         # Add Server.InfoResult NamedTuples for interfaces
         if self._all_server_namedtuples:

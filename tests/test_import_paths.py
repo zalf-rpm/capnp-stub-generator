@@ -6,10 +6,10 @@ import re
 def test_import_path_includes_schema_directory(zalfmas_stubs):
     """Test that the schema's own directory is included in import_path."""
     # Check monica_management_capnp.py
-    # It is located in tests/_generated/zalfmas/model/monica/monica_management_capnp.py
+    # Due to Python module annotation, it's at mas/schema/model/monica/
     # The schema is in tests/schemas/zalfmas/model/monica/monica_management.capnp
 
-    stub_file = zalfmas_stubs / "model/monica/monica_management_capnp.py"
+    stub_file = zalfmas_stubs / "mas/schema/model/monica/monica_management_capnp.py"
     content = stub_file.read_text()
 
     # Extract import_path list
@@ -36,7 +36,7 @@ def test_import_path_includes_schema_directory(zalfmas_stubs):
 
 def test_import_path_no_duplicates(zalfmas_stubs):
     """Test that import_path does not contain duplicates."""
-    stub_file = zalfmas_stubs / "model/monica/monica_params_capnp.py"
+    stub_file = zalfmas_stubs / "mas/schema/model/monica/monica_params_capnp.py"
     content = stub_file.read_text()
 
     match = re.search(r"import_path = \[(.*?)\]", content, re.DOTALL)
@@ -64,7 +64,7 @@ def test_import_path_no_duplicates(zalfmas_stubs):
 
 def test_import_path_uses_abspath(zalfmas_stubs):
     """Test that all paths in import_path are wrapped in abspath."""
-    stub_file = zalfmas_stubs / "model/monica/monica_management_capnp.py"
+    stub_file = zalfmas_stubs / "mas/schema/model/monica/monica_management_capnp.py"
     content = stub_file.read_text()
 
     match = re.search(r"import_path = \[(.*?)\]", content, re.DOTALL)
