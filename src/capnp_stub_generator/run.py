@@ -142,7 +142,7 @@ def augment_capnp_stubs_with_overloads(
     output_dir: str,
     interfaces: dict[str, tuple[str, list[str]]],
     dynamic_object_types: dict[str, list[tuple[str, str]]],
-) -> None:
+) -> tuple[str, str]:
     """Copy capnp-stubs package and augment with cast_as and _DynamicObjectReader overloads.
 
     This copies the entire capnp-stubs package to a separate directory
@@ -155,6 +155,9 @@ def augment_capnp_stubs_with_overloads(
         output_dir: The output directory where generated stubs are located (for relative import calculation).
         interfaces: Dictionary mapping interface names to (client_name, base_client_names) tuples.
         dynamic_object_types: Dictionary with "structs" and "interfaces" keys containing type tuples.
+
+    Returns:
+        Tuple of (capnp-stubs path, schema_capnp path) that were copied/augmented.
 
     """
     # Create destination path for augmented stubs
@@ -192,10 +195,11 @@ def augment_capnp_stubs_with_overloads(
         logger.info(f"Copied schema stubs to: {dest_schema_path}")
     else:
         logger.warning(f"Schema stubs not found at: {source_schema_path}")
+        dest_schema_path = None
 
     if not interfaces and not dynamic_object_types.get("structs") and not dynamic_object_types.get("interfaces"):
         logger.info("No interfaces or _DynamicObjectReader types found, skipping capnp-stubs augmentation.")
-        return
+        return dest_stubs_path, dest_schema_path
 
     # Path to lib/capnp.pyi
     capnp_pyi_path = os.path.join(dest_stubs_path, "lib", "capnp.pyi")
@@ -219,7 +223,7 @@ def augment_capnp_stubs_with_overloads(
 
     if typing_import_idx is None:
         logger.warning("Could not find 'from typing import' in lib/capnp.pyi, skipping augmentation.")
-        return
+        return dest_stubs_path, dest_schema_path
 
     # Add overload to the typing import if not already present
     typing_line = lines[typing_import_idx]
@@ -253,6 +257,9 @@ def augment_capnp_stubs_with_overloads(
             module_imports,
             interfaces,
         )
+
+    # Return the paths to the bundled stubs that were copied
+    return dest_stubs_path, dest_schema_path
 
 
 def _build_module_imports(
@@ -823,6 +830,72 @@ def _augment_dynamic_object_reader(
     logger.info(f"Augmented _DynamicObjectReader in {capnp_pyi_path} with {total_overloads // 2} overload(s).")
 
 
+def format_all_outputs(output_directories: set[str]) -> None:
+    """Format all generated stub files using ruff.
+
+    Runs multiple passes to catch everything:
+    1. ruff format (default settings)
+    2. ruff check --fix --select ALL
+    3. ruff format again
+
+    Args:
+        output_directories: Set of directories containing generated stubs.
+
+    """
+    # Collect all .py and .pyi files from output directories
+    stub_files: list[str] = []
+    for output_dir in output_directories:
+        for root, _, files in os.walk(output_dir):
+            for file in files:
+                if file.endswith((".pyi", ".py")):
+                    stub_files.append(os.path.join(root, file))
+
+    if not stub_files:
+        logger.warning("No files found to format")
+        return
+
+    logger.info(f"Formatting {len(stub_files)} generated file(s) with ruff...")
+
+    try:
+        # Pass 1: ruff format (default settings)
+        logger.info("Pass 1: Running ruff format...")
+        subprocess.run(
+            ["ruff", "format"] + stub_files,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        # Pass 2: ruff check --fix --select ALL
+        logger.info("Pass 2: Running ruff check --fix --select ALL...")
+        subprocess.run(
+            ["ruff", "check", "--fix", "--select", "ALL"] + stub_files,
+            capture_output=True,
+            text=True,
+            check=False,  # Don't fail on unfixable issues
+        )
+
+        # Pass 3: ruff format again
+        logger.info("Pass 3: Running ruff format again...")
+        subprocess.run(
+            ["ruff", "format"] + stub_files,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        logger.info("✓ Ruff formatting completed successfully")
+
+    except FileNotFoundError:
+        logger.error("ruff not found. Please install ruff: pip install ruff")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Ruff formatting failed: {e}")
+        logger.error(f"Stdout: {e.stdout}")
+        logger.error(f"Stderr: {e.stderr}")
+    except Exception as e:
+        logger.error(f"Unexpected error during formatting: {e}")
+
+
 def validate_with_pyright(output_directories: set[str]) -> None:
     """Validate generated stub files using pyright.
 
@@ -876,54 +949,17 @@ def validate_with_pyright(output_directories: set[str]) -> None:
 
 
 def format_outputs(raw_input: str, is_pyi: bool) -> str:
-    """Formats raw input using ruff.
+    """Returns raw input without formatting (formatting is done at the end).
 
     Args:
         raw_input (str): The unformatted input.
         is_pyi (bool): Whether or not the output is a `pyi` file.
 
     Returns:
-        str: The formatted outputs.
+        str: The unformatted outputs.
 
     """
-    try:
-        # Write to temporary file for ruff to process
-        suffix = ".pyi" if is_pyi else ".py"
-        with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False, encoding="utf-8") as f:
-            temp_path = Path(f.name)
-            f.write(raw_input)
-
-        try:
-            # Run ruff check --fix to fix import ordering and other issues
-            subprocess.run(
-                ["ruff", "check", "--fix", str(temp_path)],
-                capture_output=True,
-                check=False,  # Don't raise on non-zero exit
-            )
-
-            # Run ruff format with very large line length (320 is max) to prevent wrapping
-            subprocess.run(
-                ["ruff", "format", "--line-length", "320", str(temp_path)],
-                capture_output=True,
-                check=True,
-            )
-
-            # Read the formatted output
-            return temp_path.read_text(encoding="utf-8")
-
-        finally:
-            # Clean up temporary file
-            temp_path.unlink(missing_ok=True)
-
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Ruff formatting failed: {e}")
-        logger.error(f"Stdout: {e.stdout.decode('utf-8', errors='replace')}")
-        logger.error(f"Stderr: {e.stderr.decode('utf-8', errors='replace')}")
-        # Return unformatted output on error
-        return raw_input
-    except Exception as e:
-        logger.error(f"Unexpected error during formatting: {e}")
-        return raw_input
+    return raw_input
 
 
 def _generate_stubs_from_schema(
@@ -1468,6 +1504,9 @@ def run_from_schemas(
                     break
                 current_dir = parent_dir
 
+    # Track bundled stub directories for formatting
+    bundled_stub_dirs = set()
+
     # Copy bundled schema module once at the top level (common parent or output_dir)
     # This avoids duplicating the schema module in each subdirectory
     source_stubs_path = find_capnp_stubs_package()
@@ -1494,6 +1533,7 @@ def run_from_schemas(
                 shutil.rmtree(dest_schema_path)
             shutil.copytree(source_schema_path, dest_schema_path)
             logger.info(f"Copied schema module to top level: {dest_schema_path}")
+            bundled_stub_dirs.add(dest_schema_path)
         else:
             logger.warning(f"Schema module not found at: {source_schema_path}")
 
@@ -1532,19 +1572,31 @@ def run_from_schemas(
             f"Augmenting capnp-stubs with {len(all_interfaces)} interfaces, {len(all_dynamic_object_types.get('structs', []))} structs, {len(all_dynamic_object_types.get('lists', []))} lists, {len(all_dynamic_object_types.get('interfaces', []))} interface types",
         )
 
-        augment_capnp_stubs_with_overloads(
+        capnp_stubs_path, schema_capnp_path = augment_capnp_stubs_with_overloads(
             source_stubs_path,
             augmented_stubs_dir,
             actual_output_dir,
             all_interfaces,
             all_dynamic_object_types,
         )
+        
+        # Add augmented stubs to bundled dirs for formatting
+        if capnp_stubs_path:
+            bundled_stub_dirs.add(capnp_stubs_path)
+        if schema_capnp_path:
+            bundled_stub_dirs.add(schema_capnp_path)
     elif augment_capnp_stubs:
         logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found")
 
+    # Combine all directories (generated stubs + bundled stubs) for formatting
+    all_output_dirs = output_directories_used | bundled_stub_dirs
+    
+    # Format all generated files with ruff (includes bundled stubs)
+    format_all_outputs(all_output_dirs)
+
     # Validate generated stubs with pyright (unless disabled)
     if not skip_pyright:
-        validate_with_pyright(output_directories_used)
+        validate_with_pyright(all_output_dirs)
 
 
 # ===== Directory Structure Helper Functions =====
