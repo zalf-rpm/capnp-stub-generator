@@ -368,12 +368,31 @@ def _build_module_imports(
         "",
         "# Generated imports for project-specific types",
     ]
+
+    # Standard library capnp modules that should be imported from capnp package
+    capnp_stdlib_modules = {
+        "persistent_capnp",
+        "schema_capnp",
+        "c++_capnp",
+        "c_capnp",
+        "java_capnp",
+        "go_capnp",
+        "python_capnp",
+        "json_capnp",
+        "compat_capnp",
+    }
+
     for capnp_module_name in sorted(module_imports.keys()):
         from_path = module_imports[capnp_module_name]
+
+        # Check if this is a standard library module (no path prefix)
+        if not from_path and capnp_module_name in capnp_stdlib_modules:
+            # Import from capnp package using import...as syntax for pyright compatibility
+            import_lines.append(f"import capnp.{capnp_module_name} as {capnp_module_name}")
         # Use "from X import Y" style when we have a module path
         # e.g., "from mas.schema.climate import climate_capnp"
         # Or direct import when no path: "import climate_capnp"
-        if from_path:
+        elif from_path:
             import_lines.append(f"from {from_path} import {capnp_module_name}")
         else:
             import_lines.append(f"import {capnp_module_name}")
@@ -463,12 +482,14 @@ def _augment_capnp_pyi(
         qualified_client = client_suffix
 
         overload_lines.append("    @overload")
-        overload_lines.append(f"    def cast_as(self, schema: {qualified_interface}) -> {qualified_client}: ...")
+        overload_lines.append(
+            f"    def cast_as(self, schema: {qualified_interface}) -> {qualified_client}: ...  # type: ignore[reportOverlappingOverload]",
+        )
 
     # Add a catchall overload that matches the original function definition
     overload_lines.append("    @overload")
     overload_lines.append(
-        "    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...",
+        "    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...  # type: ignore[reportOverlappingOverload]",
     )
 
     # Insert overloads before the original cast_as method
@@ -637,12 +658,14 @@ def _augment_dynamic_object_reader(
             clean_alias = type_alias
 
         struct_overloads.append("    @overload")
-        struct_overloads.append(f"    def as_struct(self, schema: {clean_protocol}) -> {clean_alias}: ...")
+        struct_overloads.append(
+            f"    def as_struct(self, schema: {clean_protocol}) -> {clean_alias}: ...  # type: ignore[reportOverlappingOverload]",
+        )
 
     # Add catchall overload for as_struct
     struct_overloads.append("    @overload")
     struct_overloads.append(
-        "    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...",
+        "    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...  # type: ignore[reportOverlappingOverload]",
     )
 
     # Build overloads for as_list
@@ -684,13 +707,15 @@ def _augment_dynamic_object_reader(
             clean_alias = type_alias
 
         list_overloads.append("    @overload")
-        list_overloads.append(f"    def as_list(self, schema: type[{clean_list}]) -> {clean_alias}: ...")
+        list_overloads.append(
+            f"    def as_list(self, schema: type[{clean_list}]) -> {clean_alias}: ...  # type: ignore[reportOverlappingOverload]",
+        )
 
     # Add catchall overload for as_list
     if list_overloads:  # Only add if we have list overloads
         list_overloads.append("    @overload")
         list_overloads.append(
-            "    def as_list(self, schema: type) -> _DynamicListReader: ...",
+            "    def as_list(self, schema: type) -> _DynamicListReader: ...  # type: ignore[reportOverlappingOverload]",
         )
 
     # Build overloads for as_interface
@@ -755,12 +780,14 @@ def _augment_dynamic_object_reader(
             clean_alias = type_alias
 
         interface_overloads.append("    @overload")
-        interface_overloads.append(f"    def as_interface(self, schema: {clean_protocol}) -> {clean_alias}: ...")
+        interface_overloads.append(
+            f"    def as_interface(self, schema: {clean_protocol}) -> {clean_alias}: ...  # type: ignore[reportOverlappingOverload]",
+        )
 
     # Add catchall overload for as_interface
     interface_overloads.append("    @overload")
     interface_overloads.append(
-        "    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...",
+        "    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...  # type: ignore[reportOverlappingOverload]",
     )
 
     # Insert overloads - ensure proper ordering

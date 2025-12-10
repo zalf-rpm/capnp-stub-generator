@@ -33,7 +33,7 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
 def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs):
     """Test that _new_client uses module aliases for inherited interface Server types."""
     # Use pre-generated zalfmas stubs which include common.capnp with interface inheritance
-    stub_file = zalfmas_stubs / "common_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Identifiable._new_client should accept _DynamicCapabilityServer
@@ -92,7 +92,7 @@ def test_new_client_nested_interface_uses_full_module_path(basic_stubs):
 
 def test_new_client_return_types_use_client_aliases(zalfmas_stubs):
     """Test that _new_client return types use proper Client type aliases."""
-    stub_file = zalfmas_stubs / "common_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # _new_client should return Client types

@@ -16,8 +16,8 @@ def _read(path: str | Path) -> list[str]:
 
 def _get_stub_path(schema: str) -> Path:
     """Get path to pre-generated stub file."""
-    stub_name = f"{Path(schema).stem}_capnp.pyi"
-    return generated_dir / stub_name
+    stub_name = f"{Path(schema).stem}_capnp"
+    return generated_dir / stub_name / "__init__.pyi"
 
 
 def test_primitives_and_lists_imports_and_types():

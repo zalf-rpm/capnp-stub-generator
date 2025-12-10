@@ -161,7 +161,7 @@ class TestAnyPointerTypeDifferences:
 
     def test_client_anypointer_uses_dynamic_object_reader(self, zalfmas_stubs):
         """Test that Client Result uses _DynamicObjectReader for AnyPointer."""
-        stub_file = zalfmas_stubs / "common_capnp" / "__init__.pyi"
+        stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
         content = stub_file.read_text()
 
         # HolderClient.ValueResult should use _DynamicObjectReader
@@ -183,7 +183,7 @@ class TestAnyPointerTypeDifferences:
 
     def test_server_anypointer_uses_broad_union(self, zalfmas_stubs):
         """Test that Server Result uses broad type union for AnyPointer."""
-        stub_file = zalfmas_stubs / "common_capnp" / "__init__.pyi"
+        stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
         content = stub_file.read_text()
 
         # Server.ValueResult should use broad union
@@ -199,7 +199,7 @@ class TestAnyPointerTypeDifferences:
 
     def test_server_result_tuple_uses_broad_union(self, zalfmas_stubs):
         """Test that Server ResultTuple also uses broad type union for AnyPointer."""
-        stub_file = zalfmas_stubs / "common_capnp" / "__init__.pyi"
+        stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
         content = stub_file.read_text()
 
         # ValueResultTuple should also use AnyPointer type alias

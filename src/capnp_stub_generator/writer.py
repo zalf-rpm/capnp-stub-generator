@@ -344,20 +344,6 @@ class Writer:
         # Add the root schema and all its references
         add_schema_and_nested(self._schema)
 
-        # Add schemas from imported files (not all files, just imports)
-        # Check if the root schema has imports
-        if hasattr(self._schema.node, "imports"):
-            for import_ref in self._schema.node.imports:
-                import_id = import_ref.id
-                if import_id in self._file_id_to_path:
-                    try:
-                        imported_file_schema = self._schema_loader.get(import_id)
-                        # Add the imported file and its nested types
-                        # This ensures types from imported files are available for cross-file references
-                        add_schema_and_nested(imported_file_schema)
-                    except Exception as e:
-                        logger.debug(f"Could not load imported file schema {hex(import_id)}: {e}")
-
         logger.debug(f"Built schema ID mapping with {len(self._schemas_by_id)} schemas")
         if len(self._schemas_by_id) == 0:
             logger.warning("Schema ID mapping is empty! This will result in empty stubs.")
@@ -2442,9 +2428,9 @@ class Writer:
                 try:
                     interface_schema = self._schema_loader.get(parent_schema.node.id)
                     if hasattr(interface_schema, "as_interface"):
-                        self.gen_interface(interface_schema.as_interface())
+                        _ = self.gen_interface(interface_schema.as_interface())
                     elif isinstance(interface_schema, _InterfaceSchema):
-                        self.gen_interface(interface_schema)
+                        _ = self.gen_interface(interface_schema)
                 except Exception as e:
                     logger.debug(f"Could not generate parent interface: {e}")
                 # Now the parent scope should exist

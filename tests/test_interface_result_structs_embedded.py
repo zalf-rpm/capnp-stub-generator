@@ -19,7 +19,7 @@ def test_interface_result_structs_are_embedded(calculator_stubs):
     but the implicit result structs were missing, causing runtime errors.
     """
     # Load the generated module to get the embedded schemas
-    stub_file = calculator_stubs / "calculator_capnp.py"
+    stub_file = calculator_stubs / "calculator_capnp/__init__.py"
     content = stub_file.read_text()
 
     # Extract the _SCHEMA_NODES list
@@ -49,7 +49,7 @@ def test_result_struct_has_fields(calculator_stubs):
     """Verify that the embedded result struct can be loaded and has the expected fields."""
     # Just check that result structs are present in the generated file
     # Runtime test would require complex import handling
-    stub_file = calculator_stubs / "calculator_capnp.py"
+    stub_file = calculator_stubs / "calculator_capnp/__init__.py"
     content = stub_file.read_text()
 
     # Verify result structs are mentioned
@@ -64,7 +64,7 @@ def test_param_structs_are_embedded(calculator_stubs):
     While explicit param structs are usually in nestedNodes,
     implicit param structs for methods should also be embedded.
     """
-    stub_file = calculator_stubs / "calculator_capnp.py"
+    stub_file = calculator_stubs / "calculator_capnp/__init__.py"
     content = stub_file.read_text()
 
     import re
@@ -91,7 +91,7 @@ def test_param_structs_are_embedded(calculator_stubs):
 
 def test_runtime_result_field_access(calculator_stubs):
     """Test that result structs are accessible (check generated code structure)."""
-    stub_file = calculator_stubs / "calculator_capnp.py"
+    stub_file = calculator_stubs / "calculator_capnp/__init__.py"
     content = stub_file.read_text()
 
     # Verify the generated code has the necessary structure

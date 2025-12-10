@@ -41,9 +41,13 @@ def test_generate_zalfmas_stubs(generated_zalfmas_dir):
     This test uses recursive search and excludes to generate stubs
     for all valid zalfmas schemas, excluding known problematic files.
     """
-    # Define files to exclude (problematic schemas that exist)
-    # Note: Only a.capnp exists; the others are mentioned for documentation
+    # Define files to exclude (problematic schemas and standard library schemas in capnp folder)
     excludes = [str(ZALFMAS_DIR / "a.capnp")]
+
+    # Exclude all schemas in the capnp folder (standard library schemas)
+    capnp_folder = ZALFMAS_DIR / "capnp"
+    if capnp_folder.exists():
+        excludes.extend([str(f) for f in capnp_folder.glob("*.capnp")])
 
     # Build arguments for the CLI
     args = ["-p", str(ZALFMAS_DIR), "-o", str(generated_zalfmas_dir), "-I", str(ZALFMAS_DIR), "-r", "-e"] + excludes
@@ -57,7 +61,7 @@ def test_generate_zalfmas_stubs(generated_zalfmas_dir):
         pytest.fail(f"Stub generation failed: {e}")
 
     # Verify stubs were generated
-    generated_stubs = list(generated_zalfmas_dir.glob("**/*_capnp.pyi"))
+    generated_stubs = list(generated_zalfmas_dir.glob("**/__init__.pyi"))
 
     print(f"\n✓ Successfully generated {len(generated_stubs)} stub files")
 

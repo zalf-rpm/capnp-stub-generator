@@ -5,7 +5,7 @@ import re
 
 def test_server_named_tuple_interface_type(zalfmas_stubs):
     """Test that server NamedTuple result accepts both Server and Client for interfaces."""
-    stub_file = zalfmas_stubs / "registry_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find Server section
@@ -32,7 +32,7 @@ def test_server_named_tuple_interface_type(zalfmas_stubs):
 
 def test_list_of_structs_not_any(zalfmas_stubs):
     """Test that List(Struct) is not Any in results."""
-    stub_file = zalfmas_stubs / "registry_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find RegistryClient
@@ -62,7 +62,7 @@ def test_list_of_structs_not_any(zalfmas_stubs):
 
 def test_list_of_interfaces_types(zalfmas_stubs):
     """Test that List(Interface) uses correct Client/Server types."""
-    stub_file = zalfmas_stubs / "registry_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find AdminClient

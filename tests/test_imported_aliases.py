@@ -9,7 +9,7 @@ def test_imported_type_aliases_used(zalfmas_stubs):
     # It imports IdInformation from common_capnp
     # Admin.addCategory takes IdInformation
 
-    stub_file = zalfmas_stubs / "mas/schema/registry_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find AdminClient
@@ -39,7 +39,7 @@ def test_imported_type_aliases_used(zalfmas_stubs):
 
     # If the alias is used, it should be imported.
     # Check imports
-    assert "from .common_capnp import" in content
+    assert "from mas.schema.common.common_capnp import" in content or "from .common_capnp import" in content
 
     # If we successfully used the alias, we should see it in the file content
     # But wait, did we import the alias in the generated file?
@@ -69,7 +69,7 @@ def test_imported_return_type_aliases(zalfmas_stubs):
     # Admin.removeCategory returns List(Identifiable)
     # Identifiable is imported from common_capnp
 
-    stub_file = zalfmas_stubs / "mas/schema/registry_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
     # Find AdminClient
