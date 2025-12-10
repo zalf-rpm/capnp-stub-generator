@@ -81,9 +81,6 @@ class Writer:
         file_path: str,
         schema_loader: capnp.SchemaLoader,
         file_id_to_path: dict[int, str],
-        output_directory: str | None = None,
-        import_paths: list[str] | None = None,
-        schema_base_directory: str | None = None,
     ):
         """Initialize the stub writer with schema information.
 
@@ -92,9 +89,6 @@ class Writer:
             file_path: Path to the schema file (e.g., "path/to/schema.capnp").
             schema_loader: SchemaLoader instance with all nodes loaded.
             file_id_to_path: Mapping of schema IDs to file paths for resolving imports.
-            output_directory: The directory where output files are written, if different from schema location.
-            import_paths: Additional import paths for resolving absolute imports (e.g., /capnp/c++.capnp).
-            schema_base_directory: The base directory where schema module is located (for relative imports).
 
         """
         self.scope: Scope = Scope(name="", id=schema.node.id, parent=None, return_scope=None)
@@ -103,11 +97,6 @@ class Writer:
         self._schema: _Schema = schema
         self._schema_loader: capnp.SchemaLoader = schema_loader
         self._file_id_to_path: dict[int, str] = file_id_to_path
-        self._output_directory: pathlib.Path | None = pathlib.Path(output_directory) if output_directory else None
-        self._import_paths: list[pathlib.Path] = [pathlib.Path(p) for p in import_paths] if import_paths else []
-        self._schema_base_directory: pathlib.Path | None = (
-            pathlib.Path(schema_base_directory) if schema_base_directory else None
-        )
 
         self._module_path: pathlib.Path = pathlib.Path(file_path)
 
@@ -176,34 +165,6 @@ class Writer:
         except Exception as e:
             logger.debug(f"Error reading Python module annotation: {e}")
         return None
-
-    def get_module_based_output_path(self, output_dir: pathlib.Path, base_name: str) -> pathlib.Path:
-        """Calculate the output path based on Python module annotation.
-
-        If a Python module annotation is present (e.g., "mas.schema.climate"),
-        converts it to a directory path (e.g., "mas/schema/climate_capnp.pyi").
-
-        Args:
-            output_dir: Base output directory.
-            base_name: Base name for the output file (e.g., "climate").
-
-        Returns:
-            Full path where the stub should be written.
-
-        """
-        if self._python_module_path:
-            # Convert module path to directory structure
-            # "mas.schema.climate" -> "mas/schema"
-            module_parts = self._python_module_path.split(".")
-            module_dir = pathlib.Path(*module_parts)
-
-            # Create the full output path
-            output_path = output_dir / module_dir / f"{base_name}_capnp.pyi"
-
-            logger.debug(f"Module-based output: {self._python_module_path} -> {output_path}")
-            return output_path
-        # Fallback: use base_name directly in output_dir
-        return output_dir / f"{base_name}.pyi"
 
     def get_python_module_for_schema(self, schema_id: int) -> str | None:
         """Get the Python module path for a schema by ID.
@@ -348,30 +309,6 @@ class Writer:
         if len(self._schemas_by_id) == 0:
             logger.warning("Schema ID mapping is empty! This will result in empty stubs.")
             logger.warning(f"Root schema ID: {hex(self._schema.node.id)}")
-
-    def _get_nested_schema(
-        self,
-        parent_schema: capnp_types.SchemaType,
-        nested_name: str,
-    ) -> capnp_types.SchemaType | None:
-        """Get a nested schema by name from a parent schema.
-
-        Looks up the nested schema in our ID mapping.
-
-        Args:
-            parent_schema: The parent schema containing the nested type
-            nested_name: The name of the nested type to find
-
-        Returns:
-            The nested schema, or None if not found
-
-        """
-        # Find the nested node by name
-        for nested_node in parent_schema.node.nestedNodes:
-            if nested_node.name == nested_name:
-                # Look up in our schema ID mapping
-                return self._schemas_by_id.get(nested_node.id)
-        return None
 
     def _extract_name_from_protocol(self, protocol_name: str) -> str:
         """Extract user-facing name from Protocol name.
@@ -2043,34 +1980,6 @@ class Writer:
         context = StructGenerationContext.create_with_protocol(schema, type_name, protocol_class_name, new_type, [])
 
         return context, protocol_declaration
-
-    def _get_parsed_schema_for_scope(self, scope: Scope) -> capnp_types.SchemaType:
-        """Get the schema corresponding to the given scope by traversing from root.
-
-        This avoids using runtime getattr traversal which is not type-safe.
-        """
-        current = self._schema
-        trace = scope.trace
-
-        # If trace is empty or just root, return root schema
-        if not trace or (len(trace) == 1 and trace[0].is_root):
-            return current
-
-        # Skip root and traverse down
-        # Note: trace[0] is root. We start from trace[1].
-        for s in trace[1:]:
-            # Find nested schema by scope ID in our schema mapping
-            nested_schema = self._schemas_by_id.get(s.id)
-            if nested_schema:
-                current = nested_schema
-            else:
-                # This might happen if the scope is not strictly following the schema nesting
-                # (e.g. Builder/Reader scopes which are artificial)
-                # But for finding nested types, we should be in a schema scope.
-                # If we can't find it, we can't resolve nested types via schema.
-                raise ValueError(f"Could not find scope {s.name} (id={hex(s.id)}) in schema mapping")
-
-        return current
 
     def _resolve_nested_schema(
         self,

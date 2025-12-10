@@ -996,9 +996,6 @@ def _generate_stubs_from_schema(
         file_path=file_path,
         schema_loader=schema_loader,
         file_id_to_path=file_id_to_path,
-        output_directory=output_directory,
-        import_paths=import_paths,
-        schema_base_directory=schema_base_directory,
     )
     writer.generate_all_nested()
 
@@ -1336,9 +1333,6 @@ def run_from_schemas(
             file_path=path,
             schema_loader=schema_loader,
             file_id_to_path=file_id_to_path,
-            output_directory=output_dir,
-            import_paths=import_paths,
-            schema_base_directory=output_dir if output_dir else os.path.dirname(path),
         )
 
         # Check if schema has Python module annotation
