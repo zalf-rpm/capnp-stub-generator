@@ -3394,10 +3394,19 @@ class Writer:
                         except Exception:
                             single_field_type = "int"
                     elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                        # Struct type - server returns Builder
+                        # Struct type - server returns Builder | Reader
                         is_single_primitive_or_interface = True
                         struct_type = self.get_type_name(field_obj.slot.type)
-                        single_field_type = self._build_nested_builder_type(struct_type)
+                        struct_builder = self._build_nested_builder_type(struct_type)
+                        struct_reader = self._build_nested_reader_type(struct_type)
+
+                        builder_alias = self._get_flat_builder_alias(struct_type)
+                        reader_alias = self._get_flat_reader_alias(struct_type)
+
+                        if builder_alias and reader_alias:
+                            single_field_type = f"{builder_alias} | {reader_alias}"
+                        else:
+                            single_field_type = f"{struct_builder} | {struct_reader}"
                     elif field_type_enum == capnp_types.CapnpElementType.LIST:
                         # List type - server returns Sequence (list)
                         is_single_primitive_or_interface = True
