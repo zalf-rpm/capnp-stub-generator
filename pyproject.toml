@@ -41,6 +41,7 @@ packages = [
   { include = "capnp-stubs", from = "src" },
   { include = "tests" },
 ]
+include = [{ path = "src/capnp-base-stubs", format = "sdist" }]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
