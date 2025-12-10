@@ -12,7 +12,6 @@ import sys
 import tempfile
 from collections.abc import Set
 from dataclasses import dataclass
-from pathlib import Path
 
 import capnp
 from capnp.lib.capnp import _Schema
@@ -206,7 +205,7 @@ def augment_capnp_stubs_with_overloads(
 
     if not os.path.exists(capnp_pyi_path):
         logger.warning(f"Could not find lib/capnp.pyi at {capnp_pyi_path}, skipping augmentation.")
-        return
+        return None
 
     # Read the original file
     with open(capnp_pyi_path, encoding="utf8") as f:
@@ -639,7 +638,6 @@ def _augment_dynamic_object_reader(
         # Build the clean names starting from _capnp module
         # But if the next part is the same (package.module pattern), include both
         if protocol_capnp_idx is not None:
-            start_idx = protocol_capnp_idx
             # Check for package.module pattern (e.g., schema_capnp.schema_capnp)
             if (
                 protocol_capnp_idx + 1 < len(protocol_parts)
@@ -1199,7 +1197,6 @@ def run(args: argparse.Namespace, root_directory: str):
 
     # Create a wrapper script to invoke our plugin
     with tempfile.NamedTemporaryFile(mode="w", suffix="_capnpc", delete=False) as wrapper:
-        plugin_path = os.path.join(os.path.dirname(__file__), "capnpc_plugin.py")
         wrapper.write(f"""#!/usr/bin/env {sys.executable}
 import sys
 sys.path.insert(0, {os.path.dirname(os.path.dirname(__file__))!r})
@@ -1579,7 +1576,7 @@ def run_from_schemas(
             all_interfaces,
             all_dynamic_object_types,
         )
-        
+
         # Add augmented stubs to bundled dirs for formatting
         if capnp_stubs_path:
             bundled_stub_dirs.add(capnp_stubs_path)
@@ -1590,7 +1587,7 @@ def run_from_schemas(
 
     # Combine all directories (generated stubs + bundled stubs) for formatting
     all_output_dirs = output_directories_used | bundled_stub_dirs
-    
+
     # Format all generated files with ruff (includes bundled stubs)
     format_all_outputs(all_output_dirs)
 
