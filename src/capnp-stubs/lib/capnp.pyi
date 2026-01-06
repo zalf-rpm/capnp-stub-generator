@@ -10,9 +10,10 @@ from contextlib import AbstractContextManager, asynccontextmanager
 from ssl import SSLContext
 from typing import IO, Any, Literal, overload
 
-from schema_capnp import FieldReader as _StructSchemaField
-from schema_capnp import NestedNodeReader as _NestedNodeReader
-from schema_capnp import NodeReader as _NodeReader
+# Import schema.capnp types for precise node property types
+# These are _DynamicStructReader at runtime but typed more precisely
+from schema_capnp import FieldReader as _SchemaFieldReader
+from schema_capnp import NodeReader as _SchemaNodeReader
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 # Generated imports for project-specific types
@@ -91,6 +92,93 @@ class KjException(Exception):
     def _to_python(self) -> Exception:
         """Convert to a more specific Python exception if appropriate."""
 
+class _NestedNodeReader:
+    """pycapnp's internal representation of a nested node in a schema.
+
+    This is distinct from schema_capnp.NestedNodeReader which is a _DynamicStructReader.
+    This type is returned by _NodeReader.nestedNodes.
+    """
+
+    @property
+    def id(self) -> int:
+        """The ID of the nested node."""
+
+    @property
+    def name(self) -> str:
+        """The name of the nested node."""
+
+class _List_NestedNode_Reader:
+    """pycapnp's internal list of nested nodes.
+
+    This is distinct from schema_capnp list types which are _DynamicListReader.
+    """
+
+    def __len__(self) -> int: ...
+    def __getitem__(self, index: int) -> _NestedNodeReader: ...
+    def __iter__(self) -> Iterator[_NestedNodeReader]: ...
+
+class _NodeReader:
+    """pycapnp's internal representation of a schema node.
+
+    This is distinct from schema_capnp.NodeReader which is a _DynamicStructReader.
+    This type is returned by _Schema.get_proto() and can be passed to SchemaLoader.load().
+    """
+
+    @property
+    def displayName(self) -> str:
+        """The display name of the node."""
+
+    @property
+    def id(self) -> int:
+        """The unique ID of the node."""
+
+    @property
+    def isConst(self) -> bool:
+        """Whether this node is a constant."""
+
+    @property
+    def isEnum(self) -> bool:
+        """Whether this node is an enum."""
+
+    @property
+    def isInterface(self) -> bool:
+        """Whether this node is an interface."""
+
+    @property
+    def isStruct(self) -> bool:
+        """Whether this node is a struct."""
+
+    @property
+    def nestedNodes(self) -> _List_NestedNode_Reader:
+        """List of nested nodes."""
+
+    @property
+    def node(self) -> _SchemaNodeReader:
+        """Access the underlying schema.capnp Node reader."""
+
+    @property
+    def scopeId(self) -> int:
+        """The scope ID of this node."""
+
+class _StructSchemaField:
+    """pycapnp's internal representation of a field in a struct schema.
+
+    This is distinct from schema_capnp.FieldReader which is a _DynamicStructReader.
+    This type is returned by _StructSchema.fields and _StructSchema.fields_list.
+    """
+
+    @property
+    def proto(self) -> _SchemaFieldReader:
+        """The field's schema as a schema.capnp Field reader."""
+
+    @property
+    def schema(self) -> _StructSchema | _EnumSchema | _InterfaceSchema:
+        """The schema of the field's type.
+
+        Note: For list fields, use the field's slot.type to get element type info.
+        This property may raise for primitive/unknown types.
+        """
+
 class _InterfaceMethod:
     param_type: _StructSchema
     result_type: _StructSchema
@@ -100,7 +188,7 @@ class _Schema:
 
     def as_const_value(self) -> Any: ...
     @property
-    def node(self) -> _NodeReader: ...
+    def node(self) -> _SchemaNodeReader: ...
     def as_enum(self) -> _EnumSchema: ...
     def as_interface(self) -> _InterfaceSchema: ...
     def as_struct(self) -> _StructSchema: ...
@@ -142,7 +230,7 @@ class _EnumSchema:
         """The list of enumerants as a dictionary"""
 
     @property
-    def node(self) -> _NodeReader:
+    def node(self) -> _SchemaNodeReader:
         """The raw schema node"""
 
 class _InterfaceSchema:
@@ -172,7 +260,7 @@ class _InterfaceSchema:
     def superclasses(self) -> list[Any]:
         """A list of superclasses for this interface"""
     @property
-    def node(self) -> _NodeReader:
+    def node(self) -> _SchemaNodeReader:
         """The raw schema node"""
 
 class _ListSchema:
@@ -1901,6 +1989,7 @@ __all__ = [
     "_MallocMessageBuilder",
     "_NodeReader",
     "_NestedNodeReader",
+    "_List_NestedNode_Reader",
     "_PackedFdMessageReader",
     "_ParsedSchema",
     "_PyCustomMessageBuilder",

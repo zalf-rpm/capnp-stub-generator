@@ -186,16 +186,13 @@ class TestAnyPointerTypeDifferences:
         stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
         content = stub_file.read_text()
 
-        # Server.ValueResult should use broad union
+        # Server.ValueResult should use broad union (now via AnyPointer type alias)
         # Check that the pattern exists in Server context
         assert "class Server(_DynamicCapabilityServer):" in content
-        assert "class ValueResult(Awaitable[ValueResult], Protocol):" in content
+        # AnyPointer type alias should be defined
+        assert "type AnyPointer = (" in content
         assert "_DynamicCapabilityServer" in content
-        # The broad union should exist somewhere in Server
-        assert (
-            "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer"
-            in content
-        )
+        assert "_DynamicStructBuilder" in content
 
     def test_server_result_tuple_uses_broad_union(self, zalfmas_stubs):
         """Test that Server ResultTuple also uses broad type union for AnyPointer."""

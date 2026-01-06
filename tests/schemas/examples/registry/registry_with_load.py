@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Example using capnp.load() to load schemas directly.
+"""Example using capnp.load() to load schemas directly.
 
 This approach loads .capnp files at runtime and doesn't require pre-compiled
 Python modules. It's simpler for development but requires the schema files
@@ -31,7 +30,6 @@ class Identifiable(common_capnp.Identifiable.Server):
 
     async def info(self, _context):
         """Return id information."""
-        pass
 
 
 async def main():

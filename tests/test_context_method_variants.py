@@ -13,13 +13,15 @@ def test_both_method_variants_exist(calculator_stubs):
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
-    # Regular method with individual parameters (single line signature)
-    assert "def evaluate(self, expression: ExpressionReader, _context:" in content
+    # Regular method with individual parameters (may be multi-line signature)
+    assert "def evaluate(" in content
+    assert "expression: ExpressionReader" in content
     assert "_context: _CalculatorInterfaceModule.Server.EvaluateCallContext" in content
     assert "**kwargs: Any" in content
 
     # _context variant with only context parameter
-    assert "def evaluate_context(self, context: _CalculatorInterfaceModule.Server.EvaluateCallContext)" in content
+    assert "def evaluate_context(" in content
+    assert "context: _CalculatorInterfaceModule.Server.EvaluateCallContext" in content
     assert "-> Awaitable[None]" in content
 
 
@@ -89,10 +91,8 @@ def test_nested_interface_context_methods(calculator_stubs):
     content = stub_file.read_text()
 
     # Calculator.Value is a nested interface (now _ValueInterfaceModule inside _CalculatorInterfaceModule)
-    assert (
-        "def read_context(self, context: _CalculatorInterfaceModule._ValueInterfaceModule.Server.ReadCallContext) -> Awaitable[None]:"
-        in content
-    )
+    assert "def read_context(" in content
+    assert "context: _CalculatorInterfaceModule._ValueInterfaceModule.Server.ReadCallContext" in content
 
     # Calculator.Function is a nested interface (now _FunctionInterfaceModule inside _CalculatorInterfaceModule)
     assert "def call_context(" in content  # Verify method exists
@@ -110,10 +110,8 @@ def test_context_method_documentation(calculator_stubs):
     # - Can access context.params and set context.results
 
     # Example from docs: defFunction_context(self, context)
-    assert (
-        "def defFunction_context(self, context: _CalculatorInterfaceModule.Server.DeffunctionCallContext) -> Awaitable[None]:"
-        in content
-    )
+    assert "def defFunction_context(" in content
+    assert "context: _CalculatorInterfaceModule.Server.DeffunctionCallContext" in content
 
     # The CallContext should provide access to both params and results
     assert "class DeffunctionCallContext(Protocol):" in content

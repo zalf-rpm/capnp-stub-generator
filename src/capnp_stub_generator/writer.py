@@ -33,6 +33,8 @@ from capnp_stub_generator.writer_dto import (
 )
 
 if TYPE_CHECKING:
+    from capnp.lib.capnp import _StructSchemaField
+
     from schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
 
 capnp.remove_import_hook()
@@ -1497,7 +1499,7 @@ class Writer:
 
     def gen_slot(
         self,
-        raw_field: FieldReader,
+        raw_field: _StructSchemaField,
         field: FieldReader,
         init_choices: list[InitChoice],
         list_init_choices: list[tuple[str, str]] | None = None,
@@ -1505,11 +1507,11 @@ class Writer:
         """Generates a new type from a slot. Which type, is later determined.
 
         Args:
-            raw_field (Any): The raw content of the field.
-            field (Any): The field to generate the type from.
-            new_type (CapnpType): The new type that was registered previously.
+            raw_field: The pycapnp field schema wrapper (provides .schema property).
+            field: The field descriptor from schema.capnp.
             init_choices (list[InitChoice]): A list of possible (overload) `init` functions that are populated
                 by this method.
+            list_init_choices: Optional list of list field init choices.
 
         Returns:
             helper.TypeHintedVariable | None: The type hinted variable that was created, or None otherwise.
@@ -1647,12 +1649,12 @@ class Writer:
             [helper.TypeHint(python_type_name, primary=True)],
         )
 
-    def gen_enum_slot(self, field: FieldReader, schema: _StructSchema) -> helper.TypeHintedVariable:
+    def gen_enum_slot(self, field: FieldReader, schema: capnp_types.SchemaType) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `enum`.
 
         Args:
             field (FieldReader): The field reader.
-            schema (_EnumSchema): The schema of the field.
+            schema: The schema of the field (expected to be an enum schema).
 
         Returns:
             str: The type-hinted slot.
@@ -2018,14 +2020,14 @@ class Writer:
     def _process_slot_field(
         self,
         field: FieldReader,
-        raw_field: FieldReader,
+        raw_field: _StructSchemaField,
         fields_collection: StructFieldsCollection,
     ) -> None:
         """Process a SLOT field and add to collection.
 
         Args:
-            field: The field descriptor
-            raw_field: The raw field from the schema
+            field: The field descriptor from schema.capnp
+            raw_field: The pycapnp field schema wrapper
             context: The struct generation context
             fields_collection: The collection to add the field to
 
@@ -2043,7 +2045,7 @@ class Writer:
     def _process_group_field(
         self,
         field: FieldReader,
-        raw_field: FieldReader,
+        raw_field: _StructSchemaField,
         fields_collection: StructFieldsCollection,
     ) -> None:
         """Process a GROUP field and add to collection.
@@ -2051,8 +2053,8 @@ class Writer:
         GROUP fields are essentially nested structs that are generated recursively.
 
         Args:
-            field: The field descriptor
-            raw_field: The raw field from the schema
+            field: The field descriptor from schema.capnp
+            raw_field: The pycapnp field schema wrapper
             fields_collection: The collection to add the field to
 
         """
@@ -2067,8 +2069,7 @@ class Writer:
         assert group_name != field.name
 
         # Generate the group struct recursively
-        raw_schema = raw_field.schema
-        group_type = self.gen_struct(raw_schema, type_name=group_name)
+        group_type = self.gen_struct(raw_field.schema, type_name=group_name)
         group_scoped_name = group_type.scoped_name
 
         # Create hinted variable for the group field
@@ -2258,19 +2259,20 @@ class Writer:
         target_scope = context.new_type.scope if context.new_type.scope else self.scope
         target_scope.add(f"{context.type_name}: {protocol_class_name}")
 
-    def gen_struct(self, schema: _StructSchema, type_name: str = "") -> CapnpType:
+    def gen_struct(self, schema: _StructSchema | _EnumSchema | _InterfaceSchema, type_name: str = "") -> CapnpType:
         """Generate a `struct` object.
 
         This orchestrator delegates to specialized methods for clarity and testability.
 
         Args:
-            schema (_StructSchema): The schema to generate the `struct` object out of.
+            schema: The schema to generate the `struct` object out of (must be a struct schema).
             type_name (str, optional): A type name to override the display name of the struct. Defaults to "".
 
         Returns:
             Type: The `struct`-type module that was generated.
 
         """
+        assert isinstance(schema, _StructSchema), f"Expected _StructSchema, got {type(schema).__name__}"
         assert schema.node.which() == capnp_types.CapnpElementType.STRUCT
 
         # Phase 1: Setup and initialization
