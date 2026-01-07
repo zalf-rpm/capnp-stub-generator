@@ -4730,8 +4730,12 @@ class Writer:
         out.append("")
 
         # Load schemas and build module structure
+        # Use a shared loader so capabilities work across schema modules
         out.append("# Load schemas and build module structure")
-        out.append("_loader = capnp.SchemaLoader()")
+        out.append("# Use a shared loader stored on capnp module so capabilities work across schema modules")
+        out.append("if not hasattr(capnp, '_embedded_schema_loader'):")
+        out.append("    capnp._embedded_schema_loader = capnp.SchemaLoader()")
+        out.append("_loader = capnp._embedded_schema_loader")
         out.append("for _schema_b64 in _SCHEMA_NODES:")
         out.append("    _schema_data = base64.b64decode(_schema_b64)")
         out.append("    _node_reader = schema_capnp.Node.from_bytes_packed(_schema_data)")
