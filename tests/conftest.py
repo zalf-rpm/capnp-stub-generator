@@ -76,7 +76,7 @@ main()
 
     try:
         # Helper function to generate stubs using capnp compile
-        def compile_schemas(schema_dir: Path, output_dir: Path, import_paths: list[str] = None):
+        def compile_schemas(schema_dir: Path, output_dir: Path, import_paths: list[str] | None = None):
             """Compile schemas using capnp compile with our plugin."""
             # Find all .capnp files recursively
             schema_files = list(schema_dir.rglob("*.capnp"))

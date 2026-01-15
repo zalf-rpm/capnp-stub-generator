@@ -17,6 +17,7 @@ from schema_capnp import NodeReader as _SchemaNodeReader
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
 # Generated imports for project-specific types
+from tests._generated.examples.addressbook import addressbook_capnp
 from tests._generated.examples.calculator import calculator_capnp
 from tests._generated.examples.restorer import restorer_capnp
 from tests._generated.examples.single_value import single_value_capnp
@@ -601,18 +602,33 @@ class _DynamicObjectReader:
     """
 
     @overload
-    def as_interface(self, schema: restorer_capnp._AnyTesterInterfaceModule) -> restorer_capnp.AnyTesterClient: ...
+    def as_interface(
+        self,
+        schema: calculator_capnp._CalculatorInterfaceModule,
+    ) -> calculator_capnp.CalculatorClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def as_interface(self, schema: restorer_capnp._BagInterfaceModule) -> restorer_capnp.BagClient: ...
+    def as_interface(
+        self,
+        schema: calculator_capnp._CalculatorInterfaceModule._FunctionInterfaceModule,
+    ) -> calculator_capnp.FunctionClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def as_interface(self, schema: restorer_capnp._RestorerInterfaceModule) -> restorer_capnp.RestorerClient: ...
+    def as_interface(
+        self,
+        schema: calculator_capnp._CalculatorInterfaceModule._ValueInterfaceModule,
+    ) -> calculator_capnp.ValueClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(self, schema: restorer_capnp._AnyTesterInterfaceModule) -> restorer_capnp.AnyTesterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(self, schema: restorer_capnp._BagInterfaceModule) -> restorer_capnp.BagClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(self, schema: restorer_capnp._RestorerInterfaceModule) -> restorer_capnp.RestorerClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
     def as_interface(
         self,
         schema: single_value_capnp._SingleValueInterfaceModule,
-    ) -> single_value_capnp.SingleValueClient: ...
+    ) -> single_value_capnp.SingleValueClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
+    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...  # type: ignore[reportOverlappingOverload]
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this AnyPointer to an interface capability.
 
@@ -642,12 +658,41 @@ class _DynamicObjectReader:
     @overload
     def as_struct(
         self,
+        schema: calculator_capnp._CalculatorInterfaceModule._ExpressionStructModule._ExpressionCallStructModule,
+    ) -> calculator_capnp.ExpressionCallReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: addressbook_capnp._PersonStructModule._PersonEmploymentStructModule,
+    ) -> addressbook_capnp.PersonEmploymentReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: addressbook_capnp._PersonStructModule._PersonTestGroupStructModule,
+    ) -> addressbook_capnp.PersonTestGroupReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: addressbook_capnp._PersonStructModule._PhoneNumberStructModule,
+    ) -> addressbook_capnp.PhoneNumberReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: calculator_capnp._CalculatorInterfaceModule._ExpressionStructModule,
+    ) -> calculator_capnp.ExpressionReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
         schema: restorer_capnp._RestorerInterfaceModule._RestoreParamsStructModule,
-    ) -> restorer_capnp.RestoreParamsReader: ...
+    ) -> restorer_capnp.RestoreParamsReader: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def as_struct(self, schema: single_value_capnp._MyStructStructModule) -> single_value_capnp.MyStructReader: ...
+    def as_struct(self, schema: addressbook_capnp._AddressBookStructModule) -> addressbook_capnp.AddressBookReader: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...
+    def as_struct(self, schema: addressbook_capnp._PersonStructModule) -> addressbook_capnp.PersonReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(self, schema: single_value_capnp._MyStructStructModule) -> single_value_capnp.MyStructReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...  # type: ignore[reportOverlappingOverload]
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
         """Cast this AnyPointer to a struct reader.
 
@@ -1165,30 +1210,30 @@ class _CapabilityClient:
     """
 
     @overload
-    def cast_as(self, schema: calculator_capnp._CalculatorInterfaceModule) -> calculator_capnp.CalculatorClient: ...
+    def cast_as(self, schema: calculator_capnp._CalculatorInterfaceModule) -> calculator_capnp.CalculatorClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
     def cast_as(
         self,
         schema: calculator_capnp._CalculatorInterfaceModule._FunctionInterfaceModule,
-    ) -> calculator_capnp.FunctionClient: ...
+    ) -> calculator_capnp.FunctionClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
     def cast_as(
         self,
         schema: calculator_capnp._CalculatorInterfaceModule._ValueInterfaceModule,
-    ) -> calculator_capnp.ValueClient: ...
+    ) -> calculator_capnp.ValueClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def cast_as(self, schema: restorer_capnp._AnyTesterInterfaceModule) -> restorer_capnp.AnyTesterClient: ...
+    def cast_as(self, schema: restorer_capnp._AnyTesterInterfaceModule) -> restorer_capnp.AnyTesterClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def cast_as(self, schema: restorer_capnp._BagInterfaceModule) -> restorer_capnp.BagClient: ...
+    def cast_as(self, schema: restorer_capnp._BagInterfaceModule) -> restorer_capnp.BagClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def cast_as(self, schema: restorer_capnp._RestorerInterfaceModule) -> restorer_capnp.RestorerClient: ...
+    def cast_as(self, schema: restorer_capnp._RestorerInterfaceModule) -> restorer_capnp.RestorerClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
     def cast_as(
         self,
         schema: single_value_capnp._SingleValueInterfaceModule,
-    ) -> single_value_capnp.SingleValueClient: ...
+    ) -> single_value_capnp.SingleValueClient: ...  # type: ignore[reportOverlappingOverload]
     @overload
-    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
+    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...  # type: ignore[reportOverlappingOverload]
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this capability to a specific interface type.
 

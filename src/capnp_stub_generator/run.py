@@ -141,7 +141,7 @@ def augment_capnp_stubs_with_overloads(
     output_dir: str,
     interfaces: dict[str, tuple[str, list[str]]],
     dynamic_object_types: dict[str, list[tuple[str, str]]],
-) -> tuple[str, str]:
+) -> tuple[str, str | None] | None:
     """Copy capnp-stubs package and augment with cast_as and _DynamicObjectReader overloads.
 
     This copies the entire capnp-stubs package to a separate directory
@@ -156,7 +156,8 @@ def augment_capnp_stubs_with_overloads(
         dynamic_object_types: Dictionary with "structs" and "interfaces" keys containing type tuples.
 
     Returns:
-        Tuple of (capnp-stubs path, schema_capnp path) that were copied/augmented.
+        Tuple of (capnp-stubs path, schema_capnp path or None) that were copied/augmented,
+        or None if lib/capnp.pyi could not be found.
 
     """
     # Create destination path for augmented stubs
@@ -1563,7 +1564,7 @@ def run_from_schemas(
             f"Augmenting capnp-stubs with {len(all_interfaces)} interfaces, {len(all_dynamic_object_types.get('structs', []))} structs, {len(all_dynamic_object_types.get('lists', []))} lists, {len(all_dynamic_object_types.get('interfaces', []))} interface types",
         )
 
-        capnp_stubs_path, schema_capnp_path = augment_capnp_stubs_with_overloads(
+        result = augment_capnp_stubs_with_overloads(
             source_stubs_path,
             augmented_stubs_dir,
             actual_output_dir,
@@ -1572,10 +1573,12 @@ def run_from_schemas(
         )
 
         # Add augmented stubs to bundled dirs for formatting
-        if capnp_stubs_path:
-            bundled_stub_dirs.add(capnp_stubs_path)
-        if schema_capnp_path:
-            bundled_stub_dirs.add(schema_capnp_path)
+        if result:
+            capnp_stubs_path, schema_capnp_path = result
+            if capnp_stubs_path:
+                bundled_stub_dirs.add(capnp_stubs_path)
+            if schema_capnp_path:
+                bundled_stub_dirs.add(schema_capnp_path)
     elif augment_capnp_stubs:
         logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found")
 

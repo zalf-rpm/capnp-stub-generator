@@ -49,7 +49,7 @@ class TestSharedSchemaLoader:
             if "dummy_capnp" in sys.modules:
                 del sys.modules["dummy_capnp"]
 
-            import dummy_capnp as dummy_capnp_reimported  # noqa: F811, F401
+            import dummy_capnp as dummy_capnp_reimported  # noqa: F401
 
             loader_after_reimport = capnp._embedded_schema_loader
             loader_id_second = id(loader_after_reimport)
@@ -158,7 +158,7 @@ class TestSharedSchemaLoader:
             if "dummy_capnp" in sys.modules:
                 del sys.modules["dummy_capnp"]
 
-            import dummy_capnp as dummy_reimported  # noqa: F811
+            import dummy_capnp as dummy_reimported
 
             # Verify we can still create and use messages
             msg2 = dummy_reimported.TestAllTypes.new_message()
