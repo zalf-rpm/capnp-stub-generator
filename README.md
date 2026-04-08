@@ -139,28 +139,6 @@ stubs:
 	capnpc -opython:$(STUBS_DIR) -Ischemas $(SCHEMAS)
 ```
 
-### Python setuptools
-
-```python
-from setuptools import setup
-from setuptools.command.build_py import build_py
-import subprocess
-
-class BuildWithStubs(build_py):
-    def run(self):
-        subprocess.run([
-            'capnpc', '-opython:stubs/',
-            'schemas/myschema.capnp'
-        ], check=True)
-        super().run()
-
-setup(
-    name='myproject',
-    cmdclass={'build_py': BuildWithStubs},
-    # ...
-)
-```
-
 ## Type Checking Generated Stubs
 
 The generated stubs work with mypy and pyright:
@@ -253,7 +231,7 @@ This package bundles [pycapnp type stubs](https://github.com/zalf-rpm/pycapnp-st
 
 GNU General Public License v3.0 or later (GPL-3.0-or-later)
 
-Copyright (C) 2022 Adrian Figueroa <adrian.figueroa@metirionic.com>  
+Copyright (C) 2022 Adrian Figueroa <adrian.figueroa@metirionic.com>
 Copyright (C) 2025 Vincent Dlugosch <vincent.dlugosch@zalf.de>
 
 See the [LICENSE](LICENSE) file for details.
