@@ -5,6 +5,7 @@ Note: This generator requires pycapnp >= 2.0.0.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os.path
 import pathlib
@@ -83,7 +84,7 @@ class Writer:
         file_path: str,
         schema_loader: capnp.SchemaLoader,
         file_id_to_path: dict[int, str],
-    ):
+    ) -> None:
         """Initialize the stub writer with schema information.
 
         Args:
@@ -462,7 +463,7 @@ class Writer:
                 runtime_parts.append(part)
         return ".".join(runtime_parts)
 
-    def _add_typing_import(self, module_name: Writer.VALID_TYPING_IMPORTS):
+    def _add_typing_import(self, module_name: Writer.VALID_TYPING_IMPORTS) -> None:
         """Add an import for a module from the 'typing' package.
 
         E.g., when using
@@ -477,7 +478,7 @@ class Writer:
         """
         self._typing_imports.add(module_name)
 
-    def _add_import(self, import_line: str):
+    def _add_import(self, import_line: str) -> None:
         """Add a full import line.
 
         E.g. 'import numpy as np'.
@@ -490,7 +491,7 @@ class Writer:
         if import_line not in self._imports:
             self._imports.append(import_line)
 
-    def _add_enum_import(self):
+    def _add_enum_import(self) -> None:
         """Adds an import for the `Enum` class (deprecated - now using _EnumModule)."""
         # Note: _EnumModule is already imported in __init__, so this method is now a no-op
         # We keep it for compatibility with existing code structure
@@ -604,7 +605,7 @@ class Writer:
             ),
         ]
 
-    def _add_from_bytes_methods(self, scoped_reader_type: str, scoped_builder_type: str):
+    def _add_from_bytes_methods(self, scoped_reader_type: str, scoped_builder_type: str) -> None:
         """Add from_bytes and from_bytes_packed instance methods to current scope.
 
         These are instance methods on the module that override base class methods.
@@ -627,7 +628,7 @@ class Writer:
         self.scope.add(
             helper.new_function(
                 "from_bytes",
-                parameters=["self", buf_param] + self._create_capnp_limit_params(),
+                parameters=["self", buf_param, *self._create_capnp_limit_params()],
                 return_type=helper.new_type_group("AbstractContextManager", [scoped_reader_type]),
             ),
         )
@@ -638,7 +639,7 @@ class Writer:
         self.scope.add(
             helper.new_function(
                 "from_bytes",
-                parameters=["self", buf_param] + self._create_capnp_limit_params() + ["*", builder_kwarg],
+                parameters=["self", buf_param, *self._create_capnp_limit_params(), "*", builder_kwarg],
                 return_type=helper.new_type_group("AbstractContextManager", [scoped_reader_type]),
             ),
         )
@@ -649,7 +650,7 @@ class Writer:
         self.scope.add(
             helper.new_function(
                 "from_bytes",
-                parameters=["self", buf_param] + self._create_capnp_limit_params() + ["*", builder_kwarg_true],
+                parameters=["self", buf_param, *self._create_capnp_limit_params(), "*", builder_kwarg_true],
                 return_type=helper.new_type_group("AbstractContextManager", [scoped_builder_type]),
             ),
         )
@@ -659,12 +660,12 @@ class Writer:
         self.scope.add(
             helper.new_function(
                 "from_bytes_packed",
-                parameters=["self", buf_param] + self._create_capnp_limit_params(),
+                parameters=["self", buf_param, *self._create_capnp_limit_params()],
                 return_type="_DynamicStructReader",
             ),
         )
 
-    def _add_read_methods(self, scoped_reader_type: str):
+    def _add_read_methods(self, scoped_reader_type: str) -> None:
         """Add read and read_packed instance methods to current scope.
 
         These are instance methods on the module that override base class methods.
@@ -682,7 +683,7 @@ class Writer:
         self.scope.add(
             helper.new_function(
                 "read",
-                parameters=["self", file_param] + self._create_capnp_limit_params(),
+                parameters=["self", file_param, *self._create_capnp_limit_params()],
                 return_type=scoped_reader_type,
             ),
         )
@@ -692,7 +693,7 @@ class Writer:
         self.scope.add(
             helper.new_function(
                 "read_packed",
-                parameters=["self", file_param] + self._create_capnp_limit_params(),
+                parameters=["self", file_param, *self._create_capnp_limit_params()],
                 return_type=scoped_reader_type,
             ),
         )
@@ -798,7 +799,9 @@ class Writer:
 
         return getter_type, setter_type
 
-    def _add_properties(self, slot_fields: list[helper.TypeHintedVariable], mode: Literal["base", "reader", "builder"]):
+    def _add_properties(
+        self, slot_fields: list[helper.TypeHintedVariable], mode: Literal["base", "reader", "builder"]
+    ) -> None:
         """Add properties to current scope based on mode.
 
         Args:
@@ -816,17 +819,13 @@ class Writer:
 
             if mode == "reader":
                 field_type = self._get_reader_property_type(field_copy)
-                should_override = slot_field.name in {
-                    "schema",
-                }
+                should_override = slot_field.name == "schema"
                 for line in helper.new_property(slot_field.name, field_type, add_override=should_override):
                     self.scope.add(line)
 
             elif mode == "builder":
                 getter_type, setter_type = self._get_builder_property_types(field_copy)
-                should_override = slot_field.name in {
-                    "schema",
-                }
+                should_override = slot_field.name == "schema"
                 for line in helper.new_property(
                     slot_field.name,
                     getter_type,
@@ -836,7 +835,7 @@ class Writer:
                 ):
                     self.scope.add(line)
 
-    def _add_reader_properties(self, slot_fields: list[helper.TypeHintedVariable]):
+    def _add_reader_properties(self, slot_fields: list[helper.TypeHintedVariable]) -> None:
         """Add read-only properties to Reader class.
 
         Args:
@@ -845,7 +844,7 @@ class Writer:
         """
         self._add_properties(slot_fields, "reader")
 
-    def _add_builder_properties(self, slot_fields: list[helper.TypeHintedVariable]):
+    def _add_builder_properties(self, slot_fields: list[helper.TypeHintedVariable]) -> None:
         """Add mutable properties with setters to Builder class.
 
         Args:
@@ -858,7 +857,7 @@ class Writer:
         self,
         init_choices: list[InitChoice],
         list_init_choices: list[tuple[str, str]],
-    ):
+    ) -> None:
         """Add init method overloads to Builder class.
 
         Args:
@@ -982,7 +981,7 @@ class Writer:
         self,
         slot_fields: list[helper.TypeHintedVariable],
         builder_type_name: str,
-    ):
+    ) -> None:
         """Add new_message instance method override with field parameters as kwargs.
 
         Args:
@@ -1083,7 +1082,7 @@ class Writer:
         slot_fields: list[helper.TypeHintedVariable],
         reader_type_name: str,
         builder_type_name: str,
-    ):
+    ) -> None:
         """Generate the base struct class with minimal overrides.
 
         Now inherits from _StructModule, so we only need to add:
@@ -1111,7 +1110,7 @@ class Writer:
         slot_fields: list[helper.TypeHintedVariable],
         builder_type_name: str,
         schema: _StructSchema,
-    ):
+    ) -> None:
         """Generate the Reader class for a struct.
 
         Now inherits from _DynamicStructReader, so we only need to add:
@@ -1163,7 +1162,7 @@ class Writer:
         list_init_choices: list[tuple[str, str]],
         reader_type_name: str,
         schema: _StructSchema,
-    ):
+    ) -> None:
         """Generate the Builder class for a struct.
 
         Now inherits from _DynamicStructBuilder, so we only need to add:
@@ -1250,7 +1249,7 @@ class Writer:
         # No longer add Protocol - interface modules inherit from _InterfaceModule
         return base_classes
 
-    def _generate_nested_types_for_interface(self, schema: _InterfaceSchema):
+    def _generate_nested_types_for_interface(self, schema: _InterfaceSchema) -> None:
         """Generate all nested types for an interface.
 
         Args:
@@ -1285,7 +1284,7 @@ class Writer:
         # Restore interface scope after generating nested types
         self.scope = interface_scope
 
-    def _add_new_client_method(self, name: str, client_return_type: str | None = None):
+    def _add_new_client_method(self, name: str, client_return_type: str | None = None) -> None:
         """Add _new_client() class method to create capability client from Server.
 
         Args:
@@ -1595,7 +1594,8 @@ class Writer:
             hinted_variable = helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
 
         else:
-            raise TypeError(f"Unknown field slot type {field_slot_type}.")
+            msg = f"Unknown field slot type {field_slot_type}."
+            raise TypeError(msg)
 
         return hinted_variable
 
@@ -1661,11 +1661,8 @@ class Writer:
 
         """
         if not self.is_type_id_known(field.slot.type.enum.typeId):
-            try:
+            with contextlib.suppress(NoParentError):
                 self.generate_nested(schema)
-
-            except NoParentError:
-                pass
 
         # Enum values are integers at runtime, but also accept string literals
         try:
@@ -1881,10 +1878,7 @@ class Writer:
         while s and not s.is_root:
             # s.name is like _CalculatorStructModule
             # Extract Calculator
-            if s.name.startswith("_"):
-                part = self._extract_name_from_protocol(s.name)
-            else:
-                part = s.name
+            part = self._extract_name_from_protocol(s.name) if s.name.startswith("_") else s.name
             flat_name = f"{part}{flat_name}"
             s = s.parent
 
@@ -2112,7 +2106,7 @@ class Writer:
         """
         fields_collection = StructFieldsCollection()
 
-        for field, raw_field in zip(schema.node.struct.fields, schema.as_struct().fields_list):
+        for field, raw_field in zip(schema.node.struct.fields, schema.as_struct().fields_list, strict=False):
             field_type = field.which()
 
             if field_type == capnp_types.CapnpFieldType.SLOT:
@@ -2120,7 +2114,8 @@ class Writer:
             elif field_type == capnp_types.CapnpFieldType.GROUP:
                 self._process_group_field(field, raw_field, fields_collection)
             else:
-                raise AssertionError(f"{schema.node.displayName}: {field.name}: {field.which()}")
+                msg = f"{schema.node.displayName}: {field.name}: {field.which()}"
+                raise AssertionError(msg)
 
         return fields_collection
 
@@ -2666,9 +2661,7 @@ class Writer:
         param_str = ", ".join(param_list)
 
         # Generate method signature
-        lines = [f"def {method_name}({param_str}) -> {wrapped_result_type}: ..."]
-
-        return lines
+        return [f"def {method_name}({param_str}) -> {wrapped_result_type}: ..."]
 
     def _generate_request_protocol(
         self,
@@ -2816,10 +2809,7 @@ class Writer:
 
                             if not for_server:
                                 # Client receives Reader only
-                                if reader_alias:
-                                    field_type = reader_alias
-                                else:
-                                    field_type = reader_type
+                                field_type = reader_alias or reader_type
                             # Server returns Builder | Reader
                             elif builder_alias and reader_alias:
                                 field_type = f"{builder_alias} | {reader_alias}"
@@ -2842,10 +2832,7 @@ class Writer:
                                 # But usually field_type is the Protocol name
                                 server_type = f"{field_type}.Server"
 
-                            if for_server:
-                                field_type = f"{server_type} | {client_type}"
-                            else:
-                                field_type = client_type
+                            field_type = f"{server_type} | {client_type}" if for_server else client_type
                         elif field_type_enum == capnp_types.CapnpElementType.LIST:
                             # Generate list class and get aliases
                             _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
@@ -2939,11 +2926,7 @@ class Writer:
                                 self._needs_anypointer_alias = True
                         # Client receives specific type if known, else _DynamicObjectReader
                         # Note: At runtime, pycapnp returns _DynamicObjectReader for AnyStruct and AnyList too
-                        elif (
-                            any_pointer_kind == "capability"
-                            or any_pointer_kind == "struct"
-                            or any_pointer_kind == "list"
-                        ):
+                        elif any_pointer_kind in {"capability", "struct", "list"}:
                             field_type = "_DynamicObjectReader"
                         else:
                             field_type = "_DynamicObjectReader"
@@ -2956,10 +2939,7 @@ class Writer:
 
                         if not for_server:
                             # Client receives Reader only
-                            if reader_alias:
-                                field_type = reader_alias
-                            else:
-                                field_type = reader_type
+                            field_type = reader_alias or reader_type
                         # Server returns Builder | Reader
                         elif builder_alias and reader_alias:
                             field_type = f"{builder_alias} | {reader_alias}"
@@ -2984,10 +2964,7 @@ class Writer:
                             client_type = f"{field_type}Client"
                             server_type = f"{field_type}.Server"
 
-                        if for_server:
-                            field_type = f"{server_type} | {client_type}"
-                        else:
-                            field_type = client_type
+                        field_type = f"{server_type} | {client_type}" if for_server else client_type
                     elif field_type_enum == capnp_types.CapnpElementType.LIST:
                         # Generate list class and get aliases
                         _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
@@ -3075,18 +3052,13 @@ class Writer:
         # Scope the request class name to the interface
         # Request classes are nested in the interface module, so we need the interface path
         interface_path = self._get_scope_path()
-        if interface_path:
-            scoped_request_class = f"{interface_path}.{request_class_name}"
-        else:
-            scoped_request_class = request_class_name
+        scoped_request_class = f"{interface_path}.{request_class_name}" if interface_path else request_class_name
 
         # Build parameter list (similar to client method)
         param_list = ["self"] + [p.to_request_param() for p in parameters]
         param_str = ", ".join(param_list)
 
-        lines = [f"def {method_name}_request({param_str}) -> {scoped_request_class}: ..."]
-
-        return lines
+        return [f"def {method_name}_request({param_str}) -> {scoped_request_class}: ..."]
 
     @staticmethod
     def _sanitize_namedtuple_field_name(field_name: str) -> str:
@@ -3348,10 +3320,7 @@ class Writer:
                     pass
 
             # Generate return type - use NamedTuple with "Tuple" suffix
-            if scope_path:
-                full_server_path = f"{scope_path}.Server.{result_type}Tuple"
-            else:
-                full_server_path = f"Server.{result_type}Tuple"
+            full_server_path = f"{scope_path}.Server.{result_type}Tuple" if scope_path else f"Server.{result_type}Tuple"
 
             if is_single_primitive_or_interface and single_field_type:
                 # For single primitive/interface: allow both the primitive/interface.Server and the NamedTuple
@@ -3455,10 +3424,7 @@ class Writer:
 
         # CallContext.params points to the Params Protocol (nested in Server class)
         params_type = f"{method_name.title()}Params"
-        if scope_path:
-            fully_qualified_params = f"{scope_path}.Server.{params_type}"
-        else:
-            fully_qualified_params = f"Server.{params_type}"
+        fully_qualified_params = f"{scope_path}.Server.{params_type}" if scope_path else f"Server.{params_type}"
         lines.append(f"    params: {fully_qualified_params}")
 
         # CallContext.results points to the Server Result Protocol (nested in Server class)
@@ -3570,7 +3536,8 @@ class Writer:
             # Use get_type_by_id to ensure the type is generated and get its Protocol name
             # e.g. "_IdInformationStructModule"
             if method_info.result_schema is None:
-                raise ValueError("Result schema is None for direct struct return")
+                msg = "Result schema is None for direct struct return"
+                raise ValueError(msg)
 
             struct_type = self.get_type_by_id(method_info.result_schema.node.id)
             struct_name = struct_type.scoped_name
@@ -3728,8 +3695,7 @@ class Writer:
         context = self._setup_interface_generation(schema)
         if context is None:
             # Already imported
-            imported_type = self.register_import(schema)
-            return imported_type
+            return self.register_import(schema)
 
         # Track the interface's parent scope (may differ from current scope when generated lazily)
         type_alias_scope = context.parent_scope or self.scope
@@ -4039,7 +4005,7 @@ class Writer:
             logger.warning(f"Skipping unknown node type '{schema.node.which()}': {schema.node.displayName}")
             return
 
-    def generate_all_nested(self):
+    def generate_all_nested(self) -> None:
         """Generate types for all nested nodes, recursively."""
         for node in self._schema.node.nestedNodes:
             try:
@@ -4256,7 +4222,8 @@ class Writer:
             scope = self.scope.parent
 
         if scope is None:
-            raise ValueError(f"No valid scope was found for registering the type '{name}'.")
+            msg = f"No valid scope was found for registering the type '{name}'."
+            raise ValueError(msg)
 
         self.type_map[type_id] = retval = CapnpType(schema=schema, name=name, scope=scope)
 
@@ -4336,7 +4303,8 @@ class Writer:
             if self.is_type_id_known(type_id):
                 return self.type_map[type_id]
 
-        raise KeyError(f"The type ID '{type_id} was not found in the type registry.'")
+        msg = f"The type ID '{type_id} was not found in the type registry.'"
+        raise KeyError(msg)
 
     def new_scope(
         self,
@@ -4364,7 +4332,8 @@ class Writer:
                 parent_scope = self.scopes_by_id[node.scopeId]
 
             except KeyError as e:
-                raise NoParentError(f"The scope with name '{name}' has no parent.") from e
+                msg = f"The scope with name '{name}' has no parent."
+                raise NoParentError(msg) from e
 
         # Add the heading of the scope to the parent scope.
         if scope_heading:
@@ -4380,7 +4349,7 @@ class Writer:
 
         return parent_scope
 
-    def return_from_scope(self):
+    def return_from_scope(self) -> None:
         """Return from the current scope."""
         assert self.scope is not None, "The current scope is not valid."
         assert not self.scope.is_root, "The current scope is the root scope and cannot be returned from."
@@ -4507,7 +4476,8 @@ class Writer:
             element_type = None
 
         else:
-            raise TypeError(f"Unknown type reader type '{type_reader_type}'.")
+            msg = f"Unknown type reader type '{type_reader_type}'."
+            raise TypeError(msg)
 
         if element_type and (not element_type.scope.is_root):
             return f"{element_type.scope}.{type_name}"
@@ -4566,15 +4536,14 @@ class Writer:
                             seen_structs.add(protocol_path)
 
                 # For Client types (interfaces)
-                elif alias_name.endswith("Client"):
-                    if "Client" in original_path:
-                        parts = original_path.rsplit(".", 1)
-                        if len(parts) == 2:
-                            protocol_path = parts[0]
-                            # Only include InterfaceModule types
-                            if "InterfaceModule" in protocol_path and protocol_path not in seen_interfaces:
-                                interface_types.append((protocol_path, alias_name))
-                                seen_interfaces.add(protocol_path)
+                elif alias_name.endswith("Client") and "Client" in original_path:
+                    parts = original_path.rsplit(".", 1)
+                    if len(parts) == 2:
+                        protocol_path = parts[0]
+                        # Only include InterfaceModule types
+                        if "InterfaceModule" in protocol_path and protocol_path not in seen_interfaces:
+                            interface_types.append((protocol_path, alias_name))
+                            seen_interfaces.add(protocol_path)
 
         logger.debug(
             f"Module {self._schema.node.displayName}: Found {len(struct_types)} structs, {len(list_types)} lists, {len(interface_types)} interfaces",
@@ -4747,7 +4716,7 @@ class Writer:
         out.append("# Build module structure inline")
 
         # Helper function to generate inline module construction code
-        def generate_module_construction(schema_node: NodeReader, parent_path: str = "", indent: int = 0):
+        def generate_module_construction(schema_node: NodeReader, parent_path: str = "", indent: int = 0) -> None:
             """Generate code to construct a module and its nested modules."""
             indent_str = ""  # No indentation since we're at module level
 
@@ -4764,10 +4733,7 @@ class Writer:
                 nested_node_proto = nested_schema.node
 
                 # Determine the full path to this module
-                if parent_path:
-                    full_path = f"{parent_path}.{nested_name}"
-                else:
-                    full_path = nested_name
+                full_path = f"{parent_path}.{nested_name}" if parent_path else nested_name
 
                 # Generate construction code based on node type
                 node_type = nested_node_proto.which()

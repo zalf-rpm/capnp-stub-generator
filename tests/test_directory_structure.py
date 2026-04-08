@@ -60,13 +60,13 @@ def temp_output_dir():
         shutil.rmtree(temp_dir)
 
 
-def test_directory_structure_preserved(temp_schema_dir, temp_output_dir):
+def test_directory_structure_preserved(temp_schema_dir, temp_output_dir) -> None:
     """Test that input directory structure is preserved in output."""
     # Get all schema files
     schema_files = [str(f) for f in temp_schema_dir.rglob("*.capnp")]
 
     # Generate stubs
-    args = ["-p"] + schema_files + ["-o", str(temp_output_dir), "--no-pyright"]
+    args = ["-p", *schema_files, "-o", str(temp_output_dir), "--no-pyright"]
     run_generator(args)
 
     # Verify structure is preserved
@@ -79,7 +79,7 @@ def test_directory_structure_preserved(temp_schema_dir, temp_output_dir):
     assert not (temp_output_dir / "deep_capnp" / "__init__.pyi").exists()
 
 
-def test_directory_structure_with_glob(temp_schema_dir, temp_output_dir):
+def test_directory_structure_with_glob(temp_schema_dir, temp_output_dir) -> None:
     """Test directory structure preservation with glob patterns."""
     # Use glob pattern
     pattern = str(temp_schema_dir / "**" / "*.capnp")
@@ -100,7 +100,7 @@ def test_directory_structure_with_glob(temp_schema_dir, temp_output_dir):
     assert any("subdir2" in name for name in package_names)
 
 
-def test_single_file_no_nested_structure(temp_schema_dir, temp_output_dir):
+def test_single_file_no_nested_structure(temp_schema_dir, temp_output_dir) -> None:
     """Test that single file doesn't create unnecessary nesting."""
     # Generate stub for single file
     schema_file = str(temp_schema_dir / "root.capnp")
@@ -115,7 +115,7 @@ def test_single_file_no_nested_structure(temp_schema_dir, temp_output_dir):
 @pytest.mark.skip(
     reason="Plugin-based generation requires output directory; generating next to source is not currently supported",
 )
-def test_no_output_dir_places_next_to_source(temp_schema_dir):
+def test_no_output_dir_places_next_to_source(temp_schema_dir) -> None:
     """Test that without -o flag, stubs are placed next to source files."""
     schema_file = str(temp_schema_dir / "root.capnp")
     args = ["-p", schema_file]
@@ -125,12 +125,12 @@ def test_no_output_dir_places_next_to_source(temp_schema_dir):
     assert (temp_schema_dir / "root_capnp" / "__init__.pyi").exists()
 
 
-def test_mixed_directory_levels(temp_schema_dir, temp_output_dir):
+def test_mixed_directory_levels(temp_schema_dir, temp_output_dir) -> None:
     """Test with schemas at different directory levels."""
     # Get all schemas
     schema_files = [str(f) for f in temp_schema_dir.rglob("*.capnp")]
 
-    args = ["-p"] + schema_files + ["-o", str(temp_output_dir), "--no-pyright"]
+    args = ["-p", *schema_files, "-o", str(temp_output_dir), "--no-pyright"]
     run_generator(args)
 
     # All should be generated - check for package directories with __init__.pyi

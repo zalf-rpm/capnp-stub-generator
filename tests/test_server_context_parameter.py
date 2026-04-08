@@ -15,7 +15,7 @@ CALCULATOR_DIR = TESTS_DIR / "examples" / "calculator"
 class TestServerContextParameter:
     """Test that _context parameter is mandatory in Server implementations."""
 
-    def test_context_is_in_stubs(self, generate_calculator_stubs):
+    def test_context_is_in_stubs(self, generate_calculator_stubs) -> None:
         """Verify that generated stubs explicitly list _context with proper typing."""
         stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         assert stub_file.exists(), "Calculator stub file not generated"
@@ -59,7 +59,7 @@ class TestServerContextParameter:
                         assert "CallContext" in method_sig, f"Method {method_name} _context should be typed"
                         assert "**kwargs" in method_sig, f"Method {method_name} should have **kwargs"
 
-    def test_context_parameter_position(self, generate_calculator_stubs):
+    def test_context_parameter_position(self, generate_calculator_stubs) -> None:
         """Test that _context comes after regular parameters, before **kwargs."""
         stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -100,7 +100,7 @@ class TestServerContextParameter:
 class TestContextTypeHints:
     """Test that _context has proper type hints with CallContext."""
 
-    def test_context_has_callcontext_type(self, generate_calculator_stubs):
+    def test_context_has_callcontext_type(self, generate_calculator_stubs) -> None:
         """Test that _context parameter uses CallContext types."""
         stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -119,7 +119,7 @@ class TestContextTypeHints:
         )
 
 
-def test_server_context_parameter_summary(generate_calculator_stubs):
+def test_server_context_parameter_summary(generate_calculator_stubs) -> None:
     """Summary test showing _context parameter is now mandatory and typed."""
     stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()

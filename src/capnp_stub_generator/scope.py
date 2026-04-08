@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from typing import Literal, override
-
-from capnp_stub_generator import capnp_types
+from typing import TYPE_CHECKING, Literal, override
 
 from .helper import TypeHintedVariable
+
+if TYPE_CHECKING:
+    from capnp_stub_generator import capnp_types
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class Scope:
 
         The first parent has no further parents.
         """
-        return self.parents + [self]
+        return [*self.parents, self]
 
     @property
     def root(self) -> Scope:
@@ -88,7 +89,7 @@ class Scope:
         """The number of spaces by which this scope is indented."""
         return len(self.parents) * INDENT_SPACES
 
-    def add(self, content: str | TypeHintedVariable = ""):
+    def add(self, content: str | TypeHintedVariable = "") -> None:
         """Add content to this scope, taking into account the current indent spaces.
 
         Args:

@@ -3,7 +3,7 @@
 import re
 
 
-def test_imported_type_aliases_used(zalfmas_stubs):
+def test_imported_type_aliases_used(zalfmas_stubs) -> None:
     """Test that imported type aliases are used in method signatures."""
     # Check registry_capnp.pyi
     # It imports IdInformation from common_capnp
@@ -29,7 +29,7 @@ def test_imported_type_aliases_used(zalfmas_stubs):
     )
 
 
-def test_imported_return_type_aliases(zalfmas_stubs):
+def test_imported_return_type_aliases(zalfmas_stubs) -> None:
     """Test that imported type aliases are used in return types."""
     # Check registry_capnp.pyi
     # Admin.removeCategory returns List(Identifiable)

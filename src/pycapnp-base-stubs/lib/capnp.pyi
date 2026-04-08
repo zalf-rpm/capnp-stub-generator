@@ -179,7 +179,7 @@ class _InterfaceMethod:
     result_type: _StructSchema
 
 class _Schema:
-    """Base class for _StructSchema and _ParsedSchema"""
+    """Base class for _StructSchema and _ParsedSchema."""
 
     def as_const_value(self) -> Any: ...
     @property
@@ -207,11 +207,11 @@ class _StructSchema(_Schema):
 
     @property
     def fields(self) -> dict[str, _StructSchemaField]:
-        """All of the _StructSchemaField in this schema as a dict"""
+        """All of the _StructSchemaField in this schema as a dict."""
 
     @property
     def fields_list(self) -> list[_StructSchemaField]:
-        """All of the _StructSchemaField in this schema as a list"""
+        """All of the _StructSchemaField in this schema as a list."""
 
 class _EnumSchema:
     """Schema for enum types.
@@ -222,11 +222,11 @@ class _EnumSchema:
 
     @property
     def enumerants(self) -> dict[str, int]:
-        """The list of enumerants as a dictionary"""
+        """The list of enumerants as a dictionary."""
 
     @property
     def node(self) -> _SchemaNodeReader:
-        """The raw schema node"""
+        """The raw schema node."""
 
 class _InterfaceSchema:
     """Schema for interface types, parameterized by the interface type.
@@ -241,22 +241,22 @@ class _InterfaceSchema:
 
     @property
     def method_names_inherited(self) -> set[str]:
-        """A set of the function names in the interface, including inherited methods"""
+        """A set of the function names in the interface, including inherited methods."""
 
     @property
     def methods(self) -> dict[str, _InterfaceMethod]:
-        """A mapping of method names to their respective _InterfaceMethod"""
+        """A mapping of method names to their respective _InterfaceMethod."""
 
     @property
     def methods_inherited(self) -> dict[str, _InterfaceMethod]:
-        """A mapping of method names to their respective _InterfaceMethod, including inherited methods"""
+        """A mapping of method names to their respective _InterfaceMethod, including inherited methods."""
 
     @property
     def superclasses(self) -> list[Any]:
-        """A list of superclasses for this interface"""
+        """A list of superclasses for this interface."""
     @property
     def node(self) -> _SchemaNodeReader:
-        """The raw schema node"""
+        """The raw schema node."""
 
 class _ListSchema:
     """Schema for list types.
@@ -1898,14 +1898,45 @@ def kj_loop() -> AsyncIterator[None]:
     """
 
 __all__ = [
-    # Exception class
-    "KjException",
     # Public classes
     "AsyncIoStream",
+    # Exception class
+    "KjException",
     "SchemaLoader",
     "SchemaParser",
     "TwoPartyClient",
     "TwoPartyServer",
+    # Internal classes that are exposed but prefixed with underscore
+    "_CapabilityClient",
+    "_DynamicCapabilityClient",
+    "_DynamicListBuilder",
+    "_DynamicListReader",
+    "_DynamicOrphan",
+    "_DynamicResizableListBuilder",
+    "_DynamicStructBuilder",
+    "_DynamicStructReader",
+    "_EnumModule",
+    "_EnumSchema",
+    "_EventLoop",
+    "_InterfaceMethod",
+    "_InterfaceModule",
+    "_InterfaceSchema",
+    "_ListSchema",
+    "_List_NestedNode_Reader",
+    "_MallocMessageBuilder",
+    "_NestedNodeReader",
+    "_NodeReader",
+    "_PackedFdMessageReader",
+    "_ParsedSchema",
+    "_PyCustomMessageBuilder",
+    "_Schema",
+    "_StreamFdMessageReader",
+    "_StructModule",
+    "_StructSchema",
+    "_StructSchemaField",
+    "_init_capnp_api",
+    "_write_message_to_fd",
+    "_write_packed_message_to_fd",
     # Public functions
     "add_import_hook",
     "cleanup_global_schema_parser",
@@ -1917,38 +1948,7 @@ __all__ = [
     "register_type",
     "remove_import_hook",
     "run",
-    "void_task_done_callback",
     # Modules
     "types",
-    # Internal classes that are exposed but prefixed with underscore
-    "_CapabilityClient",
-    "_DynamicCapabilityClient",
-    "_DynamicListBuilder",
-    "_DynamicListReader",
-    "_DynamicOrphan",
-    "_DynamicResizableListBuilder",
-    "_DynamicStructBuilder",
-    "_DynamicStructReader",
-    "_EventLoop",
-    "_EnumSchema",
-    "_InterfaceSchema",
-    "_InterfaceMethod",
-    "_InterfaceModule",
-    "_ListSchema",
-    "_MallocMessageBuilder",
-    "_NodeReader",
-    "_NestedNodeReader",
-    "_List_NestedNode_Reader",
-    "_PackedFdMessageReader",
-    "_ParsedSchema",
-    "_PyCustomMessageBuilder",
-    "_StreamFdMessageReader",
-    "_StructModule",
-    "_StructSchema",
-    "_EnumModule",
-    "_StructSchemaField",
-    "_init_capnp_api",
-    "_write_message_to_fd",
-    "_write_packed_message_to_fd",
-    "_Schema",
+    "void_task_done_callback",
 ]

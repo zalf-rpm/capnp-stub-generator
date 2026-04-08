@@ -8,14 +8,14 @@ from tests._generated.examples.restorer import restorer_capnp
 
 
 class BagImpl(restorer_capnp.Bag.Server):
-    def __init__(self, value=""):
+    def __init__(self, value="") -> None:
         self.value = value
 
     async def getValue(self, _context, **kwargs):
         # Return NamedTuple
         return restorer_capnp.Bag.Server.GetvalueResultTuple(value=self.value)
 
-    async def setValue_context(self, context):
+    async def setValue_context(self, context) -> None:
         self.value = context.params.value
 
 
@@ -28,7 +28,7 @@ class AnyTesterImpl(restorer_capnp.AnyTester.Server):
         # Wait, let's check writer.py logic for single field return
         return restorer_capnp.AnyTester.Server.GetanystructResultTuple(s=params)
 
-    async def getAnyList_context(self, context):
+    async def getAnyList_context(self, context) -> None:
         # Return a list of strings (Text)
         # Note: pycapnp might struggle with AnyList assignment without explicit type
         # But let's try a list of strings which is more standard
@@ -38,22 +38,22 @@ class AnyTesterImpl(restorer_capnp.AnyTester.Server):
         # The client will receive a null pointer (None?) or empty reader
         pass
 
-    async def getAnyPointer_context(self, context):
+    async def getAnyPointer_context(self, context) -> None:
         context.results.p = "test_pointer"
 
-    async def setAnyPointer_context(self, context):
+    async def setAnyPointer_context(self, context) -> None:
         # Just consume it to verify it was passed
         pass
 
 
 class RestorerImpl(restorer_capnp.Restorer.Server):
-    def __init__(self):
+    def __init__(self) -> None:
         self.bags: dict[str, capnp.lib.capnp.Capability] = {}
 
-    async def getAnyTester_context(self, context):
+    async def getAnyTester_context(self, context) -> None:
         context.results.tester = AnyTesterImpl()
 
-    async def restore_context(self, context):
+    async def restore_context(self, context) -> None:
         local_ref = context.params.localRef
         print(f"Restoring {local_ref}")
 
@@ -67,11 +67,11 @@ class RestorerImpl(restorer_capnp.Restorer.Server):
         context.results.cap = self.bags[local_ref]
 
 
-async def new_connection(stream):
+async def new_connection(stream) -> None:
     await capnp.TwoPartyServer(stream, bootstrap=RestorerImpl()).on_disconnect()
 
 
-async def main():
+async def main() -> None:
     # Create the restorer
     # In a real server, we would export this via TwoPartyServer
     # For this example, we'll just simulate usage or run a simple server

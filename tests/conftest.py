@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import subprocess
 import sys
@@ -76,7 +77,7 @@ main()
 
     try:
         # Helper function to generate stubs using capnp compile
-        def compile_schemas(schema_dir: Path, output_dir: Path, import_paths: list[str] | None = None):
+        def compile_schemas(schema_dir: Path, output_dir: Path, import_paths: list[str] | None = None) -> None:
             """Compile schemas using capnp compile with our plugin."""
             # Find all .capnp files recursively
             schema_files = list(schema_dir.rglob("*.capnp"))
@@ -202,7 +203,7 @@ main()
         ]
 
         pyright_result = subprocess.run(
-            ["pyright"] + basic_stubs_to_check + examples_stubs_to_check,
+            ["pyright", *basic_stubs_to_check, *examples_stubs_to_check],
             check=False,
             capture_output=True,
             text=True,
@@ -219,10 +220,8 @@ main()
 
     finally:
         # Clean up wrapper script
-        try:
+        with contextlib.suppress(Exception):
             os_module.unlink(wrapper_path)
-        except Exception:
-            pass
 
     # Return paths for tests to use
     return {

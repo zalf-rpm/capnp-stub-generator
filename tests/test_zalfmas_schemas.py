@@ -35,7 +35,7 @@ def generated_zalfmas_dir():
     # shutil.rmtree(GENERATED_ZALFMAS_DIR)
 
 
-def test_generate_zalfmas_stubs(generated_zalfmas_dir):
+def test_generate_zalfmas_stubs(generated_zalfmas_dir) -> None:
     """Test generating stubs for zalfmas schemas using recursive discovery.
 
     This test uses recursive search and excludes to generate stubs
@@ -50,7 +50,7 @@ def test_generate_zalfmas_stubs(generated_zalfmas_dir):
         excludes.extend([str(f) for f in capnp_folder.glob("*.capnp")])
 
     # Build arguments for the CLI
-    args = ["-p", str(ZALFMAS_DIR), "-o", str(generated_zalfmas_dir), "-I", str(ZALFMAS_DIR), "-r", "-e"] + excludes
+    args = ["-p", str(ZALFMAS_DIR), "-o", str(generated_zalfmas_dir), "-I", str(ZALFMAS_DIR), "-r", "-e", *excludes]
 
     print(f"\nGenerating stubs with args: {' '.join(args)}")
 
@@ -71,7 +71,7 @@ def test_generate_zalfmas_stubs(generated_zalfmas_dir):
 
     print(f"  - {len(root_stubs)} in root directory")
     if subdir_stubs:
-        subdirs = set(s.relative_to(generated_zalfmas_dir).parent for s in subdir_stubs)
+        subdirs = {s.relative_to(generated_zalfmas_dir).parent for s in subdir_stubs}
         for subdir in sorted(subdirs):
             count = len([s for s in subdir_stubs if s.relative_to(generated_zalfmas_dir).parent == subdir])
             print(f"  - {count} in {subdir}/")

@@ -3,7 +3,7 @@
 import pytest
 
 
-def test_result_type_aliases_exist(calculator_stubs):
+def test_result_type_aliases_exist(calculator_stubs) -> None:
     """Test that Result type aliases are generated at the top level."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -16,7 +16,7 @@ def test_result_type_aliases_exist(calculator_stubs):
     assert "type CallResult = " in content, "CallResult type alias should exist"
 
 
-def test_result_type_aliases_point_to_client_nested_types(calculator_stubs):
+def test_result_type_aliases_point_to_client_nested_types(calculator_stubs) -> None:
     """Test that Result type aliases point to Client-nested Result classes."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -35,7 +35,7 @@ def test_result_type_aliases_point_to_client_nested_types(calculator_stubs):
     ), "CallResult should point to FunctionClient.CallResult"
 
 
-def test_result_type_aliases_alongside_builder_reader(calculator_stubs):
+def test_result_type_aliases_alongside_builder_reader(calculator_stubs) -> None:
     """Test that Result type aliases appear alongside Builder and Reader aliases."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -61,7 +61,7 @@ def test_result_type_aliases_alongside_builder_reader(calculator_stubs):
     assert any("Result" in line for line in type_alias_section), "Should have Result aliases"
 
 
-def test_result_type_aliases_in_sorted_order(calculator_stubs):
+def test_result_type_aliases_in_sorted_order(calculator_stubs) -> None:
     """Test that Result type aliases are sorted alphabetically with other aliases."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -87,7 +87,7 @@ def test_result_type_aliases_in_sorted_order(calculator_stubs):
     assert type_aliases == sorted_aliases, f"Type aliases should be sorted. Got: {type_aliases}"
 
 
-def test_void_method_result_type_alias_exists(calculator_stubs):
+def test_void_method_result_type_alias_exists(calculator_stubs) -> None:
     """Test that void methods also have Result type aliases."""
     # For the channel example with void methods
     channel_stub = calculator_stubs.parent.parent / "basic" / "interfaces_capnp" / "__init__.pyi"
@@ -103,7 +103,7 @@ def test_void_method_result_type_alias_exists(calculator_stubs):
         assert "type CloseResult = " in content, "Void method should also have Result type alias"
 
 
-def test_nested_interface_result_type_aliases(calculator_stubs):
+def test_nested_interface_result_type_aliases(calculator_stubs) -> None:
     """Test that nested interfaces (Value, Function) have Result type aliases."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -117,7 +117,7 @@ def test_nested_interface_result_type_aliases(calculator_stubs):
     assert "FunctionClient.CallResult" in content
 
 
-def test_result_type_alias_usage_in_type_hints(calculator_stubs):
+def test_result_type_alias_usage_in_type_hints(calculator_stubs) -> None:
     """Test that Result type aliases can be used in type hints (manual check)."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -132,7 +132,7 @@ def test_result_type_alias_usage_in_type_hints(calculator_stubs):
     assert "    class CalculatorClient" in content
 
 
-def test_result_type_count_matches_method_count(calculator_stubs):
+def test_result_type_count_matches_method_count(calculator_stubs) -> None:
     """Test that we have Result type aliases for all interface methods."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -155,7 +155,7 @@ def test_result_type_count_matches_method_count(calculator_stubs):
     assert "type CallResult = " in content, "Should have CallResult type alias"
 
 
-def test_summary():
+def test_summary() -> None:
     """Summary of Result type alias tests."""
     print("\n✓ Result type aliases generated")
     print("✓ Result aliases point to Client-nested types")

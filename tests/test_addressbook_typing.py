@@ -17,7 +17,7 @@ import pytest
 TESTS_DIR = Path(__file__).parent
 
 
-def test_init_returns_typed_list(addressbook_stubs):
+def test_init_returns_typed_list(addressbook_stubs) -> None:
     """Test that init() returns a properly typed list, not Any."""
     GENERATED_DIR = addressbook_stubs
     # Create a test file that uses init
@@ -59,7 +59,7 @@ alice.email = "alice@example.com"  # Should type check
         )
 
 
-def test_list_element_access_typed(addressbook_stubs):
+def test_list_element_access_typed(addressbook_stubs) -> None:
     """Test that accessing list elements gives proper types."""
     GENERATED_DIR = addressbook_stubs
     test_code = """
@@ -102,7 +102,7 @@ bob_phones[0].number = "555-4567"
         )
 
 
-def test_iteration_typed(addressbook_stubs):
+def test_iteration_typed(addressbook_stubs) -> None:
     """Test that iterating over lists gives proper types."""
     GENERATED_DIR = addressbook_stubs
     test_code = """
@@ -115,7 +115,7 @@ for person in addresses.people:
     # These should type check
     name: str = person.name
     email: str = person.email
-    
+
     # Nested iteration should also be typed
     for phone in person.phones:
         number: str = phone.number
@@ -145,7 +145,7 @@ for person in addresses.people:
         )
 
 
-def test_union_field_access(addressbook_stubs):
+def test_union_field_access(addressbook_stubs) -> None:
     """Test that union fields are properly typed."""
     GENERATED_DIR = addressbook_stubs
     test_code = """
@@ -184,7 +184,7 @@ bob.employment.unemployed = None
         )
 
 
-def test_nested_init_typed(addressbook_stubs):
+def test_nested_init_typed(addressbook_stubs) -> None:
     """Test that nested init() calls return proper types."""
     GENERATED_DIR = addressbook_stubs
     test_code = """
@@ -226,7 +226,7 @@ phones[1].type = "work"
         )
 
 
-def test_all_addressbook_typing_summary(addressbook_stubs):
+def test_all_addressbook_typing_summary(addressbook_stubs) -> None:
     """Provide a summary of addressbook typing tests."""
     print("\n" + "=" * 70)
     print("ADDRESSBOOK TYPING TEST SUMMARY")

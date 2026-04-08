@@ -457,7 +457,7 @@ class MethodSignatureCollection:
     request_helper_lines: list[str]
     server_context_lines: list[str]
 
-    def __init__(self, method_name: str):
+    def __init__(self, method_name: str) -> None:
         """Initialize empty collection for a method.
 
         Args:
@@ -547,7 +547,7 @@ class ServerMethodsCollection:
     namedtuples: dict[str, list[tuple[str, str]]]
     context_classes: list[str]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize empty collection."""
         self.server_methods = []
         self.namedtuples = {}

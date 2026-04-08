@@ -104,7 +104,7 @@ class TestExampleGeneration:
     """Test that stubs can be generated for all examples."""
 
     @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
-    def test_stub_generation(self, generate_all_stubs, example: Example):
+    def test_stub_generation(self, generate_all_stubs, example: Example) -> None:
         """Test that stub files are generated for the example."""
         info = generate_all_stubs[example.name]
 
@@ -121,7 +121,7 @@ class TestExampleFunctionality:
     """Test that examples can actually be imported and used."""
 
     @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
-    def test_example_imports(self, generate_all_stubs, example: Example):
+    def test_example_imports(self, generate_all_stubs, example: Example) -> None:
         """Test that generated modules can be imported."""
         import sys
 
@@ -141,7 +141,7 @@ class TestExampleFunctionality:
             sys.path.remove(str(example.generated_dir))
 
     @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
-    def test_example_type_checking(self, generate_all_stubs, example: Example):
+    def test_example_type_checking(self, generate_all_stubs, example: Example) -> None:
         """Test that example python files pass type checking with pyright."""
         import os
         import subprocess
@@ -190,7 +190,7 @@ class TestExampleFunctionality:
 
 
 # Summary test to show overall status
-def test_all_examples_summary(generate_all_stubs):
+def test_all_examples_summary(generate_all_stubs) -> None:
     """Provide a summary of all examples tested."""
     summary = []
 

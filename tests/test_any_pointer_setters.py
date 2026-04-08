@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 
 
-def test_any_pointer_setters(basic_stubs):
+def test_any_pointer_setters(basic_stubs) -> None:
     """Test that AnyPointer fields accept various types in setters."""
     stub_file = basic_stubs / "any_pointer_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -27,7 +27,7 @@ def test_any_pointer_setters(basic_stubs):
     assert "l: AnyList | Sequence[Any] | None = None" in content
 
 
-def test_any_pointer_type_checking(basic_stubs):
+def test_any_pointer_type_checking(basic_stubs) -> None:
     """Test type checking for AnyPointer assignments."""
     test_code = """
 from typing import Any
@@ -35,18 +35,18 @@ import any_pointer_capnp
 
 def test_assignments():
     builder = any_pointer_capnp.AnyHolder.new_message()
-    
+
     # AnyPointer assignments
     builder.any = "some text"
     builder.any = b"some data"
     # builder.any = 123  # Should fail (int not in AnyPointer)
-    
+
     # AnyStruct assignments
     builder.s = {"some": "dict"}
-    
+
     # AnyList assignments
     builder.l = ["some", "list"]
-    
+
     # new_message with AnyPointer
     b2 = any_pointer_capnp.AnyHolder.new_message(any="text")
 """

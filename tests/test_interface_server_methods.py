@@ -1,7 +1,7 @@
 """Tests for interface Server class method signatures."""
 
 
-def test_server_class_exists_for_interfaces(calculator_stub_lines):
+def test_server_class_exists_for_interfaces(calculator_stub_lines) -> None:
     """Server classes should be generated for all interfaces."""
     lines = calculator_stub_lines
 
@@ -18,7 +18,7 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines):
     assert server_count == 3, f"Expected 3 Server classes, found {server_count}"
 
 
-def test_server_methods_have_signatures(calculator_stub_lines):
+def test_server_methods_have_signatures(calculator_stub_lines) -> None:
     """Server class methods should have proper type signatures."""
     lines = calculator_stub_lines
     content = "".join(lines)
@@ -39,7 +39,7 @@ def test_server_methods_have_signatures(calculator_stub_lines):
     assert "expression: ExpressionReader" in content
 
 
-def test_server_methods_accept_context(calculator_stub_lines):
+def test_server_methods_accept_context(calculator_stub_lines) -> None:
     """Server methods should accept _context parameter and **kwargs."""
     lines = calculator_stub_lines
     content = "".join(lines)
@@ -77,7 +77,7 @@ def test_server_methods_accept_context(calculator_stub_lines):
             assert "CallContext" in method, f"Server method _context should be typed with CallContext: {method}"
 
 
-def test_server_methods_return_interface_or_implementation(calculator_stub_lines):
+def test_server_methods_return_interface_or_implementation(calculator_stub_lines) -> None:
     """Server methods returning interfaces return Server types."""
     lines = calculator_stub_lines
     content = "".join(lines)
@@ -89,7 +89,7 @@ def test_server_methods_return_interface_or_implementation(calculator_stub_lines
     assert "_CalculatorInterfaceModule._FunctionInterfaceModule.Server" in content
 
 
-def test_server_method_parameters_match_protocol(calculator_stub_lines):
+def test_server_method_parameters_match_protocol(calculator_stub_lines) -> None:
     """Server method parameters should match the Protocol interface plus _context."""
     lines = calculator_stub_lines
     content = "".join(lines)

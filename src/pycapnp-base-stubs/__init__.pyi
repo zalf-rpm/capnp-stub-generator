@@ -55,32 +55,14 @@ from capnp.version import version as __version__
 _embedded_schema_loader: SchemaLoader
 
 __all__ = [
-    # Exception class
-    "KjException",
     # Public classes
     "AsyncIoStream",
+    # Exception class
+    "KjException",
     "SchemaLoader",
     "SchemaParser",
     "TwoPartyClient",
     "TwoPartyServer",
-    # Public functions
-    "add_import_hook",
-    "cleanup_global_schema_parser",
-    "deregister_all_types",
-    "fill_context",
-    "kj_loop",
-    "load",
-    "read_multiple_bytes_packed",
-    "register_type",
-    "remove_import_hook",
-    "run",
-    "void_task_done_callback",
-    # Modules
-    "lib",
-    "types",
-    "version",
-    # Version string
-    "__version__",
     # Internal classes that are exposed but prefixed with underscore
     "_CapabilityClient",
     "_DynamicCapabilityClient",
@@ -98,7 +80,25 @@ __all__ = [
     "_PyCustomMessageBuilder",
     "_StreamFdMessageReader",
     "_StructModule",
+    # Version string
+    "__version__",
     "_init_capnp_api",
     "_write_message_to_fd",
     "_write_packed_message_to_fd",
+    # Public functions
+    "add_import_hook",
+    "cleanup_global_schema_parser",
+    "deregister_all_types",
+    "fill_context",
+    "kj_loop",
+    # Modules
+    "lib",
+    "load",
+    "read_multiple_bytes_packed",
+    "register_type",
+    "remove_import_hook",
+    "run",
+    "types",
+    "version",
+    "void_task_done_callback",
 ]

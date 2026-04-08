@@ -23,7 +23,7 @@ from capnp_stub_generator.writer_dto import (
 class TestStructGenerationContext:
     """Tests for StructGenerationContext."""
 
-    def test_create_factory_method(self):
+    def test_create_factory_method(self) -> None:
         """Test that the factory method creates context with Protocol-based name variants."""
         # Create mock objects
         mock_schema = Mock()
@@ -52,7 +52,7 @@ class TestStructGenerationContext:
         assert context.scoped_reader_type_name == "Company._PersonStructModule.Reader"
         assert context.scoped_builder_type_name == "Company._PersonStructModule.Builder"
 
-    def test_create_with_empty_generic_params(self):
+    def test_create_with_empty_generic_params(self) -> None:
         """Test context creation with no generic parameters."""
         mock_schema = Mock()
         mock_new_type = Mock()
@@ -69,7 +69,7 @@ class TestStructGenerationContext:
         assert context.registered_params == []
         assert context.reader_type_name == "PersonReader"
 
-    def test_create_with_nested_type(self):
+    def test_create_with_nested_type(self) -> None:
         """Test context creation with nested type names using Protocol structure."""
         mock_schema = Mock()
         mock_new_type = Mock()
@@ -91,7 +91,7 @@ class TestStructGenerationContext:
 class TestStructFieldsCollection:
     """Tests for StructFieldsCollection."""
 
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test that collection initializes with empty lists."""
         collection = StructFieldsCollection()
 
@@ -99,7 +99,7 @@ class TestStructFieldsCollection:
         assert collection.init_choices == []
         assert collection.list_init_choices == []
 
-    def test_add_slot_field(self):
+    def test_add_slot_field(self) -> None:
         """Test adding slot fields."""
         collection = StructFieldsCollection()
         mock_field = Mock(spec=helper.TypeHintedVariable)
@@ -109,7 +109,7 @@ class TestStructFieldsCollection:
         assert len(collection.slot_fields) == 1
         assert collection.slot_fields[0] == mock_field
 
-    def test_add_multiple_slot_fields(self):
+    def test_add_multiple_slot_fields(self) -> None:
         """Test adding multiple slot fields."""
         collection = StructFieldsCollection()
         field1 = Mock(spec=helper.TypeHintedVariable)
@@ -121,7 +121,7 @@ class TestStructFieldsCollection:
         assert len(collection.slot_fields) == 2
         assert collection.slot_fields == [field1, field2]
 
-    def test_add_init_choice(self):
+    def test_add_init_choice(self) -> None:
         """Test adding init choices."""
         collection = StructFieldsCollection()
 
@@ -130,7 +130,7 @@ class TestStructFieldsCollection:
         assert len(collection.init_choices) == 1
         assert collection.init_choices[0] == ("address", "Address")
 
-    def test_repr(self):
+    def test_repr(self) -> None:
         """Test string representation for debugging."""
         collection = StructFieldsCollection()
         collection.add_slot_field(Mock(spec=helper.TypeHintedVariable))
@@ -143,7 +143,7 @@ class TestStructFieldsCollection:
         assert "init_choices=1" in repr_str
         assert "list_init_choices=0" in repr_str
 
-    def test_complex_workflow(self):
+    def test_complex_workflow(self) -> None:
         """Test a realistic workflow of building up field collections."""
         collection = StructFieldsCollection()
 
@@ -171,7 +171,7 @@ class TestStructFieldsCollection:
 class TestIntegration:
     """Integration tests for using DTOs together."""
 
-    def test_dto_workflow(self):
+    def test_dto_workflow(self) -> None:
         """Test typical workflow using both DTOs together."""
         # Setup context
         mock_schema = Mock()
@@ -207,7 +207,7 @@ class TestIntegration:
 class TestInterfaceGenerationContext:
     """Tests for InterfaceGenerationContext."""
 
-    def test_create_factory_method(self):
+    def test_create_factory_method(self) -> None:
         """Test that the factory method creates context correctly."""
         mock_schema = Mock()
         mock_type = Mock()
@@ -230,7 +230,7 @@ class TestInterfaceGenerationContext:
         assert context.base_classes == base_classes
         assert context.parent_scope == mock_scope
 
-    def test_create_with_empty_base_classes(self):
+    def test_create_with_empty_base_classes(self) -> None:
         """Test context creation with no base classes."""
         mock_schema = Mock()
         mock_type = Mock()
@@ -252,7 +252,7 @@ class TestInterfaceGenerationContext:
 class TestMethodInfo:
     """Tests for MethodInfo."""
 
-    def test_from_runtime_method_success(self):
+    def test_from_runtime_method_success(self) -> None:
         """Test MethodInfo creation from valid runtime method."""
         mock_method = Mock()
         mock_param_schema = Mock()
@@ -282,7 +282,7 @@ class TestMethodInfo:
         assert method_info.param_fields == ["x", "y"]
         assert method_info.result_fields == ["value"]
 
-    def test_from_runtime_method_missing_schemas(self):
+    def test_from_runtime_method_missing_schemas(self) -> None:
         """Test MethodInfo creation when schemas are missing."""
         mock_method = Mock()
         mock_method.param_type = None
@@ -296,7 +296,7 @@ class TestMethodInfo:
         assert method_info.param_fields == []
         assert method_info.result_fields == []
 
-    def test_from_runtime_method_error_handling(self):
+    def test_from_runtime_method_error_handling(self) -> None:
         """Test MethodInfo creation with errors during access."""
         mock_method = Mock()
         # Make param_type raise exception when .node is accessed
@@ -316,7 +316,7 @@ class TestMethodInfo:
 class TestParameterInfo:
     """Tests for ParameterInfo."""
 
-    def test_to_client_param(self):
+    def test_to_client_param(self) -> None:
         """Test client parameter formatting."""
         param = ParameterInfo(
             name="value",
@@ -327,7 +327,7 @@ class TestParameterInfo:
 
         assert param.to_client_param() == "value: int | None = None"
 
-    def test_to_server_param(self):
+    def test_to_server_param(self) -> None:
         """Test server parameter formatting."""
         param = ParameterInfo(
             name="data",
@@ -338,7 +338,7 @@ class TestParameterInfo:
 
         assert param.to_server_param() == "data: DataStructReader"
 
-    def test_to_request_param(self):
+    def test_to_request_param(self) -> None:
         """Test request parameter formatting."""
         param = ParameterInfo(
             name="items",
@@ -349,7 +349,7 @@ class TestParameterInfo:
 
         assert param.to_request_param() == "items: Sequence[Item] | Sequence[dict[str, Any]] | None = None"
 
-    def test_different_types_for_contexts(self):
+    def test_different_types_for_contexts(self) -> None:
         """Test that different contexts can have different types."""
         param = ParameterInfo(
             name="obj",
@@ -366,7 +366,7 @@ class TestParameterInfo:
 class TestMethodSignatureCollection:
     """Tests for MethodSignatureCollection."""
 
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test collection initializes with empty lists."""
         collection = MethodSignatureCollection("calculate")
 
@@ -376,7 +376,7 @@ class TestMethodSignatureCollection:
         assert collection.result_class_lines == []
         assert collection.request_helper_lines == []
 
-    def test_set_client_method(self):
+    def test_set_client_method(self) -> None:
         """Test setting client method lines."""
         collection = MethodSignatureCollection("add")
         lines = ["def add(self, x: int, y: int) -> Awaitable[int]: ..."]
@@ -385,7 +385,7 @@ class TestMethodSignatureCollection:
 
         assert collection.client_method_lines == lines
 
-    def test_set_request_class(self):
+    def test_set_request_class(self) -> None:
         """Test setting Request Protocol class lines."""
         collection = MethodSignatureCollection("multiply")
         lines = [
@@ -400,7 +400,7 @@ class TestMethodSignatureCollection:
         assert collection.request_class_lines == lines
         assert len(collection.request_class_lines) == 4
 
-    def test_set_request_helper(self):
+    def test_set_request_helper(self) -> None:
         """Test setting _request helper method lines."""
         collection = MethodSignatureCollection("process")
         lines = ["def process_request(self, data: str | None = None) -> ProcessRequest: ..."]
@@ -409,7 +409,7 @@ class TestMethodSignatureCollection:
 
         assert collection.request_helper_lines == lines
 
-    def test_repr(self):
+    def test_repr(self) -> None:
         """Test string representation for debugging."""
         collection = MethodSignatureCollection("test")
         collection.set_client_method(["line1"])
@@ -424,7 +424,7 @@ class TestMethodSignatureCollection:
         assert "request_lines=2" in repr_str
         assert "result_lines=0" in repr_str
 
-    def test_complete_workflow(self):
+    def test_complete_workflow(self) -> None:
         """Test a realistic workflow of building up method signatures."""
         collection = MethodSignatureCollection("calculate")
 
@@ -450,7 +450,7 @@ class TestMethodSignatureCollection:
 class TestServerMethodsCollection:
     """Tests for ServerMethodsCollection."""
 
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test collection initializes with empty containers."""
         collection = ServerMethodsCollection()
 
@@ -458,7 +458,7 @@ class TestServerMethodsCollection:
         assert collection.namedtuples == {}
         assert collection.has_methods() is False
 
-    def test_add_server_method(self):
+    def test_add_server_method(self) -> None:
         """Test adding server method signatures."""
         collection = ServerMethodsCollection()
 
@@ -468,7 +468,7 @@ class TestServerMethodsCollection:
         assert len(collection.server_methods) == 2
         assert collection.has_methods() is True
 
-    def test_add_namedtuple(self):
+    def test_add_namedtuple(self) -> None:
         """Test adding NamedTuple definitions."""
         collection = ServerMethodsCollection()
 
@@ -481,20 +481,20 @@ class TestServerMethodsCollection:
         assert collection.namedtuples["Result1"] == [("value", "int")]
         assert collection.namedtuples["Result2"] == [("data", "str"), ("count", "int")]
 
-    def test_has_methods_false(self):
+    def test_has_methods_false(self) -> None:
         """Test has_methods returns False when empty."""
         collection = ServerMethodsCollection()
 
         assert collection.has_methods() is False
 
-    def test_has_methods_true(self):
+    def test_has_methods_true(self) -> None:
         """Test has_methods returns True after adding methods."""
         collection = ServerMethodsCollection()
         collection.add_server_method("    def test(self, context: Any) -> None: ...")
 
         assert collection.has_methods() is True
 
-    def test_repr(self):
+    def test_repr(self) -> None:
         """Test string representation for debugging."""
         collection = ServerMethodsCollection()
         collection.add_server_method("method1")
@@ -507,7 +507,7 @@ class TestServerMethodsCollection:
         assert "methods=2" in repr_str
         assert "namedtuples=1" in repr_str
 
-    def test_complete_workflow(self):
+    def test_complete_workflow(self) -> None:
         """Test a realistic workflow of accumulating server components."""
         collection = ServerMethodsCollection()
 
@@ -529,7 +529,7 @@ class TestServerMethodsCollection:
 class TestInterfaceDTOIntegration:
     """Integration tests for using interface DTOs together."""
 
-    def test_full_interface_workflow(self):
+    def test_full_interface_workflow(self) -> None:
         """Test typical workflow using all interface DTOs together."""
         # Setup context
         mock_schema = Mock()
@@ -575,7 +575,7 @@ class TestInterfaceDTOIntegration:
         assert "int | None = None" in method_collection.client_method_lines[0]
         assert server_collection.has_methods() is True
 
-    def test_multiple_methods_workflow(self):
+    def test_multiple_methods_workflow(self) -> None:
         """Test workflow with multiple methods."""
         server_collection = ServerMethodsCollection()
 

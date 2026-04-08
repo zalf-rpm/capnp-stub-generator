@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
-def test_union_type_annotation_with_future_import(tmp_path: Path):
+def test_union_type_annotation_with_future_import(tmp_path: Path) -> None:
     """Test that union types work when __future__ annotations is imported."""
     # Generate stub for a simple schema
     from tests.conftest import generate_stub_from_schema
@@ -52,7 +55,7 @@ assert result == "none"
     assert result.returncode == 0, f"Failed with: {result.stderr}"
 
 
-def test_union_type_annotation_without_future_import_fails(tmp_path: Path):
+def test_union_type_annotation_without_future_import_fails(tmp_path: Path) -> None:
     """Test that union types fail without __future__ annotations (documents current limitation)."""
     from tests.conftest import generate_stub_from_schema
 
@@ -93,7 +96,7 @@ def process_data(data: primitives_capnp.SimplePrimitives | str | None) -> str:
     assert "TypeError" in result.stderr or "unsupported operand type" in result.stderr.lower()
 
 
-def test_union_type_with_typing_union(tmp_path: Path):
+def test_union_type_with_typing_union(tmp_path: Path) -> None:
     """Test that typing.Union works as an alternative to | operator."""
     from tests.conftest import generate_stub_from_schema
 
@@ -139,7 +142,7 @@ assert result == "test"
     assert result.returncode == 0, f"Failed with: {result.stderr}"
 
 
-def test_union_type_in_class_definition(tmp_path: Path):
+def test_union_type_in_class_definition(tmp_path: Path) -> None:
     """Test that union types work in class method signatures with __future__ import."""
     from tests.conftest import generate_stub_from_schema
 
@@ -159,7 +162,7 @@ import primitives_capnp
 class DataProcessor:
     def __init__(self):
         self._data = None
-    
+
     def process(
         self,
         data: primitives_capnp.SimplePrimitives | str | None,

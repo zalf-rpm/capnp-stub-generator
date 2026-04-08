@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import argparse
+import contextlib
 import glob
 import logging
 import os.path
@@ -10,13 +10,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Set
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import capnp
-from capnp.lib.capnp import _Schema
 
 from capnp_stub_generator.writer import Writer
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Set as AbstractSet
+
+    from capnp.lib.capnp import _Schema
 
 if hasattr(capnp, "remove_import_hook"):
     capnp.remove_import_hook()
@@ -301,7 +306,7 @@ def _build_module_imports(
             continue
 
         # Check if this is a single-line import
-        if stripped.startswith("import ") or stripped.startswith("from "):
+        if stripped.startswith(("import ", "from ")):
             continue
 
         # Empty lines or comments between imports - continue
@@ -313,7 +318,7 @@ def _build_module_imports(
         break
 
     # Collect all module names from interfaces and dynamic object types
-    all_qualified_names: Set[str] = set()
+    all_qualified_names: AbstractSet[str] = set()
 
     # From interfaces
     for interface_name in interfaces:
@@ -349,10 +354,7 @@ def _build_module_imports(
         if capnp_module_idx + 1 < len(parts) and parts[capnp_module_idx + 1] == capnp_module_name:
             # This is a package with a submodule of same name (e.g., schema_capnp.schema_capnp)
             # Import as: from schema_capnp import schema_capnp
-            if capnp_module_idx == 0:
-                from_path = capnp_module_name
-            else:
-                from_path = ".".join(parts[: capnp_module_idx + 1])
+            from_path = capnp_module_name if capnp_module_idx == 0 else ".".join(parts[: capnp_module_idx + 1])
         # Normal module
         # Build the from path - use the module annotation if present (parts before _capnp)
         # For "mas.schema.climate.climate_capnp._ClimateSensorInterfaceModule"
@@ -702,15 +704,9 @@ def _augment_dynamic_object_reader(
                 alias_capnp_idx = i
                 break
 
-        if list_capnp_idx is not None:
-            clean_list = ".".join(list_parts[list_capnp_idx:])
-        else:
-            clean_list = list_class
+        clean_list = ".".join(list_parts[list_capnp_idx:]) if list_capnp_idx is not None else list_class
 
-        if alias_capnp_idx is not None:
-            clean_alias = ".".join(alias_parts[alias_capnp_idx:])
-        else:
-            clean_alias = type_alias
+        clean_alias = ".".join(alias_parts[alias_capnp_idx:]) if alias_capnp_idx is not None else type_alias
 
         list_overloads.append("    @overload")
         list_overloads.append(
@@ -730,7 +726,7 @@ def _augment_dynamic_object_reader(
 
     if interfaces:
         # Build a map of interface types we have
-        interface_type_map = {proto: client for proto, client in interface_types}
+        interface_type_map = dict(interface_types)
 
         # Use inheritance-based sorting from _sort_interfaces_by_inheritance
         # This returns (interface_name, client_name) sorted by inheritance depth
@@ -780,10 +776,7 @@ def _augment_dynamic_object_reader(
         else:
             clean_protocol = protocol_name
 
-        if alias_capnp_idx is not None:
-            clean_alias = ".".join(alias_parts[alias_capnp_idx:])
-        else:
-            clean_alias = type_alias
+        clean_alias = ".".join(alias_parts[alias_capnp_idx:]) if alias_capnp_idx is not None else type_alias
 
         interface_overloads.append("    @overload")
         interface_overloads.append(
@@ -859,7 +852,7 @@ def format_all_outputs(output_directories: set[str]) -> None:
         # Pass 1: ruff format (default settings)
         logger.info("Pass 1: Running ruff format...")
         subprocess.run(
-            ["ruff", "format"] + stub_files,
+            ["ruff", "format", *stub_files],
             capture_output=True,
             text=True,
             check=True,
@@ -868,7 +861,7 @@ def format_all_outputs(output_directories: set[str]) -> None:
         # Pass 2: ruff check --fix --select ALL
         logger.info("Pass 2: Running ruff check --fix --select ALL...")
         subprocess.run(
-            ["ruff", "check", "--fix", "--select", "ALL"] + stub_files,
+            ["ruff", "check", "--fix", "--select", "ALL", *stub_files],
             capture_output=True,
             text=True,
             check=False,  # Don't fail on unfixable issues
@@ -877,7 +870,7 @@ def format_all_outputs(output_directories: set[str]) -> None:
         # Pass 3: ruff format again
         logger.info("Pass 3: Running ruff format again...")
         subprocess.run(
-            ["ruff", "format"] + stub_files,
+            ["ruff", "format", *stub_files],
             capture_output=True,
             text=True,
             check=True,
@@ -886,13 +879,13 @@ def format_all_outputs(output_directories: set[str]) -> None:
         logger.info("✓ Ruff formatting completed successfully")
 
     except FileNotFoundError:
-        logger.error("ruff not found. Please install ruff: pip install ruff")
+        logger.exception("ruff not found. Please install ruff: pip install ruff")
     except subprocess.CalledProcessError as e:
-        logger.error(f"Ruff formatting failed: {e}")
-        logger.error(f"Stdout: {e.stdout}")
-        logger.error(f"Stderr: {e.stderr}")
+        logger.exception(f"Ruff formatting failed: {e}")
+        logger.exception(f"Stdout: {e.stdout}")
+        logger.exception(f"Stderr: {e.stderr}")
     except Exception as e:
-        logger.error(f"Unexpected error during formatting: {e}")
+        logger.exception(f"Unexpected error during formatting: {e}")
 
 
 def validate_with_pyright(output_directories: set[str]) -> None:
@@ -922,7 +915,7 @@ def validate_with_pyright(output_directories: set[str]) -> None:
     try:
         # Run pyright on all stub files
         result = subprocess.run(
-            ["pyright"] + stub_files,
+            ["pyright", *stub_files],
             capture_output=True,
             text=True,
             check=False,
@@ -939,11 +932,12 @@ def validate_with_pyright(output_directories: set[str]) -> None:
         logger.info("✓ Pyright validation passed - no type errors found")
 
     except FileNotFoundError:
-        logger.error("pyright not found. Please install pyright: npm install -g pyright")
-        raise PyrightValidationError("pyright command not found. Please install pyright.")
+        logger.exception("pyright not found. Please install pyright: npm install -g pyright")
+        msg = "pyright command not found. Please install pyright."
+        raise PyrightValidationError(msg)
     except subprocess.SubprocessError as e:
         error_msg = f"Error running pyright: {e}"
-        logger.error(error_msg)
+        logger.exception(error_msg)
         raise PyrightValidationError(error_msg)
 
 
@@ -1000,7 +994,9 @@ def _generate_stubs_from_schema(
     )
     writer.generate_all_nested()
 
-    for outputs, suffix, is_pyi in zip((writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), (True, False)):
+    for outputs, suffix, is_pyi in zip(
+        (writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), (True, False), strict=False
+    ):
         formatted_output = format_outputs(outputs, is_pyi)
 
         with open(output_file_path + suffix, "w", encoding="utf8") as output_file:
@@ -1092,7 +1088,7 @@ def extract_base_from_pattern(pattern: str) -> str:
     base_parts = []
     found_wildcard = False
 
-    for i, part in enumerate(parts):
+    for _i, part in enumerate(parts):
         if "**" in part:
             # For **, use the directory before it
             found_wildcard = True
@@ -1120,7 +1116,7 @@ def extract_base_from_pattern(pattern: str) -> str:
     return base
 
 
-def run(args: argparse.Namespace, root_directory: str):
+def run(args: argparse.Namespace, root_directory: str) -> None:
     """Run the stub generator on a set of paths that point to *.capnp schemas.
 
     Now uses capnp compile with the plugin to ensure all schemas including
@@ -1219,7 +1215,7 @@ main()
             src_prefix = common_base or root_directory
         else:
             # Generate stubs next to source files - use parent of first schema
-            src_prefix = os.path.dirname(list(valid_paths)[0])
+            src_prefix = os.path.dirname(next(iter(valid_paths)))
 
         # Build capnp compile command
         cmd = ["capnp", "compile"]
@@ -1260,15 +1256,13 @@ main()
             try:
                 validate_with_pyright(output_directories)
             except PyrightValidationError as e:
-                logger.error(str(e))
+                logger.exception(str(e))
                 sys.exit(1)
 
     finally:
         # Clean up wrapper script
-        try:
+        with contextlib.suppress(Exception):
             os.unlink(wrapper_path)
-        except Exception:
-            pass
 
 
 def run_from_schemas(
@@ -1558,7 +1552,7 @@ def run_from_schemas(
                 augmented_stubs_dir = os.path.commonpath([os.path.abspath(d) for d in output_dirs_list])
 
         # Use the absolute path to output_dir for import path calculation
-        actual_output_dir = os.path.abspath(output_dir) if output_dir else list(output_directories_used)[0]
+        actual_output_dir = os.path.abspath(output_dir) if output_dir else next(iter(output_directories_used))
 
         logger.info(
             f"Augmenting capnp-stubs with {len(all_interfaces)} interfaces, {len(all_dynamic_object_types.get('structs', []))} structs, {len(all_dynamic_object_types.get('lists', []))} lists, {len(all_dynamic_object_types.get('interfaces', []))} interface types",
@@ -1727,13 +1721,12 @@ def _handle_multiple_pattern_bases(
     common_base = os.path.commonpath(absolute_bases)
 
     # If all bases are identical, check if we should go up one level
-    if all(base == absolute_bases[0] for base in absolute_bases):
-        if _should_preserve_parent_directory(
-            common_base,
-            relative_bases,
-            valid_paths,
-        ):
-            return os.path.dirname(common_base)
+    if all(base == absolute_bases[0] for base in absolute_bases) and _should_preserve_parent_directory(
+        common_base,
+        relative_bases,
+        valid_paths,
+    ):
+        return os.path.dirname(common_base)
 
     return common_base
 
@@ -1800,10 +1793,7 @@ def _extract_pattern_bases(
             continue
 
         # Convert to absolute path
-        if not os.path.isabs(pattern):
-            abs_pattern = os.path.join(root_directory, pattern)
-        else:
-            abs_pattern = pattern
+        abs_pattern = os.path.join(root_directory, pattern) if not os.path.isabs(pattern) else pattern
 
         abs_base = extract_base_from_pattern(abs_pattern)
         if not os.path.isabs(abs_base):
@@ -1866,11 +1856,9 @@ def _determine_output_directory_structure(
     absolute_bases, relative_bases = _extract_pattern_bases(paths, root_directory)
 
     # Step 2: Calculate common base directory
-    common_base = _calculate_common_base(
+    return _calculate_common_base(
         absolute_bases,
         relative_bases,
         paths,
         valid_paths,
     )
-
-    return common_base

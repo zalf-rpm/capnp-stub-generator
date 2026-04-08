@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 
-def test_top_level_union_which_literal(basic_stubs):
+def test_top_level_union_which_literal(basic_stubs) -> None:
     path = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     with open(path, encoding="utf8") as f:
         lines = f.readlines()
@@ -13,7 +13,7 @@ def test_top_level_union_which_literal(basic_stubs):
     assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
 
 
-def test_union_field_names_present(basic_stubs):
+def test_union_field_names_present(basic_stubs) -> None:
     path = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     with open(path, encoding="utf8") as f:
         lines = f.readlines()

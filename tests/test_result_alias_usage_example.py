@@ -18,7 +18,7 @@ just like Builder and Reader types.
 # - calculator_capnp.EvaluateResult     (now available!)
 
 
-def example_usage():
+def example_usage() -> None:
     """Example showing the improved type annotation style."""
     from tests._generated.examples.calculator import calculator_capnp
 

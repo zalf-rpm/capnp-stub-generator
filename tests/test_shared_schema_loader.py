@@ -17,7 +17,7 @@ import capnp
 class TestSharedSchemaLoader:
     """Tests for the shared schema loader singleton pattern."""
 
-    def test_shared_loader_exists_after_import(self, basic_stubs):
+    def test_shared_loader_exists_after_import(self, basic_stubs) -> None:
         """Verify that the shared loader is created after importing a generated module."""
         # Add the generated stubs directory to the path
         sys.path.insert(0, str(basic_stubs))
@@ -34,7 +34,7 @@ class TestSharedSchemaLoader:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))
 
-    def test_reimporting_module_uses_same_loader(self, basic_stubs):
+    def test_reimporting_module_uses_same_loader(self, basic_stubs) -> None:
         """Verify that reimporting a module uses the same shared loader."""
         sys.path.insert(0, str(basic_stubs))
 
@@ -61,7 +61,7 @@ class TestSharedSchemaLoader:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))
 
-    def test_multiple_modules_share_same_loader(self, basic_stubs):
+    def test_multiple_modules_share_same_loader(self, basic_stubs) -> None:
         """Verify that multiple schema modules share the same loader instance."""
         sys.path.insert(0, str(basic_stubs))
 
@@ -85,7 +85,7 @@ class TestSharedSchemaLoader:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))
 
-    def test_loading_same_schema_nodes_multiple_times(self, basic_stubs):
+    def test_loading_same_schema_nodes_multiple_times(self, basic_stubs) -> None:
         """Test that load_dynamic can be called multiple times with the same schema nodes.
 
         The SchemaLoader.load_dynamic method should handle duplicate loads gracefully.
@@ -132,7 +132,7 @@ class TestSharedSchemaLoader:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))
 
-    def test_schemas_accessible_after_multiple_loads(self, basic_stubs):
+    def test_schemas_accessible_after_multiple_loads(self, basic_stubs) -> None:
         """Verify that schemas remain accessible after being loaded multiple times."""
         sys.path.insert(0, str(basic_stubs))
 
@@ -172,7 +172,7 @@ class TestSharedSchemaLoader:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))
 
-    def test_loader_get_returns_consistent_schemas(self, basic_stubs):
+    def test_loader_get_returns_consistent_schemas(self, basic_stubs) -> None:
         """Verify that loader.get() returns consistent schema objects."""
         sys.path.insert(0, str(basic_stubs))
 
@@ -210,7 +210,7 @@ class TestSharedSchemaLoader:
 class TestCrossModuleCapabilities:
     """Tests for capability handling across modules using shared loader."""
 
-    def test_interface_schemas_share_loader(self, basic_stubs):
+    def test_interface_schemas_share_loader(self, basic_stubs) -> None:
         """Verify that interface schemas from different modules share the loader."""
         sys.path.insert(0, str(basic_stubs))
 

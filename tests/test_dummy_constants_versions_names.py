@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-def test_global_constants_and_derived_constant_present(dummy_stub_lines):
+def test_global_constants_and_derived_constant_present(dummy_stub_lines) -> None:
     lines = dummy_stub_lines
     # Global constants - only primitive types are currently generated
     assert any("globalInt:" in line for line in lines)
@@ -13,7 +13,7 @@ def test_global_constants_and_derived_constant_present(dummy_stub_lines):
     # assert any("derivedConstant:" in line for line in lines)
 
 
-def test_struct_constants_section(dummy_stub_lines):
+def test_struct_constants_section(dummy_stub_lines) -> None:
     lines = dummy_stub_lines
     assert any("class _TestConstantsStructModule(_StructModule):" in line for line in lines)
     # Struct-level constants are not currently generated in stub files
@@ -29,7 +29,7 @@ def test_struct_constants_section(dummy_stub_lines):
     #     assert any(name in line for line in lines)
 
 
-def test_versioned_structs_fields_and_defaults(dummy_stub_lines):
+def test_versioned_structs_fields_and_defaults(dummy_stub_lines) -> None:
     lines = dummy_stub_lines
     assert any("class _TestOldVersionStructModule(_StructModule):" in line for line in lines)
     assert any("class _TestNewVersionStructModule(_StructModule):" in line for line in lines)
@@ -41,7 +41,7 @@ def test_versioned_structs_fields_and_defaults(dummy_stub_lines):
     # assert any("new2:" in line and '"baz"' in line for line in lines)
 
 
-def test_name_annotations_renamed_struct_enum_fields(dummy_stub_lines):
+def test_name_annotations_renamed_struct_enum_fields(dummy_stub_lines) -> None:
     lines = dummy_stub_lines
     # Name annotations ($Cxx.name) are not currently processed by the generator
     # The structs use their schema names, not the C++ annotation names
@@ -55,7 +55,7 @@ def test_name_annotations_renamed_struct_enum_fields(dummy_stub_lines):
     # assert any("goodFieldName:" in line for line in lines)
 
 
-def test_empty_struct_representation(dummy_stub_lines):
+def test_empty_struct_representation(dummy_stub_lines) -> None:
     lines = dummy_stub_lines
     # TestEmptyStruct should still produce a class
     assert any("class _TestEmptyStructStructModule(_StructModule):" in line for line in lines)

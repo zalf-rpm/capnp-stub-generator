@@ -3,7 +3,7 @@
 import subprocess
 
 
-def test_enum_type_alias_exists(calculator_stubs):
+def test_enum_type_alias_exists(calculator_stubs) -> None:
     """Test that enum type aliases are generated."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -12,7 +12,7 @@ def test_enum_type_alias_exists(calculator_stubs):
     assert 'type CalculatorOperatorEnum = int | Literal["add", "subtract", "multiply", "divide"]' in content
 
 
-def test_enum_type_alias_accepts_literals(calculator_stubs):
+def test_enum_type_alias_accepts_literals(calculator_stubs) -> None:
     """Test that the Operator type accepts string literals."""
     test_code = '''
 import calculator_capnp
@@ -42,7 +42,7 @@ use_operator_literal("divide")
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 
 
-def test_enum_type_alias_accepts_int(calculator_stubs):
+def test_enum_type_alias_accepts_int(calculator_stubs) -> None:
     """Test that the Operator accepts integer values."""
     test_code = '''
 import calculator_capnp
@@ -72,7 +72,7 @@ use_operator_int(3)
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 
 
-def test_enum_type_alias_accepts_enum_attribute(calculator_stubs):
+def test_enum_type_alias_accepts_enum_attribute(calculator_stubs) -> None:
     """Test that the Operator accepts enum dot notation."""
     test_code = '''
 import calculator_capnp
@@ -102,7 +102,7 @@ use_operator_enum(calculator_capnp.Calculator.Operator.divide)
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 
 
-def test_enum_type_alias_rejects_invalid_literals(calculator_stubs):
+def test_enum_type_alias_rejects_invalid_literals(calculator_stubs) -> None:
     """Test that the Operator rejects invalid string literals."""
     test_code = '''
 import calculator_capnp
@@ -132,22 +132,22 @@ use_operator("invalid")  # type: ignore[arg-type]
     assert error_count == 0, f"Type checking failed unexpectedly: {result.stdout}"
 
 
-def test_enum_type_alias_in_class_init(calculator_stubs):
+def test_enum_type_alias_in_class_init(calculator_stubs) -> None:
     """Test using Operator in a class __init__ method (real-world example)."""
     test_code = '''
 import calculator_capnp
 
 class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     """Implementation wrapping arithmetic operators."""
-    
+
     def __init__(self, op: calculator_capnp.CalculatorOperatorEnum):
         self.op = op
-    
+
     async def call(self, params, _context, **kwargs):
         assert len(params) == 2
-        
+
         op = self.op
-        
+
         if op == "add":
             return params[0] + params[1]
         elif op == "subtract":
@@ -179,7 +179,7 @@ impl3 = OperatorImpl(0)
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 
 
-def test_enum_comparison_with_literals(calculator_stubs):
+def test_enum_comparison_with_literals(calculator_stubs) -> None:
     """Test that enum values can be compared with string literals."""
     test_code = '''
 import calculator_capnp

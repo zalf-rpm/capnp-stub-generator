@@ -7,7 +7,7 @@ import capnp  # noqa: F401
 from tests._generated.examples.addressbook import addressbook_capnp
 
 
-def writeAddressBook(file: IO[str]):
+def writeAddressBook(file: IO[str]) -> None:
     addresses = addressbook_capnp.AddressBook.new_message()
     people = addresses.init("people", 2)
 
@@ -33,7 +33,7 @@ def writeAddressBook(file: IO[str]):
     addresses.write(file)
 
 
-def printAddressBook(file: IO[str]):
+def printAddressBook(file: IO[str]) -> None:
     addresses = addressbook_capnp.AddressBook.read(file)
 
     for person in addresses.people:

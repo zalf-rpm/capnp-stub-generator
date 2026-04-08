@@ -12,7 +12,7 @@ import schema_capnp
 from capnp_stub_generator.run import run_from_schemas
 
 
-def main():
+def main() -> None:
     """Entry point for the capnpc plugin."""
     logging.basicConfig(level=logging.INFO)
 

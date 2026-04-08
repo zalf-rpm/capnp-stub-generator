@@ -7,7 +7,7 @@ import argparse
 from capnp_stub_generator.run import run
 
 
-def run_generator(args_list):
+def run_generator(args_list) -> None:
     """Helper to convert CLI-style args to run() call."""
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--paths", nargs="+", default=[])

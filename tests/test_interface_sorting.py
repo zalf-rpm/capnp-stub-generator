@@ -3,13 +3,13 @@
 from capnp_stub_generator.run import InterfaceNode, _sort_interfaces_by_inheritance
 
 
-def test_interface_node_compute_depth_root():
+def test_interface_node_compute_depth_root() -> None:
     """Root interfaces have depth 0."""
     node = InterfaceNode("Base", "Base.Client", [])
     assert node.compute_depth({}, {}) == 0
 
 
-def test_interface_node_compute_depth_single_inheritance():
+def test_interface_node_compute_depth_single_inheritance() -> None:
     """Single inheritance chain has correct depth."""
     base = InterfaceNode("Base", "Base.Client", [])
     derived = InterfaceNode("Derived", "Derived.Client", ["Base.Client"])
@@ -21,7 +21,7 @@ def test_interface_node_compute_depth_single_inheritance():
     assert derived.compute_depth(registry, client_map) == 1
 
 
-def test_interface_node_compute_depth_multi_level():
+def test_interface_node_compute_depth_multi_level() -> None:
     """Multi-level inheritance has correct depths."""
     root = InterfaceNode("Root", "Root.Client", [])
     mid = InterfaceNode("Mid", "Mid.Client", ["Root.Client"])
@@ -35,7 +35,7 @@ def test_interface_node_compute_depth_multi_level():
     assert leaf.compute_depth(registry, client_map) == 2
 
 
-def test_interface_node_compute_depth_multiple_bases():
+def test_interface_node_compute_depth_multiple_bases() -> None:
     """Interface with multiple bases uses max depth."""
     base1 = InterfaceNode("Base1", "Base1.Client", [])
     base2 = InterfaceNode("Base2", "Base2.Client", [])
@@ -53,7 +53,7 @@ def test_interface_node_compute_depth_multiple_bases():
     assert derived.compute_depth(registry, client_map) == 2  # 1 + max(0, 1)
 
 
-def test_interface_node_compute_depth_circular():
+def test_interface_node_compute_depth_circular() -> None:
     """Circular dependencies return 0 gracefully."""
     # Simulate circular: A -> B -> A
     a = InterfaceNode("A", "A.Client", ["B.Client"])
@@ -70,7 +70,7 @@ def test_interface_node_compute_depth_circular():
     assert depth_b >= 0
 
 
-def test_interface_node_compute_depth_missing_base():
+def test_interface_node_compute_depth_missing_base() -> None:
     """Missing base interfaces are handled gracefully."""
     derived = InterfaceNode("Derived", "Derived.Client", ["MissingBase.Client"])
 
@@ -81,19 +81,19 @@ def test_interface_node_compute_depth_missing_base():
     assert derived.compute_depth(registry, client_map) == 1
 
 
-def test_sort_interfaces_empty():
+def test_sort_interfaces_empty() -> None:
     """Empty interface dict returns empty list."""
     assert _sort_interfaces_by_inheritance({}) == []
 
 
-def test_sort_interfaces_single():
+def test_sort_interfaces_single() -> None:
     """Single interface works correctly."""
     interfaces = {"Base": ("Base.Client", [])}
     result = _sort_interfaces_by_inheritance(interfaces)
     assert result == [("Base", "Base.Client")]
 
 
-def test_sort_interfaces_hierarchy():
+def test_sort_interfaces_hierarchy() -> None:
     """Multi-level hierarchy sorts correctly (most derived first)."""
     interfaces = {
         "Root": ("Root.Client", []),
@@ -109,7 +109,7 @@ def test_sort_interfaces_hierarchy():
     assert result[2] == ("Root", "Root.Client")
 
 
-def test_sort_interfaces_multiple_roots():
+def test_sort_interfaces_multiple_roots() -> None:
     """Multiple independent hierarchies sort correctly."""
     interfaces = {
         "RootA": ("RootA.Client", []),
@@ -127,7 +127,7 @@ def test_sort_interfaces_multiple_roots():
     assert names.index("DerivedB") < names.index("RootB")
 
 
-def test_sort_interfaces_diamond_inheritance():
+def test_sort_interfaces_diamond_inheritance() -> None:
     """Diamond inheritance pattern sorts correctly."""
     interfaces = {
         "Base": ("Base.Client", []),
@@ -148,7 +148,7 @@ def test_sort_interfaces_diamond_inheritance():
     assert "Right" in names[1:3]
 
 
-def test_sort_interfaces_stable_sort():
+def test_sort_interfaces_stable_sort() -> None:
     """Interfaces with same depth are sorted alphabetically."""
     interfaces = {
         "Zebra": ("Zebra.Client", ["Base.Client"]),

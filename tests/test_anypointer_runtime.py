@@ -9,13 +9,13 @@ import pytest
 sys.path.append(str(Path(__file__).parent.parent))
 
 
-async def _test_anypointer_runtime_behavior(generated_stubs):
+async def _test_anypointer_runtime_behavior(generated_stubs) -> None:
     # Import here to ensure stubs are generated first
     from tests._generated.examples.restorer import restorer_capnp
     from tests.schemas.examples.restorer.restorer_server import RestorerImpl
 
     # Start server on random port
-    async def new_connection(stream):
+    async def new_connection(stream) -> None:
         await capnp.TwoPartyServer(stream, bootstrap=RestorerImpl()).on_disconnect()
 
     server = await capnp.AsyncIoStream.create_server(new_connection, "localhost", 0)
@@ -56,5 +56,5 @@ async def _test_anypointer_runtime_behavior(generated_stubs):
         # await connection.wait_closed() # if available
 
 
-def test_anypointer_runtime_wrapper(generated_stubs):
+def test_anypointer_runtime_wrapper(generated_stubs) -> None:
     asyncio.run(capnp.run(_test_anypointer_runtime_behavior(generated_stubs)))

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import keyword
-from collections.abc import Sequence
 from copy import copy
 from dataclasses import dataclass, field
-from typing import override
+from typing import TYPE_CHECKING, override
 
-from capnp_stub_generator.capnp_types import SchemaType
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from capnp_stub_generator.capnp_types import SchemaType
 
 BUILDER_NAME = "Builder"
 READER_NAME = "Reader"
@@ -174,7 +176,8 @@ class TypeHintedVariable:
                 primary_type_hint_count += 1
 
         if primary_type_hint_count != 1:
-            raise ValueError(f"There can only be exactly one primary type hint. Found {primary_type_hint_count}")
+            msg = f"There can only be exactly one primary type hint. Found {primary_type_hint_count}"
+            raise ValueError(msg)
 
     @override
     def __str__(self) -> str:
@@ -204,7 +207,8 @@ class TypeHintedVariable:
             if type_hint.primary:
                 return type_hint
 
-        raise RuntimeError("Primary type hint not found.")
+        msg = "Primary type hint not found."
+        raise RuntimeError(msg)
 
     def _generate_typed_variable(self, type_name: str) -> str:
         """Generate the typed variable string for a chosen type name.
@@ -259,7 +263,7 @@ class TypeHintedVariable:
         type_str = self._join_type_hints(type_hints_for_affixes)
         return self._nest(type_str)
 
-    def add_type_hint(self, new_type_hint: TypeHint):
+    def add_type_hint(self, new_type_hint: TypeHint) -> None:
         """Add a type hint to the hinted variable.
 
         Args:
@@ -268,10 +272,12 @@ class TypeHintedVariable:
         """
         for type_hint in self.type_hints:
             if type_hint == new_type_hint:
-                raise ValueError("Type hint already exists.")
+                msg = "Type hint already exists."
+                raise ValueError(msg)
 
         if new_type_hint.primary:
-            raise ValueError("There can only be one primary type.")
+            msg = "There can only be one primary type."
+            raise ValueError(msg)
 
         self.type_hints.append(new_type_hint)
 
@@ -289,7 +295,8 @@ class TypeHintedVariable:
             if type_hint.affix == affix:
                 return type_hint
 
-        raise KeyError(f"Affix '{affix}' is not present in any recorded type hint.")
+        msg = f"Affix '{affix}' is not present in any recorded type hint."
+        raise KeyError(msg)
 
     def has_type_hint_with_affix(self, affix: str) -> bool:
         """Assess, whether or not the variable has a type hint with the provided affix."""
@@ -312,7 +319,7 @@ class TypeHintedVariable:
         """Whether the variable holds a type hint with a reader affix."""
         return self.has_type_hint_with_affix(READER_NAME)
 
-    def add_builder_from_primary_type(self):
+    def add_builder_from_primary_type(self) -> None:
         """Add a type hint with builder affix, based on the primary type."""
         self.add_type_hint(
             TypeHint(
@@ -322,7 +329,7 @@ class TypeHintedVariable:
             ),
         )
 
-    def add_reader_from_primary_type(self):
+    def add_reader_from_primary_type(self) -> None:
         """Add a type hint with builder affix, based on the primary type."""
         self.add_type_hint(
             TypeHint(
@@ -353,9 +360,7 @@ def replace_capnp_suffix(original: str) -> str:
         result = result.replace(".capnp", "_capnp")
 
     # Replace hyphens with underscores to create valid Python identifiers
-    result = result.replace("-", "_")
-
-    return result
+    return result.replace("-", "_")
 
 
 def join_parameters(parameters: Sequence[TypeHintedVariable | str] | None) -> str:

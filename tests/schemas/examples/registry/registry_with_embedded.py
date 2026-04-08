@@ -36,11 +36,11 @@ from tests._generated.zalfmas.mas.schema.registry import registry_capnp  # noqa:
 class Identifiable(common_capnp.Identifiable.Server):
     """Server implementation of Identifiable interface."""
 
-    async def info(self, _context, **kwargs):
+    async def info(self, _context, **kwargs) -> None:
         """Return id information."""
 
 
-async def main():
+async def main() -> None:
     """Create a Registry.Entry message with an Identifiable capability."""
     re = registry_capnp.Registry.Entry.new_message(
         categoryId="cat",

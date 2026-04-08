@@ -33,7 +33,7 @@ def generated_dir():
     # shutil.rmtree(GENERATED_DIR)
 
 
-def test_simple_interface_inheritance(generated_dir):
+def test_simple_interface_inheritance(generated_dir) -> None:
     """Test that an interface extending another interface shows inheritance.
 
     ClimateInstance extends Identifiable, so the generated stub should show:
@@ -56,7 +56,7 @@ def test_simple_interface_inheritance(generated_dir):
     ]
 
     schema_paths = [str(f) for f in schema_files]
-    args = ["-p"] + schema_paths + ["-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
+    args = ["-p", *schema_paths, "-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
     run_generator(args)
 
     # Check the generated stub (in mas/schema/model subdirectory due to Python module annotations)
@@ -81,7 +81,7 @@ def test_simple_interface_inheritance(generated_dir):
     in_climate_instance = False
     found_server_inheritance = False
 
-    for i, line in enumerate(lines):
+    for _i, line in enumerate(lines):
         if "class _ClimateInstanceInterfaceModule(" in line:
             in_climate_instance = True
         elif in_climate_instance and "class Server(" in line and "_IdentifiableInterfaceModule.Server" in line:
@@ -96,7 +96,7 @@ def test_simple_interface_inheritance(generated_dir):
     )
 
 
-def test_multiple_interface_inheritance(generated_dir):
+def test_multiple_interface_inheritance(generated_dir) -> None:
     """Test that an interface extending multiple interfaces shows all inheritance.
 
     IdentifiableHolder extends both Identifiable and Holder(T), so:
@@ -130,7 +130,7 @@ def test_multiple_interface_inheritance(generated_dir):
     in_identifiable_holder = False
     found_server_inheritance = False
 
-    for i, line in enumerate(lines):
+    for _i, line in enumerate(lines):
         if "class _IdentifiableHolderInterfaceModule(" in line:
             in_identifiable_holder = True
         elif (
@@ -147,7 +147,7 @@ def test_multiple_interface_inheritance(generated_dir):
     )
 
 
-def test_interface_with_persistent_inheritance(generated_dir):
+def test_interface_with_persistent_inheritance(generated_dir) -> None:
     """Test interfaces that extend Persistent.
 
     Service in climate.capnp extends Identifiable and Persistent.
@@ -162,7 +162,7 @@ def test_interface_with_persistent_inheritance(generated_dir):
     ]
 
     schema_paths = [str(f) for f in schema_files]
-    args = ["-p"] + schema_paths + ["-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
+    args = ["-p", *schema_paths, "-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
     run_generator(args)
 
     stub_file = generated_dir / "mas" / "schema" / "climate" / "climate_capnp" / "__init__.pyi"
@@ -180,7 +180,7 @@ def test_interface_with_persistent_inheritance(generated_dir):
     in_service = False
     found_server_inheritance = False
 
-    for i, line in enumerate(lines):
+    for _i, line in enumerate(lines):
         if "class _ServiceInterfaceModule(" in line:
             in_service = True
         elif (
@@ -197,7 +197,7 @@ def test_interface_with_persistent_inheritance(generated_dir):
     )
 
 
-def test_interface_inheritance_in_nested_interfaces(generated_dir):
+def test_interface_inheritance_in_nested_interfaces(generated_dir) -> None:
     """Test that nested interfaces that extend other interfaces show inheritance.
 
     In cluster_admin_service.capnp, AdminMaster, UserMaster, and Runtime
@@ -209,7 +209,7 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir):
     ]
 
     schema_paths = [str(f) for f in schema_files]
-    args = ["-p"] + schema_paths + ["-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
+    args = ["-p", *schema_paths, "-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
     run_generator(args)
 
     stub_file = generated_dir / "mas" / "schema" / "cluster" / "cluster_admin_service_capnp" / "__init__.pyi"
@@ -239,7 +239,7 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir):
     )
 
 
-def test_interface_method_inheritance_visibility(generated_dir):
+def test_interface_method_inheritance_visibility(generated_dir) -> None:
     """Test that methods from parent interfaces are accessible via inheritance.
 
     When ClimateInstance extends Identifiable, users should be able to:
@@ -262,7 +262,7 @@ def test_interface_method_inheritance_visibility(generated_dir):
     ]
 
     schema_paths = [str(f) for f in schema_files]
-    args = ["-p"] + schema_paths + ["-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
+    args = ["-p", *schema_paths, "-o", str(generated_dir), "-I", str(ZALFMAS_DIR)]
     run_generator(args)
 
     # Read both stub files
@@ -284,7 +284,7 @@ def test_interface_method_inheritance_visibility(generated_dir):
     # Python's Protocol mechanism handles this - we don't need to repeat the method
 
 
-def test_empty_interface_with_inheritance(generated_dir):
+def test_empty_interface_with_inheritance(generated_dir) -> None:
     """Test that interfaces with no methods but with inheritance work correctly.
 
     IdentifiableHolder has no methods of its own, but extends two other interfaces.

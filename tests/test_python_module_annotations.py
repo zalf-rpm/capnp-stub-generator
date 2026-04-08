@@ -5,7 +5,7 @@ from pathlib import Path
 from test_helpers import run_generator
 
 
-def test_module_annotation_creates_directory_structure(tmp_path):
+def test_module_annotation_creates_directory_structure(tmp_path) -> None:
     """Test that $Python.module() creates the correct directory structure."""
     # Use zalfmas climate schema which has $Python.module("mas.schema.climate")
     schema_path = Path("tests/schemas/zalfmas/climate.capnp")
@@ -30,7 +30,7 @@ def test_module_annotation_creates_directory_structure(tmp_path):
     assert (output_dir / "mas" / "schema" / "climate" / "__init__.pyi").exists()
 
 
-def test_module_annotation_uses_absolute_imports(tmp_path):
+def test_module_annotation_uses_absolute_imports(tmp_path) -> None:
     """Test that stubs with $Python.module() use absolute imports."""
     schema_path = Path("tests/schemas/zalfmas/climate.capnp")
     output_dir = tmp_path / "output"
@@ -52,7 +52,7 @@ def test_module_annotation_uses_absolute_imports(tmp_path):
     assert "from .geo_capnp import" not in content, "Should not use relative import for geo_capnp"
 
 
-def test_schema_without_annotation_still_works(tmp_path):
+def test_schema_without_annotation_still_works(tmp_path) -> None:
     """Test that schemas without $Python.module() still work with relative imports."""
     # Use addressbook schema which doesn't have Python module annotations
     schema_path = Path("tests/schemas/examples/addressbook/addressbook.capnp")
@@ -65,7 +65,7 @@ def test_schema_without_annotation_still_works(tmp_path):
     assert expected_path.exists(), f"Expected stub at {expected_path}"
 
 
-def test_mixed_annotated_and_non_annotated_schemas(tmp_path):
+def test_mixed_annotated_and_non_annotated_schemas(tmp_path) -> None:
     """Test that annotated and non-annotated schemas can coexist."""
     # Generate both types of schemas, but use different import paths to avoid conflicts
     annotated_schema = Path("tests/schemas/zalfmas/date.capnp")
@@ -85,7 +85,7 @@ def test_mixed_annotated_and_non_annotated_schemas(tmp_path):
     assert non_annotated_path.exists(), "Non-annotated schema should use flat structure"
 
 
-def test_nested_module_paths(tmp_path):
+def test_nested_module_paths(tmp_path) -> None:
     """Test that deeply nested module paths work correctly."""
     # date.capnp has $Python.module("mas.schema.common")
     schema_path = Path("tests/schemas/zalfmas/date.capnp")

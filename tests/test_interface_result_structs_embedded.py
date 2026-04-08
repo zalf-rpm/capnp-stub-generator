@@ -12,7 +12,7 @@ import base64
 import schema_capnp
 
 
-def test_interface_result_structs_are_embedded(calculator_stubs):
+def test_interface_result_structs_are_embedded(calculator_stubs) -> None:
     """Verify that interface method result structs are embedded in the binary.
 
     Before the fix, only the explicit param structs were embedded,
@@ -33,7 +33,7 @@ def test_interface_result_structs_are_embedded(calculator_stubs):
     embedded_ids = set()
     for line in schema_lines:
         line = line.strip()
-        if line.startswith('"') or line.startswith("'"):
+        if line.startswith(('"', "'")):
             schema_b64 = line.split(",")[0].strip().strip('"').strip("'")
             schema_data = base64.b64decode(schema_b64)
             node_reader = schema_capnp.Node.from_bytes_packed(schema_data)
@@ -45,7 +45,7 @@ def test_interface_result_structs_are_embedded(calculator_stubs):
     assert evaluate_results_id in embedded_ids, "Calculator.evaluate$Results not embedded"
 
 
-def test_result_struct_has_fields(calculator_stubs):
+def test_result_struct_has_fields(calculator_stubs) -> None:
     """Verify that the embedded result struct can be loaded and has the expected fields."""
     # Just check that result structs are present in the generated file
     # Runtime test would require complex import handling
@@ -58,7 +58,7 @@ def test_result_struct_has_fields(calculator_stubs):
     assert "load_dynamic" in content  # Schemas are loaded
 
 
-def test_param_structs_are_embedded(calculator_stubs):
+def test_param_structs_are_embedded(calculator_stubs) -> None:
     """Verify that interface method param structs are also embedded.
 
     While explicit param structs are usually in nestedNodes,
@@ -76,7 +76,7 @@ def test_param_structs_are_embedded(calculator_stubs):
     embedded_ids = set()
     for line in schema_lines:
         line = line.strip()
-        if line.startswith('"') or line.startswith("'"):
+        if line.startswith(('"', "'")):
             schema_b64 = line.split(",")[0].strip().strip('"').strip("'")
             schema_data = base64.b64decode(schema_b64)
             node_reader = schema_capnp.Node.from_bytes_packed(schema_data)
@@ -89,7 +89,7 @@ def test_param_structs_are_embedded(calculator_stubs):
     assert len(embedded_ids) > 10, "Should have many schemas including params/results"
 
 
-def test_runtime_result_field_access(calculator_stubs):
+def test_runtime_result_field_access(calculator_stubs) -> None:
     """Test that result structs are accessible (check generated code structure)."""
     stub_file = calculator_stubs / "calculator_capnp/__init__.py"
     content = stub_file.read_text()

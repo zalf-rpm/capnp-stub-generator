@@ -4,19 +4,19 @@ from tests._generated.examples.single_value import single_value_capnp
 
 
 class SingleValueImpl(single_value_capnp.SingleValue.Server):
-    async def getBool(self, _context, **kwargs):
+    async def getBool(self, _context, **kwargs) -> bool:
         return True
 
-    async def getInt(self, _context, **kwargs):
+    async def getInt(self, _context, **kwargs) -> int:
         return 42
 
-    async def getFloat(self, _context, **kwargs):
+    async def getFloat(self, _context, **kwargs) -> float:
         return 3.14
 
-    async def getText(self, _context, **kwargs):
+    async def getText(self, _context, **kwargs) -> str:
         return "hello"
 
-    async def getData(self, _context, **kwargs):
+    async def getData(self, _context, **kwargs) -> bytes:
         return b"data"
 
     async def getList(self, _context, **kwargs):
@@ -28,7 +28,7 @@ class SingleValueImpl(single_value_capnp.SingleValue.Server):
     async def getInterface(self, _context, **kwargs):
         return self
 
-    async def getAny(self, _context, **kwargs):
+    async def getAny(self, _context, **kwargs) -> None:
         return None
 
     async def getListStruct(self, _context, **kwargs):
@@ -38,11 +38,11 @@ class SingleValueImpl(single_value_capnp.SingleValue.Server):
         return [s1, s2]
 
 
-async def new_connection(stream: capnp.lib.capnp.AsyncIoStream):
+async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
     await capnp.TwoPartyServer(stream, bootstrap=SingleValueImpl()).on_disconnect()
 
 
-async def main():
+async def main() -> None:
     # Create the restorer
     # In a real server, we would export this via TwoPartyServer
     # For this example, we'll just simulate usage or run a simple server

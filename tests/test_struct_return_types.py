@@ -3,7 +3,7 @@
 import re
 
 
-def test_client_result_uses_reader_only(basic_stubs):
+def test_client_result_uses_reader_only(basic_stubs) -> None:
     """Test that client result protocols use Reader types only for structs."""
     stub_file = basic_stubs / "struct_return_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -31,7 +31,7 @@ def test_client_result_uses_reader_only(basic_stubs):
     assert "NestedBuilder" not in result_content, "Client result should not reference Builder"
 
 
-def test_server_result_uses_builder_and_reader(basic_stubs):
+def test_server_result_uses_builder_and_reader(basic_stubs) -> None:
     """Test that server result protocols use Builder | Reader types."""
     stub_file = basic_stubs / "struct_return_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -58,7 +58,7 @@ def test_server_result_uses_builder_and_reader(basic_stubs):
     assert "nested: NestedBuilder | NestedReader" in result_content
 
 
-def test_server_named_tuple_has_nested_field(basic_stubs):
+def test_server_named_tuple_has_nested_field(basic_stubs) -> None:
     """Test that server NamedTuple result has nested struct field."""
     stub_file = basic_stubs / "struct_return_capnp" / "__init__.pyi"
     content = stub_file.read_text()

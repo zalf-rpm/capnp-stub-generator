@@ -20,7 +20,7 @@ def _get_stub_path(schema: str) -> Path:
     return generated_dir / stub_name / "__init__.pyi"
 
 
-def test_primitives_and_lists_imports_and_types():
+def test_primitives_and_lists_imports_and_types() -> None:
     stub_path = _get_stub_path("primitives.capnp")
     lines = _read(stub_path)
     content = "".join(lines)
@@ -40,7 +40,7 @@ def test_primitives_and_lists_imports_and_types():
     assert any("def ints(self) -> Int32ListReader" in line for line in lines)
 
 
-def test_nested_enum_and_literal_and_overload():
+def test_nested_enum_and_literal_and_overload() -> None:
     stub_path = _get_stub_path("nested.capnp")
     lines = _read(stub_path)
     # Enum should now be a simple class with int annotations
@@ -52,7 +52,7 @@ def test_nested_enum_and_literal_and_overload():
     assert any("overload" in line for line in lines if line.startswith("from typing import"))
 
 
-def test_unions_literal_and_overload_and_which():
+def test_unions_literal_and_overload_and_which() -> None:
     stub_path = _get_stub_path("unions.capnp")
     lines = _read(stub_path)
     # Expect Literal import (union which methods)
@@ -63,7 +63,7 @@ def test_unions_literal_and_overload_and_which():
     assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
 
 
-def test_interfaces_protocol_and_any_and_iterator():
+def test_interfaces_protocol_and_any_and_iterator() -> None:
     stub_path = _get_stub_path("interfaces.capnp")
     lines = _read(stub_path)
     content = "".join(lines)
@@ -78,7 +78,7 @@ def test_interfaces_protocol_and_any_and_iterator():
     assert "count: int" in content
 
 
-def test_imports_cross_module_reference():
+def test_imports_cross_module_reference() -> None:
     # Use pre-generated stubs from basic directory
     # Both import_base and import_user should already be generated together
     user_stub = generated_dir / "import_user_capnp" / "__init__.pyi"

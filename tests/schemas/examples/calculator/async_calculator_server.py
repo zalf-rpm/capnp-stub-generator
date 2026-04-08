@@ -48,7 +48,7 @@ async def evaluate_impl(
 class ValueImpl(calculator_capnp.Calculator.Value.Server):
     """Simple implementation of the Calculator.Value Cap'n Proto interface."""
 
-    def __init__(self, value):
+    def __init__(self, value) -> None:
         self.value = value
 
     async def read(self, _context, **kwargs):
@@ -60,7 +60,7 @@ class FunctionImpl(calculator_capnp.Calculator.Function.Server):
     function is defined by a Calculator.Expression.
     """
 
-    def __init__(self, paramCount: int, body: calculator_capnp.ExpressionReader):
+    def __init__(self, paramCount: int, body: calculator_capnp.ExpressionReader) -> None:
         self.paramCount: int = paramCount
         self.body: calculator_capnp.ExpressionBuilder = body.as_builder()
 
@@ -68,7 +68,7 @@ class FunctionImpl(calculator_capnp.Calculator.Function.Server):
         """Note that we're returning a Promise object here, and bypassing the
         helper functionality that normally sets the results struct from the
         returned object. Instead, we set _context.results directly inside of
-        another promise
+        another promise.
         """
         assert len(params) == self.paramCount
         return await evaluate_impl(self.body, params)
@@ -79,7 +79,7 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     basic binary arithmetic operators.
     """
 
-    def __init__(self, op: calculator_capnp.CalculatorOperatorEnum):
+    def __init__(self, op: calculator_capnp.CalculatorOperatorEnum) -> None:
         self.op: calculator_capnp.CalculatorOperatorEnum = op
 
     async def call(self, params, _context, **kwargs):
@@ -95,7 +95,8 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
             return params[0] * params[1]
         if op == "divide":
             return params[0] / params[1]
-        raise ValueError("Unknown operator")
+        msg = "Unknown operator"
+        raise ValueError(msg)
 
 
 class CalculatorImpl(calculator_capnp.Calculator.Server):
@@ -111,7 +112,7 @@ class CalculatorImpl(calculator_capnp.Calculator.Server):
         return OperatorImpl(op)
 
 
-async def new_connection(stream):
+async def new_connection(stream) -> None:
     await capnp.TwoPartyServer(stream, bootstrap=CalculatorImpl()).on_disconnect()
 
 
@@ -123,7 +124,7 @@ def parse_args():
     return parser.parse_args()
 
 
-async def main():
+async def main() -> None:
     host, port = parse_args().address.split(":")
     server = await capnp.AsyncIoStream.create_server(new_connection, host, port)
     async with server:

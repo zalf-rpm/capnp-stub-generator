@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-def test_complex_group_presence_and_nested_union_symbols(basic_stubs):
+def test_complex_group_presence_and_nested_union_symbols(basic_stubs) -> None:
     path = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     with open(path, encoding="utf8") as f:
         lines = f.readlines()

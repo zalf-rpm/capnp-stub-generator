@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 
-def test_capnpc_plugin_invocation(tmp_path, basic_stubs):
+def test_capnpc_plugin_invocation(tmp_path, basic_stubs) -> None:
     """Test that capnpc can invoke our plugin."""
     # Create a wrapper script for the plugin
     plugin_name = "capnpc-python"
@@ -56,7 +56,7 @@ def test_capnpc_plugin_invocation(tmp_path, basic_stubs):
     assert content  # Just check it's not empty (header is present)
 
 
-def test_capnpc_plugin_bundling_options(tmp_path):
+def test_capnpc_plugin_bundling_options(tmp_path) -> None:
     """Test that bundling is enabled by default in plugin mode."""
     plugin_name = "capnpc-python"
     plugin_path = tmp_path / plugin_name

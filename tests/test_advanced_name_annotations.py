@@ -1,4 +1,4 @@
-def test_name_annotations(basic_stubs):
+def test_name_annotations(basic_stubs) -> None:
     """Test that Cap'n Proto name annotations ($Cxx.name) are handled.
 
     Note: The generator currently uses the original schema names rather than

@@ -8,7 +8,7 @@ This test verifies that both variants are generated correctly.
 """
 
 
-def test_both_method_variants_exist(calculator_stubs):
+def test_both_method_variants_exist(calculator_stubs) -> None:
     """Both regular and _context variant methods should be generated."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -25,7 +25,7 @@ def test_both_method_variants_exist(calculator_stubs):
     assert "-> Awaitable[None]" in content
 
 
-def test_context_variant_signature(calculator_stubs):
+def test_context_variant_signature(calculator_stubs) -> None:
     """_context methods should have correct signature."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -49,7 +49,7 @@ def test_context_variant_signature(calculator_stubs):
         )
 
 
-def test_callcontext_has_params_and_results(calculator_stubs):
+def test_callcontext_has_params_and_results(calculator_stubs) -> None:
     """CallContext should have both params and results attributes."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -62,7 +62,7 @@ def test_callcontext_has_params_and_results(calculator_stubs):
     assert "def results(self) -> _CalculatorInterfaceModule.Server.EvaluateResult: ..." in content
 
 
-def test_callcontext_void_method(basic_stubs):
+def test_callcontext_void_method(basic_stubs) -> None:
     """CallContext for void methods should have params but no results."""
     stub_file = basic_stubs / "channel_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -85,7 +85,7 @@ def test_callcontext_void_method(basic_stubs):
     assert "results:" not in close_context.group(0)
 
 
-def test_nested_interface_context_methods(calculator_stubs):
+def test_nested_interface_context_methods(calculator_stubs) -> None:
     """Nested interfaces should also have _context methods."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -98,7 +98,7 @@ def test_nested_interface_context_methods(calculator_stubs):
     assert "def call_context(" in content  # Verify method exists
 
 
-def test_context_method_documentation(calculator_stubs):
+def test_context_method_documentation(calculator_stubs) -> None:
     """Verify the _context methods work as documented in pycapnp."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -121,7 +121,7 @@ def test_context_method_documentation(calculator_stubs):
     assert "def results(self) -> _CalculatorInterfaceModule.Server.DeffunctionResult: ..." in content
 
 
-def test_context_methods_count(calculator_stubs):
+def test_context_methods_count(calculator_stubs) -> None:
     """Count that all interface methods have _context variants."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -153,7 +153,7 @@ def test_context_methods_count(calculator_stubs):
                 assert method in context_methods, f"Method {method} should have a _context variant"
 
 
-def test_context_method_summary():
+def test_context_method_summary() -> None:
     """Summary test for _context method generation."""
     print("\n" + "=" * 70)
     print("CONTEXT METHOD VARIANT TEST SUMMARY")
