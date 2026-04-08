@@ -535,18 +535,18 @@ The core class that generates stub files:
 ## Development Workflow
 ```bash
 # Install dependencies
-poetry install
+uv sync
 
 # Run tests
-poetry run pytest
+uv run pytest
 
 # Run linting
-poetry run ruff check .
-poetry run ruff format .
+uv run ruff check .
+uv run ruff format .
 
 # Generate stubs for testing
-poetry run capnp-stub-generator -p "tests/schemas/**/*.capnp" -r
+uv run capnp-stub-generator -p "tests/schemas/**/*.capnp" -r
 
 # Run specific test
-poetry run pytest tests/test_addressbook_typing.py -v
+uv run pytest tests/test_addressbook_typing.py -v
 ```

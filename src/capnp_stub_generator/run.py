@@ -1017,7 +1017,7 @@ def _generate_stubs_from_schema(
         # For __init__.pyi files, the module name is the directory containing it
         # And module_path_prefix already includes this directory name if it was nested
         # So we use module_path_prefix directly as full_module_name
-        full_module_name = module_path_prefix if module_path_prefix else os.path.basename(output_dir_path)
+        full_module_name = module_path_prefix or os.path.basename(output_dir_path)
     else:
         # For non-__init__ files, check if we're inside a package (has __init__.py)
         module_name = output_basename
@@ -1216,7 +1216,7 @@ main()
                 valid_paths,
                 root_directory,
             )
-            src_prefix = common_base if common_base else root_directory
+            src_prefix = common_base or root_directory
         else:
             # Generate stubs next to source files - use parent of first schema
             src_prefix = os.path.dirname(list(valid_paths)[0])
@@ -1228,7 +1228,7 @@ main()
             cmd.append(f"--src-prefix={src_prefix}")
 
         # Add output specification
-        output_spec = output_dir if output_dir else "."
+        output_spec = output_dir or "."
         cmd.append(f"-o{wrapper_path}:{output_spec}")
 
         # Add import paths
@@ -1426,7 +1426,7 @@ def run_from_schemas(
             output_directory=output_dir_to_pass,
             import_paths=import_paths,
             module_path_prefix=module_path_prefix,
-            schema_base_directory=output_dir if output_dir else output_directory,
+            schema_base_directory=output_dir or output_directory,
         )
 
         # Collect interfaces for this output directory

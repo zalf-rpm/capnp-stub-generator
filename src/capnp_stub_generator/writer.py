@@ -371,7 +371,7 @@ class Writer:
 
         """
         # Extract the last component (e.g., "_ExpressionStructModule")
-        last_part = module_type.split(".")[-1]
+        last_part = module_type.rsplit(".", maxsplit=1)[-1]
         # Remove "_" prefix and "Module" suffix to get the base name
         if last_part.startswith("_"):
             base_name = self._extract_name_from_protocol(last_part)
@@ -396,7 +396,7 @@ class Writer:
 
         """
         # Extract the last component (e.g., "_ExpressionStructModule")
-        last_part = module_type.split(".")[-1]
+        last_part = module_type.rsplit(".", maxsplit=1)[-1]
         # Remove "_" prefix and "Module" suffix to get the base name
         if last_part.startswith("_"):
             base_name = self._extract_name_from_protocol(last_part)
@@ -421,7 +421,7 @@ class Writer:
 
         """
         # Extract the last component (e.g., "_ValueInterfaceModule")
-        last_part = module_type.split(".")[-1]
+        last_part = module_type.rsplit(".", maxsplit=1)[-1]
         # Remove "_" prefix and "Module" suffix to get the base name
         if last_part.startswith("_"):
             base_name = self._extract_name_from_protocol(last_part)
@@ -1295,7 +1295,7 @@ class Writer:
 
         """
         scope_path = self._get_scope_path()
-        fully_qualified_interface = scope_path if scope_path else name
+        fully_qualified_interface = scope_path or name
 
         # Use base type _DynamicCapabilityServer for parameter to match base class signature
         # This accepts any server implementation (including subclasses of this interface's Server)
@@ -2244,7 +2244,7 @@ class Writer:
             # Add aliases for Reader and Builder at current scope for nested types
             # Use type statement (PEP 695) for consistency
             # Use the registered type's scope to ensure it goes to the right place (parent scope)
-            target_scope = context.new_type.scope if context.new_type.scope else self.scope
+            target_scope = context.new_type.scope or self.scope
             target_scope.add(f"type {context.reader_type_name} = {protocol_class_name}.Reader")
             target_scope.add(f"type {context.builder_type_name} = {protocol_class_name}.Builder")
 
@@ -2256,7 +2256,7 @@ class Writer:
         # Add annotation for the module type at the correct parent scope
         # Use the registered type's scope to ensure it goes to the right place
         # For top-level types, this is root scope; for nested types, this is the parent's scope
-        target_scope = context.new_type.scope if context.new_type.scope else self.scope
+        target_scope = context.new_type.scope or self.scope
         target_scope.add(f"{context.type_name}: {protocol_class_name}")
 
     def gen_struct(self, schema: _StructSchema | _EnumSchema | _InterfaceSchema, type_name: str = "") -> CapnpType:
@@ -2564,7 +2564,7 @@ class Writer:
 
         """
         # Get the last component: "_HolderInterfaceModule" -> "_HolderInterfaceModule"
-        last_component = interface_path.split(".")[-1]
+        last_component = interface_path.rsplit(".", maxsplit=1)[-1]
         # Remove "_" prefix and "Module" suffix: "_HolderInterfaceModule" -> "Holder"
         name = self._extract_name_from_protocol(last_component)
         # Add "Client" suffix: "Holder" -> "HolderClient"
@@ -3020,7 +3020,7 @@ class Writer:
                             # Getter returns Builder
                             # builder_alias might be None if not defined in this module
                             # builder_type is always defined for structs
-                            b_type = builder_alias if builder_alias else builder_type
+                            b_type = builder_alias or builder_type
                             getter_type = b_type
                             # Setter accepts Builder | Reader | dict
                             self._add_typing_import("Any")
