@@ -78,6 +78,11 @@ EXAMPLES = [
         schema_files=["single_value.capnp"],
         python_files=["single_value_client.py", "single_value_server.py"],
     ),
+    Example(
+        name="fbp_nested_callback",
+        schema_files=["fbp_nested_callback.capnp"],
+        python_files=["fbp_nested_callback_example.py"],
+    ),
 ]
 
 

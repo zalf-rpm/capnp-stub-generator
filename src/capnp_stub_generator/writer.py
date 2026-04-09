@@ -5,6 +5,7 @@ Note: This generator requires pycapnp >= 2.0.0.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import logging
 import os.path
@@ -4585,6 +4586,188 @@ class Writer:
 
         return "\n".join(out)
 
+    def _find_runtime_schema_access_segments_from_type(
+        self,
+        type_reader: TypeReader,
+        target_id: int,
+        seen: set[int],
+    ) -> list[tuple[str, str | None]] | None:
+        """Find runtime access path segments for a schema referenced by a type."""
+        type_which = type_reader.which()
+
+        if type_which in {"struct", "interface", "enum"}:
+            schema_id = getattr(type_reader, type_which).typeId
+            referenced_schema = self._schemas_by_id.get(schema_id)
+            if referenced_schema is None:
+                return None
+
+            nested_segments = self._find_runtime_schema_access_segments(referenced_schema, target_id, seen)
+            if nested_segments is None:
+                return None
+
+            return [("schema", None), *nested_segments]
+
+        if type_which == "list":
+            nested_segments = self._find_runtime_schema_access_segments_from_list_element(
+                type_reader.list.elementType,
+                target_id,
+                seen,
+            )
+            if nested_segments is not None:
+                return [("schema", None), ("elementType", None), *nested_segments]
+
+        return None
+
+    def _find_runtime_schema_access_segments_from_list_element(
+        self,
+        element_type: TypeReader,
+        target_id: int,
+        seen: set[int],
+    ) -> list[tuple[str, str | None]] | None:
+        """Find runtime access path segments for a list element schema."""
+        element_which = element_type.which()
+
+        if element_which == "list":
+            nested_segments = self._find_runtime_schema_access_segments_from_list_element(
+                element_type.list.elementType,
+                target_id,
+                seen,
+            )
+            if nested_segments is not None:
+                return [("elementType", None), *nested_segments]
+            return None
+
+        if element_which in {"struct", "interface", "enum"}:
+            schema_id = getattr(element_type, element_which).typeId
+            referenced_schema = self._schemas_by_id.get(schema_id)
+            if referenced_schema is None:
+                return None
+
+            return self._find_runtime_schema_access_segments(referenced_schema, target_id, seen)
+
+        return None
+
+    def _find_runtime_schema_access_segments_in_field(
+        self,
+        field: FieldReader,
+        target_id: int,
+        seen: set[int],
+    ) -> list[tuple[str, str | None]] | None:
+        """Find runtime field access path segments that resolve to the target schema."""
+        if field.which() != "slot":
+            return None
+
+        nested_segments = self._find_runtime_schema_access_segments_from_type(field.slot.type, target_id, seen)
+        if nested_segments is None:
+            return None
+
+        return [("fields", field.name), *nested_segments]
+
+    def _find_runtime_schema_access_segments(
+        self,
+        schema: capnp_types.SchemaType,
+        target_id: int,
+        seen: set[int] | None = None,
+    ) -> list[tuple[str, str | None]] | None:
+        """Find runtime access path segments that resolve a branded nested schema."""
+        if seen is None:
+            seen = set()
+
+        schema_id = schema.node.id
+        if schema_id in seen:
+            return None
+        seen.add(schema_id)
+
+        if schema_id == target_id:
+            return []
+
+        node_which = schema.node.which()
+        if node_which == capnp_types.CapnpElementType.INTERFACE:
+            for method in schema.node.interface.methods:
+                param_schema = self._schemas_by_id.get(method.paramStructType)
+                if param_schema is not None:
+                    nested_segments = self._find_runtime_schema_access_segments(param_schema, target_id, seen)
+                    if nested_segments is not None:
+                        return [("methods", method.name), ("attr", "param_type"), *nested_segments]
+
+                result_schema = self._schemas_by_id.get(method.resultStructType)
+                if result_schema is not None:
+                    nested_segments = self._find_runtime_schema_access_segments(result_schema, target_id, seen)
+                    if nested_segments is not None:
+                        return [("methods", method.name), ("attr", "result_type"), *nested_segments]
+
+        if node_which == capnp_types.CapnpElementType.STRUCT:
+            for field in schema.node.struct.fields:
+                nested_segments = self._find_runtime_schema_access_segments_in_field(field, target_id, seen)
+                if nested_segments is not None:
+                    return nested_segments
+
+        return None
+
+    def _build_runtime_nested_schema_expr(
+        self,
+        ancestor_schemas: list[tuple[str, object]],
+        nested_schema: capnp_types.SchemaType,
+    ) -> str | None:
+        """Build the runtime expression for a nested schema from the nearest branded ancestor."""
+        for ancestor_path, ancestor_schema in reversed(ancestor_schemas):
+            if not isinstance(ancestor_schema, (_EnumSchema, _InterfaceSchema, _StructSchema, _Schema)):
+                continue
+
+            nested_segments = self._find_runtime_schema_access_segments(ancestor_schema, nested_schema.node.id)
+            if nested_segments is None:
+                continue
+
+            expr = f"{ancestor_path}.schema"
+            for segment_kind, segment_value in nested_segments:
+                if segment_kind == "methods":
+                    expr = f"{expr}.methods[{segment_value!r}]"
+                elif segment_kind == "fields":
+                    expr = f"{expr}.fields[{segment_value!r}]"
+                elif segment_kind == "attr":
+                    expr = f"{expr}.{segment_value}"
+                elif segment_kind in {"schema", "elementType"}:
+                    expr = f"{expr}.{segment_kind}"
+            return expr
+
+        return None
+
+    def _build_runtime_module_construction_lines(
+        self,
+        full_path: str,
+        nested_schema: capnp_types.SchemaType,
+        ancestor_schemas: list[tuple[str, object]],
+    ) -> list[str] | None:
+        """Build runtime lines that instantiate a nested module."""
+        nested_id = nested_schema.node.id
+        nested_name = full_path.rsplit(".", 1)[-1]
+        node_type = nested_schema.node.which()
+
+        if node_type == capnp_types.CapnpElementType.CONST:
+            return [f"{full_path} = _loader.get({hex(nested_id)}).as_const_value()"]
+
+        constructor_by_type = {
+            capnp_types.CapnpElementType.STRUCT: ("_StructModule", "as_struct"),
+            capnp_types.CapnpElementType.INTERFACE: ("_InterfaceModule", "as_interface"),
+            capnp_types.CapnpElementType.ENUM: ("_EnumModule", "as_enum"),
+        }
+        constructor_info = constructor_by_type.get(node_type)
+        if constructor_info is None:
+            return None
+
+        module_constructor, cast_method = constructor_info
+        schema_expr = self._build_runtime_nested_schema_expr(ancestor_schemas, nested_schema)
+        if schema_expr is None:
+            schema_expr = f"_loader.get({hex(nested_id)}).{cast_method}()"
+            return [f"{full_path} = {module_constructor}({schema_expr}, {nested_name!r})"]
+
+        return [
+            f"{full_path} = {module_constructor}(",
+            f"    {schema_expr},",
+            f"    {nested_name!r},",
+            ")",
+        ]
+
     def dumps_py(self) -> str:
         """Generates string output for the *.py stub file that handles the import of capnproto schemas.
 
@@ -4603,15 +4786,14 @@ class Writer:
                 self.scope = self.scope.return_scope
 
         out: list[str] = []
+        out.append("# pyright: reportAttributeAccessIssue=false, reportArgumentType=false")
         out.append(self.docstring)
         out.append("")
         out.append("import base64")
         out.append("")
         out.append("import capnp")
-        out.append("from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule")
-
-        # schema_capnp is a top-level module, so use absolute import
         out.append("import schema_capnp")
+        out.append("from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule")
 
         # Add NamedTuple import if we have server namedtuples
         if self._all_server_namedtuples:
@@ -4623,8 +4805,6 @@ class Writer:
 
         # Embed schemas as binary and manually build module structure
         # This replicates SchemaParser's behavior using SchemaLoader
-        import base64
-
         out.append("# Embedded compiled schemas (base64-encoded)")
         out.append("_SCHEMA_NODES = [")
 
@@ -4667,11 +4847,15 @@ class Writer:
         # Build module structure inline by traversing the schema hierarchy
         # We build modules depth-first to ensure parents exist before children
         out.append("# Build module structure inline")
+        out.append("")
 
         # Helper function to generate inline module construction code
-        def generate_module_construction(schema_node: NodeReader, parent_path: str = "", indent: int = 0) -> None:
+        def generate_module_construction(
+            schema_node: NodeReader,
+            ancestor_schemas: list[tuple[str, object]],
+            parent_path: str = "",
+        ) -> None:
             """Generate code to construct a module and its nested modules."""
-            indent_str = ""  # No indentation since we're at module level
 
             # For each nested node in this schema
             for nested_node in schema_node.nestedNodes:
@@ -4688,31 +4872,26 @@ class Writer:
                 # Determine the full path to this module
                 full_path = f"{parent_path}.{nested_name}" if parent_path else nested_name
 
-                # Generate construction code based on node type
-                node_type = nested_node_proto.which()
-
-                if node_type == capnp_types.CapnpElementType.STRUCT:
-                    out.append(
-                        f"{indent_str}{full_path} = _StructModule(_loader.get({hex(nested_id)}).as_struct(), '{nested_name}')",
-                    )
-                elif node_type == capnp_types.CapnpElementType.INTERFACE:
-                    out.append(
-                        f"{indent_str}{full_path} = _InterfaceModule(_loader.get({hex(nested_id)}).as_interface(), '{nested_name}')",
-                    )
-                elif node_type == capnp_types.CapnpElementType.ENUM:
-                    out.append(
-                        f"{indent_str}{full_path} = _EnumModule(_loader.get({hex(nested_id)}).as_enum(), '{nested_name}')",
-                    )
-                elif node_type == capnp_types.CapnpElementType.CONST:
-                    out.append(f"{indent_str}{full_path} = _loader.get({hex(nested_id)}).as_const_value()")
+                construction_lines = self._build_runtime_module_construction_lines(
+                    full_path=full_path,
+                    nested_schema=nested_schema,
+                    ancestor_schemas=ancestor_schemas,
+                )
+                if construction_lines is not None:
+                    out.extend(construction_lines)
 
                 # Recursively generate code for nested modules
                 # Only structs and interfaces can have nested types
+                node_type = nested_node_proto.which()
                 if node_type in (capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE):
-                    generate_module_construction(nested_node_proto, full_path, indent)
+                    generate_module_construction(
+                        nested_node_proto,
+                        [*ancestor_schemas, (full_path, nested_schema)],
+                        full_path,
+                    )
 
         # Start generating from the root schema
-        generate_module_construction(self._schema.node)
+        generate_module_construction(self._schema.node, [])
 
         # Add Server.InfoResult NamedTuples for interfaces
         if self._all_server_namedtuples:

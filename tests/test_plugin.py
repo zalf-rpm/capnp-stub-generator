@@ -105,4 +105,6 @@ def test_capnpc_plugin_bundling_options(tmp_path) -> None:
     # Since bundling is enabled by default, capnp-stubs should be bundled in the output dir
     assert (stubs_dir / "capnp-stubs").exists(), "capnp-stubs not bundled"
     assert (stubs_dir / "schema_capnp").exists(), "schema_capnp not bundled"
+    assert (stubs_dir / "schema_capnp" / "__init__.py").exists(), "schema_capnp runtime not bundled"
+    assert (stubs_dir / "schema_capnp" / "__init__.pyi").exists(), "schema_capnp stub file not found"
     assert (stubs_dir / "schema_capnp" / "schema.capnp").exists(), "schema.capnp not found"

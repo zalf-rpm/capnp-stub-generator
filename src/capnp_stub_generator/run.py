@@ -206,8 +206,6 @@ def augment_capnp_stubs_with_overloads(
         with open(capnp_pyi_path, encoding="utf8") as f:
             content = f.read()
 
-        # Replace relative imports with absolute imports
-        # from ...schema_capnp.schema_capnp -> from schema_capnp.schema_capnp
         content = content.replace("from ...schema_capnp import", "from schema_capnp import")
 
         with open(capnp_pyi_path, "w", encoding="utf8") as f:
@@ -215,7 +213,6 @@ def augment_capnp_stubs_with_overloads(
 
         logger.info("Fixed schema_capnp imports to be absolute")
 
-    # Copy the schema_capnp directory if it exists (sibling to source_stubs_path)
     source_schema_path = Path(source_stubs_path).parent / "schema_capnp"
     dest_schema_path = Path(augmented_stubs_dir) / "schema_capnp"
 
@@ -1474,37 +1471,6 @@ def run_from_schemas(
 
     # Track bundled stub directories for formatting
     bundled_stub_dirs = set()
-
-    # Copy bundled schema module once at the top level (common parent or output_dir)
-    # This avoids duplicating the schema module in each subdirectory
-    source_stubs_path = find_capnp_stubs_package()
-    if source_stubs_path:
-        source_schema_path = Path(source_stubs_path).parent / "schema_capnp"
-
-        # Determine top-level directory for schema
-        if output_dir:
-            # Use the output_dir as top level
-            assert output_dir_path is not None
-            schema_dest_dir = output_dir_path.resolve()
-        else:
-            # Find common parent of all output directories
-            output_dirs_list = list(output_directories_used)
-            if len(output_dirs_list) == 1:
-                schema_dest_dir = Path(output_dirs_list[0])
-            else:
-                schema_dest_dir = Path(os.path.commonpath([str(Path(d).resolve()) for d in output_dirs_list]))
-
-        # Copy to 'schema_capnp' directory at top level
-        dest_schema_path = schema_dest_dir / "schema_capnp"
-
-        if source_schema_path.is_dir():
-            if dest_schema_path.exists():
-                shutil.rmtree(dest_schema_path)
-            shutil.copytree(source_schema_path, dest_schema_path)
-            logger.info(f"Copied schema module to top level: {dest_schema_path}")
-            bundled_stub_dirs.add(str(dest_schema_path))
-        else:
-            logger.warning(f"Schema module not found at: {source_schema_path}")
 
     # Augment capnp-stubs with cast_as overloads (now default behavior)
     source_stubs_path = find_capnp_stubs_package()

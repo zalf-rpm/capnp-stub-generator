@@ -173,10 +173,10 @@ class _StructSchemaField:
         """The field's schema as a schema.capnp Field reader."""
 
     @property
-    def schema(self) -> _StructSchema | _EnumSchema | _InterfaceSchema:
+    def schema(self) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
         """The schema of the field's type.
 
-        Note: For list fields, use the field's slot.type to get element type info.
+        For list fields, this returns a _ListSchema whose elementType describes the list items.
         This property may raise for primitive/unknown types.
         """
 
