@@ -34,7 +34,7 @@ def sanitize_name(name: str) -> str:
     return name
 
 
-def _build_variant_type(type_name: str, variant: str, flat: bool = False) -> str:
+def _build_variant_type(type_name: str, variant: str, *, flat: bool = False) -> str:
     """Build Builder or Reader variant of a type name.
 
     Handles both flat naming (MyClassBuilder) and nested naming (MyClass.Builder).
@@ -167,7 +167,7 @@ class TypeHintedVariable:
     is_any_struct: bool = field(default=False, init=False)
     is_capability: bool = field(default=False, init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Sanity check for provided type hints."""
         primary_type_hint_count = 0
 
@@ -456,6 +456,7 @@ def new_decorator(name: str, parameters: Sequence[TypeHintedVariable | str] | No
 def new_property(
     name: str,
     return_type: str,
+    *,
     with_setter: bool = False,
     setter_type: str | None = None,
     add_override: bool = False,

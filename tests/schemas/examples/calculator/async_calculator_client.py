@@ -30,7 +30,7 @@ def parse_args():
     return parser.parse_args()
 
 
-async def main(connection: capnp.AsyncIoStream) -> None:
+async def main(connection: capnp.AsyncIoStream):
     client = capnp.TwoPartyClient(connection)
 
     # Bootstrap the Calculator interface
@@ -298,7 +298,7 @@ async def main(connection: capnp.AsyncIoStream) -> None:
     print("PASS")
 
 
-async def cmd_main(host: str) -> None:
+async def cmd_main(host: str):
     host, port = host.split(":")
     await main(await capnp.AsyncIoStream.create_connection(host=host, port=int(port)))
 

@@ -1,6 +1,9 @@
+"""Runtime tests for AnyPointer behavior against generated stubs."""
+
 import asyncio
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import capnp
 import pytest
@@ -9,7 +12,7 @@ import pytest
 sys.path.append(str(Path(__file__).parent.parent))
 
 
-async def _test_anypointer_runtime_behavior(generated_stubs) -> None:
+async def _test_anypointer_runtime_behavior() -> None:
     # Import here to ensure stubs are generated first
     from tests._generated.examples.restorer import restorer_capnp
     from tests.schemas.examples.restorer.restorer_server import RestorerImpl
@@ -25,7 +28,11 @@ async def _test_anypointer_runtime_behavior(generated_stubs) -> None:
         # Start client
         connection = await capnp.AsyncIoStream.create_connection(host="localhost", port=port)
         client = capnp.TwoPartyClient(connection)
-        restorer = client.bootstrap().cast_as(restorer_capnp.Restorer)
+        bootstrap = client.bootstrap()
+        restorer = cast(
+            "restorer_capnp.RestorerClient",
+            bootstrap.cast_as(restorer_capnp.Restorer),
+        )
 
         # Get AnyTester
         tester_result = await restorer.getAnyTester()
@@ -34,7 +41,7 @@ async def _test_anypointer_runtime_behavior(generated_stubs) -> None:
         # Test 1: Passing a list to AnyPointer (Expected Failure)
         # This is the core issue: type hint says it's allowed (list[Any]), but runtime fails
         with pytest.raises(capnp.KjException) as excinfo:
-            await tester.setAnyPointer([1, 2, 3])  # type: ignore
+            await tester.setAnyPointer(cast("Any", [1, 2, 3]))
 
         # Verify the error message is about init() or similar
         # The exact message might vary but "init() with size is only valid for list" is typical
@@ -56,5 +63,5 @@ async def _test_anypointer_runtime_behavior(generated_stubs) -> None:
         # await connection.wait_closed() # if available
 
 
-def test_anypointer_runtime_wrapper(generated_stubs) -> None:
-    asyncio.run(capnp.run(_test_anypointer_runtime_behavior(generated_stubs)))
+def test_anypointer_runtime_wrapper() -> None:
+    asyncio.run(capnp.run(_test_anypointer_runtime_behavior()))

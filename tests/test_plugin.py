@@ -1,10 +1,12 @@
+"""Plugin invocation tests for the capnpc entry point."""
+
 import os
 import subprocess
 import sys
 from pathlib import Path
 
 
-def test_capnpc_plugin_invocation(tmp_path, basic_stubs) -> None:
+def test_capnpc_plugin_invocation(tmp_path) -> None:
     """Test that capnpc can invoke our plugin."""
     # Create a wrapper script for the plugin
     plugin_name = "capnpc-python"
@@ -12,8 +14,7 @@ def test_capnpc_plugin_invocation(tmp_path, basic_stubs) -> None:
 
     # We need to make sure we use the current python environment and PYTHONPATH
     python_exe = sys.executable
-    cwd = os.getcwd()
-    src_path = os.path.join(cwd, "src")
+    src_path = Path.cwd() / "src"
 
     # Create the wrapper script
     with open(plugin_path, "w") as f:
@@ -62,8 +63,7 @@ def test_capnpc_plugin_bundling_options(tmp_path) -> None:
     plugin_path = tmp_path / plugin_name
 
     python_exe = sys.executable
-    cwd = os.getcwd()
-    src_path = os.path.join(cwd, "src")
+    src_path = Path.cwd() / "src"
 
     with open(plugin_path, "w") as f:
         f.write("#!/bin/sh\n")

@@ -31,10 +31,10 @@ def test_interface_result_structs_are_embedded(calculator_stubs) -> None:
     # Parse all embedded schema IDs
     schema_lines = match.group(1).strip().split("\n")
     embedded_ids = set()
-    for line in schema_lines:
-        line = line.strip()
-        if line.startswith(('"', "'")):
-            schema_b64 = line.split(",")[0].strip().strip('"').strip("'")
+    for raw_line in schema_lines:
+        schema_line = raw_line.strip()
+        if schema_line.startswith(('"', "'")):
+            schema_b64 = schema_line.split(",")[0].strip().strip('"').strip("'")
             schema_data = base64.b64decode(schema_b64)
             node_reader = schema_capnp.Node.from_bytes_packed(schema_data)
             embedded_ids.add(node_reader.id)
@@ -74,10 +74,10 @@ def test_param_structs_are_embedded(calculator_stubs) -> None:
 
     schema_lines = match.group(1).strip().split("\n")
     embedded_ids = set()
-    for line in schema_lines:
-        line = line.strip()
-        if line.startswith(('"', "'")):
-            schema_b64 = line.split(",")[0].strip().strip('"').strip("'")
+    for raw_line in schema_lines:
+        schema_line = raw_line.strip()
+        if schema_line.startswith(('"', "'")):
+            schema_b64 = schema_line.split(",")[0].strip().strip('"').strip("'")
             schema_data = base64.b64decode(schema_b64)
             node_reader = schema_capnp.Node.from_bytes_packed(schema_data)
             embedded_ids.add(node_reader.id)

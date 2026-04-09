@@ -19,7 +19,7 @@ TESTS_DIR = Path(__file__).parent
 
 def test_init_returns_typed_list(addressbook_stubs) -> None:
     """Test that init() returns a properly typed list, not Any."""
-    GENERATED_DIR = addressbook_stubs
+    generated_dir = addressbook_stubs
     # Create a test file that uses init
     test_code = """
 import addressbook_capnp
@@ -36,7 +36,7 @@ alice.name = "Alice"  # Should type check
 alice.email = "alice@example.com"  # Should type check
 """
 
-    test_file = GENERATED_DIR / "test_typing_init.py"
+    test_file = generated_dir / "test_typing_init.py"
     test_file.write_text(test_code)
 
     # Run pyright on the test file
@@ -61,7 +61,7 @@ alice.email = "alice@example.com"  # Should type check
 
 def test_list_element_access_typed(addressbook_stubs) -> None:
     """Test that accessing list elements gives proper types."""
-    GENERATED_DIR = addressbook_stubs
+    generated_dir = addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -80,7 +80,7 @@ bob_phones = bob.init("phones", 2)
 bob_phones[0].number = "555-4567"
 """
 
-    test_file = GENERATED_DIR / "test_typing_elements.py"
+    test_file = generated_dir / "test_typing_elements.py"
     test_file.write_text(test_code)
 
     result = subprocess.run(
@@ -104,7 +104,7 @@ bob_phones[0].number = "555-4567"
 
 def test_iteration_typed(addressbook_stubs) -> None:
     """Test that iterating over lists gives proper types."""
-    GENERATED_DIR = addressbook_stubs
+    generated_dir = addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -123,7 +123,7 @@ for person in addresses.people:
         phone_type = phone.type
 """
 
-    test_file = GENERATED_DIR / "test_typing_iteration.py"
+    test_file = generated_dir / "test_typing_iteration.py"
     test_file.write_text(test_code)
 
     result = subprocess.run(
@@ -147,7 +147,7 @@ for person in addresses.people:
 
 def test_union_field_access(addressbook_stubs) -> None:
     """Test that union fields are properly typed."""
-    GENERATED_DIR = addressbook_stubs
+    generated_dir = addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -162,7 +162,7 @@ bob = people[1]
 bob.employment.unemployed = None
 """
 
-    test_file = GENERATED_DIR / "test_typing_unions.py"
+    test_file = generated_dir / "test_typing_unions.py"
     test_file.write_text(test_code)
 
     result = subprocess.run(
@@ -186,7 +186,7 @@ bob.employment.unemployed = None
 
 def test_nested_init_typed(addressbook_stubs) -> None:
     """Test that nested init() calls return proper types."""
-    GENERATED_DIR = addressbook_stubs
+    generated_dir = addressbook_stubs
     test_code = """
 import addressbook_capnp
 
@@ -204,7 +204,7 @@ phones[1].number = "456"
 phones[1].type = "work"
 """
 
-    test_file = GENERATED_DIR / "test_typing_nested_init.py"
+    test_file = generated_dir / "test_typing_nested_init.py"
     test_file.write_text(test_code)
 
     result = subprocess.run(
@@ -226,7 +226,7 @@ phones[1].type = "work"
         )
 
 
-def test_all_addressbook_typing_summary(addressbook_stubs) -> None:
+def test_all_addressbook_typing_summary() -> None:
     """Provide a summary of addressbook typing tests."""
     print("\n" + "=" * 70)
     print("ADDRESSBOOK TYPING TEST SUMMARY")

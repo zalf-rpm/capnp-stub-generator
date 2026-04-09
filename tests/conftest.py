@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import subprocess
 import sys
@@ -68,12 +67,10 @@ sys.path.insert(0, {str(Path(__file__).parent.parent / "src")!r})
 from capnp_stub_generator.capnpc_plugin import main
 main()
 """)
-        wrapper_path = wrapper.name
+        wrapper_path = Path(wrapper.name)
 
     # Make wrapper executable
-    import os as os_module
-
-    os_module.chmod(wrapper_path, 0o755)
+    wrapper_path.chmod(0o700)
 
     try:
         # Helper function to generate stubs using capnp compile
@@ -220,8 +217,7 @@ main()
 
     finally:
         # Clean up wrapper script
-        with contextlib.suppress(Exception):
-            os_module.unlink(wrapper_path)
+        wrapper_path.unlink(missing_ok=True)
 
     # Return paths for tests to use
     return {

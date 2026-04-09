@@ -1,5 +1,8 @@
+"""Data transfer objects used during stub generation."""
+
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, override
 
@@ -8,6 +11,8 @@ if TYPE_CHECKING:
 
     from capnp_stub_generator import helper
     from capnp_stub_generator.scope import CapnpType, Scope
+
+logger = logging.getLogger(__name__)
 
 
 # Type alias for init choice tuples
@@ -354,7 +359,7 @@ class MethodInfo:
                 result_fields = [f.name for f in result_schema.node.struct.fields]
         except Exception:
             # Safe defaults already set
-            pass
+            logger.debug("Failed to inspect runtime method %s", method_name, exc_info=True)
 
         return cls(
             method_name=method_name,

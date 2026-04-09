@@ -11,7 +11,7 @@ These are imported by lib/capnp.pyi for type annotations but NOT re-exported.
 import asyncio
 import types
 
-from .lib.capnp import SchemaParser, _NodeReader, _ParsedSchema, _SchemaType
+from .lib.capnp import SchemaParser, _ParsedSchema, _SchemaType
 
 # Protocol classes for types imported from capnp runtime
 
@@ -34,9 +34,9 @@ class CapnpTypesModule:
 
 class CapnpModule(types.ModuleType):
     schema: _ParsedSchema
-    _nodeSchema: _ParsedSchema
-    _nodeProto: _NodeReader
     _parser: SchemaParser
+
+    def __getattr__(self, name: str) -> object: ...
 
 # Re-export commonly used types
 Server = asyncio.Server

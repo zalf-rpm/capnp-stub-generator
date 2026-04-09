@@ -160,11 +160,10 @@ class Writer:
         """
         try:
             for annotation in self._schema.node.annotations:
-                if annotation.id == self._python_module_annotation_id:
-                    if annotation.value.which() == "text":
-                        module_path = annotation.value.text
-                        logger.info(f"Found Python module annotation: {module_path}")
-                        return module_path
+                if annotation.id == self._python_module_annotation_id and annotation.value.which() == "text":
+                    module_path = annotation.value.text
+                    logger.info(f"Found Python module annotation: {module_path}")
+                    return module_path
         except Exception as e:
             logger.debug(f"Error reading Python module annotation: {e}")
         return None
@@ -184,9 +183,8 @@ class Writer:
         try:
             schema = self._schema_loader.get(schema_id)
             for annotation in schema.node.annotations:
-                if annotation.id == self._python_module_annotation_id:
-                    if annotation.value.which() == "text":
-                        return annotation.value.text
+                if annotation.id == self._python_module_annotation_id and annotation.value.which() == "text":
+                    return annotation.value.text
         except Exception as e:
             logger.debug(f"Error reading Python module annotation from schema {hex(schema_id)}: {e}")
 
@@ -248,25 +246,18 @@ class Writer:
                         def collect_type_ids(type_obj: TypeReader) -> list[int]:  # type: ignore[no-untyped-def]
                             """Extract all schema IDs referenced by a type."""
                             type_which = type_obj.which()
+                            referenced_ids: list[int] = []
 
                             if type_which == "struct":
-                                return [type_obj.struct.typeId]
-                            if type_which == "interface":
-                                return [type_obj.interface.typeId]
-                            if type_which == "list":
-                                return collect_type_ids(type_obj.list.elementType)
-                            if type_which == "enum":
-                                return [type_obj.enum.typeId]
-                            if type_which == "anyPointer":
-                                # Handle anyPointer with implicit/explicit params
-                                if (
-                                    type_obj.anyPointer.which() == "implicitMethodParameter"
-                                    or type_obj.anyPointer.which() == "unconstrained"
-                                ):
-                                    return []
-                                # Could have other anyPointer variants
-                                return []
-                            return []
+                                referenced_ids = [type_obj.struct.typeId]
+                            elif type_which == "interface":
+                                referenced_ids = [type_obj.interface.typeId]
+                            elif type_which == "list":
+                                referenced_ids = collect_type_ids(type_obj.list.elementType)
+                            elif type_which == "enum":
+                                referenced_ids = [type_obj.enum.typeId]
+
+                            return referenced_ids
 
                         referenced_ids = collect_type_ids(type_node)
                         for ref_id in referenced_ids:
@@ -514,10 +505,7 @@ class Writer:
             list[str]: The list of imports that were previously added.
 
         """
-        import_lines: list[str] = []
-
-        for imp in self._imports:
-            import_lines.append(imp)
+        import_lines = self._imports.copy()
 
         if self._typing_imports:
             # Consolidate typing imports deterministically.
@@ -1556,10 +1544,8 @@ class Writer:
         elif field_slot_type == capnp_types.CapnpElementType.INTERFACE:
             # Interfaces are represented as Protocols; expose attribute with Protocol type
             # Ensure the interface type has been generated
-            try:
+            with contextlib.suppress(Exception):  # pragma: no cover - best effort for incomplete imported schemas
                 self.generate_nested(raw_field.schema)
-            except Exception:  # pragma: no cover - continue gracefully
-                pass
             try:
                 type_name = self.get_type_name(field.slot.type)
             except Exception:
@@ -1705,12 +1691,10 @@ class Writer:
         init_choices.append((helper.sanitize_name(field.name), type_name))
         hints = [helper.TypeHint(type_name, primary=True)]
         # If this is an interface type, also allow passing its Server implementation
-        try:
+        with contextlib.suppress(Exception):
             if field.slot.type.which() == capnp_types.CapnpElementType.INTERFACE:
                 # type_name is already the Protocol module name (e.g., "_GreeterModule")
                 hints.append(helper.TypeHint(f"{type_name}.Server"))
-        except Exception:
-            pass
         return helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
 
     def gen_any_pointer_slot(self, field: FieldReader) -> helper.TypeHintedVariable | None:
@@ -2586,15 +2570,13 @@ class Writer:
             return list_params
 
         for param in parameters:
-            try:
+            with contextlib.suppress(Exception):
                 field_obj = next(f for f in method_info.param_schema.node.struct.fields if f.name == param.name)
 
                 if field_obj.slot.type.which() == capnp_types.CapnpElementType.LIST:
                     # Generate list class and get aliases
                     _, _, builder_alias = self._generate_list_class(field_obj.slot.type)
                     list_params.append((param.name, builder_alias))
-            except Exception:
-                continue
 
         return list_params
 
@@ -2619,7 +2601,7 @@ class Writer:
             return struct_params
 
         for param in parameters:
-            try:
+            with contextlib.suppress(Exception):
                 field_obj = next(f for f in method_info.param_schema.node.struct.fields if f.name == param.name)
 
                 if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
@@ -2628,8 +2610,6 @@ class Writer:
                     builder_alias = self._get_flat_builder_alias(struct_type_name)
                     builder_type = builder_alias or self._build_scoped_builder_type(struct_type_name)
                     struct_params.append((param.name, builder_type))
-            except Exception:
-                continue
 
         return struct_params
 
@@ -2729,6 +2709,7 @@ class Writer:
         self,
         method_info: MethodInfo,
         result_type: str,
+        *,
         is_direct_struct_return: bool,
         for_server: bool = False,
     ) -> list[str]:
@@ -2837,12 +2818,7 @@ class Writer:
                             # Generate list class and get aliases
                             _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
 
-                            if not for_server:
-                                # Client receives Reader only
-                                field_type = reader_alias
-                            else:
-                                # Server returns Builder | Reader
-                                field_type = f"{builder_alias} | {reader_alias}"
+                            field_type = reader_alias if not for_server else f"{builder_alias} | {reader_alias}"
 
                         lines.append(f"    {rf}: {field_type}")
                     except Exception:
@@ -3211,11 +3187,7 @@ class Writer:
         # Generate CallContext type name - it's inside Server class
         scope_path = self._get_scope_path()
         context_class_name = f"{method_name.title()}CallContext"
-        if scope_path:
-            # CallContext is now under Server, not at interface level
-            context_type = f"{scope_path}.Server.{context_class_name}"
-        else:
-            context_type = f"Server.{context_class_name}"
+        context_type = f"{scope_path}.Server.{context_class_name}" if scope_path else f"Server.{context_class_name}"
 
         # Server methods have: self, params..., _context: CallContext, **kwargs
         param_parts = ["self"]
@@ -3238,7 +3210,7 @@ class Writer:
 
             if len(method_info.result_fields) == 1 and method_info.result_schema is not None:
                 field_name = method_info.result_fields[0]
-                try:
+                with contextlib.suppress(Exception):
                     field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == field_name)
                     field_type_enum = field_obj.slot.type.which()
 
@@ -3316,8 +3288,6 @@ class Writer:
                         is_single_primitive_or_interface = True
                         single_field_type = "AnyPointer"
                         self._needs_anypointer_alias = True
-                except Exception:
-                    pass
 
             # Generate return type - use NamedTuple with "Tuple" suffix
             full_server_path = f"{scope_path}.Server.{result_type}Tuple" if scope_path else f"Server.{result_type}Tuple"
@@ -3352,11 +3322,7 @@ class Writer:
         # Generate CallContext type name - it's inside Server class
         scope_path = self._get_scope_path()
         context_class_name = f"{method_name.title()}CallContext"
-        if scope_path:
-            # CallContext is now under Server, not at interface level
-            context_type = f"{scope_path}.Server.{context_class_name}"
-        else:
-            context_type = f"Server.{context_class_name}"
+        context_type = f"{scope_path}.Server.{context_class_name}" if scope_path else f"Server.{context_class_name}"
 
         # _context variant only takes context parameter
         param_str = f"self, context: {context_type}"
@@ -3399,6 +3365,7 @@ class Writer:
     def _generate_callcontext_protocol(
         self,
         method_info: MethodInfo,
+        *,
         has_results: bool,
         result_type_for_context: str | None = None,
         is_direct_struct_return: bool = False,
@@ -3508,7 +3475,7 @@ class Writer:
         client_result_lines = self._generate_result_protocol(
             method_info,
             result_type,
-            is_direct_struct_return,
+            is_direct_struct_return=is_direct_struct_return,
             for_server=False,
         )
         collection.set_client_result_class(client_result_lines)
@@ -3517,7 +3484,7 @@ class Writer:
         server_result_lines = self._generate_result_protocol(
             method_info,
             result_type,
-            is_direct_struct_return,
+            is_direct_struct_return=is_direct_struct_return,
             for_server=True,
         )
         collection.set_server_result_class(server_result_lines)
@@ -3544,7 +3511,7 @@ class Writer:
 
             callcontext_lines = self._generate_callcontext_protocol(
                 method_info,
-                has_results,
+                has_results=has_results,
                 result_type_for_context=struct_name,
                 is_direct_struct_return=True,
             )
@@ -3557,7 +3524,7 @@ class Writer:
             result_type_for_ctx = f"{method_info.method_name.title()}Result" if has_results else None
             callcontext_lines = self._generate_callcontext_protocol(
                 method_info,
-                has_results,
+                has_results=has_results,
                 result_type_for_context=result_type_for_ctx,
                 is_direct_struct_return=False,
             )
@@ -4053,22 +4020,18 @@ class Writer:
                     if nested_node.id == target_id:
                         return True
                     # Recursively search deeper by getting the nested schema from loader
-                    try:
+                    with contextlib.suppress(Exception):
                         nested_schema = self._schema_loader.get(nested_node.id)
                         if search_nested_nodes(nested_schema, target_id):
                             return True
-                    except Exception:
-                        pass
                 return False
 
             for file_id, path in self._file_id_to_path.items():
-                try:
+                with contextlib.suppress(Exception):
                     file_schema = self._schema_loader.get(file_id)
                     if search_nested_nodes(file_schema, schema.node.id):
                         matching_path = pathlib.Path(path)
                         break
-                except Exception:
-                    pass
 
         # Since this is an import, there must be a parent module.
         assert matching_path is not None, f"The module named {module_name} was not provided to the stub generator."
@@ -4129,14 +4092,12 @@ class Writer:
         # For deeply nested types (e.g., Params.Irrigation.Parameters), we import the root parent
         # and Python will resolve the full path via attribute access
 
+        registered_name: str
+
         # Check if this is a nested type (contains dots)
         if "." in definition_name:
             # Get the root parent (e.g., "Params" from "Params.Irrigation.Parameters")
             root_name = definition_name.split(".")[0]
-
-            # For structs, import the Protocol class for type references
-            # Determine node type
-            # _DynamicStructReader
 
             if schema.node.which() == capnp_types.CapnpElementType.STRUCT:
                 protocol_root_name = f"_{root_name}StructModule"
@@ -4146,26 +4107,19 @@ class Writer:
                 # becomes "_ParamsStructModule._OrganicFertilizationStructModule._OrganicMatterParametersStructModule"
                 parts = definition_name.split(".")
                 protocol_parts = [f"_{part}StructModule" for part in parts]
-                protocol_definition_name = ".".join(protocol_parts)
-                return self.register_type(schema.node.id, schema, name=protocol_definition_name, scope=self.scope.root)
-            # Import only the root parent for enums/interfaces
-            if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+                registered_name = ".".join(protocol_parts)
+            elif schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
                 # For nested interfaces, register with Protocol name
                 # E.g., "Channel.Reader" -> "Channel._ReaderInterfaceModule"
                 parts = definition_name.split(".")
                 last_part = parts[-1]
                 parts[-1] = f"_{last_part}InterfaceModule"
-                protocol_definition_name = ".".join(parts)
+                registered_name = ".".join(parts)
                 self._add_import(f"from {python_import_path} import {root_name}")
-                return self.register_type(
-                    schema.node.id,
-                    schema,
-                    name=protocol_definition_name,
-                    scope=self.scope.root,
-                )
-            self._add_import(f"from {python_import_path} import {root_name}")
-            return self.register_type(schema.node.id, schema, name=definition_name, scope=self.scope.root)
-        if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+            else:
+                self._add_import(f"from {python_import_path} import {root_name}")
+                registered_name = definition_name
+        elif schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
             # For interfaces, import the Protocol class, the TypeAlias, and the Client alias
             protocol_name = f"_{definition_name}InterfaceModule"
             client_name = f"{definition_name}Client"
@@ -4173,28 +4127,27 @@ class Writer:
 
             # Track imported aliases
             self._imported_aliases.add(client_name)
-
-            # Register with Protocol name for internal type references
-            return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
-        if schema.node.which() == capnp_types.CapnpElementType.ENUM:
+            registered_name = protocol_name
+        elif schema.node.which() == capnp_types.CapnpElementType.ENUM:
             # Enums just need the enum itself
             alias_name = f"{definition_name}Enum"
             self._add_import(f"from {python_import_path} import {alias_name}")
-            return self.register_type(schema.node.id, schema, name=alias_name, scope=self.scope.root)
-        # Structs: import the Protocol class (_<Name>StructModule) for internal type references
-        # The TypeAlias can be accessed if needed, but internal references use the Protocol
-        protocol_name = f"_{definition_name}StructModule"
-        reader_alias = f"{definition_name}Reader"
-        builder_alias = f"{definition_name}Builder"
+            registered_name = alias_name
+        else:
+            # Structs: import the Protocol class (_<Name>StructModule) for internal type references
+            # The TypeAlias can be accessed if needed, but internal references use the Protocol
+            protocol_name = f"_{definition_name}StructModule"
+            reader_alias = f"{definition_name}Reader"
+            builder_alias = f"{definition_name}Builder"
 
-        self._add_import(f"from {python_import_path} import {protocol_name}, {reader_alias}, {builder_alias}")
+            self._add_import(f"from {python_import_path} import {protocol_name}, {reader_alias}, {builder_alias}")
 
-        # Track imported aliases
-        self._imported_aliases.add(reader_alias)
-        self._imported_aliases.add(builder_alias)
+            # Track imported aliases
+            self._imported_aliases.add(reader_alias)
+            self._imported_aliases.add(builder_alias)
+            registered_name = protocol_name
 
-        # Register the type with the Protocol name so scoped_name returns the Protocol name
-        return self.register_type(schema.node.id, schema, name=protocol_name, scope=self.scope.root)
+        return self.register_type(schema.node.id, schema, name=registered_name, scope=self.scope.root)
 
     def register_type(
         self,
@@ -4311,6 +4264,7 @@ class Writer:
         name: str,
         node: NodeReader,
         scope_heading: str = "",
+        *,
         register: bool = True,
         parent_scope: Scope | None = None,
     ) -> Scope:
@@ -4598,8 +4552,7 @@ class Writer:
         out.append("")
 
         if self.type_vars:
-            for name in sorted(self.type_vars):
-                out.append(f'{name} = TypeVar("{name}")')
+            out.extend(f'{name} = TypeVar("{name}")' for name in sorted(self.type_vars))
             out.append("")
 
         out.extend(self.scope.lines)

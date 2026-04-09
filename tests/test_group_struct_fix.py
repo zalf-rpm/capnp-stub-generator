@@ -1,3 +1,5 @@
+"""Tests for group struct generation fixes."""
+
 import argparse
 from pathlib import Path
 

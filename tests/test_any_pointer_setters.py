@@ -1,3 +1,5 @@
+"""Tests for AnyPointer setter and constructor typing."""
+
 from __future__ import annotations
 
 import subprocess

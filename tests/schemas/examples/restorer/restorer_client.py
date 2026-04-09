@@ -7,7 +7,7 @@ import capnp
 from tests._generated.examples.restorer import restorer_capnp
 
 
-async def main() -> None:
+async def main():
     # Connect to server
     # Note: In a real scenario we'd use argparse for host/port
     connection = await capnp.AsyncIoStream.create_connection(host="localhost", port=60000)

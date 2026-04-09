@@ -1,4 +1,4 @@
-"""This module defines the scope, a unit of indented text."""
+"""Scope model for indented output blocks."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ class Scope:
     return_scope: Scope | None
     lines: list[str] = dataclasses.field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Assures that, if this is the root scope, its name is empty."""
         assert (self.is_root) == (self.name == "")
 

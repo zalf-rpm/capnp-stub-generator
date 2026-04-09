@@ -1,4 +1,4 @@
-"""This is an automatically generated stub for `schema_new.capnp`."""
+"""Automatically generated type stubs for `schema_new.capnp`."""
 
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
@@ -1751,14 +1751,13 @@ class _ElementSizeEnumModule:
     empty: int
     bit: int
     byte: int
-    twoBytes: int
-    fourBytes: int
-    eightBytes: int
     pointer: int
-    inlineComposite: int
+
+    def __getattr__(self, name: str) -> int: ...
 
 class _FieldStructModule(_StructModule):
-    noDiscriminant: int
+    def __getattr__(self, name: str) -> int: ...
+
     class _FieldSlotStructModule(_StructModule):
         class Reader(_DynamicStructReader):
             @property

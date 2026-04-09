@@ -127,7 +127,6 @@ class TestSharedSchemaLoader:
 
                     # This should not raise - load_dynamic should handle duplicates
                     loader.load_dynamic(node_reader)
-
         finally:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))
@@ -167,7 +166,6 @@ class TestSharedSchemaLoader:
 
             assert msg2.boolField is False
             assert msg2.int32Field == 123
-
         finally:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))
@@ -201,7 +199,6 @@ class TestSharedSchemaLoader:
                 # Should return the same schema object
                 assert schema1.node.id == schema2.node.id
                 assert schema1.node.displayName == schema2.node.displayName
-
         finally:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))
@@ -226,7 +223,6 @@ class TestCrossModuleCapabilities:
             # Verify the Channel interface is accessible via the loader
             # The Channel interface should be in the loader from channel_capnp
             assert channel_capnp.Channel is not None
-
         finally:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))

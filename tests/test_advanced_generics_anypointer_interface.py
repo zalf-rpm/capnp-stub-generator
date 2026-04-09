@@ -1,3 +1,5 @@
+"""Tests for generic AnyPointer and interface generation."""
+
 from pathlib import Path
 
 SCHEMAS_DIR = Path(__file__).parent / "schemas" / "basic"

@@ -1,3 +1,6 @@
+"""Tests for handling Cap'n Proto name annotations in generated stubs."""
+
+
 def test_name_annotations(basic_stubs) -> None:
     """Test that Cap'n Proto name annotations ($Cxx.name) are handled.
 
