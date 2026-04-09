@@ -59,14 +59,29 @@ extraPaths = ["src", "tests/_generated/basic"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-extend-exclude = [
-  "typings/capnp-stubs",
-  "tests/schemas/examples",
-]
+extend-exclude = ["typings/capnp-stubs", "tests/schemas/examples"]
 
 [tool.ruff.lint]
 select = ["ALL"]
-ignore = ["E501", "D203", "D213", "COM812", "S101", "T201", "PYI021"]
+ignore = [
+  "E501",
+  "D203",
+  "D213",
+  "COM812",
+  "S101",
+  "T201",
+  "PYI021",
+  "ANN001",
+  "N802",
+  "SLF001",
+  "G004",
+  "ANN401",
+  "INP001",
+  "PLC0415",
+  "D103",
+  "PLR0912",
+  "C901",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

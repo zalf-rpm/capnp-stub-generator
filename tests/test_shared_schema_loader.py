@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 
 import capnp
+import schema_capnp
 
 
 class TestSharedSchemaLoader:
@@ -107,8 +108,6 @@ class TestSharedSchemaLoader:
             # This simulates what happens when the module is reimported
             import base64
             import re
-
-            import schema_capnp
 
             # Read the module file to get the embedded schema data
             module_file = basic_stubs / "dummy_capnp" / "__init__.py"
