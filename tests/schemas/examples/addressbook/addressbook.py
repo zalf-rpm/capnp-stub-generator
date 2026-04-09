@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import IO
 
-import capnp  # noqa: F401
-
 from tests._generated.examples.addressbook import addressbook_capnp
 
 

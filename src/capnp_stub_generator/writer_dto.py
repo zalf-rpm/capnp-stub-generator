@@ -55,7 +55,7 @@ class StructGenerationContext:
         new_type: CapnpType,
         registered_params: list[str],
     ) -> StructGenerationContext:
-        """Factory method to create context with auto-generated name variants.
+        """Create a context with auto-generated name variants.
 
         This factory ensures consistency by automatically generating all the
         Reader and Builder name variants from the base type name.
@@ -102,7 +102,7 @@ class StructGenerationContext:
         new_type: CapnpType,
         registered_params: list[str],
     ) -> StructGenerationContext:
-        """Factory method for Protocol-based struct generation.
+        """Create a context for Protocol-based struct generation.
 
         Args:
             schema: The Cap'n Proto struct schema
@@ -223,7 +223,7 @@ class EnumGenerationContext:
         type_name: str,
         new_type: CapnpType,
     ) -> EnumGenerationContext:
-        """Factory method to create enum context with Protocol-based naming.
+        """Create an enum context with Protocol-based naming.
 
         Args:
             schema: The Cap'n Proto enum schema
@@ -279,7 +279,7 @@ class InterfaceGenerationContext:
         base_classes: list[str],
         parent_scope: Scope,
     ) -> InterfaceGenerationContext:
-        """Factory method to create interface context with Protocol-based naming.
+        """Create an interface context with Protocol-based naming.
 
         Args:
             schema: The Cap'n Proto interface schema

@@ -64,14 +64,19 @@ extend-exclude = ["typings/capnp-stubs", "tests/schemas/examples"]
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
+  "A003",
   "E501",
   "D203",
   "D213",
   "COM812",
   "S101",
+  "S603",
+  "S607",
   "T201",
   "PYI021",
+  "PYI016",
   "ANN001",
+  "ANN201",
   "N802",
   "SLF001",
   "G004",
@@ -79,7 +84,13 @@ ignore = [
   "INP001",
   "PLC0415",
   "D103",
+  "D102",
+  "ERA001",
+  "PTH123",
+  "BLE001",
+  "PLR2004",
   "PLR0912",
+  "PLR0915",
   "C901",
 ]
 

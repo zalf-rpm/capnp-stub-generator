@@ -47,6 +47,9 @@ InitChoice = tuple[str, str]
 
 # Constants
 DISCRIMINANT_NONE = 65535  # Value indicating no discriminant (not part of a union)
+MIN_ALIAS_DATA_PARTS = 2
+MODULE_PATH_PARTS = 2
+ENUM_ALIAS_DATA_PARTS = 3
 
 # Type alias for AnyPointer fields - accepts all pointer types
 ANYPOINTER_TYPE = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder"
@@ -484,7 +487,7 @@ class Writer:
             self._imports.append(import_line)
 
     def _add_enum_import(self) -> None:
-        """Adds an import for the `Enum` class (deprecated - now using _EnumModule)."""
+        """Retain the deprecated `Enum` import helper for compatibility."""
         # Note: _EnumModule is already imported in __init__, so this method is now a no-op
         # We keep it for compatibility with existing code structure
 
@@ -1448,7 +1451,6 @@ class Writer:
 
         # Generate class
         self._add_typing_import("Iterator")
-        # self._add_typing_import("Sequence")  # Removed as pycapnp lists don't support slicing
         self._add_typing_import("overload")
         self._add_typing_import("override")
 
@@ -1492,7 +1494,7 @@ class Writer:
         init_choices: list[InitChoice],
         list_init_choices: list[tuple[str, str]] | None = None,
     ) -> helper.TypeHintedVariable | None:
-        """Generates a new type from a slot. Which type, is later determined.
+        """Generate a type-hinted variable from a slot field.
 
         Args:
             raw_field: The pycapnp field schema wrapper (provides .schema property).
@@ -1913,7 +1915,7 @@ class Writer:
         schema: _StructSchema,
         type_name: str,
     ) -> tuple[StructGenerationContext | None, str]:
-        """Setup struct generation by checking imports, creating type, and preparing context.
+        """Set up struct generation and create its context.
 
         This method handles the initial setup phase of struct generation including:
         - Checking if the struct is already imported
@@ -2287,7 +2289,7 @@ class Writer:
     # ===== Interface Generation Helper Methods (Phase 2 Extraction) =====
 
     def _setup_interface_generation(self, schema: _InterfaceSchema) -> InterfaceGenerationContext | None:
-        """Setup interface generation by checking imports and preparing context.
+        """Set up interface generation and create its context.
 
         Args:
             schema: The Cap'n Proto interface schema
@@ -2744,7 +2746,7 @@ class Writer:
                 # Check for union
                 struct_node = method_info.result_schema.node.struct
                 for field_obj in struct_node.fields:
-                    if field_obj.discriminantValue != 65535:  # Field is part of a union
+                    if field_obj.discriminantValue != DISCRIMINANT_NONE:  # Field is part of a union
                         has_union = True
                         union_fields.append(field_obj.name)
 
@@ -4269,7 +4271,7 @@ class Writer:
         register: bool = True,
         parent_scope: Scope | None = None,
     ) -> Scope:
-        """Creates a new scope below the scope of the provided node.
+        """Create a new scope below the scope of the provided node.
 
         Args:
             name (str): The name of the new scope.
@@ -4467,7 +4469,7 @@ class Writer:
 
         # Use _all_type_aliases which contains ONLY the types generated in this module
         for alias_name, alias_data in self._all_type_aliases.items():
-            if len(alias_data) >= 2:
+            if len(alias_data) >= MIN_ALIAS_DATA_PARTS:
                 original_path, _ = alias_data[0], alias_data[1]
 
                 # For Reader types - could be struct or list
@@ -4493,7 +4495,7 @@ class Writer:
                 # For Client types (interfaces)
                 elif alias_name.endswith("Client") and "Client" in original_path:
                     parts = original_path.rsplit(".", 1)
-                    if len(parts) == 2:
+                    if len(parts) == MODULE_PATH_PARTS:
                         protocol_path = parts[0]
                         # Only include InterfaceModule types
                         if "InterfaceModule" in protocol_path and protocol_path not in seen_interfaces:
@@ -4507,7 +4509,7 @@ class Writer:
         return (struct_types, list_types, interface_types)
 
     def dumps_pyi(self) -> str:
-        """Generates string output for the *.pyi stub file that provides type hinting.
+        """Generate the .pyi stub output for this schema.
 
         Returns:
             str: The output string.
@@ -4567,7 +4569,7 @@ class Writer:
             for alias_name in sorted(self._all_type_aliases.keys()):
                 alias_info = self._all_type_aliases[alias_name]
 
-                if len(alias_info) == 3:
+                if len(alias_info) == ENUM_ALIAS_DATA_PARTS:
                     # Enum with values: (full_path, type_kind, enum_values)
                     full_path, type_kind, enum_values = alias_info
                     if type_kind == "Enum":
@@ -4769,7 +4771,7 @@ class Writer:
         ]
 
     def dumps_py(self) -> str:
-        """Generates string output for the *.py stub file that handles the import of capnproto schemas.
+        """Generate the .py loader module for this schema.
 
         The generated .py file embeds the .capnp source file, making it completely
         self-contained and independent of external .capnp files.
@@ -4856,7 +4858,6 @@ class Writer:
             parent_path: str = "",
         ) -> None:
             """Generate code to construct a module and its nested modules."""
-
             # For each nested node in this schema
             for nested_node in schema_node.nestedNodes:
                 nested_id = nested_node.id

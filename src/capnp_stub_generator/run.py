@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 PYI_SUFFIX = ".pyi"
 PY_SUFFIX = ".py"
+MIN_PRESERVED_PATH_DEPTH = 2
 
 
 class PyrightValidationError(Exception):
@@ -111,6 +112,21 @@ class SchemaWriteTarget:
     file_path: str
     output_file_path: str
     module_path_prefix: str | None = None
+
+
+def _resolve_executable(name: str) -> str:
+    """Resolve an executable to an absolute path."""
+    executable = shutil.which(name)
+    if executable is not None:
+        return executable
+
+    msg = f"{name} command not found"
+    raise FileNotFoundError(msg)
+
+
+def _run_command(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+    """Run a trusted subprocess command and capture its output."""
+    return subprocess.run(command, capture_output=True, text=True, check=check)
 
 
 def find_capnp_stubs_package() -> str | None:
@@ -203,12 +219,12 @@ def augment_capnp_stubs_with_overloads(
     # Fix schema_capnp imports to be absolute instead of relative
     capnp_pyi_path = dest_stubs_path / "lib" / "capnp.pyi"
     if capnp_pyi_path.exists():
-        with open(capnp_pyi_path, encoding="utf8") as f:
+        with capnp_pyi_path.open(encoding="utf8") as f:
             content = f.read()
 
         content = content.replace("from ...schema_capnp import", "from schema_capnp import")
 
-        with open(capnp_pyi_path, "w", encoding="utf8") as f:
+        with capnp_pyi_path.open("w", encoding="utf8") as f:
             f.write(content)
 
         logger.info("Fixed schema_capnp imports to be absolute")
@@ -237,7 +253,7 @@ def augment_capnp_stubs_with_overloads(
         return None
 
     # Read the original file
-    with open(capnp_pyi_path, encoding="utf8") as f:
+    with capnp_pyi_path.open(encoding="utf8") as f:
         original_content = f.read()
 
     lines = original_content.split("\n")
@@ -264,7 +280,7 @@ def augment_capnp_stubs_with_overloads(
     module_imports = _build_module_imports(interfaces, dynamic_object_types, lines, typing_import_idx)
 
     # Write back the lines with imports added
-    with open(capnp_pyi_path, "w", encoding="utf8") as f:
+    with capnp_pyi_path.open("w", encoding="utf8") as f:
         f.write("\n".join(lines))
 
     # Augment cast_as if we have interfaces
@@ -438,8 +454,10 @@ def _augment_capnp_pyi(
         module_imports: Dictionary mapping module names to import paths.
 
     """
+    capnp_pyi_path = Path(capnp_pyi_path)
+
     # Read the file again (after imports were added)
-    with open(capnp_pyi_path, encoding="utf8") as f:
+    with capnp_pyi_path.open(encoding="utf8") as f:
         original_content = f.read()
 
     lines = original_content.split("\n")
@@ -517,7 +535,7 @@ def _augment_capnp_pyi(
 
     # Write back
     augmented_content = "\n".join(lines)
-    with open(capnp_pyi_path, "w", encoding="utf8") as f:
+    with capnp_pyi_path.open("w", encoding="utf8") as f:
         f.write(augmented_content)
 
     logger.info(f"Augmented {capnp_pyi_path} with {len(interfaces)} cast_as overload(s).")
@@ -536,6 +554,7 @@ def _augment_dynamic_object_reader(
         interfaces: Full interfaces dict for inheritance-based sorting.
 
     """
+    capnp_pyi_path = Path(capnp_pyi_path)
     struct_types = dynamic_object_types.get("structs", [])
     list_types = dynamic_object_types.get("lists", [])
     interface_types = dynamic_object_types.get("interfaces", [])
@@ -549,7 +568,7 @@ def _augment_dynamic_object_reader(
         return
 
     # Read the file
-    with open(capnp_pyi_path, encoding="utf8") as f:
+    with capnp_pyi_path.open(encoding="utf8") as f:
         original_content = f.read()
 
     lines = original_content.split("\n")
@@ -692,9 +711,6 @@ def _augment_dynamic_object_reader(
 
     list_overloads: list[str] = []
     for list_class, type_alias in sorted_list_types:
-        # list_class: "examples.dummy.dummy_capnp._BoolList"
-        # type_alias: "examples.dummy.dummy_capnp.BoolListReader"
-
         # Extract just the _capnp module part and after
         list_parts = list_class.split(".")
         alias_parts = type_alias.split(".")
@@ -759,9 +775,6 @@ def _augment_dynamic_object_reader(
 
     interface_overloads: list[str] = []
     for protocol_name, type_alias in sorted_interface_types:
-        # protocol_name: "examples.calculator.calculator_capnp._CalculatorInterfaceModule"
-        # type_alias: "examples.calculator.calculator_capnp.CalculatorClient"
-
         # Extract just the _capnp module part and after
         protocol_parts = protocol_name.split(".")
         alias_parts = type_alias.split(".")
@@ -822,7 +835,7 @@ def _augment_dynamic_object_reader(
 
     # Write back
     augmented_content = "\n".join(lines)
-    with open(capnp_pyi_path, "w", encoding="utf8") as f:
+    with capnp_pyi_path.open("w", encoding="utf8") as f:
         f.write(augmented_content)
 
     total_overloads = len(struct_overloads) + len(interface_overloads)
@@ -854,32 +867,19 @@ def format_all_outputs(output_directories: set[str]) -> None:
     logger.info(f"Formatting {len(stub_files)} generated file(s) with ruff...")
 
     try:
+        ruff = _resolve_executable("ruff")
+
         # Pass 1: ruff format (default settings)
         logger.info("Pass 1: Running ruff format...")
-        subprocess.run(
-            ["ruff", "format", *stub_files],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        _run_command([ruff, "format", *stub_files], check=True)
 
         # Pass 2: ruff check --fix --select ALL
         logger.info("Pass 2: Running ruff check --fix --select ALL...")
-        subprocess.run(
-            ["ruff", "check", "--fix", "--select", "ALL", *stub_files],
-            capture_output=True,
-            text=True,
-            check=False,  # Don't fail on unfixable issues
-        )
+        _run_command([ruff, "check", "--fix", "--select", "ALL", *stub_files], check=False)
 
         # Pass 3: ruff format again
         logger.info("Pass 3: Running ruff format again...")
-        subprocess.run(
-            ["ruff", "format", *stub_files],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        _run_command([ruff, "format", *stub_files], check=True)
 
         logger.info("✓ Ruff formatting completed successfully")
 
@@ -914,13 +914,10 @@ def validate_with_pyright(output_directories: set[str]) -> None:
     logger.info(f"Validating {len(stub_files)} generated stub file(s) with pyright...")
 
     try:
+        pyright = _resolve_executable("pyright")
+
         # Run pyright on all stub files
-        result = subprocess.run(
-            ["pyright", *stub_files],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        result = _run_command([pyright, *stub_files], check=False)
 
         # Check for errors in output
         error_count = result.stdout.count(" error:")
@@ -963,7 +960,7 @@ def _generate_stubs_from_schema(
     dict[str, tuple[str, list[str]]],
     tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]],
 ]:
-    """Internal function for generating *.pyi stubs from schema information.
+    """Generate stub files from schema information.
 
     Args:
         schema: The root schema to parse and write stubs for.
@@ -985,7 +982,8 @@ def _generate_stubs_from_schema(
     for outputs, suffix in zip((writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), strict=False):
         formatted_output = format_outputs(outputs)
 
-        with open(target.output_file_path + suffix, "w", encoding="utf8") as output_file:
+        output_path_with_suffix = Path(target.output_file_path + suffix)
+        with output_path_with_suffix.open("w", encoding="utf8") as output_file:
             output_file.write(formatted_output)
 
     logger.info("Wrote stubs to '%s(%s/%s)'.", target.output_file_path, PYI_SUFFIX, PY_SUFFIX)
@@ -1208,7 +1206,7 @@ main()
             src_prefix = str(Path(next(iter(valid_paths))).parent)
 
         # Build capnp compile command
-        cmd = ["capnp", "compile"]
+        cmd = [_resolve_executable("capnp"), "compile"]
 
         if src_prefix:
             cmd.append(f"--src-prefix={src_prefix}")
@@ -1227,12 +1225,7 @@ main()
         logger.debug(f"Running: {' '.join(cmd)}")
 
         # Run capnp compile
-        result = subprocess.run(
-            cmd,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        result = _run_command(cmd, check=False)
 
         if result.returncode != 0:
             logger.error(f"capnp compile failed:\n{result.stderr}")
@@ -1578,7 +1571,7 @@ def _should_preserve_parent_directory(
     sample_relative = relative_bases[0]
     depth = sample_relative.count(os.sep)
 
-    if depth < 2:
+    if depth < MIN_PRESERVED_PATH_DEPTH:
         return False
 
     # Verify files are in the base directory
@@ -1638,7 +1631,7 @@ def _handle_single_pattern_base(
     sample_relative = relative_bases[0]
     depth = sample_relative.count(os.sep)
 
-    if depth < 2:
+    if depth < MIN_PRESERVED_PATH_DEPTH:
         return base
 
     # Verify files are actually in this directory

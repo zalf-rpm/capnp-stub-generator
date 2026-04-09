@@ -106,7 +106,7 @@ class Scope:
             self.lines.append(" " * self.indent_spaces + content)
 
     def trace_as_str(self, delimiter: Literal[".", "_"] = ".") -> str:
-        """A string representation of this scope's relative trace.
+        """Return this scope's relative trace as a string.
 
         Follow the trace of the scope, and connect parent scopes with a delimiter.
         The root scope is not included in this trace string.
@@ -124,7 +124,7 @@ class Scope:
 
     @override
     def __repr__(self) -> str:
-        """A string representation of this scope.
+        """Return this scope as a string.
 
         Follow the path of scopes, and connect parent scopes with '.'.
         """

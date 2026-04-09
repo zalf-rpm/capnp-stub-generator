@@ -146,7 +146,7 @@ class TestExampleFunctionality:
             sys.path.remove(str(example.generated_dir))
 
     @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
-    def test_example_type_checking(self, generate_all_stubs, example: Example) -> None:
+    def test_example_type_checking(self, example: Example) -> None:
         """Test that example python files pass type checking with pyright."""
         import os
         import subprocess

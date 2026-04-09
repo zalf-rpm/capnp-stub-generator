@@ -9,9 +9,11 @@ different schema modules that may reference each other.
 
 from __future__ import annotations
 
+import importlib
 import sys
 
 import capnp
+
 import schema_capnp
 
 
@@ -25,7 +27,7 @@ class TestSharedSchemaLoader:
 
         try:
             # Import a generated module - this should create the shared loader
-            import dummy_capnp  # noqa: F401
+            importlib.import_module("dummy_capnp")
 
             # Verify the shared loader was created on the capnp module
             assert hasattr(capnp, "_embedded_schema_loader")
@@ -41,7 +43,7 @@ class TestSharedSchemaLoader:
 
         try:
             # First import
-            import dummy_capnp  # noqa: F401
+            importlib.import_module("dummy_capnp")
 
             loader_after_first_import = capnp._embedded_schema_loader
             loader_id_first = id(loader_after_first_import)
@@ -50,7 +52,7 @@ class TestSharedSchemaLoader:
             if "dummy_capnp" in sys.modules:
                 del sys.modules["dummy_capnp"]
 
-            import dummy_capnp as dummy_capnp_reimported  # noqa: F401
+            importlib.import_module("dummy_capnp")
 
             loader_after_reimport = capnp._embedded_schema_loader
             loader_id_second = id(loader_after_reimport)
@@ -68,13 +70,13 @@ class TestSharedSchemaLoader:
 
         try:
             # Import first module
-            import dummy_capnp  # noqa: F401
+            importlib.import_module("dummy_capnp")
 
             loader_after_first = capnp._embedded_schema_loader
             loader_id_first = id(loader_after_first)
 
             # Import a different module
-            import channel_capnp  # noqa: F401
+            importlib.import_module("channel_capnp")
 
             loader_after_second = capnp._embedded_schema_loader
             loader_id_second = id(loader_after_second)
@@ -97,7 +99,7 @@ class TestSharedSchemaLoader:
 
         try:
             # Import a module to populate the loader
-            import dummy_capnp  # noqa: F401
+            importlib.import_module("dummy_capnp")
 
             loader = capnp._embedded_schema_loader
 
@@ -174,7 +176,7 @@ class TestSharedSchemaLoader:
         sys.path.insert(0, str(basic_stubs))
 
         try:
-            import dummy_capnp  # noqa: F401
+            importlib.import_module("dummy_capnp")
 
             loader = capnp._embedded_schema_loader
 
@@ -212,8 +214,8 @@ class TestCrossModuleCapabilities:
 
         try:
             # Import modules with interfaces
-            import channel_capnp
-            import interfaces_capnp  # noqa: F401
+            channel_capnp = importlib.import_module("channel_capnp")
+            importlib.import_module("interfaces_capnp")
 
             # Both should use the same loader
             loader = capnp._embedded_schema_loader

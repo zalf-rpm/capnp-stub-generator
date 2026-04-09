@@ -72,7 +72,7 @@ def _build_variant_type(type_name: str, variant: str, *, flat: bool = False) -> 
 
 
 def new_builder_flat(type_name: str) -> str:
-    """Converts a type name to its builder variant using flat naming (for TypeAlias names).
+    """Convert a type name to its builder variant using flat naming.
 
     E.g. `MyClass` becomes `MyClassBuilder`.
     For generic types like `MyClass[T]`, becomes `MyClassBuilder[T]`.
@@ -88,7 +88,7 @@ def new_builder_flat(type_name: str) -> str:
 
 
 def new_reader_flat(type_name: str) -> str:
-    """Converts a type name to its reader variant using flat naming (for TypeAlias names).
+    """Convert a type name to its reader variant using flat naming.
 
     E.g. `MyClass` becomes `MyClassReader`.
     For generic types like `MyClass[T]`, becomes `MyClassReader[T]`.
@@ -104,7 +104,7 @@ def new_reader_flat(type_name: str) -> str:
 
 
 def new_builder(type_name: str) -> str:
-    """Converts a type name to its builder variant using nested class syntax.
+    """Convert a type name to its builder variant using nested class syntax.
 
     E.g. `MyClass` becomes `MyClass.Builder`.
     E.g. `Outer.Inner` becomes `Outer.Inner.Builder`.
@@ -132,7 +132,7 @@ class TypeHint:
 
     @override
     def __str__(self) -> str:
-        """The string representation of the type hint.
+        """Return the string representation of the type hint.
 
         This is composed of the scopes (if any), the name of the hint, and the affix (if any).
         For generic types like `MyClass[T]`, the affix comes after: `MyClass[T].Builder`.
@@ -181,7 +181,7 @@ class TypeHintedVariable:
 
     @override
     def __str__(self) -> str:
-        """String representation of this object.
+        """Return the string representation of this object.
 
         Returns:
             str: The string representation.
@@ -282,7 +282,7 @@ class TypeHintedVariable:
         self.type_hints.append(new_type_hint)
 
     def get_type_hint_for_affix(self, affix: str) -> TypeHint:
-        """Looks for a type hint that has the provided affix and returns it.
+        """Return the type hint that uses the provided affix.
 
         Args:
             affix (str | None): The affix to look for.
@@ -364,7 +364,7 @@ def replace_capnp_suffix(original: str) -> str:
 
 
 def join_parameters(parameters: Sequence[TypeHintedVariable | str] | None) -> str:
-    """Joins parameters by means of ', '.
+    """Join parameters with `, `.
 
     Args:
         parameters (Sequence[HintedVariable | str] | None): The parameters to join.
@@ -494,7 +494,7 @@ def new_property(
 
 
 def new_class_declaration(name: str, parameters: Sequence[str] | None = None) -> str:
-    """Creates a string for declaring a class.
+    """Create a class declaration string.
 
     For example, for a name of 'SomeClass' and a list of parameters that is 'str, Type[str, int]', the output
     will be 'SomeClass (str, Type[str, int]):'.

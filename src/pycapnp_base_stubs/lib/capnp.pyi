@@ -1491,7 +1491,7 @@ def _write_packed_message_to_fd(fd: int, message: _MessageBuilder) -> None:
     """
 
 def fill_context(method_name: str, context: _CallContext, returned_data: Any) -> None:
-    """Internal helper for filling RPC call context with returned data.
+    """Fill RPC call context with returned data.
 
     Args:
         method_name: Name of the RPC method
@@ -1501,7 +1501,7 @@ def fill_context(method_name: str, context: _CallContext, returned_data: Any) ->
     """
 
 def void_task_done_callback(method_name: str, fulfiller: Any, task: Any) -> None:
-    """Internal callback for void RPC methods when async task completes.
+    """Handle completion of a void RPC method task.
 
     Args:
         method_name: Name of the RPC method

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import capnp
+
 import schema_capnp
 from capnp_stub_generator.run import RunFromSchemasOptions, run_from_schemas
 

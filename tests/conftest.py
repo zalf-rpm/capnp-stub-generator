@@ -280,7 +280,7 @@ def capnp_stubs(generated_stubs):
 # Legacy fixtures for backward compatibility (deprecated)
 @pytest.fixture
 def generate_calculator_stubs(calculator_stubs):
-    """Deprecated: Use calculator_stubs fixture instead."""
+    """Use the calculator_stubs fixture instead."""
     return calculator_stubs
 
 
