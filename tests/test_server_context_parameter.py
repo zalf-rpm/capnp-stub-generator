@@ -6,6 +6,7 @@ parameter that pycapnp always passes to server implementations.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 TESTS_DIR = Path(__file__).parent
@@ -25,9 +26,6 @@ class TestServerContextParameter:
         # Check that CallContext types are generated inside Server class
         assert "CallContext(Protocol):" in stub_content
         # ResultsBuilder no longer exists - CallContext.results now points to NamedTuple
-
-        # Check that Server methods have _context parameter
-        import re
 
         server_methods = re.findall(
             r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)",
@@ -63,8 +61,6 @@ class TestServerContextParameter:
         """Test that _context comes after regular parameters, before **kwargs."""
         stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
-
-        import re
 
         # Test _CalculatorInterfaceModule._FunctionInterfaceModule.call
         # Function is now an interface module inheriting from _InterfaceModule
@@ -105,9 +101,6 @@ class TestContextTypeHints:
         stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
 
-        # Find a server method and verify its _context type
-        import re
-
         # Look for read method in Value.Server (may span multiple lines)
         match = re.search(r"def read\([^)]*_context: ([^\s,]+)", content, re.DOTALL)
         assert match, "Could not find read method with _context"
@@ -123,8 +116,6 @@ def test_server_context_parameter_summary(generate_calculator_stubs) -> None:
     """Summary test showing _context parameter is now mandatory and typed."""
     stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
-
-    import re
 
     # Count CallContext types generated
     callcontext_count = len(re.findall(r"class \w+CallContext\(Protocol\):", content))

@@ -4,6 +4,13 @@ This shows how Result types can now be used as top-level type aliases,
 just like Builder and Reader types.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tests._generated.examples.calculator import calculator_capnp
+
 # Before this change, you had to use the full nested path:
 # def process_result(result: calculator_capnp._CalculatorModule.CalculatorClient.EvaluateResult) -> None:
 #     ...
@@ -20,7 +27,6 @@ just like Builder and Reader types.
 
 def example_usage() -> None:
     """Show the improved type annotation style."""
-    from tests._generated.examples.calculator import calculator_capnp
 
     # Type aliases are now available at module level
     def handle_evaluate_result(result: calculator_capnp.EvaluateResult) -> None:

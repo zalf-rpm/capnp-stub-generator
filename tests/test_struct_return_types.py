@@ -63,8 +63,6 @@ def test_server_named_tuple_has_nested_field(basic_stubs) -> None:
     stub_file = basic_stubs / "struct_return_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
-    import re
-
     # Find InfoResultTuple in Server
     # It might be defined inside Server or at module level depending on implementation
     # In the generated file it was inside Server

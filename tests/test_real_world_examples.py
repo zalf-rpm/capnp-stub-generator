@@ -13,6 +13,9 @@ The tests verify that:
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -128,8 +131,6 @@ class TestExampleFunctionality:
     @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
     def test_example_imports(self, generate_all_stubs, example: Example) -> None:
         """Test that generated modules can be imported."""
-        import sys
-
         # Add generated directory to path
         sys.path.insert(0, str(example.generated_dir))
 
@@ -148,9 +149,6 @@ class TestExampleFunctionality:
     @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
     def test_example_type_checking(self, example: Example) -> None:
         """Test that example python files pass type checking with pyright."""
-        import os
-        import subprocess
-
         if not example.python_files:
             return
 

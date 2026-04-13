@@ -9,7 +9,9 @@ different schema modules that may reference each other.
 
 from __future__ import annotations
 
+import base64
 import importlib
+import re
 import sys
 
 import capnp
@@ -106,11 +108,6 @@ class TestSharedSchemaLoader:
             # Verify the loader has schemas loaded
             assert loader is not None
 
-            # Try to get a schema by reading the embedded data again
-            # This simulates what happens when the module is reimported
-            import base64
-            import re
-
             # Read the module file to get the embedded schema data
             module_file = basic_stubs / "dummy_capnp" / "__init__.py"
             content = module_file.read_text()
@@ -138,7 +135,7 @@ class TestSharedSchemaLoader:
 
         try:
             # Import module
-            import dummy_capnp
+            dummy_capnp = importlib.import_module("dummy_capnp")
 
             # Verify we can create messages using the schema
             # This confirms the schema was loaded correctly
@@ -158,7 +155,7 @@ class TestSharedSchemaLoader:
             if "dummy_capnp" in sys.modules:
                 del sys.modules["dummy_capnp"]
 
-            import dummy_capnp as dummy_reimported
+            dummy_reimported = importlib.import_module("dummy_capnp")
 
             # Verify we can still create and use messages
             msg2 = dummy_reimported.TestAllTypes.new_message()
@@ -183,9 +180,6 @@ class TestSharedSchemaLoader:
             # Read the module to find schema IDs
             module_file = basic_stubs / "dummy_capnp" / "__init__.py"
             content = module_file.read_text()
-
-            # Find hex IDs like _loader.get(0xABCD1234)
-            import re
 
             id_pattern = re.compile(r"_loader\.get\((0x[0-9A-Fa-f]+)\)")
             hex_ids = id_pattern.findall(content)

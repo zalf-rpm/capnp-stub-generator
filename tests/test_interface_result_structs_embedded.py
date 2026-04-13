@@ -8,6 +8,7 @@ when trying to access result fields like context.results.cap.
 from __future__ import annotations
 
 import base64
+import re
 
 import schema_capnp
 
@@ -21,9 +22,6 @@ def test_interface_result_structs_are_embedded(calculator_stubs) -> None:
     # Load the generated module to get the embedded schemas
     stub_file = calculator_stubs / "calculator_capnp/__init__.py"
     content = stub_file.read_text()
-
-    # Extract the _SCHEMA_NODES list
-    import re
 
     match = re.search(r"_SCHEMA_NODES = \[(.*?)\]", content, re.DOTALL)
     assert match, "_SCHEMA_NODES not found in generated file"
@@ -66,8 +64,6 @@ def test_param_structs_are_embedded(calculator_stubs) -> None:
     """
     stub_file = calculator_stubs / "calculator_capnp/__init__.py"
     content = stub_file.read_text()
-
-    import re
 
     match = re.search(r"_SCHEMA_NODES = \[(.*?)\]", content, re.DOTALL)
     assert match

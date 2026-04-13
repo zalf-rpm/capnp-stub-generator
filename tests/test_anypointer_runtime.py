@@ -11,12 +11,11 @@ import pytest
 # Ensure we can import from tests directory
 sys.path.append(str(Path(__file__).parent.parent))
 
+from tests._generated.examples.restorer import restorer_capnp
+from tests.schemas.examples.restorer.restorer_server import RestorerImpl
+
 
 async def _test_anypointer_runtime_behavior() -> None:
-    # Import here to ensure stubs are generated first
-    from tests._generated.examples.restorer import restorer_capnp
-    from tests.schemas.examples.restorer.restorer_server import RestorerImpl
-
     # Start server on random port
     async def new_connection(stream) -> None:
         await capnp.TwoPartyServer(stream, bootstrap=RestorerImpl()).on_disconnect()
@@ -29,10 +28,7 @@ async def _test_anypointer_runtime_behavior() -> None:
         connection = await capnp.AsyncIoStream.create_connection(host="localhost", port=port)
         client = capnp.TwoPartyClient(connection)
         bootstrap = client.bootstrap()
-        restorer = cast(
-            "restorer_capnp.RestorerClient",
-            bootstrap.cast_as(restorer_capnp.Restorer),
-        )
+        restorer = bootstrap.cast_as(restorer_capnp.Restorer)
 
         # Get AnyTester
         tester_result = await restorer.getAnyTester()

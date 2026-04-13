@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import shutil
 import subprocess
@@ -11,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+
+from capnp_stub_generator.run import run
 
 # Test directory structure
 TESTS_DIR = Path(__file__).parent
@@ -373,11 +376,6 @@ def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
 
     if not schema_path:
         pytest.fail(f"Schema {schema_name} not found in schema directories")
-
-    # Use the run module directly
-    import argparse
-
-    from capnp_stub_generator.run import run
 
     # Create minimal args namespace
     args = argparse.Namespace(

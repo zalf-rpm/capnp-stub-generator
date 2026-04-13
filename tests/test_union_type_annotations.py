@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import TYPE_CHECKING
+
+from tests.conftest import generate_stub_from_schema
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -11,8 +14,6 @@ if TYPE_CHECKING:
 def test_union_type_annotation_with_future_import(tmp_path: Path) -> None:
     """Test that union types work when __future__ annotations is imported."""
     # Generate stub for a simple schema
-    from tests.conftest import generate_stub_from_schema
-
     stub_dir = generate_stub_from_schema("primitives.capnp", tmp_path)
 
     # Create a test file that uses union type annotations
@@ -41,9 +42,6 @@ assert result == "none"
 """,
     )
 
-    # Run the test file - should work without errors
-    import subprocess
-
     result = subprocess.run(
         ["python", str(test_file)],
         check=False,
@@ -57,8 +55,6 @@ assert result == "none"
 
 def test_union_type_annotation_without_future_import_fails(tmp_path: Path) -> None:
     """Test that union types fail without __future__ annotations (documents current limitation)."""
-    from tests.conftest import generate_stub_from_schema
-
     stub_dir = generate_stub_from_schema("primitives.capnp", tmp_path)
 
     # Create a test file that does NOT import __future__ annotations
@@ -80,9 +76,6 @@ def process_data(data: primitives_capnp.SimplePrimitives | str | None) -> str:
 """,
     )
 
-    # Run the test file - should fail with TypeError
-    import subprocess
-
     result = subprocess.run(
         ["python", str(test_file)],
         check=False,
@@ -98,8 +91,6 @@ def process_data(data: primitives_capnp.SimplePrimitives | str | None) -> str:
 
 def test_union_type_with_typing_union(tmp_path: Path) -> None:
     """Test that typing.Union works as an alternative to | operator."""
-    from tests.conftest import generate_stub_from_schema
-
     stub_dir = generate_stub_from_schema("primitives.capnp", tmp_path)
 
     # Create a test file that uses typing.Union instead of |
@@ -128,9 +119,6 @@ assert result == "test"
 """,
     )
 
-    # Run the test file - should work without errors
-    import subprocess
-
     result = subprocess.run(
         ["python", str(test_file)],
         check=False,
@@ -144,8 +132,6 @@ assert result == "test"
 
 def test_union_type_in_class_definition(tmp_path: Path) -> None:
     """Test that union types work in class method signatures with __future__ import."""
-    from tests.conftest import generate_stub_from_schema
-
     stub_dir = generate_stub_from_schema("primitives.capnp", tmp_path)
 
     # Create a test file with a class that uses union type annotations
@@ -181,9 +167,6 @@ result = processor.process("test")
 assert result == "test"
 """,
     )
-
-    # Run the test file - should work without errors
-    import subprocess
 
     result = subprocess.run(
         ["python", str(test_file)],

@@ -6,10 +6,11 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, override
 
+from capnp_stub_generator import helper
+
 if TYPE_CHECKING:
     from capnp.lib.capnp import _EnumSchema, _InterfaceSchema, _StructSchema
 
-    from capnp_stub_generator import helper
     from capnp_stub_generator.scope import CapnpType, Scope
 
 logger = logging.getLogger(__name__)
@@ -70,8 +71,6 @@ class StructGenerationContext:
             A fully initialized StructGenerationContext
 
         """
-        from capnp_stub_generator import helper
-
         # For TypeAlias names, use flat naming (e.g., "IdInformationBuilder")
         reader_type_name = helper.new_reader_flat(new_type.name)
         builder_type_name = helper.new_builder_flat(new_type.name)
@@ -115,8 +114,6 @@ class StructGenerationContext:
             A fully initialized StructGenerationContext
 
         """
-        from capnp_stub_generator import helper
-
         # For TypeAlias names, use the user-facing name
         reader_type_name = helper.new_reader_flat(user_type_name)
         builder_type_name = helper.new_builder_flat(user_type_name)
@@ -398,8 +395,6 @@ class ParameterInfo:
             Parameter string like "name: Type | None = None"
 
         """
-        from capnp_stub_generator import helper
-
         sanitized_name = helper.sanitize_name(self.name)
         return f"{sanitized_name}: {self.client_type} | None = None"
 
@@ -410,8 +405,6 @@ class ParameterInfo:
             Parameter string like "name: Type"
 
         """
-        from capnp_stub_generator import helper
-
         sanitized_name = helper.sanitize_name(self.name)
         return f"{sanitized_name}: {self.server_type}"
 
@@ -422,8 +415,6 @@ class ParameterInfo:
             Parameter string like "name: Type | None = None"
 
         """
-        from capnp_stub_generator import helper
-
         sanitized_name = helper.sanitize_name(self.name)
         return f"{sanitized_name}: {self.request_type} | None = None"
 

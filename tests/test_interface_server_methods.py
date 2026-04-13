@@ -1,5 +1,7 @@
 """Tests for interface Server class method signatures."""
 
+import re
+
 
 def test_server_class_exists_for_interfaces(calculator_stub_lines) -> None:
     """Server classes should be generated for all interfaces."""
@@ -46,9 +48,6 @@ def test_server_methods_accept_context(calculator_stub_lines) -> None:
 
     # All server methods should have **kwargs
     assert "**kwargs" in content
-
-    # Find all Server classes and verify their methods
-    import re
 
     server_sections = re.findall(
         r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)",

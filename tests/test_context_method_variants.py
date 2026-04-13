@@ -7,6 +7,8 @@ According to pycapnp documentation, server methods can be implemented in two way
 This test verifies that both variants are generated correctly.
 """
 
+import re
+
 
 def test_both_method_variants_exist(calculator_stubs) -> None:
     """Both regular and _context variant methods should be generated."""
@@ -29,9 +31,6 @@ def test_context_variant_signature(calculator_stubs) -> None:
     """_context methods should have correct signature."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
-
-    # Find all _context methods
-    import re
 
     context_methods = re.findall(r"def (\w+)_context\(", content)
 
@@ -70,9 +69,6 @@ def test_callcontext_void_method(basic_stubs) -> None:
     # Check void method CallContext (Reader.close is a void method)
     assert "class CloseCallContext(Protocol):" in content
     assert "params: _ChannelInterfaceModule._ReaderInterfaceModule.Server.CloseParams" in content
-
-    # Should NOT have results for void method
-    import re
 
     # Find CloseCallContext inside Reader
     close_context = re.search(
@@ -125,8 +121,6 @@ def test_context_methods_count(calculator_stubs) -> None:
     """Count that all interface methods have _context variants."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
-
-    import re
 
     # Find all Server class methods
     server_sections = re.findall(
