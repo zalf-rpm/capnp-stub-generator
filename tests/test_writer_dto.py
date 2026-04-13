@@ -366,6 +366,18 @@ class TestParameterInfo:
         assert "Reader" in param.to_server_param()
         assert "dict[str, Any]" not in param.to_request_param()
 
+    def test_none_type_is_not_duplicated_in_optional_params(self) -> None:
+        """Test that ``None``-typed parameters stay deduplicated."""
+        param = ParameterInfo(
+            name="void",
+            client_type="None",
+            server_type="None",
+            request_type="None",
+        )
+
+        assert param.to_client_param() == "void: None = None"
+        assert param.to_request_param() == "void: None = None"
+
 
 class TestMethodSignatureCollection:
     """Tests for MethodSignatureCollection."""
@@ -418,7 +430,6 @@ class TestMethodSignatureCollection:
         collection = MethodSignatureCollection("test")
         collection.set_client_method(["line1"])
         collection.set_request_class(["line2", "line3"])
-        # collection.set_result_class(["line4"]) # Removed
 
         repr_str = repr(collection)
 
@@ -440,9 +451,7 @@ class TestMethodSignatureCollection:
                 "    def send(self) -> Awaitable[int]: ...",
             ],
         )
-        # collection.set_result_class([])  # Removed
         collection.set_request_helper(["def calculate_request(...) -> CalculateRequest: ..."])
-        # collection.set_server_method("    def calculate(self, context: Any) -> int: ...") # Removed
 
         # Verify all components are set
         assert len(collection.client_method_lines) == 1
@@ -566,7 +575,6 @@ class TestInterfaceDTOIntegration:
         # Build method signature collection
         method_collection = MethodSignatureCollection("add")
         method_collection.set_client_method([f"def add(self, {param.to_client_param()}) -> Awaitable[int]: ..."])
-        # method_collection.set_server_method(...) # Removed
 
         # Build server collection
         server_collection = ServerMethodsCollection()
@@ -585,7 +593,6 @@ class TestInterfaceDTOIntegration:
 
         # Process multiple methods
         for method_name in ["add", "subtract", "multiply"]:
-            # method_collection.set_server_method(...) # Removed
             server_collection.add_server_method(f"    def {method_name}(self, context: Any) -> int: ...")
 
         # Verify all methods collected

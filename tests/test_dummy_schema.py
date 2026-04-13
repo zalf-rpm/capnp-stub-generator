@@ -19,6 +19,7 @@ class TestDummyEnumsAndTypes:
     """Tests for enum definitions and basic types."""
 
     def test_enum_definition_and_imports(self, dummy_stub_lines: list[str]) -> None:
+        """Test enum definition and imports."""
         lines = dummy_stub_lines
         # Enums are now simple classes with int attributes
         assert any(line.strip().startswith("class _TestEnumEnumModule:") for line in lines)
@@ -28,6 +29,7 @@ class TestDummyEnumsAndTypes:
             assert any(f"{name}: int" in line for line in lines)
 
     def test_testalltypes_field_presence_and_collections_import(self, dummy_stub_lines: list[str]) -> None:
+        """Test testalltypes field presence and collections import."""
         lines = dummy_stub_lines
         assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
         # Fields are now properties
@@ -48,6 +50,7 @@ class TestDummyListsAndDefaults:
     """Tests for list handling and default values."""
 
     def test_lists_small_struct_and_listlist_fields(self, dummy_stub_lines: list[str]) -> None:
+        """Test lists small struct and listlist fields."""
         lines = dummy_stub_lines
         assert any("class _TestListsStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties - check for def fieldname(self)
@@ -80,6 +83,7 @@ class TestDummyListsAndDefaults:
             assert any(f"def {field}(self)" in line for line in lines), f"Missing field {field}"
 
     def test_list_defaults_struct_and_scalar_lists_present(self, dummy_stub_lines: list[str]) -> None:
+        """Test list defaults struct and scalar lists present."""
         lines = dummy_stub_lines
         assert any("class _TestListDefaultsStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties
@@ -87,6 +91,7 @@ class TestDummyListsAndDefaults:
             assert any(f"def {field}(self)" in line for line in lines), f"Missing field {field}"
 
     def test_field_zero_bit_and_defaults(self, dummy_stub_lines: list[str]) -> None:
+        """Test field zero bit and defaults."""
         lines = dummy_stub_lines
         assert any("class _TestFieldZeroIsBitStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties
@@ -99,6 +104,7 @@ class TestDummyGroupsAndNested:
     """Tests for groups and nested type handling."""
 
     def test_group_field_members_materialized(self, dummy_stub_lines: list[str]) -> None:
+        """Test group field members materialized."""
         lines = dummy_stub_lines
         assert any("class _TestGroupsStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties
@@ -106,6 +112,7 @@ class TestDummyGroupsAndNested:
         assert count_corge >= MIN_GROUP_MEMBER_COUNT  # across foo/bar/baz groups
 
     def test_interleaved_groups_union_and_nested_group_fields(self, dummy_stub_lines: list[str]) -> None:
+        """Test interleaved groups union and nested group fields."""
         lines = dummy_stub_lines
         assert any("class _TestInterleavedGroupsStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties
@@ -117,6 +124,7 @@ class TestDummyGroupsAndNested:
         assert all(found.values())
 
     def test_nested_types_enums_and_lists(self, dummy_stub_lines: list[str]) -> None:
+        """Test nested types enums and lists."""
         lines = dummy_stub_lines
         assert any(re.match(r"^\s*class _NestedEnum1EnumModule:", line) for line in lines)
         assert any(re.match(r"^\s*class _NestedEnum2EnumModule:", line) for line in lines)
@@ -128,6 +136,7 @@ class TestDummyGroupsAndNested:
         assert any("def innerNestedEnum(self) -> TestNestedTypesNestedStructNestedEnum2Enum" in line for line in lines)
 
     def test_using_type_aliases_resolved(self, dummy_stub_lines: list[str]) -> None:
+        """Test using type aliases resolved."""
         lines = dummy_stub_lines
         assert any("OuterNestedEnum" in line and "Literal" not in line for line in lines)
         assert any("class _TestUsingStructModule(_StructModule):" in line for line in lines)
@@ -137,11 +146,13 @@ class TestDummyUnions:
     """Tests for union-related features."""
 
     def test_union_which_methods_and_literal_import(self, dummy_stub_lines: list[str]) -> None:
+        """Test union which methods and literal import."""
         lines = dummy_stub_lines
         assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
         assert any(line.startswith("from typing import") and "Literal" in line for line in lines)
 
     def test_unnamed_union_fields_present(self, dummy_stub_lines: list[str]) -> None:
+        """Test unnamed union fields present."""
         lines = dummy_stub_lines
         assert any("class _TestUnnamedUnionStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties
@@ -153,11 +164,13 @@ class TestDummyUnions:
         )
 
     def test_interleaved_union_discriminants_sorted(self, dummy_stub_lines: list[str]) -> None:
+        """Test interleaved union discriminants sorted."""
         lines = dummy_stub_lines
         which_methods = [line for line in lines if "def which" in line and "Literal" in line]
         assert which_methods
 
     def test_union_defaults_struct_initializers_present(self, dummy_stub_lines: list[str]) -> None:
+        """Test union defaults struct initializers present."""
         lines = dummy_stub_lines
         assert any("class _TestUnionDefaultsStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties
@@ -171,16 +184,19 @@ class TestDummyConstantsAndVersioning:
     """Tests for constants, versioned structs, and name annotations."""
 
     def test_global_constants_and_derived_constant_present(self, dummy_stub_lines: list[str]) -> None:
+        """Test global constants and derived constant present."""
         lines = dummy_stub_lines
         # Constants remain as simple annotations (not properties)
         assert any("globalInt:" in line for line in lines)
         assert any("globalText:" in line for line in lines)
 
     def test_struct_constants_section(self, dummy_stub_lines: list[str]) -> None:
+        """Test struct constants section."""
         lines = dummy_stub_lines
         assert any("class _TestConstantsStructModule(_StructModule):" in line for line in lines)
 
     def test_versioned_structs_fields_and_defaults(self, dummy_stub_lines: list[str]) -> None:
+        """Test versioned structs fields and defaults."""
         lines = dummy_stub_lines
         assert any("class _TestOldVersionStructModule(_StructModule):" in line for line in lines)
         assert any("class _TestNewVersionStructModule(_StructModule):" in line for line in lines)
@@ -189,6 +205,7 @@ class TestDummyConstantsAndVersioning:
         assert any("def new2(self)" in line and "str" in line for line in lines)
 
     def test_name_annotations_renamed_struct_enum_fields(self, dummy_stub_lines: list[str]) -> None:
+        """Test name annotations renamed struct enum fields."""
         lines = dummy_stub_lines
         assert any("class _TestNameAnnotationStructModule(_StructModule):" in line for line in lines)
         assert any("class _BadlyNamedEnumEnumModule:" in line for line in lines)
@@ -196,5 +213,6 @@ class TestDummyConstantsAndVersioning:
         assert any("badFieldName" in line or "bar" in line for line in lines)
 
     def test_empty_struct_representation(self, dummy_stub_lines: list[str]) -> None:
+        """Test empty struct representation."""
         lines = dummy_stub_lines
         assert any("class _TestEmptyStructStructModule(_StructModule):" in line for line in lines)

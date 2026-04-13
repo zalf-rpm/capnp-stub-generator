@@ -32,7 +32,6 @@ def generated_dir() -> Path:
     return GENERATED_DIR
 
     # Keep generated files for inspection
-    # shutil.rmtree(GENERATED_DIR)
 
 
 def test_simple_interface_inheritance(generated_dir: Path) -> None:

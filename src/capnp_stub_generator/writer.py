@@ -175,10 +175,10 @@ class Writer:
             for annotation in self._schema.node.annotations:
                 if annotation.id == self._python_module_annotation_id and annotation.value.which() == "text":
                     module_path = annotation.value.text
-                    logger.info(f"Found Python module annotation: {module_path}")
+                    logger.info("Found Python module annotation: %s", module_path)
                     return module_path
         except ANNOTATION_ACCESS_EXCEPTIONS as error:
-            logger.debug(f"Error reading Python module annotation: {error}")
+            logger.debug("Error reading Python module annotation: %s", error)
         return None
 
     def get_python_module_for_schema(self, schema_id: int) -> str | None:
@@ -199,7 +199,7 @@ class Writer:
                 if annotation.id == self._python_module_annotation_id and annotation.value.which() == "text":
                     return annotation.value.text
         except ANNOTATION_ACCESS_EXCEPTIONS as error:
-            logger.debug(f"Error reading Python module annotation from schema {hex(schema_id)}: {error}")
+            logger.debug("Error reading Python module annotation from schema %s: %s", hex(schema_id), error)
 
         return None
 
@@ -213,10 +213,10 @@ class Writer:
         """
         self._add_schema_and_nested(self._schema)
 
-        logger.debug(f"Built schema ID mapping with {len(self._schemas_by_id)} schemas")
+        logger.debug("Built schema ID mapping with %s schemas", len(self._schemas_by_id))
         if len(self._schemas_by_id) == 0:
             logger.warning("Schema ID mapping is empty! This will result in empty stubs.")
-            logger.warning(f"Root schema ID: {hex(self._schema.node.id)}")
+            logger.warning("Root schema ID: %s", hex(self._schema.node.id))
 
     def _add_schema_and_nested(self, schema: capnp_types.SchemaType) -> None:
         """Recursively add a schema and its nested or referenced schemas to the mapping."""
@@ -239,7 +239,11 @@ class Writer:
                 nested_schema = self._schema_loader.get(nested_id)
             except SCHEMA_LOOKUP_EXCEPTIONS as error:
                 logger.debug(
-                    f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}) for {schema.node.displayName}: {error}",
+                    "Could not resolve nested schema %s (id=%s) for %s: %s",
+                    nested_node.name,
+                    hex(nested_id),
+                    schema.node.displayName,
+                    error,
                 )
                 continue
             self._add_schema_and_nested(nested_schema)
@@ -273,7 +277,7 @@ class Writer:
         try:
             group_schema = self._schema_loader.get(group_id)
         except SCHEMA_LOOKUP_EXCEPTIONS as error:
-            logger.warning(f"Group field {field.name} references schema {hex(group_id)} not in loader: {error}")
+            logger.warning("Group field %s references schema %s not in loader: %s", field.name, hex(group_id), error)
             return
         self._add_schema_and_nested(group_schema)
 
@@ -285,7 +289,7 @@ class Writer:
             try:
                 referenced_schema = self._schema_loader.get(ref_id)
             except SCHEMA_LOOKUP_EXCEPTIONS as error:
-                logger.debug(f"Could not load referenced type {hex(ref_id)} for field {field.name}: {error}")
+                logger.debug("Could not load referenced type %s for field %s: %s", hex(ref_id), field.name, error)
                 continue
             self._add_schema_and_nested(referenced_schema)
 
@@ -306,7 +310,7 @@ class Writer:
             method_schema = self._schema_loader.get(schema_id)
         except SCHEMA_LOOKUP_EXCEPTIONS as error:
             logger.debug(
-                f"Could not load {schema_kind} struct for method {method_name} (id={hex(schema_id)}): {error}",
+                "Could not load %s struct for method %s (id=%s): %s", schema_kind, method_name, hex(schema_id), error
             )
             return
         self._add_schema_and_nested(method_schema)
@@ -1174,7 +1178,7 @@ class Writer:
             for superclass in interface_node.superclasses:
                 superclass_type = self._maybe_get_type_by_id(superclass.id)
                 if superclass_type is None:
-                    logger.debug(f"Could not resolve superclass {superclass.id}")
+                    logger.debug("Could not resolve superclass %s", superclass.id)
                     continue
                 protocol_name = superclass_type.name
                 if superclass_type.scope and not superclass_type.scope.is_root:
@@ -1211,11 +1215,18 @@ class Writer:
                         self.generate_nested(nested_schema)
                     except SCHEMA_LOOKUP_EXCEPTIONS as load_error:
                         logger.debug(
-                            f"Could not find or load nested type {nested_node.name} (id={hex(nested_node.id)}) in interface {schema.node.displayName}: {load_error}",
+                            "Could not find or load nested type %s (id=%s) in interface %s: %s",
+                            nested_node.name,
+                            hex(nested_node.id),
+                            schema.node.displayName,
+                            load_error,
                         )
             except TYPE_GENERATION_EXCEPTIONS as error:  # pragma: no cover
                 logger.debug(
-                    f"Could not generate nested type {nested_node.name} in interface {schema.node.displayName}: {error}",
+                    "Could not generate nested type %s in interface %s: %s",
+                    nested_node.name,
+                    schema.node.displayName,
+                    error,
                 )
 
         # Restore interface scope after generating nested types
@@ -1903,7 +1914,7 @@ class Writer:
         try:
             _ = self.new_scope(protocol_class_name, schema.node)
         except NoParentError:
-            logger.warning(f"Skipping generation of {type_name} - parent scope not available")
+            logger.warning("Skipping generation of %s - parent scope not available", type_name)
             return None, ""
 
         # Register type with the Protocol class name for correct scoped_name generation
@@ -2265,7 +2276,9 @@ class Writer:
             parent_schema = self._schemas_by_id.get(schema.node.scopeId)
             if parent_schema and parent_schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
                 logger.debug(
-                    f"Generating parent interface {parent_schema.node.displayName} before nested {schema.node.displayName}",
+                    "Generating parent interface %s before nested %s",
+                    parent_schema.node.displayName,
+                    schema.node.displayName,
                 )
                 # Recursively generate the parent interface first
                 # Try to get it as an interface schema from the loader
@@ -2276,7 +2289,7 @@ class Writer:
                     elif isinstance(interface_schema, _InterfaceSchema):
                         _ = self.gen_interface(interface_schema)
                 except TYPE_GENERATION_EXCEPTIONS as error:
-                    logger.debug(f"Could not generate parent interface: {error}")
+                    logger.debug("Could not generate parent interface: %s", error)
                 # Now the parent scope should exist
                 parent_scope = self.scopes_by_id.get(schema.node.scopeId)
 
@@ -3619,7 +3632,7 @@ class Writer:
             for superclass in interface_node.superclasses:
                 superclass_type = self._maybe_get_type_by_id(superclass.id)
                 if superclass_type is None:
-                    logger.debug(f"Could not resolve superclass {superclass.id} for Server inheritance")
+                    logger.debug("Could not resolve superclass %s for Server inheritance", superclass.id)
                     continue
                 protocol_name = superclass_type.name
                 if superclass_type.scope and not superclass_type.scope.is_root:
@@ -3741,7 +3754,7 @@ class Writer:
         """Generate a schema based on its node kind."""
         node_kind = schema.node.which()
         if node_kind == "file":
-            logger.debug(f"Skipping file node: {schema.node.displayName}")
+            logger.debug("Skipping file node: %s", schema.node.displayName)
             return
 
         if self.is_type_id_known(schema.node.id):
@@ -3755,7 +3768,7 @@ class Writer:
         }
         generator = generators.get(node_kind)
         if generator is None:
-            logger.warning(f"Skipping unknown node type '{node_kind}': {schema.node.displayName}")
+            logger.warning("Skipping unknown node type '%s': %s", node_kind, schema.node.displayName)
             return
         generator(schema)
 
@@ -3783,12 +3796,12 @@ class Writer:
                 if nested_schema:
                     self.generate_nested(nested_schema)
                 else:
-                    logger.debug(f"Could not find nested schema {node.name} (id={hex(node.id)}) in schema mapping")
+                    logger.debug("Could not find nested schema %s (id=%s) in schema mapping", node.name, hex(node.id))
             except TYPE_GENERATION_EXCEPTIONS as error:
                 # capnpc may omit unused nodes from imported schemas in the CodeGeneratorRequest.
                 # This results in "no schema node loaded" errors when trying to access them.
                 # These are harmless if the nodes are indeed unused, so we log as debug.
-                logger.debug(f"Could not generate nested node '{node.name}': {error}")
+                logger.debug("Could not generate nested node '%s': %s", node.name, error)
 
     def _schema_contains_nested_id(self, schema_obj: _Schema, target_id: int) -> bool:
         """Return whether a file schema contains the target nested schema ID."""
@@ -4092,7 +4105,9 @@ class Writer:
         # Use word boundary to avoid matching "class TestSturdyRef" when looking for "class TestSturdyRefHostId"
         # Search from the END to find the most recently added class with this name
         scope_heading_pattern = f"class {self.scope.name}"
-        logger.debug(f"  Looking for pattern: '{scope_heading_pattern}' in {len(self.scope.parent.lines)} parent lines")
+        logger.debug(
+            "  Looking for pattern: '%s' in %s parent lines", scope_heading_pattern, len(self.scope.parent.lines)
+        )
         heading_index = None
         for i in range(len(self.scope.parent.lines) - 1, -1, -1):
             line = self.scope.parent.lines[i]
@@ -4139,7 +4154,7 @@ class Writer:
             if nested_schema is not None:
                 self.generate_nested(nested_schema)
         except TYPE_GENERATION_EXCEPTIONS as error:
-            logger.debug(f"Could not pre-generate {type_kind} with ID {type_id}: {error}")
+            logger.debug("Could not pre-generate %s with ID %s: %s", type_kind, type_id, error)
 
     @staticmethod
     def _qualified_type_name(element_type: CapnpType) -> str:
@@ -4247,7 +4262,11 @@ class Writer:
             seen_types[type_kind].add(type_path)
 
         logger.debug(
-            f"Module {self._schema.node.displayName}: Found {len(collected_types['structs'])} structs, {len(collected_types['lists'])} lists, {len(collected_types['interfaces'])} interfaces",
+            "Module %s: Found %s structs, %s lists, %s interfaces",
+            self._schema.node.displayName,
+            len(collected_types["structs"]),
+            len(collected_types["lists"]),
+            len(collected_types["interfaces"]),
         )
 
         return (collected_types["structs"], collected_types["lists"], collected_types["interfaces"])
@@ -4257,7 +4276,7 @@ class Writer:
         if self.scope.is_root:
             return
 
-        logger.warning(f"Scope not at root when {context}! name='{self.scope.name}', forcing return to root")
+        logger.warning("Scope not at root when %s! name='%s', forcing return to root", context, self.scope.name)
         while self.scope.return_scope is not None:
             self.scope = self.scope.return_scope
 
@@ -4588,7 +4607,7 @@ class Writer:
                 out.append(f"    {schema_b64!r},  # {schema.node.displayName}")
                 seen_ids.add(schema_id)
             except SCHEMA_SERIALIZATION_EXCEPTIONS as error:
-                logger.debug(f"Could not serialize schema {hex(schema_id)}: {error}")
+                logger.debug("Could not serialize schema %s: %s", hex(schema_id), error)
 
         out.extend(["]", ""])
 

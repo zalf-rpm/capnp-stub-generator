@@ -127,7 +127,6 @@ def test_result_type_alias_usage_in_type_hints(calculator_stubs: Path) -> None:
     content = stub_file.read_text()
 
     # The type aliases should be at module level, making them usable:
-    # def my_function() -> EvaluateResult: ...
     # This is verified by the presence of the type alias definition
     assert "type EvaluateResult = _CalculatorInterfaceModule.CalculatorClient.EvaluateResult" in content
 

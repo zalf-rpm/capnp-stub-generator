@@ -56,8 +56,8 @@ async def _test_anypointer_runtime_behavior() -> None:
 
         # Close connection to allow server to shut down
         connection.close()
-        # await connection.wait_closed() # if available
 
 
 def test_anypointer_runtime_wrapper() -> None:
+    """Test anypointer runtime wrapper."""
     asyncio.run(capnp.run(_test_anypointer_runtime_behavior()))

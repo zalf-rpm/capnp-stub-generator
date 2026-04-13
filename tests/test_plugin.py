@@ -18,7 +18,7 @@ def test_capnpc_plugin_invocation(tmp_path: Path) -> None:
     src_path = Path.cwd() / "src"
 
     # Create the wrapper script
-    with open(plugin_path, "w") as f:
+    with plugin_path.open("w") as f:
         f.write("#!/bin/sh\n")
         f.write(f"export PYTHONPATH={src_path}:$PYTHONPATH\n")
         f.write(f"exec {python_exe} -m capnp_stub_generator.capnpc_plugin\n")
@@ -63,7 +63,7 @@ def test_capnpc_plugin_bundling_options(tmp_path: Path) -> None:
     python_exe = sys.executable
     src_path = Path.cwd() / "src"
 
-    with open(plugin_path, "w") as f:
+    with plugin_path.open("w") as f:
         f.write("#!/bin/sh\n")
         f.write(f"export PYTHONPATH={src_path}:$PYTHONPATH\n")
         f.write(f"exec {python_exe} -m capnp_stub_generator.capnpc_plugin\n")

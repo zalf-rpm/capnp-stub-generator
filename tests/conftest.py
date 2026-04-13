@@ -308,7 +308,7 @@ def generate_calculator_stubs(calculator_stubs: Path) -> Path:
 def calculator_stub_lines(calculator_stubs: Path) -> list[str]:
     """Read calculator stub file lines."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
-    with open(stub_file) as f:
+    with stub_file.open() as f:
         return f.readlines()
 
 
@@ -327,7 +327,7 @@ def read_stub_file(stub_path: Path) -> list[str]:
         List of lines from the stub file
 
     """
-    with open(stub_path) as f:
+    with stub_path.open() as f:
         return f.readlines()
 
 

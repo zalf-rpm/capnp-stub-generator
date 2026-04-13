@@ -9,8 +9,9 @@ if TYPE_CHECKING:
 
 
 def test_complex_group_presence_and_nested_union_symbols(basic_stubs: Path) -> None:
+    """Test complex group presence and nested union symbols."""
     path = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
-    with open(path, encoding="utf8") as f:
+    with path.open(encoding="utf8") as f:
         lines = f.readlines()
     # Check for class and field names (fields are now properties)
     for token in ["complexGroup", "g1", "deep", "deeper", "deepest"]:

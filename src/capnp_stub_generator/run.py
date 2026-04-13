@@ -270,18 +270,18 @@ def _copy_augmented_stub_packages(source_stubs_path: str, augmented_stubs_dir: s
     source_stubs_dir = Path(source_stubs_path)
     dest_stubs_path = Path(augmented_stubs_dir) / "capnp-stubs"
     _replace_tree(source_stubs_dir, dest_stubs_path)
-    logger.info(f"Copied capnp-stubs to: {dest_stubs_path}")
+    logger.info("Copied capnp-stubs to: %s", dest_stubs_path)
 
     _fix_schema_capnp_imports(dest_stubs_path / "lib" / "capnp.pyi")
 
     source_schema_path = source_stubs_dir.parent / "schema_capnp"
     if not source_schema_path.is_dir():
-        logger.warning(f"Schema stubs not found at: {source_schema_path}")
+        logger.warning("Schema stubs not found at: %s", source_schema_path)
         return dest_stubs_path, None
 
     dest_schema_path = Path(augmented_stubs_dir) / "schema_capnp"
     _replace_tree(source_schema_path, dest_schema_path)
-    logger.info(f"Copied schema stubs to: {dest_schema_path}")
+    logger.info("Copied schema stubs to: %s", dest_schema_path)
     return dest_stubs_path, dest_schema_path
 
 
@@ -465,13 +465,13 @@ def _build_cast_as_overloads(
         interface_details = _capnp_qualified_suffix(interface_name)
         client_details = _capnp_qualified_suffix(client_name)
         if interface_details is None or client_details is None:
-            logger.warning(f"Could not find capnp module in interface name: {interface_name}")
+            logger.warning("Could not find capnp module in interface name: %s", interface_name)
             continue
 
         capnp_module_name, qualified_interface = interface_details
         _, qualified_client = client_details
         if capnp_module_name not in module_imports:
-            logger.warning(f"Could not find import path for module {capnp_module_name}")
+            logger.warning("Could not find import path for module %s", capnp_module_name)
             continue
 
         overload_lines.extend(
@@ -587,7 +587,7 @@ def augment_capnp_stubs_with_overloads(
 
     capnp_pyi_path = dest_stubs_path / "lib" / "capnp.pyi"
     if not capnp_pyi_path.exists():
-        logger.warning(f"Could not find lib/capnp.pyi at {capnp_pyi_path}, skipping augmentation.")
+        logger.warning("Could not find lib/capnp.pyi at %s, skipping augmentation.", capnp_pyi_path)
         return None
 
     lines = _read_stub_lines(capnp_pyi_path)
@@ -662,7 +662,7 @@ def _augment_capnp_pyi(
 
     lines[cast_as_line_idx:cast_as_line_idx] = _build_cast_as_overloads(interfaces, module_imports)
     _write_stub_lines(capnp_pyi_path, lines)
-    logger.info(f"Augmented {capnp_pyi_path} with {len(interfaces)} cast_as overload(s).")
+    logger.info("Augmented %s with %s cast_as overload(s).", capnp_pyi_path, len(interfaces))
 
 
 def _augment_dynamic_object_reader(
@@ -684,7 +684,10 @@ def _augment_dynamic_object_reader(
     interface_types = dynamic_object_types.get("interfaces", [])
 
     logger.info(
-        f"Augmenting _DynamicObjectReader with {len(struct_types)} structs, {len(list_types)} lists, {len(interface_types)} interfaces",
+        "Augmenting _DynamicObjectReader with %s structs, %s lists, %s interfaces",
+        len(struct_types),
+        len(list_types),
+        len(interface_types),
     )
 
     if not struct_types and not list_types and not interface_types:
@@ -702,7 +705,9 @@ def _augment_dynamic_object_reader(
 
     if as_struct_insert_idx is None or as_interface_insert_idx is None:
         logger.warning(
-            f"Could not find as_struct/as_interface methods in _DynamicObjectReader (as_struct={as_struct_insert_idx}, as_interface={as_interface_insert_idx}), skipping augmentation.",
+            "Could not find as_struct/as_interface methods in _DynamicObjectReader (as_struct=%s, as_interface=%s), skipping augmentation.",
+            as_struct_insert_idx,
+            as_interface_insert_idx,
         )
         return
 
@@ -730,7 +735,7 @@ def _augment_dynamic_object_reader(
     _write_stub_lines(capnp_pyi_path, lines)
 
     total_overloads = sum(len(overload_lines) // 2 for _, overload_lines in overload_blocks)
-    logger.info(f"Augmented _DynamicObjectReader in {capnp_pyi_path} with {total_overloads} overload(s).")
+    logger.info("Augmented _DynamicObjectReader in %s with %s overload(s).", capnp_pyi_path, total_overloads)
 
 
 def format_all_outputs(output_directories: set[str], *, ruff_config_path: str | None = None) -> None:
@@ -799,7 +804,7 @@ def validate_with_pyright(output_directories: set[str]) -> None:
         logger.warning("No stub files found to validate")
         return
 
-    logger.info(f"Validating {len(stub_files)} generated stub file(s) with pyright...")
+    logger.info("Validating %s generated stub file(s) with pyright...", len(stub_files))
 
     try:
         pyright = _resolve_executable("pyright")
@@ -921,7 +926,11 @@ def _generate_stubs_from_schema(
     struct_types, list_types, interface_types = writer.get_dynamic_object_reader_types()
 
     logger.debug(
-        f"Writer returned {len(struct_types)} structs, {len(list_types)} lists, {len(interface_types)} interfaces for {full_module_name}",
+        "Writer returned %s structs, %s lists, %s interfaces for %s",
+        len(struct_types),
+        len(list_types),
+        len(interface_types),
+        full_module_name,
     )
 
     # Qualify the types with module prefix
@@ -1114,7 +1123,7 @@ def run(args: argparse.Namespace, root_directory: str) -> None:
 
     absolute_import_paths = [str((root_path / p).resolve()) for p in import_paths]
 
-    logger.info(f"Compiling {len(valid_paths)} schema(s) using capnpc plugin")
+    logger.info("Compiling %s schema(s) using capnpc plugin", len(valid_paths))
 
     if output_dir_path:
         output_dir_path.mkdir(parents=True, exist_ok=True)
@@ -1124,14 +1133,14 @@ def run(args: argparse.Namespace, root_directory: str) -> None:
     try:
         src_prefix = _determine_src_prefix(output_dir, paths, valid_paths, root_directory)
         cmd = _build_capnp_compile_command(wrapper_path, output_dir, src_prefix, absolute_import_paths, valid_paths)
-        logger.debug(f"Running: {' '.join(cmd)}")
+        logger.debug("Running: %s", " ".join(cmd))
 
         result = _run_command(cmd, check=False)
         if result.returncode != 0:
-            logger.error(f"capnp compile failed:\n{result.stderr}")
+            logger.error("capnp compile failed:\n%s", result.stderr)
             sys.exit(1)
 
-        logger.info(f"✓ Generated stubs for {len(valid_paths)} schema(s)")
+        logger.info("✓ Generated stubs for %s schema(s)", len(valid_paths))
 
         if not skip_pyright:
             try:
@@ -1156,7 +1165,7 @@ def _iter_loaded_schemas(
         try:
             yield schema_loader.get(schema_id), path
         except capnp.KjException as error:
-            logger.warning(f"Could not load schema {hex(schema_id)} from {path}: {error}")
+            logger.warning("Could not load schema %s from %s: %s", hex(schema_id), path, error)
 
 
 def _schema_module_name(path_obj: Path) -> str:
@@ -1194,7 +1203,7 @@ def _output_directory_from_annotation(output_dir: str, path_obj: Path, python_mo
     """Build the output directory from a schema's Python module annotation."""
     output_directory_path = Path(output_dir, *python_module_path.split("."), _schema_module_name(path_obj))
     output_directory_path.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Using Python module annotation: {python_module_path} -> {output_directory_path}")
+    logger.info("Using Python module annotation: %s -> %s", python_module_path, output_directory_path)
     return output_directory_path
 
 
@@ -1265,7 +1274,11 @@ def _record_generated_module(
 
     struct_types, list_types, interface_types = dynamic_object_types
     logger.debug(
-        f"Schema {path_obj.name} returned {len(struct_types)} structs, {len(list_types)} lists, {len(interface_types)} interfaces",
+        "Schema %s returned %s structs, %s lists, %s interfaces",
+        path_obj.name,
+        len(struct_types),
+        len(list_types),
+        len(interface_types),
     )
     if not struct_types and not list_types and not interface_types:
         return
@@ -1285,9 +1298,9 @@ def _process_loaded_schema(
 ) -> None:
     """Generate stubs for a loaded schema and record the resulting metadata."""
     path_obj = Path(path)
-    logger.debug(f"Processing schema {schema.node.displayName} from {path}")
-    logger.debug(f"  Schema ID: {hex(schema.node.id)}")
-    logger.debug(f"  Nested nodes in schema: {len(schema.node.nestedNodes)}")
+    logger.debug("Processing schema %s from %s", schema.node.displayName, path)
+    logger.debug("  Schema ID: %s", hex(schema.node.id))
+    logger.debug("  Nested nodes in schema: %s", len(schema.node.nestedNodes))
 
     output_directory_path = _resolve_output_directory(
         path, _python_module_path_for_schema(schema, path, context), options
@@ -1314,11 +1327,11 @@ def _ensure_package_init_files(directory: Path) -> None:
 
     if not init_py_path.exists():
         init_py_path.write_text("# Auto-generated package initialization\n", encoding="utf8")
-        logger.debug(f"Created __init__.py at {directory}")
+        logger.debug("Created __init__.py at %s", directory)
 
     if not init_pyi_path.exists():
         init_pyi_path.write_text("# Auto-generated package initialization\n", encoding="utf8")
-        logger.debug(f"Created __init__.pyi at {directory}")
+        logger.debug("Created __init__.pyi at %s", directory)
 
 
 def _ensure_parent_package_init_files(output_directory_path: Path, output_dir_path: Path) -> None:
@@ -1407,7 +1420,11 @@ def _augment_bundled_stubs(
     all_interfaces = _combine_interfaces_by_dir(state.interfaces_by_dir)
     all_dynamic_object_types = _combine_dynamic_object_types(state.dynamic_object_types_by_dir)
     logger.info(
-        f"Augmenting capnp-stubs with {len(all_interfaces)} interfaces, {len(all_dynamic_object_types['structs'])} structs, {len(all_dynamic_object_types['lists'])} lists, {len(all_dynamic_object_types['interfaces'])} interface types",
+        "Augmenting capnp-stubs with %s interfaces, %s structs, %s lists, %s interface types",
+        len(all_interfaces),
+        len(all_dynamic_object_types["structs"]),
+        len(all_dynamic_object_types["lists"]),
+        len(all_dynamic_object_types["interfaces"]),
     )
 
     result = augment_capnp_stubs_with_overloads(

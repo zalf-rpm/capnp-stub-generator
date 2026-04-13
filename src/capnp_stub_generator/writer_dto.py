@@ -389,6 +389,13 @@ class ParameterInfo:
     server_type: str
     request_type: str
 
+    @staticmethod
+    def _optional_type(type_hint: str) -> str:
+        """Return a type hint that includes ``None`` at most once."""
+        if "None" in {member.strip() for member in type_hint.split("|")}:
+            return type_hint
+        return f"{type_hint} | None"
+
     def to_client_param(self) -> str:
         """Format as client method parameter (optional with default).
 
@@ -397,7 +404,7 @@ class ParameterInfo:
 
         """
         sanitized_name = helper.sanitize_name(self.name)
-        return f"{sanitized_name}: {self.client_type} | None = None"
+        return f"{sanitized_name}: {self._optional_type(self.client_type)} = None"
 
     def to_server_param(self) -> str:
         """Format as server method parameter (required).
@@ -417,7 +424,7 @@ class ParameterInfo:
 
         """
         sanitized_name = helper.sanitize_name(self.name)
-        return f"{sanitized_name}: {self.request_type} | None = None"
+        return f"{sanitized_name}: {self._optional_type(self.request_type)} = None"
 
 
 class MethodSignatureCollection:

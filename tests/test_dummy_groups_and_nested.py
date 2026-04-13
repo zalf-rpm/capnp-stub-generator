@@ -8,6 +8,7 @@ MIN_GROUP_MEMBER_COUNT = 3
 
 
 def test_group_field_members_materialized(dummy_stub_lines: list[str]) -> None:
+    """Test group field members materialized."""
     lines = dummy_stub_lines
     # Ensure TestGroups appears and group members appear flattened or via nested classes
     assert any("class _TestGroupsStructModule(_StructModule):" in line for line in lines)
@@ -17,6 +18,7 @@ def test_group_field_members_materialized(dummy_stub_lines: list[str]) -> None:
 
 
 def test_interleaved_groups_union_and_nested_group_fields(dummy_stub_lines: list[str]) -> None:
+    """Test interleaved groups union and nested group fields."""
     lines = dummy_stub_lines
     assert any("class _TestInterleavedGroupsStructModule(_StructModule):" in line for line in lines)
     # Expect nested group names or fields plugh/xyzzy/fred across two groups (now as properties)
@@ -29,6 +31,7 @@ def test_interleaved_groups_union_and_nested_group_fields(dummy_stub_lines: list
 
 
 def test_nested_types_enums_and_lists(dummy_stub_lines: list[str]) -> None:
+    """Test nested types enums and lists."""
     lines = dummy_stub_lines
     # Nested enums are now simple classes under their parent struct with instance annotations
     assert any(re.match(r"^\s*class _NestedEnum1EnumModule:", line) for line in lines)
@@ -43,6 +46,7 @@ def test_nested_types_enums_and_lists(dummy_stub_lines: list[str]) -> None:
 
 
 def test_using_type_aliases_resolved(dummy_stub_lines: list[str]) -> None:
+    """Test using type aliases resolved."""
     lines = dummy_stub_lines
     # OuterNestedEnum alias should result in field typing referencing original enum builder/reader variants
     assert any("OuterNestedEnum" in line and "Literal" not in line for line in lines)

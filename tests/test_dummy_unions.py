@@ -6,6 +6,7 @@ import re
 
 
 def test_union_which_methods_and_literal_import(dummy_stub_lines: list[str]) -> None:
+    """Test union which methods and literal import."""
     lines = dummy_stub_lines
     # which() for TestUnion should be present with Literal return
     assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
@@ -14,6 +15,7 @@ def test_union_which_methods_and_literal_import(dummy_stub_lines: list[str]) -> 
 
 
 def test_unnamed_union_fields_present(dummy_stub_lines: list[str]) -> None:
+    """Test unnamed union fields present."""
     lines = dummy_stub_lines
     # TestUnnamedUnion field annotations should include foo/bar discriminant usage (now as properties)
     assert any("class _TestUnnamedUnionStructModule(_StructModule):" in line for line in lines)
@@ -26,6 +28,7 @@ def test_unnamed_union_fields_present(dummy_stub_lines: list[str]) -> None:
 
 
 def test_interleaved_union_discriminants_sorted(dummy_stub_lines: list[str]) -> None:
+    """Test interleaved union discriminants sorted."""
     lines = dummy_stub_lines
     # Discriminant enums are not generated separately
     # Instead, which() methods use Literal types
@@ -35,6 +38,7 @@ def test_interleaved_union_discriminants_sorted(dummy_stub_lines: list[str]) -> 
 
 
 def test_union_defaults_struct_initializers_present(dummy_stub_lines: list[str]) -> None:
+    """Test union defaults struct initializers present."""
     lines = dummy_stub_lines
     # Defaults referencing unions should generate inline initializers in TestUnionDefaults (now as properties)
     assert any("class _TestUnionDefaultsStructModule(_StructModule):" in line for line in lines)

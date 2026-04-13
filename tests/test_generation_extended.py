@@ -9,8 +9,8 @@ here = Path(__file__).parent
 generated_dir = here / "_generated" / "basic"
 
 
-def _read(path: str | Path) -> list[str]:
-    with open(path, encoding="utf8") as f:
+def _read(path: Path) -> list[str]:
+    with path.open(encoding="utf8") as f:
         return f.readlines()
 
 
@@ -21,13 +21,13 @@ def _get_stub_path(schema: str) -> Path:
 
 
 def test_primitives_and_lists_imports_and_types() -> None:
+    """Test primitives and lists imports and types."""
     stub_path = _get_stub_path("primitives.capnp")
     lines = _read(stub_path)
     content = "".join(lines)
     # Note: from __future__ import annotations is not needed with Python 3.10+ type annotations
     # Sequence and MutableSequence appear (list fields) from collections.abc
     # Note: With specific list classes, Sequence is only used for nested lists or setters
-    # assert "from collections.abc import" in content
     # assert "Sequence" in content
     # assert "MutableSequence" in content
     # Literal now appears for list init overloads, overload appears for typed init methods
@@ -41,18 +41,19 @@ def test_primitives_and_lists_imports_and_types() -> None:
 
 
 def test_nested_enum_and_literal_and_overload() -> None:
+    """Test nested enum and literal and overload."""
     stub_path = _get_stub_path("nested.capnp")
     lines = _read(stub_path)
     # Enum should now be a simple class with int annotations
     assert any(re.match(r"^\s*class _KindEnumModule:", line) for line in lines)
     assert any("Kind: _KindEnumModule" in line for line in lines)
     # Sequence import still expected for list fields (only for nested lists or setters)
-    # assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
     # Now overload is expected (for list init overloads)
     assert any("overload" in line for line in lines if line.startswith("from typing import"))
 
 
 def test_unions_literal_and_overload_and_which() -> None:
+    """Test unions literal and overload and which."""
     stub_path = _get_stub_path("unions.capnp")
     lines = _read(stub_path)
     # Expect Literal import (union which methods)
@@ -64,6 +65,7 @@ def test_unions_literal_and_overload_and_which() -> None:
 
 
 def test_interfaces_protocol_and_any_and_iterator() -> None:
+    """Test interfaces protocol and any and iterator."""
     stub_path = _get_stub_path("interfaces.capnp")
     lines = _read(stub_path)
     content = "".join(lines)
@@ -81,6 +83,7 @@ def test_interfaces_protocol_and_any_and_iterator() -> None:
 def test_imports_cross_module_reference() -> None:
     # Use pre-generated stubs from basic directory
     # Both import_base and import_user should already be generated together
+    """Test imports cross module reference."""
     user_stub = generated_dir / "import_user_capnp" / "__init__.pyi"
     user_lines = _read(user_stub)
     # With nested structure, Shared.Reader and Shared.Builder are used

@@ -33,7 +33,6 @@ def generated_zalfmas_dir() -> Path:
     return GENERATED_ZALFMAS_DIR
 
     # Keep generated files for inspection
-    # shutil.rmtree(GENERATED_ZALFMAS_DIR)
 
 
 def test_generate_zalfmas_stubs(generated_zalfmas_dir: Path) -> None:
