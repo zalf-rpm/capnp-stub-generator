@@ -2,6 +2,8 @@
 
 import re
 
+EXPECTED_SERVER_CLASS_COUNT = 3
+
 
 def test_server_class_exists_for_interfaces(calculator_stub_lines) -> None:
     """Server classes should be generated for all interfaces."""
@@ -17,7 +19,7 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines) -> None:
 
     # Count Server classes - should be 3 (Value, Function, Calculator)
     server_count = sum(1 for line in lines if line.strip() == "class Server(_DynamicCapabilityServer):")
-    assert server_count == 3, f"Expected 3 Server classes, found {server_count}"
+    assert server_count == EXPECTED_SERVER_CLASS_COUNT, f"Expected 3 Server classes, found {server_count}"
 
 
 def test_server_methods_have_signatures(calculator_stub_lines) -> None:

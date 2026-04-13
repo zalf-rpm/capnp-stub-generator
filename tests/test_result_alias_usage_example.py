@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tests.test_helpers import log_summary
+
 if TYPE_CHECKING:
     from tests._generated.examples.calculator import calculator_capnp
 
@@ -33,12 +35,12 @@ def example_usage() -> None:
         """Process an evaluation result using the convenient type alias."""
         # The result is still the same Protocol type, just with a shorter name
         value_client = result.value  # type: calculator_capnp.ValueClient
-        print(f"Got value client: {value_client}")
+        _ = value_client
 
     def handle_read_result(result: calculator_capnp.ReadResult) -> None:
         """Process a read result from the Value interface."""
         value = result.value  # type: float
-        print(f"Read value: {value}")
+        _ = value
 
     def process_expression(expr: calculator_capnp.ExpressionBuilder) -> calculator_capnp.EvaluateResult:
         """Show that Result types work alongside Builder/Reader types.
@@ -52,9 +54,14 @@ def example_usage() -> None:
         # For the example, we just show the type signature
         raise NotImplementedError
 
-    print("✓ Result type aliases work as expected")
-    print("✓ Consistent with Builder/Reader naming patterns")
-    print("✓ Makes type hints more readable")
+    log_summary(
+        "RESULT TYPE ALIAS EXAMPLE",
+        [
+            "✓ Result type aliases work as expected",
+            "✓ Consistent with Builder/Reader naming patterns",
+            "✓ Makes type hints more readable",
+        ],
+    )
 
 
 if __name__ == "__main__":

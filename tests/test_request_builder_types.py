@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_helpers import log_summary
+
 TESTS_DIR = Path(__file__).parent
 
 
@@ -222,15 +224,16 @@ class TestRequestMethodReturnsRequest:
 
 def test_request_builder_types_summary() -> None:
     """Summary of request builder type tests."""
-    print("\n" + "=" * 70)
-    print("REQUEST BUILDER TYPES TEST SUMMARY")
-    print("=" * 70)
-    print("All request builder type tests passed!")
-    print("  ✓ Request builders have proper field types (Builder variants)")
-    print("  ✓ Request builders have send() method returning result type")
-    print("  ✓ Request fields accessible with proper types")
-    print("  ✓ *_request() methods return proper request types")
-    print("=" * 70 + "\n")
+    log_summary(
+        "REQUEST BUILDER TYPES TEST SUMMARY",
+        [
+            "All request builder type tests passed!",
+            "  ✓ Request builders have proper field types (Builder variants)",
+            "  ✓ Request builders have send() method returning result type",
+            "  ✓ Request fields accessible with proper types",
+            "  ✓ *_request() methods return proper request types",
+        ],
+    )
 
 
 if __name__ == "__main__":

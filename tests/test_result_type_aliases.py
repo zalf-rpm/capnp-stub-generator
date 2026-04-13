@@ -2,6 +2,8 @@
 
 import pytest
 
+from tests.test_helpers import log_summary
+
 
 def test_result_type_aliases_exist(calculator_stubs) -> None:
     """Test that Result type aliases are generated at the top level."""
@@ -157,10 +159,15 @@ def test_result_type_count_matches_method_count(calculator_stubs) -> None:
 
 def test_summary() -> None:
     """Summary of Result type alias tests."""
-    print("\n✓ Result type aliases generated")
-    print("✓ Result aliases point to Client-nested types")
-    print("✓ Result aliases appear alongside Builder/Reader aliases")
-    print("✓ Result aliases are sorted alphabetically")
-    print("✓ Void method Results have aliases")
-    print("✓ Nested interface Results have aliases")
-    print("✓ Result alias count matches method count")
+    log_summary(
+        "RESULT TYPE ALIAS SUMMARY",
+        [
+            "✓ Result type aliases generated",
+            "✓ Result aliases point to Client-nested types",
+            "✓ Result aliases appear alongside Builder/Reader aliases",
+            "✓ Result aliases are sorted alphabetically",
+            "✓ Void method Results have aliases",
+            "✓ Nested interface Results have aliases",
+            "✓ Result alias count matches method count",
+        ],
+    )

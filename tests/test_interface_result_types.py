@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_helpers import log_summary
+
 TESTS_DIR = Path(__file__).parent
 
 
@@ -192,16 +194,17 @@ class TestRPCResultFieldTypes:
 
 def test_interface_result_types_summary() -> None:
     """Summary of interface result type tests."""
-    print("\n" + "=" * 70)
-    print("INTERFACE RESULT TYPES TEST SUMMARY")
-    print("=" * 70)
-    print("All interface result type tests passed!")
-    print("  ✓ Result types have field attributes (.value, .func)")
-    print("  ✓ Result types are Awaitable")
-    print("  ✓ Enum parameters accept string literals")
-    print("  ✓ Result field types correctly resolved")
-    print("  ✓ Nested interfaces have result types")
-    print("=" * 70 + "\n")
+    log_summary(
+        "INTERFACE RESULT TYPES TEST SUMMARY",
+        [
+            "All interface result type tests passed!",
+            "  ✓ Result types have field attributes (.value, .func)",
+            "  ✓ Result types are Awaitable",
+            "  ✓ Enum parameters accept string literals",
+            "  ✓ Result field types correctly resolved",
+            "  ✓ Nested interfaces have result types",
+        ],
+    )
 
 
 if __name__ == "__main__":

@@ -9,10 +9,11 @@ This test validates that the generated stubs provide correct types for:
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.test_helpers import log_summary, run_pyright
 
 TESTS_DIR = Path(__file__).parent
 
@@ -40,13 +41,7 @@ alice.email = "alice@example.com"  # Should type check
     test_file.write_text(test_code)
 
     # Run pyright on the test file
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=str(TESTS_DIR),
-    )
+    result = run_pyright(test_file, cwd=TESTS_DIR)
 
     error_count = result.stdout.count("error:")
 
@@ -83,13 +78,7 @@ bob_phones[0].number = "555-4567"
     test_file = generated_dir / "test_typing_elements.py"
     test_file.write_text(test_code)
 
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=str(TESTS_DIR),
-    )
+    result = run_pyright(test_file, cwd=TESTS_DIR)
 
     error_count = result.stdout.count("error:")
 
@@ -126,13 +115,7 @@ for person in addresses.people:
     test_file = generated_dir / "test_typing_iteration.py"
     test_file.write_text(test_code)
 
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=str(TESTS_DIR),
-    )
+    result = run_pyright(test_file, cwd=TESTS_DIR)
 
     error_count = result.stdout.count("error:")
 
@@ -165,13 +148,7 @@ bob.employment.unemployed = None
     test_file = generated_dir / "test_typing_unions.py"
     test_file.write_text(test_code)
 
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=str(TESTS_DIR),
-    )
+    result = run_pyright(test_file, cwd=TESTS_DIR)
 
     error_count = result.stdout.count("error:")
 
@@ -207,13 +184,7 @@ phones[1].type = "work"
     test_file = generated_dir / "test_typing_nested_init.py"
     test_file.write_text(test_code)
 
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=str(TESTS_DIR),
-    )
+    result = run_pyright(test_file, cwd=TESTS_DIR)
 
     error_count = result.stdout.count("error:")
 
@@ -228,13 +199,14 @@ phones[1].type = "work"
 
 def test_all_addressbook_typing_summary() -> None:
     """Provide a summary of addressbook typing tests."""
-    print("\n" + "=" * 70)
-    print("ADDRESSBOOK TYPING TEST SUMMARY")
-    print("=" * 70)
-    print("All typing tests passed!")
-    print("  ✓ init() returns properly typed lists")
-    print("  ✓ List element access is typed")
-    print("  ✓ Iteration provides correct types")
-    print("  ✓ Union fields are accessible")
-    print("  ✓ Nested init() calls are typed")
-    print("=" * 70 + "\n")
+    log_summary(
+        "ADDRESSBOOK TYPING TEST SUMMARY",
+        [
+            "All typing tests passed!",
+            "  ✓ init() returns properly typed lists",
+            "  ✓ List element access is typed",
+            "  ✓ Iteration provides correct types",
+            "  ✓ Union fields are accessible",
+            "  ✓ Nested init() calls are typed",
+        ],
+    )

@@ -7,7 +7,10 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from test_helpers import run_generator
+
+from tests.test_helpers import run_generator
+
+EXPECTED_GENERATED_PACKAGE_COUNT = 3
 
 
 @pytest.fixture
@@ -92,7 +95,7 @@ def test_directory_structure_with_glob(temp_schema_dir, temp_output_dir) -> None
         for f in temp_output_dir.rglob("*_capnp/__init__.pyi")
         if "capnp-stubs" not in str(f) and "schema_capnp" not in str(f)
     ]
-    assert len(generated_packages) == 3  # root, sub1, deep
+    assert len(generated_packages) == EXPECTED_GENERATED_PACKAGE_COUNT  # root, sub1, deep
 
     # Verify structure
     package_names = [str(p.relative_to(temp_output_dir)) for p in generated_packages]
@@ -139,7 +142,7 @@ def test_mixed_directory_levels(temp_schema_dir, temp_output_dir) -> None:
         for f in temp_output_dir.rglob("*_capnp/__init__.pyi")
         if "capnp-stubs" not in str(f) and "schema_capnp" not in str(f)
     ]
-    assert len(all_packages) == 3
+    assert len(all_packages) == EXPECTED_GENERATED_PACKAGE_COUNT
 
     # Structure should match input - check for __init__.pyi in packages
     assert (temp_output_dir / "root_capnp" / "__init__.pyi").exists()

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+MIN_GENERATED_STUB_COUNT = 10
+MIN_EXPECTED_ZALFMAS_STUB_COUNT = 20
+MIN_SCHEMA_STUB_CONTENT_LENGTH = 100
+
 
 def test_generate_zalfmas_no_annotations_stubs(zalfmas_no_annotations_stubs) -> None:
     """Test that zalfmas schemas without Python annotations generate correctly."""
@@ -12,7 +16,7 @@ def test_generate_zalfmas_no_annotations_stubs(zalfmas_no_annotations_stubs) -> 
     stub_files = list(zalfmas_no_annotations_stubs.rglob("*_capnp/__init__.pyi"))
 
     # Should have generated stubs for multiple schemas
-    assert len(stub_files) > 10, f"Expected many stub files, found {len(stub_files)}"
+    assert len(stub_files) > MIN_GENERATED_STUB_COUNT, f"Expected many stub files, found {len(stub_files)}"
 
     # Check a specific schema exists
     common_stub = zalfmas_no_annotations_stubs / "common_capnp" / "__init__.pyi"
@@ -58,7 +62,9 @@ def test_plugin_works_without_annotations(zalfmas_no_annotations_stubs) -> None:
     stub_files = list(zalfmas_no_annotations_stubs.rglob("*_capnp/__init__.pyi"))
 
     # Should have many schemas
-    assert len(stub_files) >= 20, f"Expected at least 20 stub files, found {len(stub_files)}"
+    assert len(stub_files) >= MIN_EXPECTED_ZALFMAS_STUB_COUNT, (
+        f"Expected at least 20 stub files, found {len(stub_files)}"
+    )
 
     # Verify a few key schemas
     expected_schemas = ["common_capnp", "climate_capnp", "model_capnp", "service_capnp"]
@@ -68,4 +74,4 @@ def test_plugin_works_without_annotations(zalfmas_no_annotations_stubs) -> None:
 
         # Check it has content
         content = stub_path.read_text()
-        assert len(content) > 100, f"{schema_name} should have substantial content"
+        assert len(content) > MIN_SCHEMA_STUB_CONTENT_LENGTH, f"{schema_name} should have substantial content"

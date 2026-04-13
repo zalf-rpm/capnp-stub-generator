@@ -12,6 +12,8 @@ import re
 
 import schema_capnp
 
+MIN_EMBEDDED_SCHEMA_COUNT = 10
+
 
 def test_interface_result_structs_are_embedded(calculator_stubs) -> None:
     """Verify that interface method result structs are embedded in the binary.
@@ -82,7 +84,7 @@ def test_param_structs_are_embedded(calculator_stubs) -> None:
     # Calculator.evaluate$Params (implicit)
     # Just verify some param struct is there - we don't have exact IDs
     # The important thing is that the code doesn't crash when loading them
-    assert len(embedded_ids) > 10, "Should have many schemas including params/results"
+    assert len(embedded_ids) > MIN_EMBEDDED_SCHEMA_COUNT, "Should have many schemas including params/results"
 
 
 def test_runtime_result_field_access(calculator_stubs) -> None:

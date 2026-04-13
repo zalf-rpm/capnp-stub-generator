@@ -64,15 +64,15 @@ extend-exclude = ["typings/capnp-stubs", "tests/schemas/examples"]
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
+  # Keep ignored for schema_capnp for now
   "A003",
+  # Keep these formatting related linting rules disabled due to conflicts 
   "E501",
-  "D203",
   "D213",
+  "D203",
   "COM812",
+  # Keep assertions allowed for now
   "S101",
-  "S603",
-  "S607",
-  "T201",
   "PYI021",
   "PYI016",
   "ANN001",
@@ -81,13 +81,11 @@ ignore = [
   "SLF001",
   "G004",
   "ANN401",
-  "INP001",
   "D103",
   "D102",
   "ERA001",
   "PTH123",
   "BLE001",
-  "PLR2004",
 ]
 
 [tool.pytest.ini_options]

@@ -13,7 +13,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-from test_helpers import run_generator
+
+from tests.test_helpers import log_summary, run_generator
 
 # Test directories
 TESTS_DIR = Path(__file__).parent
@@ -52,28 +53,28 @@ def test_generate_zalfmas_stubs(generated_zalfmas_dir) -> None:
     # Build arguments for the CLI
     args = ["-p", str(ZALFMAS_DIR), "-o", str(generated_zalfmas_dir), "-I", str(ZALFMAS_DIR), "-r", "-e", *excludes]
 
-    print(f"\nGenerating stubs with args: {' '.join(args)}")
-
     # Call the CLI main function directly
     try:
         run_generator(args)
     except Exception as e:
-        pytest.fail(f"Stub generation failed: {e}")
+        pytest.fail(f"Stub generation failed for args {' '.join(args)}: {e}")
 
     # Verify stubs were generated
     generated_stubs = list(generated_zalfmas_dir.glob("**/__init__.pyi"))
 
-    print(f"\n✓ Successfully generated {len(generated_stubs)} stub files")
-
     # Show generated files organized by directory
     root_stubs = [s for s in generated_stubs if s.parent == generated_zalfmas_dir]
     subdir_stubs = [s for s in generated_stubs if s.parent != generated_zalfmas_dir]
-
-    print(f"  - {len(root_stubs)} in root directory")
+    summary_lines = [
+        f"Generating stubs with args: {' '.join(args)}",
+        f"✓ Successfully generated {len(generated_stubs)} stub files",
+        f"  - {len(root_stubs)} in root directory",
+    ]
     if subdir_stubs:
         subdirs = {s.relative_to(generated_zalfmas_dir).parent for s in subdir_stubs}
         for subdir in sorted(subdirs):
             count = len([s for s in subdir_stubs if s.relative_to(generated_zalfmas_dir).parent == subdir])
-            print(f"  - {count} in {subdir}/")
+            summary_lines.append(f"  - {count} in {subdir}/")
 
     assert len(generated_stubs) > 0, "No stub files were generated"
+    log_summary("ZALFMAS SCHEMA GENERATION SUMMARY", summary_lines)

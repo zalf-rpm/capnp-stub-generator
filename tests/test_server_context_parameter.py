@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tests.test_helpers import log_summary
+
 TESTS_DIR = Path(__file__).parent
 CALCULATOR_DIR = TESTS_DIR / "examples" / "calculator"
 
@@ -126,20 +128,21 @@ def test_server_context_parameter_summary(generate_calculator_stubs) -> None:
     # Count Server methods with _context
     server_methods_with_context = len(re.findall(r"def \w+\([^)]*_context:[^)]*\)", content))
 
-    print("\n" + "=" * 70)
-    print("SERVER CONTEXT PARAMETER TEST SUMMARY")
-    print("=" * 70)
     assert callcontext_count > 0, "Should generate CallContext types"
     assert namedtuple_count > 0, "Should generate NamedTuple result types"
     assert server_methods_with_context > 0, "Server methods should have _context parameter"
-
-    print("All context parameter tests passed!")
-    print(f"  ✓ Generated {callcontext_count} CallContext types")
-    print(f"  ✓ Generated {namedtuple_count} NamedTuple result types")
-    print(f"  ✓ {server_methods_with_context} Server methods have typed _context")
-    print("  ✓ _context is mandatory in all Server method signatures")
-    print("  ✓ _context properly typed with CallContext for IDE support")
-    print("\nThe _context parameter is explicitly listed in all Server method signatures")
-    print("with proper CallContext typing for full type safety and IDE autocomplete.")
-    print("CallContext.results now points to NamedTuple (which accepts Builder|Reader).")
-    print("=" * 70)
+    log_summary(
+        "SERVER CONTEXT PARAMETER TEST SUMMARY",
+        [
+            "All context parameter tests passed!",
+            f"  ✓ Generated {callcontext_count} CallContext types",
+            f"  ✓ Generated {namedtuple_count} NamedTuple result types",
+            f"  ✓ {server_methods_with_context} Server methods have typed _context",
+            "  ✓ _context is mandatory in all Server method signatures",
+            "  ✓ _context properly typed with CallContext for IDE support",
+            "",
+            "The _context parameter is explicitly listed in all Server method signatures",
+            "with proper CallContext typing for full type safety and IDE autocomplete.",
+            "CallContext.results now points to NamedTuple (which accepts Builder|Reader).",
+        ],
+    )

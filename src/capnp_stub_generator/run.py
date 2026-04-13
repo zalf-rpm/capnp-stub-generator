@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os.path
 import shutil
@@ -103,6 +104,7 @@ class RunFromSchemasOptions:
     import_paths: list[str]
     skip_pyright: bool
     augment_capnp_stubs: bool
+    ruff_config_path: str | None = None
     common_base: str | None = None
     preserve_path_structure: bool = False
     file_schemas_only: set[int] | None = None
@@ -146,7 +148,43 @@ def _resolve_executable(name: str) -> str:
 
 def _run_command(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
     """Run a trusted subprocess command and capture its output."""
-    return subprocess.run(command, capture_output=True, text=True, check=check)
+    completed = asyncio.run(_run_command_async(command))
+    if check and completed.returncode != 0:
+        raise subprocess.CalledProcessError(
+            completed.returncode,
+            command,
+            output=completed.stdout,
+            stderr=completed.stderr,
+        )
+    return completed
+
+
+async def _run_command_async(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run a trusted subprocess command asynchronously and capture its output."""
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    return subprocess.CompletedProcess(
+        command,
+        process.returncode or 0,
+        stdout.decode(),
+        stderr.decode(),
+    )
+
+
+def _ruff_command_args(ruff_config_path: str | None) -> list[str]:
+    """Return Ruff config arguments when a project config file is available."""
+    if ruff_config_path is None:
+        return []
+
+    config_path = Path(ruff_config_path)
+    if config_path.is_file():
+        return ["--config", str(config_path)]
+
+    return []
 
 
 def find_capnp_stubs_package() -> str | None:
@@ -695,7 +733,7 @@ def _augment_dynamic_object_reader(
     logger.info(f"Augmented _DynamicObjectReader in {capnp_pyi_path} with {total_overloads} overload(s).")
 
 
-def format_all_outputs(output_directories: set[str]) -> None:
+def format_all_outputs(output_directories: set[str], *, ruff_config_path: str | None = None) -> None:
     """Format all generated stub files using ruff.
 
     Runs multiple passes to catch everything:
@@ -705,34 +743,31 @@ def format_all_outputs(output_directories: set[str]) -> None:
 
     Args:
         output_directories: Set of directories containing generated stubs.
+        ruff_config_path: Optional path to a Ruff config file.
 
     """
-    # Collect all .py and .pyi files from output directories
-    stub_files: list[str] = []
-    for output_dir in output_directories:
-        for root, _, files in os.walk(output_dir):
-            stub_files.extend(str(Path(root, file)) for file in files if file.endswith((".pyi", ".py")))
-
-    if not stub_files:
-        logger.warning("No files found to format")
+    ruff_targets = sorted(str(path) for path in map(Path, output_directories) if path.exists())
+    if not ruff_targets:
+        logger.warning("No output directories found to format")
         return
 
-    logger.info(f"Formatting {len(stub_files)} generated file(s) with ruff...")
+    logger.info("Formatting generated outputs in %s directorie(s) with ruff...", len(ruff_targets))
 
     try:
         ruff = _resolve_executable("ruff")
+        config_args = _ruff_command_args(ruff_config_path)
 
         # Pass 1: ruff format (default settings)
         logger.info("Pass 1: Running ruff format...")
-        _run_command([ruff, "format", *stub_files], check=True)
+        _run_command([ruff, "format", *config_args, *ruff_targets], check=True)
 
         # Pass 2: ruff check --fix --select ALL
         logger.info("Pass 2: Running ruff check --fix --select ALL...")
-        _run_command([ruff, "check", "--fix", "--select", "ALL", *stub_files], check=False)
+        _run_command([ruff, "check", *config_args, "--fix", "--select", "ALL", *ruff_targets], check=False)
 
         # Pass 3: ruff format again
         logger.info("Pass 3: Running ruff format again...")
-        _run_command([ruff, "format", *stub_files], check=True)
+        _run_command([ruff, "format", *config_args, *ruff_targets], check=True)
 
         logger.info("✓ Ruff formatting completed successfully")
 
@@ -1418,7 +1453,7 @@ def run_from_schemas(
         augment_capnp_stubs=options.augment_capnp_stubs,
     )
     all_output_dirs = state.output_directories_used | bundled_stub_dirs
-    format_all_outputs(all_output_dirs)
+    format_all_outputs(all_output_dirs, ruff_config_path=options.ruff_config_path)
 
     if not options.skip_pyright:
         validate_with_pyright(all_output_dirs)

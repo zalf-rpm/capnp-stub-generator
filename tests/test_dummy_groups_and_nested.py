@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+MIN_GROUP_MEMBER_COUNT = 3
+
 
 def test_group_field_members_materialized(dummy_stub_lines) -> None:
     lines = dummy_stub_lines
@@ -11,7 +13,7 @@ def test_group_field_members_materialized(dummy_stub_lines) -> None:
     assert any("class _TestGroupsStructModule(_StructModule):" in line for line in lines)
     # Look for group-specific field names (corge/grault/garply) multiple times (now as properties)
     count_corge = sum(1 for line in lines if "def corge(self)" in line)
-    assert count_corge >= 3  # across foo/bar/baz groups
+    assert count_corge >= MIN_GROUP_MEMBER_COUNT  # across foo/bar/baz groups
 
 
 def test_interleaved_groups_union_and_nested_group_fields(dummy_stub_lines) -> None:

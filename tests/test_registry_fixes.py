@@ -84,14 +84,12 @@ def test_list_of_interfaces_types(zalfmas_stubs) -> None:
         re.DOTALL,
     )
 
-    if not result_match:
-        print(f"Client content length: {len(client_content)}")
-        print(f"Client content start: {client_content[:200]}")
-        # Try to find it in the whole file to debug
-        full_search = re.search(r"class RemovecategoryResult", content)
-        print(f"Found in full file: {full_search}")
-
-    assert result_match, "RemovecategoryResult class not found"
+    assert result_match, (
+        "RemovecategoryResult class not found\n"
+        f"Client content length: {len(client_content)}\n"
+        f"Client content start: {client_content[:200]}\n"
+        f"Found in full file: {re.search(r'class RemovecategoryResult', content)}"
+    )
     result_content = result_match.group(1)
 
     # Check removedObjects field

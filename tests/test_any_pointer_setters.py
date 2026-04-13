@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess
+from tests.test_helpers import run_pyright
 
 
 def test_any_pointer_setters(basic_stubs) -> None:
@@ -57,15 +57,5 @@ def test_assignments():
     test_file.write_text(test_code)
 
     # Run pyright
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode != 0:
-        print(result.stdout)
-        print(result.stderr)
-
+    result = run_pyright(test_file)
     assert result.returncode == 0, f"Type checking failed: {result.stdout}"

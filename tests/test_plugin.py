@@ -1,9 +1,10 @@
 """Plugin invocation tests for the capnpc entry point."""
 
 import os
-import subprocess
 import sys
 from pathlib import Path
+
+from tests.test_helpers import run_command
 
 
 def test_capnpc_plugin_invocation(tmp_path) -> None:
@@ -41,10 +42,7 @@ def test_capnpc_plugin_invocation(tmp_path) -> None:
 
     cmd = ["capnpc", f"-opython:{output_dir}", str(schema_path)]
 
-    result = subprocess.run(cmd, check=False, env=env, capture_output=True, text=True)
-
-    if result.returncode != 0:
-        print(f"capnpc stderr:\n{result.stderr}")
+    result = run_command(cmd, env=env)
     assert result.returncode == 0, f"capnpc failed: {result.stderr}"
 
     # Check if output was generated
@@ -88,7 +86,7 @@ def test_capnpc_plugin_bundling_options(tmp_path) -> None:
 
     cmd = ["capnpc", "-opython:stubs", str(schema_path)]
 
-    result = subprocess.run(cmd, check=False, env=env, cwd=base_output_dir, capture_output=True, text=True)
+    result = run_command(cmd, env=env, cwd=base_output_dir)
 
     assert result.returncode == 0, f"capnpc failed: {result.stderr}"
 

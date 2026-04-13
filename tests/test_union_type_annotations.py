@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import subprocess
 from typing import TYPE_CHECKING
 
 from tests.conftest import generate_stub_from_schema
+from tests.test_helpers import run_python_file
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -42,13 +42,7 @@ assert result == "none"
 """,
     )
 
-    result = subprocess.run(
-        ["python", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=tmp_path,
-    )
+    result = run_python_file(test_file, cwd=tmp_path)
 
     assert result.returncode == 0, f"Failed with: {result.stderr}"
 
@@ -76,13 +70,7 @@ def process_data(data: primitives_capnp.SimplePrimitives | str | None) -> str:
 """,
     )
 
-    result = subprocess.run(
-        ["python", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=tmp_path,
-    )
+    result = run_python_file(test_file, cwd=tmp_path)
 
     # This is expected to fail
     assert result.returncode != 0
@@ -119,13 +107,7 @@ assert result == "test"
 """,
     )
 
-    result = subprocess.run(
-        ["python", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=tmp_path,
-    )
+    result = run_python_file(test_file, cwd=tmp_path)
 
     assert result.returncode == 0, f"Failed with: {result.stderr}"
 
@@ -168,12 +150,6 @@ assert result == "test"
 """,
     )
 
-    result = subprocess.run(
-        ["python", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=tmp_path,
-    )
+    result = run_python_file(test_file, cwd=tmp_path)
 
     assert result.returncode == 0, f"Failed with: {result.stderr}"

@@ -1,6 +1,17 @@
 """Test enum type alias generation and usage."""
 
-import subprocess
+from pathlib import Path
+
+from tests.test_helpers import CommandResult, run_pyright
+
+
+def _run_pyright_sample(calculator_stubs: Path, filename: str, test_code: str) -> CommandResult:
+    test_file = calculator_stubs / filename
+    test_file.write_text(test_code)
+    try:
+        return run_pyright(test_file)
+    finally:
+        test_file.unlink(missing_ok=True)
 
 
 def test_enum_type_alias_exists(calculator_stubs) -> None:
@@ -28,15 +39,7 @@ use_operator_literal("multiply")
 use_operator_literal("divide")
 '''
 
-    test_file = calculator_stubs / "test_enum_literal_typing.py"
-    test_file.write_text(test_code)
-
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    result = _run_pyright_sample(calculator_stubs, "test_enum_literal_typing.py", test_code)
 
     error_count = result.stdout.count("error:")
     assert error_count == 0, f"Type checking failed: {result.stdout}"
@@ -58,15 +61,7 @@ use_operator_int(2)
 use_operator_int(3)
 '''
 
-    test_file = calculator_stubs / "test_enum_int_typing.py"
-    test_file.write_text(test_code)
-
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    result = _run_pyright_sample(calculator_stubs, "test_enum_int_typing.py", test_code)
 
     error_count = result.stdout.count("error:")
     assert error_count == 0, f"Type checking failed: {result.stdout}"
@@ -88,15 +83,7 @@ use_operator_enum(calculator_capnp.Calculator.Operator.multiply)
 use_operator_enum(calculator_capnp.Calculator.Operator.divide)
 '''
 
-    test_file = calculator_stubs / "test_enum_attr_typing.py"
-    test_file.write_text(test_code)
-
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    result = _run_pyright_sample(calculator_stubs, "test_enum_attr_typing.py", test_code)
 
     error_count = result.stdout.count("error:")
     assert error_count == 0, f"Type checking failed: {result.stdout}"
@@ -112,24 +99,12 @@ def use_operator(op: calculator_capnp.CalculatorOperatorEnum):
     pass
 
 # Should reject invalid string literals
-use_operator("invalid")  # type: ignore[arg-type]
+use_operator("invalid")
 '''
 
-    test_file = calculator_stubs / "test_enum_invalid_typing.py"
-    test_file.write_text(test_code)
-
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    # Should have one error for the invalid literal (but we're ignoring it)
-    # This test mainly documents the expected behavior
-    # The type: ignore comment should suppress the error
+    result = _run_pyright_sample(calculator_stubs, "test_enum_invalid_typing.py", test_code)
     error_count = result.stdout.count("error:")
-    assert error_count == 0, f"Type checking failed unexpectedly: {result.stdout}"
+    assert error_count == 1, f"Type checking should reject one invalid literal:\n{result.stdout}"
 
 
 def test_enum_type_alias_in_class_init(calculator_stubs) -> None:
@@ -165,15 +140,7 @@ impl2 = OperatorImpl(calculator_capnp.Calculator.Operator.subtract)
 impl3 = OperatorImpl(0)
 '''
 
-    test_file = calculator_stubs / "test_enum_class_typing.py"
-    test_file.write_text(test_code)
-
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    result = _run_pyright_sample(calculator_stubs, "test_enum_class_typing.py", test_code)
 
     error_count = result.stdout.count("error:")
     assert error_count == 0, f"Type checking failed: {result.stdout}"
@@ -203,15 +170,7 @@ result2 = process_operator(calculator_capnp.Calculator.Operator.add)
 result3 = process_operator(0)
 '''
 
-    test_file = calculator_stubs / "test_enum_comparison_typing.py"
-    test_file.write_text(test_code)
-
-    result = subprocess.run(
-        ["pyright", str(test_file)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    result = _run_pyright_sample(calculator_stubs, "test_enum_comparison_typing.py", test_code)
 
     error_count = result.stdout.count("error:")
     assert error_count == 0, f"Type checking failed: {result.stdout}"

@@ -86,6 +86,7 @@ def main() -> None:
                 import_paths=import_paths,
                 skip_pyright=skip_pyright,
                 augment_capnp_stubs=augment_capnp_stubs,
+                ruff_config_path=str((Path.cwd() / "pyproject.toml").resolve()) if (Path.cwd() / "pyproject.toml").is_file() else None,
                 preserve_path_structure=True,
                 file_schemas_only=requested_file_ids,
             ),

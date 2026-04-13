@@ -34,11 +34,7 @@ def test_registry_result_type(zalfmas_stubs) -> None:
         re.DOTALL,
     )
 
-    if not result_match:
-        # Fallback debugging
-        print(f"Client content:\n{client_content}")
-
-    assert result_match, "RegistryResult class not found in AdminClient"
+    assert result_match, f"RegistryResult class not found in AdminClient.\nClient content:\n{client_content}"
     result_content = result_match.group(1)
 
     # Check registry field

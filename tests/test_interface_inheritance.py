@@ -10,13 +10,15 @@ import shutil
 from pathlib import Path
 
 import pytest
-from test_helpers import run_generator
+
+from tests.test_helpers import run_generator
 
 # Test directories
 TESTS_DIR = Path(__file__).parent
 ZALFMAS_DIR = TESTS_DIR / "schemas" / "zalfmas"
 IDENTIFIABLE_DIR = TESTS_DIR / "schemas" / "examples" / "identifiable"
 GENERATED_DIR = TESTS_DIR / "_generated" / "interface_inheritance"
+MIN_IDENTIFIABLE_SERVER_CLASSES = 3
 
 
 @pytest.fixture(scope="module")
@@ -234,7 +236,7 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir) -> None:
 
     # We should find at least 3 Server classes extending _IdentifiableInterfaceModule.Server
     # (one for each of AdminMaster, UserMaster, and Runtime)
-    assert server_inheritance_count >= 3, (
+    assert server_inheritance_count >= MIN_IDENTIFIABLE_SERVER_CLASSES, (
         f"Should have at least 3 Server classes extending _IdentifiableInterfaceModule.Server, found {server_inheritance_count}"
     )
 

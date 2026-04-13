@@ -9,6 +9,8 @@ This test verifies that both variants are generated correctly.
 
 import re
 
+from tests.test_helpers import log_summary
+
 
 def test_both_method_variants_exist(calculator_stubs) -> None:
     """Both regular and _context variant methods should be generated."""
@@ -149,21 +151,22 @@ def test_context_methods_count(calculator_stubs) -> None:
 
 def test_context_method_summary() -> None:
     """Summary test for _context method generation."""
-    print("\n" + "=" * 70)
-    print("CONTEXT METHOD VARIANT TEST SUMMARY")
-    print("=" * 70)
-    print("All _context method variant tests passed!")
-    print("  ✓ Both regular and _context variants generated")
-    print("  ✓ _context methods have correct signatures")
-    print("  ✓ CallContext has params and results attributes")
-    print("  ✓ Void methods have params but no results")
-    print("  ✓ Nested interfaces have _context methods")
-    print("  ✓ All interface methods have _context variants")
-    print()
-    print("Server methods can be implemented in two ways:")
-    print("  1. Regular: def method(self, param1, param2, _context, **kwargs)")
-    print("  2. _context: def method_context(self, context)")
-    print()
-    print("The _context variant provides access to context.params and context.results")
-    print("for manual parameter access and result setting.")
-    print("=" * 70)
+    log_summary(
+        "CONTEXT METHOD VARIANT TEST SUMMARY",
+        [
+            "All _context method variant tests passed!",
+            "  ✓ Both regular and _context variants generated",
+            "  ✓ _context methods have correct signatures",
+            "  ✓ CallContext has params and results attributes",
+            "  ✓ Void methods have params but no results",
+            "  ✓ Nested interfaces have _context methods",
+            "  ✓ All interface methods have _context variants",
+            "",
+            "Server methods can be implemented in two ways:",
+            "  1. Regular: def method(self, param1, param2, _context, **kwargs)",
+            "  2. _context: def method_context(self, context)",
+            "",
+            "The _context variant provides access to context.params and context.results",
+            "for manual parameter access and result setting.",
+        ],
+    )

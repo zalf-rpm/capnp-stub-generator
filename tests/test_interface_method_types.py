@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_helpers import log_summary
+
 TESTS_DIR = Path(__file__).parent
 
 
@@ -222,19 +224,20 @@ class TestInterfaceMethodComplexTypes:
 
 def test_interface_method_types_summary() -> None:
     """Summary of interface method type tests."""
-    print("\n" + "=" * 70)
-    print("INTERFACE METHOD TYPES TEST SUMMARY")
-    print("=" * 70)
-    print("All interface method type tests passed!")
-    print("  ✓ evaluate() has Expression parameter")
-    print("  ✓ defFunction() has proper types")
-    print("  ✓ getOperator() has Operator enum")
-    print("  ✓ Function.call() has Sequence[float]")
-    print("  ✓ Value.read() returns float")
-    print("  ✓ All methods have _request variants")
-    print("  ✓ No Any for known types")
-    print("  ✓ Complex types resolved correctly")
-    print("=" * 70 + "\n")
+    log_summary(
+        "INTERFACE METHOD TYPES TEST SUMMARY",
+        [
+            "All interface method type tests passed!",
+            "  ✓ evaluate() has Expression parameter",
+            "  ✓ defFunction() has proper types",
+            "  ✓ getOperator() has Operator enum",
+            "  ✓ Function.call() has Sequence[float]",
+            "  ✓ Value.read() returns float",
+            "  ✓ All methods have _request variants",
+            "  ✓ No Any for known types",
+            "  ✓ Complex types resolved correctly",
+        ],
+    )
 
 
 if __name__ == "__main__":

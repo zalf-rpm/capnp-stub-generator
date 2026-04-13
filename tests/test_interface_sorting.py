@@ -2,6 +2,9 @@
 
 from capnp_stub_generator.run import InterfaceNode, _sort_interfaces_by_inheritance
 
+LEAF_INTERFACE_DEPTH = 2
+EXPECTED_HIERARCHY_INTERFACE_COUNT = 3
+
 
 def test_interface_node_compute_depth_root() -> None:
     """Root interfaces have depth 0."""
@@ -32,7 +35,7 @@ def test_interface_node_compute_depth_multi_level() -> None:
 
     assert root.compute_depth(registry, client_map) == 0
     assert mid.compute_depth(registry, client_map) == 1
-    assert leaf.compute_depth(registry, client_map) == 2
+    assert leaf.compute_depth(registry, client_map) == LEAF_INTERFACE_DEPTH
 
 
 def test_interface_node_compute_depth_multiple_bases() -> None:
@@ -50,7 +53,7 @@ def test_interface_node_compute_depth_multiple_bases() -> None:
         "Derived.Client": "Derived",
     }
 
-    assert derived.compute_depth(registry, client_map) == 2  # 1 + max(0, 1)
+    assert derived.compute_depth(registry, client_map) == LEAF_INTERFACE_DEPTH  # 1 + max(0, 1)
 
 
 def test_interface_node_compute_depth_circular() -> None:
@@ -103,7 +106,7 @@ def test_sort_interfaces_hierarchy() -> None:
     result = _sort_interfaces_by_inheritance(interfaces)
 
     # Most derived first, then middle, then root
-    assert len(result) == 3
+    assert len(result) == EXPECTED_HIERARCHY_INTERFACE_COUNT
     assert result[0] == ("Leaf", "Leaf.Client")
     assert result[1] == ("Mid", "Mid.Client")
     assert result[2] == ("Root", "Root.Client")

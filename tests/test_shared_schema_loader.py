@@ -18,6 +18,9 @@ import capnp
 
 import schema_capnp
 
+INITIAL_INT32_VALUE = 42
+REIMPORTED_INT32_VALUE = 123
+
 
 class TestSharedSchemaLoader:
     """Tests for the shared schema loader singleton pattern."""
@@ -144,11 +147,11 @@ class TestSharedSchemaLoader:
 
             # Set some fields to verify the schema works
             msg.boolField = True
-            msg.int32Field = 42
+            msg.int32Field = INITIAL_INT32_VALUE
             msg.textField = "test"
 
             assert msg.boolField is True
-            assert msg.int32Field == 42
+            assert msg.int32Field == INITIAL_INT32_VALUE
             assert msg.textField == "test"
 
             # Force reimport
@@ -160,10 +163,10 @@ class TestSharedSchemaLoader:
             # Verify we can still create and use messages
             msg2 = dummy_reimported.TestAllTypes.new_message()
             msg2.boolField = False
-            msg2.int32Field = 123
+            msg2.int32Field = REIMPORTED_INT32_VALUE
 
             assert msg2.boolField is False
-            assert msg2.int32Field == 123
+            assert msg2.int32Field == REIMPORTED_INT32_VALUE
         finally:
             if str(basic_stubs) in sys.path:
                 sys.path.remove(str(basic_stubs))

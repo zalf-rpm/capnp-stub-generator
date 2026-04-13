@@ -14,12 +14,13 @@ The tests verify that:
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+
+from tests.test_helpers import log_summary, run_pyright
 
 # Base directories
 TESTS_DIR = Path(__file__).parent
@@ -167,10 +168,6 @@ class TestExampleFunctionality:
             if not python_file.exists():
                 continue
 
-            # Run pyright
-            # We use --pythonpath to ensure it finds the stubs
-            cmd = ["pyright", str(python_file)]
-
             # Note: We need to ensure pyright can find the generated stubs.
             # Usually pyright looks in the current directory or site-packages.
             # Since stubs are in _generated/examples/<name>, we might need to configure pyright
@@ -180,15 +177,7 @@ class TestExampleFunctionality:
             # Actually, pyright execution might be slow, so we should be careful.
             # But for correctness it's valuable.
 
-            result = subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
-
-            # We expect success (0)
-            # If it fails, print output for debugging
-            if result.returncode != 0:
-                print(f"Pyright failed for {python_file}:")
-                print(result.stdout)
-                print(result.stderr)
-
+            result = run_pyright(python_file, env=env)
             assert result.returncode == 0, f"Type checking failed for {python_file.name}"
 
 
@@ -201,10 +190,7 @@ def test_all_examples_summary(generate_all_stubs) -> None:
         info = generate_all_stubs[example.name]
         summary.append(f"  ✓ {example.name}: {len(info['stub_files'])} stub(s) generated")
 
-    print(f"\n{'=' * 70}")
-    print("REAL-WORLD EXAMPLES TEST SUMMARY")
-    print(f"{'=' * 70}")
-    print(f"Total examples tested: {len(EXAMPLES)}")
-    for line in summary:
-        print(line)
-    print(f"{'=' * 70}\n")
+    log_summary(
+        "REAL-WORLD EXAMPLES TEST SUMMARY",
+        [f"Total examples tested: {len(EXAMPLES)}", *summary],
+    )

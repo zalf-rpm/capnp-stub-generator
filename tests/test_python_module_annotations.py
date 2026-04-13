@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from test_helpers import run_generator
+from tests.test_helpers import run_generator
 
 
 def test_module_annotation_creates_directory_structure(tmp_path) -> None:

@@ -19,6 +19,10 @@ from capnp_stub_generator.writer_dto import (
     StructGenerationContext,
 )
 
+TWO_ITEMS = 2
+THREE_ITEMS = 3
+FOUR_ITEMS = 4
+
 
 class TestStructGenerationContext:
     """Tests for StructGenerationContext."""
@@ -118,7 +122,7 @@ class TestStructFieldsCollection:
         collection.add_slot_field(field1)
         collection.add_slot_field(field2)
 
-        assert len(collection.slot_fields) == 2
+        assert len(collection.slot_fields) == TWO_ITEMS
         assert collection.slot_fields == [field1, field2]
 
     def test_add_init_choice(self) -> None:
@@ -159,8 +163,8 @@ class TestStructFieldsCollection:
         collection.add_init_choice("company", "Company")
 
         # Verify final state
-        assert len(collection.slot_fields) == 3
-        assert len(collection.init_choices) == 2
+        assert len(collection.slot_fields) == THREE_ITEMS
+        assert len(collection.init_choices) == TWO_ITEMS
         assert len(collection.list_init_choices) == 0
 
         # Verify order is preserved
@@ -398,7 +402,7 @@ class TestMethodSignatureCollection:
         collection.set_request_class(lines)
 
         assert collection.request_class_lines == lines
-        assert len(collection.request_class_lines) == 4
+        assert len(collection.request_class_lines) == FOUR_ITEMS
 
     def test_set_request_helper(self) -> None:
         """Test setting _request helper method lines."""
@@ -442,7 +446,7 @@ class TestMethodSignatureCollection:
 
         # Verify all components are set
         assert len(collection.client_method_lines) == 1
-        assert len(collection.request_class_lines) == 2
+        assert len(collection.request_class_lines) == TWO_ITEMS
         assert len(collection.result_class_lines) == 0
         assert len(collection.request_helper_lines) == 1
 
@@ -465,7 +469,7 @@ class TestServerMethodsCollection:
         collection.add_server_method("    def method1(self, context: Any) -> None: ...")
         collection.add_server_method("    def method2(self, context: Any, x: int) -> int: ...")
 
-        assert len(collection.server_methods) == 2
+        assert len(collection.server_methods) == TWO_ITEMS
         assert collection.has_methods() is True
 
     def test_add_namedtuple(self) -> None:
@@ -475,7 +479,7 @@ class TestServerMethodsCollection:
         collection.add_namedtuple("Result1", [("value", "int")])
         collection.add_namedtuple("Result2", [("data", "str"), ("count", "int")])
 
-        assert len(collection.namedtuples) == 2
+        assert len(collection.namedtuples) == TWO_ITEMS
         assert "Result1" in collection.namedtuples
         assert "Result2" in collection.namedtuples
         assert collection.namedtuples["Result1"] == [("value", "int")]
@@ -521,8 +525,8 @@ class TestServerMethodsCollection:
         collection.add_namedtuple("MultiplyResult", [("product", "int")])
 
         # Verify final state
-        assert len(collection.server_methods) == 3
-        assert len(collection.namedtuples) == 2
+        assert len(collection.server_methods) == THREE_ITEMS
+        assert len(collection.namedtuples) == TWO_ITEMS
         assert collection.has_methods() is True
 
 
@@ -585,5 +589,5 @@ class TestInterfaceDTOIntegration:
             server_collection.add_server_method(f"    def {method_name}(self, context: Any) -> int: ...")
 
         # Verify all methods collected
-        assert len(server_collection.server_methods) == 3
+        assert len(server_collection.server_methods) == THREE_ITEMS
         assert all("context: Any" in sig for sig in server_collection.server_methods)

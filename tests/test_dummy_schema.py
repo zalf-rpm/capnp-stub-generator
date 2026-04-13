@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import re
 
+MIN_GROUP_MEMBER_COUNT = 3
+
 
 class TestDummyEnumsAndTypes:
     """Tests for enum definitions and basic types."""
@@ -101,7 +103,7 @@ class TestDummyGroupsAndNested:
         assert any("class _TestGroupsStructModule(_StructModule):" in line for line in lines)
         # Fields are now properties
         count_corge = sum(1 for line in lines if "def corge(self)" in line)
-        assert count_corge >= 3  # across foo/bar/baz groups
+        assert count_corge >= MIN_GROUP_MEMBER_COUNT  # across foo/bar/baz groups
 
     def test_interleaved_groups_union_and_nested_group_fields(self, dummy_stub_lines) -> None:
         lines = dummy_stub_lines

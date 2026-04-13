@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.test_helpers import log_summary
+
 
 def test_void_methods_return_result_protocol(basic_stubs) -> None:
     """Test that void interface methods like close() return a Result protocol (awaitable)."""
@@ -68,4 +70,7 @@ def test_comparison_with_non_void_methods(basic_stubs) -> None:
         or "def close(self) -> _ChannelInterfaceModule._WriterInterfaceModule.WriterClient.CloseResult:" in content
     )
 
-    print("✅ Consistent void/non-void method patterns with nested Results!")
+    log_summary(
+        "VOID METHOD RESULT SUMMARY",
+        ["✅ Consistent void/non-void method patterns with nested Results!"],
+    )

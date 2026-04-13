@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import logging
 import shutil
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from capnp_stub_generator.run import run
+from tests.test_helpers import run_command, run_pyright
 
 # Test directory structure
 TESTS_DIR = Path(__file__).parent
@@ -84,12 +84,7 @@ def _run_compile_command(
 ) -> None:
     """Run a capnp compile command and fail the test session on errors."""
     LOGGER.debug("Running: %s", " ".join(cmd))
-    result = subprocess.run(
-        cmd,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    result = run_command(cmd)
     if result.returncode == 0:
         return
 
@@ -152,12 +147,7 @@ def _validate_generated_stubs_with_pyright() -> None:
     examples_stubs_to_check = [
         str(path) for path in EXAMPLES_GENERATED_DIR.iterdir() if path.is_dir() and path.name != "capnp-stubs"
     ]
-    pyright_result = subprocess.run(
-        ["pyright", *basic_stubs_to_check, *examples_stubs_to_check],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    pyright_result = run_pyright(*basic_stubs_to_check, *examples_stubs_to_check)
     if pyright_result.returncode == 0:
         LOGGER.info("✓ Pyright validation passed")
         return
