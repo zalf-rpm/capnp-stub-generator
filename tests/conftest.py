@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import subprocess
 import sys
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -26,10 +29,145 @@ EXAMPLES_GENERATED_DIR = GENERATED_DIR / "examples"
 ZALFMAS_GENERATED_DIR = GENERATED_DIR / "zalfmas"
 ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR = GENERATED_DIR / "zalfmas_no_annotations"
 CAPNP_GENERATED_DIR = GENERATED_DIR / "capnp"
+LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class CompileRequest:
+    """Parameters describing one schema compilation pass."""
+
+    schema_dir: Path
+    output_dir: Path
+    description: str
+    failure_message: str
+    import_paths: list[str] | None = None
+
+
+def _clean_generated_dir() -> None:
+    """Remove and recreate the shared generated test directory."""
+    if GENERATED_DIR.exists():
+        shutil.rmtree(GENERATED_DIR)
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _get_plugin_path() -> Path:
+    """Return the capnpc plugin path and fail loudly if it is missing."""
+    plugin_path = Path(__file__).parent.parent / "src" / "capnp_stub_generator" / "capnpc_plugin.py"
+    if not plugin_path.exists():
+        pytest.fail(f"Plugin not found at {plugin_path}")
+    return plugin_path
+
+
+def _create_wrapper_script() -> Path:
+    """Create an executable wrapper for the capnpc Python plugin."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix="_capnpc_python", delete=False) as wrapper:
+        wrapper.write(f"""#!/usr/bin/env {sys.executable}
+import sys
+sys.path.insert(0, {str(Path(__file__).parent.parent / "src")!r})
+from capnp_stub_generator.capnpc_plugin import main
+main()
+""")
+        wrapper_path = Path(wrapper.name)
+
+    wrapper_path.chmod(0o700)
+    return wrapper_path
+
+
+def _run_compile_command(
+    cmd: list[str],
+    *,
+    failure_message: str,
+    schema_dir: Path,
+) -> None:
+    """Run a capnp compile command and fail the test session on errors."""
+    LOGGER.debug("Running: %s", " ".join(cmd))
+    result = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return
+
+    LOGGER.error("Failed to compile schemas from %s:\n%s", schema_dir, result.stderr)
+    LOGGER.error("stdout: %s", result.stdout)
+    pytest.fail(f"{failure_message}: {result.stderr}")
+
+
+def _compile_schema_files(
+    request: CompileRequest,
+    schema_files: list[Path],
+    wrapper_path: Path,
+) -> None:
+    """Compile a specific list of schema files using the capnp plugin."""
+    if not schema_files:
+        LOGGER.warning("No schema files found in %s", request.schema_dir)
+        return
+
+    LOGGER.info("Compiling %s", request.description)
+    request.output_dir.mkdir(parents=True, exist_ok=True)
+    cmd = ["capnp", "compile", f"--src-prefix={request.schema_dir}", f"-o{wrapper_path}:{request.output_dir}"]
+    for import_path in request.import_paths or []:
+        cmd.extend(["-I", import_path])
+    cmd.extend(str(schema_file) for schema_file in schema_files)
+    _run_compile_command(cmd, failure_message=request.failure_message, schema_dir=request.schema_dir)
+    LOGGER.info("✓ Generated stubs in %s", request.output_dir)
+
+
+def _compile_schema_tree(
+    request: CompileRequest,
+    wrapper_path: Path,
+) -> None:
+    """Compile all schemas under a directory."""
+    _compile_schema_files(request, list(request.schema_dir.rglob("*.capnp")), wrapper_path)
+
+
+def _filtered_schema_files(schema_dir: Path) -> list[Path]:
+    """Return schema files excluding duplicate-ID and bundled system schemas."""
+    return [
+        schema_file
+        for schema_file in schema_dir.rglob("*.capnp")
+        if schema_file.name != "a.capnp" and "capnp" not in schema_file.relative_to(schema_dir).parts
+    ]
+
+
+def _compile_filtered_zalfmas_schemas(
+    request: CompileRequest,
+    wrapper_path: Path,
+) -> None:
+    """Compile zalfmas-style schemas after filtering unsupported inputs."""
+    _compile_schema_files(request, _filtered_schema_files(request.schema_dir), wrapper_path)
+
+
+def _validate_generated_stubs_with_pyright() -> None:
+    """Run pyright against generated stubs that are expected to type check cleanly."""
+    LOGGER.info("Running pyright validation on generated stubs...")
+    basic_stubs_to_check = [
+        str(path) for path in BASIC_GENERATED_DIR.iterdir() if path.is_dir() and path.name != "capnp-stubs"
+    ]
+    examples_stubs_to_check = [
+        str(path) for path in EXAMPLES_GENERATED_DIR.iterdir() if path.is_dir() and path.name != "capnp-stubs"
+    ]
+    pyright_result = subprocess.run(
+        ["pyright", *basic_stubs_to_check, *examples_stubs_to_check],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if pyright_result.returncode == 0:
+        LOGGER.info("✓ Pyright validation passed")
+        return
+
+    error_lines = [line for line in pyright_result.stdout.split("\n") if " error:" in line]
+    if error_lines:
+        LOGGER.error("Pyright validation failed:\n%s", pyright_result.stdout)
+        pytest.fail(f"Pyright validation failed with {len(error_lines)} error(s)")
+    LOGGER.info("✓ Pyright validation passed")
 
 
 @pytest.fixture(scope="session", autouse=True)
-def generate_all_stubs():
+def generate_all_stubs() -> dict[str, Path]:
     """Generate all test stubs once at the beginning of the test session.
 
     This fixture runs automatically before any tests and generates stubs for:
@@ -42,184 +180,73 @@ def generate_all_stubs():
 
     All other tests should use the generated stubs from this fixture.
     """
-    logger = logging.getLogger(__name__)
-    logger.info("Generating all test stubs using capnp compile plugin...")
+    LOGGER.info("Generating all test stubs using capnp compile plugin...")
 
-    # Clean generated directory
-    if GENERATED_DIR.exists():
-        import shutil
-
-        shutil.rmtree(GENERATED_DIR)
-    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Get the capnpc-python plugin path
-    plugin_path = Path(__file__).parent.parent / "src" / "capnp_stub_generator" / "capnpc_plugin.py"
-    if not plugin_path.exists():
-        pytest.fail(f"Plugin not found at {plugin_path}")
-
-    # Create a temporary wrapper script for the plugin
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix="_capnpc_python", delete=False) as wrapper:
-        wrapper.write(f"""#!/usr/bin/env {sys.executable}
-import sys
-sys.path.insert(0, {str(Path(__file__).parent.parent / "src")!r})
-from capnp_stub_generator.capnpc_plugin import main
-main()
-""")
-        wrapper_path = Path(wrapper.name)
-
-    # Make wrapper executable
-    wrapper_path.chmod(0o700)
+    _clean_generated_dir()
+    _ = _get_plugin_path()
+    wrapper_path = _create_wrapper_script()
 
     try:
-        # Helper function to generate stubs using capnp compile
-        def compile_schemas(schema_dir: Path, output_dir: Path, import_paths: list[str] | None = None) -> None:
-            """Compile schemas using capnp compile with our plugin."""
-            # Find all .capnp files recursively
-            schema_files = list(schema_dir.rglob("*.capnp"))
-
-            if not schema_files:
-                logger.warning(f"No schema files found in {schema_dir}")
-                return
-
-            logger.info(f"Compiling {len(schema_files)} schemas from {schema_dir}")
-
-            # Create output directory
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-            # Build compile command with --src-prefix to strip the schema_dir prefix
-            cmd = ["capnp", "compile", f"--src-prefix={schema_dir}", f"-o{wrapper_path}:{output_dir}"]
-
-            # Add import paths
-            if import_paths:
-                for import_path in import_paths:
-                    cmd.extend(["-I", import_path])
-
-            # Add all schema files
-            cmd.extend([str(f) for f in schema_files])
-
-            logger.debug(f"Running: {' '.join(cmd)}")
-
-            result = subprocess.run(
-                cmd,
-                check=False,
-                capture_output=True,
-                text=True,
+        _compile_schema_tree(
+            CompileRequest(
+                BASIC_SCHEMAS_DIR,
+                BASIC_GENERATED_DIR,
+                f"{len(list(BASIC_SCHEMAS_DIR.rglob('*.capnp')))} schemas from {BASIC_SCHEMAS_DIR}",
+                "Schema compilation failed",
+            ),
+            wrapper_path,
+        )
+        _compile_schema_tree(
+            CompileRequest(
+                EXAMPLES_SCHEMAS_DIR,
+                EXAMPLES_GENERATED_DIR,
+                f"{len(list(EXAMPLES_SCHEMAS_DIR.rglob('*.capnp')))} schemas from {EXAMPLES_SCHEMAS_DIR}",
+                "Schema compilation failed",
+            ),
+            wrapper_path,
+        )
+        if CAPNP_SCHEMAS_DIR.exists():
+            _compile_schema_tree(
+                CompileRequest(
+                    CAPNP_SCHEMAS_DIR,
+                    CAPNP_GENERATED_DIR,
+                    f"{len(list(CAPNP_SCHEMAS_DIR.rglob('*.capnp')))} schemas from {CAPNP_SCHEMAS_DIR}",
+                    "Schema compilation failed",
+                ),
+                wrapper_path,
             )
 
-            if result.returncode != 0:
-                logger.error(f"Failed to compile schemas from {schema_dir}:\n{result.stderr}")
-                logger.error(f"stdout: {result.stdout}")
-                pytest.fail(f"Schema compilation failed: {result.stderr}")
-
-            logger.info(f"✓ Generated stubs in {output_dir}")
-
-        # Generate basic schemas
-        compile_schemas(BASIC_SCHEMAS_DIR, BASIC_GENERATED_DIR)
-
-        # Generate example schemas
-        compile_schemas(EXAMPLES_SCHEMAS_DIR, EXAMPLES_GENERATED_DIR)
-
-        # Generate capnp schemas (c++.capnp, schema.capnp)
-        if CAPNP_SCHEMAS_DIR.exists():
-            compile_schemas(CAPNP_SCHEMAS_DIR, CAPNP_GENERATED_DIR)
-
-        # Generate zalfmas schemas (with Python module annotations)
-        # Exclude a.capnp which has duplicate ID and files in capnp folder (system schemas)
-        zalfmas_files = list(ZALFMAS_SCHEMAS_DIR.rglob("*.capnp"))
-        zalfmas_files = [
-            f for f in zalfmas_files if f.name != "a.capnp" and "capnp" not in f.relative_to(ZALFMAS_SCHEMAS_DIR).parts
-        ]
-
-        if zalfmas_files:
-            logger.info(f"Compiling {len(zalfmas_files)} zalfmas schemas (WITH Python annotations)")
-            ZALFMAS_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-
-            cmd = [
-                "capnp",
-                "compile",
-                f"--src-prefix={ZALFMAS_SCHEMAS_DIR}",
-                f"-o{wrapper_path}:{ZALFMAS_GENERATED_DIR}",
-                "-I",
-                str(ZALFMAS_SCHEMAS_DIR),
-            ]
-            cmd.extend([str(f) for f in zalfmas_files])
-
-            result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-            if result.returncode != 0:
-                logger.error(f"Failed to compile zalfmas schemas:\n{result.stderr}")
-                pytest.fail(f"Zalfmas schema compilation failed: {result.stderr}")
-
-            logger.info(f"✓ Generated zalfmas stubs (with annotations) in {ZALFMAS_GENERATED_DIR}")
-
-        # Generate zalfmas schemas from schemas WITHOUT Python module annotations
-        # Use a separate schema directory that has the same files but without the $Python.module annotation
-        zalfmas_no_ann_source = SCHEMAS_DIR / "zalfmas_no_annotations"
-        if zalfmas_no_ann_source.exists():
-            zalfmas_no_ann_files = list(zalfmas_no_ann_source.rglob("*.capnp"))
-            zalfmas_no_ann_files = [
-                f
-                for f in zalfmas_no_ann_files
-                if f.name != "a.capnp" and "capnp" not in f.relative_to(zalfmas_no_ann_source).parts
-            ]
-
-            if zalfmas_no_ann_files:
-                logger.info(f"Compiling {len(zalfmas_no_ann_files)} zalfmas schemas (WITHOUT Python annotations)")
-                ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-
-                cmd = [
-                    "capnp",
-                    "compile",
-                    f"--src-prefix={zalfmas_no_ann_source}",
-                    f"-o{wrapper_path}:{ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR}",
-                    "-I",
-                    str(zalfmas_no_ann_source),
-                ]
-                cmd.extend([str(f) for f in zalfmas_no_ann_files])
-
-                result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-                if result.returncode != 0:
-                    logger.error(f"Failed to compile zalfmas schemas (no annotations):\n{result.stderr}")
-                    pytest.fail(f"Zalfmas schema compilation (no annotations) failed: {result.stderr}")
-
-                logger.info(
-                    f"✓ Generated zalfmas stubs (without annotations) in {ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR}",
-                )
-
-        logger.info("✓ All test stubs generated successfully using capnp compile")
-
-        # Run pyright validation on generated stubs (excluding zalfmas which has complex cross-schema imports)
-        # Also exclude bundled capnp-stubs from pycapnp which have pre-existing pyright issues
-        logger.info("Running pyright validation on generated stubs...")
-
-        # Get all stub directories except capnp-stubs (bundled pycapnp types)
-        basic_stubs_to_check = [str(p) for p in BASIC_GENERATED_DIR.iterdir() if p.is_dir() and p.name != "capnp-stubs"]
-        examples_stubs_to_check = [
-            str(p) for p in EXAMPLES_GENERATED_DIR.iterdir() if p.is_dir() and p.name != "capnp-stubs"
-        ]
-
-        pyright_result = subprocess.run(
-            ["pyright", *basic_stubs_to_check, *examples_stubs_to_check],
-            check=False,
-            capture_output=True,
-            text=True,
+        _compile_filtered_zalfmas_schemas(
+            CompileRequest(
+                ZALFMAS_SCHEMAS_DIR,
+                ZALFMAS_GENERATED_DIR,
+                f"{len(_filtered_schema_files(ZALFMAS_SCHEMAS_DIR))} zalfmas schemas (WITH Python annotations)",
+                "Zalfmas schema compilation failed",
+                [str(ZALFMAS_SCHEMAS_DIR)],
+            ),
+            wrapper_path,
         )
 
-        if pyright_result.returncode != 0:
-            # Count actual errors (not warnings)
-            error_lines = [line for line in pyright_result.stdout.split("\n") if " error:" in line]
-            if error_lines:
-                logger.error(f"Pyright validation failed:\n{pyright_result.stdout}")
-                pytest.fail(f"Pyright validation failed with {len(error_lines)} error(s)")
+        zalfmas_no_ann_source = SCHEMAS_DIR / "zalfmas_no_annotations"
+        if zalfmas_no_ann_source.exists():
+            _compile_filtered_zalfmas_schemas(
+                CompileRequest(
+                    zalfmas_no_ann_source,
+                    ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR,
+                    f"{len(_filtered_schema_files(zalfmas_no_ann_source))} zalfmas schemas "
+                    "(WITHOUT Python annotations)",
+                    "Zalfmas schema compilation (no annotations) failed",
+                    [str(zalfmas_no_ann_source)],
+                ),
+                wrapper_path,
+            )
 
-        logger.info("✓ Pyright validation passed")
+        LOGGER.info("✓ All test stubs generated successfully using capnp compile")
+        _validate_generated_stubs_with_pyright()
 
     finally:
-        # Clean up wrapper script
         wrapper_path.unlink(missing_ok=True)
 
-    # Return paths for tests to use
     return {
         "basic": BASIC_GENERATED_DIR,
         "examples": EXAMPLES_GENERATED_DIR,

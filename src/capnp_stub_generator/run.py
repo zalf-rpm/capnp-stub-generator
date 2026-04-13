@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,7 +18,7 @@ from capnp_stub_generator.writer import Writer
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Set as AbstractSet
+    from collections.abc import Iterator
 
     from capnp.lib.capnp import _Schema
 
@@ -31,6 +31,17 @@ logger = logging.getLogger(__name__)
 PYI_SUFFIX = ".pyi"
 PY_SUFFIX = ".py"
 MIN_PRESERVED_PATH_DEPTH = 2
+CAPNP_STDLIB_MODULES = {
+    "persistent_capnp",
+    "schema_capnp",
+    "c++_capnp",
+    "c_capnp",
+    "java_capnp",
+    "go_capnp",
+    "python_capnp",
+    "json_capnp",
+    "compat_capnp",
+}
 
 
 class PyrightValidationError(Exception):
@@ -114,6 +125,15 @@ class SchemaWriteTarget:
     module_path_prefix: str | None = None
 
 
+@dataclass
+class GeneratedSchemaState:
+    """Collected generation outputs grouped by output directory."""
+
+    output_directories_used: set[str] = field(default_factory=set)
+    interfaces_by_dir: dict[str, dict[str, tuple[str, list[str]]]] = field(default_factory=dict)
+    dynamic_object_types_by_dir: dict[str, dict[str, list[tuple[str, str]]]] = field(default_factory=dict)
+
+
 def _resolve_executable(name: str) -> str:
     """Resolve an executable to an absolute path."""
     executable = shutil.which(name)
@@ -184,6 +204,320 @@ def _sort_interfaces_by_inheritance(interfaces: dict[str, tuple[str, list[str]]]
     return [(iface_name, client_name) for _, _, iface_name, client_name in depths]
 
 
+def _replace_tree(source_path: Path, dest_path: Path) -> None:
+    """Replace a destination directory with a fresh copy of the source tree."""
+    if dest_path.exists():
+        shutil.rmtree(dest_path)
+    shutil.copytree(source_path, dest_path)
+
+
+def _fix_schema_capnp_imports(capnp_pyi_path: Path) -> None:
+    """Replace relative schema_capnp imports in the bundled capnp stubs."""
+    if not capnp_pyi_path.exists():
+        return
+
+    with capnp_pyi_path.open(encoding="utf8") as file:
+        content = file.read()
+
+    content = content.replace("from ...schema_capnp import", "from schema_capnp import")
+
+    with capnp_pyi_path.open("w", encoding="utf8") as file:
+        file.write(content)
+
+    logger.info("Fixed schema_capnp imports to be absolute")
+
+
+def _copy_augmented_stub_packages(source_stubs_path: str, augmented_stubs_dir: str) -> tuple[Path, Path | None]:
+    """Copy bundled stub packages into the augmentation directory."""
+    source_stubs_dir = Path(source_stubs_path)
+    dest_stubs_path = Path(augmented_stubs_dir) / "capnp-stubs"
+    _replace_tree(source_stubs_dir, dest_stubs_path)
+    logger.info(f"Copied capnp-stubs to: {dest_stubs_path}")
+
+    _fix_schema_capnp_imports(dest_stubs_path / "lib" / "capnp.pyi")
+
+    source_schema_path = source_stubs_dir.parent / "schema_capnp"
+    if not source_schema_path.is_dir():
+        logger.warning(f"Schema stubs not found at: {source_schema_path}")
+        return dest_stubs_path, None
+
+    dest_schema_path = Path(augmented_stubs_dir) / "schema_capnp"
+    _replace_tree(source_schema_path, dest_schema_path)
+    logger.info(f"Copied schema stubs to: {dest_schema_path}")
+    return dest_stubs_path, dest_schema_path
+
+
+def _has_dynamic_object_overloads(dynamic_object_types: dict[str, list[tuple[str, str]]]) -> bool:
+    """Return whether any dynamic reader overloads need to be generated."""
+    return any(dynamic_object_types.get(type_name) for type_name in ("structs", "lists", "interfaces"))
+
+
+def _read_stub_lines(capnp_pyi_path: Path) -> list[str]:
+    """Read a stub file and return it as a mutable list of lines."""
+    with capnp_pyi_path.open(encoding="utf8") as file:
+        return file.read().split("\n")
+
+
+def _write_stub_lines(capnp_pyi_path: Path, lines: list[str]) -> None:
+    """Write a mutable list of lines back to a stub file."""
+    with capnp_pyi_path.open("w", encoding="utf8") as file:
+        file.write("\n".join(lines))
+
+
+def _find_typing_import_idx(lines: list[str]) -> int | None:
+    """Return the index of the `from typing import ...` line if present."""
+    return next((idx for idx, line in enumerate(lines) if line.startswith("from typing import")), None)
+
+
+def _ensure_overload_import(lines: list[str], typing_import_idx: int) -> None:
+    """Ensure the typing import line includes `overload`."""
+    if "overload" in lines[typing_import_idx]:
+        return
+
+    lines[typing_import_idx] = lines[typing_import_idx].replace("from typing import ", "from typing import overload, ")
+
+
+def _find_import_end_idx(lines: list[str], typing_import_idx: int) -> int:
+    """Find the first line after the import block starting at the typing import."""
+    import_end_idx = typing_import_idx + 1
+    in_multiline_import = False
+
+    for idx, line in enumerate(lines[typing_import_idx + 1 :], start=typing_import_idx + 1):
+        stripped = line.strip()
+
+        if "from " in stripped and "import (" in stripped and ")" not in stripped:
+            in_multiline_import = True
+            continue
+
+        if in_multiline_import:
+            if ")" in stripped:
+                in_multiline_import = False
+            continue
+
+        if not stripped or stripped.startswith(("import ", "from ", "#")):
+            continue
+
+        import_end_idx = idx
+        break
+
+    return import_end_idx
+
+
+def _collect_qualified_names(
+    interfaces: dict[str, tuple[str, list[str]]],
+    dynamic_object_types: dict[str, list[tuple[str, str]]],
+) -> set[str]:
+    """Collect all qualified type names that need additional imports."""
+    qualified_names = set(interfaces)
+    qualified_names.update(protocol_name for protocol_name, _ in dynamic_object_types.get("structs", []))
+    qualified_names.update(list_name for list_name, _ in dynamic_object_types.get("lists", []))
+    qualified_names.update(protocol_name for protocol_name, _ in dynamic_object_types.get("interfaces", []))
+    return qualified_names
+
+
+def _find_capnp_module_idx(parts: list[str]) -> int | None:
+    """Find the first `_capnp` module segment in a qualified name."""
+    return next((idx for idx, part in enumerate(parts) if part.endswith("_capnp")), None)
+
+
+def _extract_module_import(qualified_name: str) -> tuple[str, str] | None:
+    """Return the module name and import path for a qualified generated type."""
+    parts = qualified_name.split(".")
+    capnp_module_idx = _find_capnp_module_idx(parts)
+    if capnp_module_idx is None:
+        return None
+
+    capnp_module_name = parts[capnp_module_idx]
+    if capnp_module_idx + 1 < len(parts) and parts[capnp_module_idx + 1] == capnp_module_name:
+        from_path = capnp_module_name if capnp_module_idx == 0 else ".".join(parts[: capnp_module_idx + 1])
+        return capnp_module_name, from_path
+
+    from_path = "" if capnp_module_idx == 0 else ".".join(parts[:capnp_module_idx])
+    return capnp_module_name, from_path
+
+
+def _store_preferred_module_import(module_imports: dict[str, str], module_name: str, from_path: str) -> None:
+    """Prefer a non-empty module import path over an empty direct import."""
+    existing = module_imports.get(module_name)
+    if existing is None or (from_path and not existing):
+        module_imports[module_name] = from_path
+
+
+def _render_module_import_lines(module_imports: dict[str, str]) -> list[str]:
+    """Render import statements for generated project-specific types."""
+    import_lines = ["", "# Generated imports for project-specific types"]
+
+    for module_name in sorted(module_imports):
+        from_path = module_imports[module_name]
+        if not from_path and module_name in CAPNP_STDLIB_MODULES:
+            import_lines.append(f"import capnp.{module_name} as {module_name}")
+        elif from_path:
+            import_lines.append(f"from {from_path} import {module_name}")
+        else:
+            import_lines.append(f"import {module_name}")
+
+    return import_lines
+
+
+def _find_class_bounds(lines: list[str], class_name: str) -> tuple[int, int] | None:
+    """Return the start and end indices of a top-level class definition."""
+    class_start_idx = next(
+        (idx for idx, line in enumerate(lines) if line.strip().startswith(f"class {class_name}")),
+        None,
+    )
+    if class_start_idx is None:
+        return None
+
+    class_end_idx = len(lines)
+    for idx in range(class_start_idx + 1, len(lines)):
+        if lines[idx].strip().startswith("class "):
+            class_end_idx = idx
+            break
+
+    return class_start_idx, class_end_idx
+
+
+def _adjust_insert_idx(lines: list[str], method_idx: int, class_start_idx: int) -> int:
+    """Move an insertion index above decorators and blank separator lines."""
+    insert_idx = method_idx
+    for idx in range(method_idx - 1, class_start_idx, -1):
+        previous_line = lines[idx].strip()
+        if previous_line.startswith("@") or previous_line == "":
+            insert_idx = idx
+            continue
+        break
+
+    return insert_idx
+
+
+def _find_method_insert_idx(lines: list[str], class_name: str, method_name: str) -> tuple[int | None, int | None]:
+    """Find where overloads should be inserted for a schema-accepting class method."""
+    class_bounds = _find_class_bounds(lines, class_name)
+    if class_bounds is None:
+        return None, None
+
+    class_start_idx, class_end_idx = class_bounds
+    for method_idx in range(class_start_idx + 1, class_end_idx):
+        line = lines[method_idx]
+        if line.strip().startswith("@overload"):
+            continue
+        if f"def {method_name}" in line and "schema:" in line:
+            return class_start_idx, _adjust_insert_idx(lines, method_idx, class_start_idx)
+
+    return class_start_idx, None
+
+
+def _capnp_qualified_suffix(qualified_name: str) -> tuple[str, str] | None:
+    """Return the `_capnp` module name and suffix for a qualified generated type."""
+    parts = qualified_name.split(".")
+    capnp_module_idx = _find_capnp_module_idx(parts)
+    if capnp_module_idx is None:
+        return None
+    return parts[capnp_module_idx], ".".join(parts[capnp_module_idx:])
+
+
+def _build_cast_as_overloads(
+    interfaces: dict[str, tuple[str, list[str]]],
+    module_imports: dict[str, str],
+) -> list[str]:
+    """Build overloads for `_CapabilityClient.cast_as`."""
+    overload_lines: list[str] = []
+
+    for interface_name, client_name in _sort_interfaces_by_inheritance(interfaces):
+        interface_details = _capnp_qualified_suffix(interface_name)
+        client_details = _capnp_qualified_suffix(client_name)
+        if interface_details is None or client_details is None:
+            logger.warning(f"Could not find capnp module in interface name: {interface_name}")
+            continue
+
+        capnp_module_name, qualified_interface = interface_details
+        _, qualified_client = client_details
+        if capnp_module_name not in module_imports:
+            logger.warning(f"Could not find import path for module {capnp_module_name}")
+            continue
+
+        overload_lines.extend(
+            [
+                "    @overload",
+                f"    def cast_as(self, schema: {qualified_interface}) -> {qualified_client}: ...",
+            ],
+        )
+
+    if overload_lines:
+        overload_lines.extend(
+            [
+                "    @overload",
+                "    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...",
+            ],
+        )
+    return overload_lines
+
+
+def _trim_to_capnp_module(qualified_name: str) -> str:
+    """Drop any non-module prefix before the first `_capnp` segment."""
+    qualified_details = _capnp_qualified_suffix(qualified_name)
+    return qualified_details[1] if qualified_details is not None else qualified_name
+
+
+def _sort_types_by_specificity(types: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Sort qualified generated types by nesting depth, deepest first."""
+    return sorted(types, key=lambda item: (-item[0].count("."), item[0]))
+
+
+def _build_dynamic_reader_overloads(
+    method_name: str,
+    types: list[tuple[str, str]],
+    *,
+    wrap_schema_in_type: bool = False,
+    catchall_signature: str | None = None,
+) -> list[str]:
+    """Build overload blocks for `_DynamicObjectReader` methods."""
+    overload_lines: list[str] = []
+
+    for schema_name, return_name in types:
+        clean_schema = _trim_to_capnp_module(schema_name)
+        clean_return = _trim_to_capnp_module(return_name)
+        schema_expression = f"type[{clean_schema}]" if wrap_schema_in_type else clean_schema
+        overload_lines.extend(
+            [
+                "    @overload",
+                f"    def {method_name}(self, schema: {schema_expression}) -> {clean_return}: ...",
+            ],
+        )
+
+    if catchall_signature is not None and overload_lines:
+        overload_lines.extend(["    @overload", catchall_signature])
+
+    return overload_lines
+
+
+def _sort_interface_reader_types(
+    interface_types: list[tuple[str, str]],
+    interfaces: dict[str, tuple[str, list[str]]],
+) -> list[tuple[str, str]]:
+    """Sort interface reader overloads by inheritance, then preserve any leftovers."""
+    if not interfaces:
+        return _sort_types_by_specificity(interface_types)
+
+    interface_type_map = dict(interface_types)
+    sorted_interface_types = [
+        (interface_name, interface_type_map[interface_name])
+        for interface_name, _ in _sort_interfaces_by_inheritance(interfaces)
+        if interface_name in interface_type_map
+    ]
+    seen = {interface_name for interface_name, _ in sorted_interface_types}
+    sorted_interface_types.extend(
+        (interface_name, client_name) for interface_name, client_name in interface_types if interface_name not in seen
+    )
+    return sorted_interface_types
+
+
+def _insert_overload_blocks(lines: list[str], overload_blocks: list[tuple[int, list[str]]]) -> None:
+    """Insert overload blocks from bottom to top so earlier indices stay stable."""
+    for insert_idx, overload_lines in sorted(overload_blocks, key=lambda item: item[0], reverse=True):
+        lines[insert_idx:insert_idx] = overload_lines
+
+
 def augment_capnp_stubs_with_overloads(
     source_stubs_path: str,
     augmented_stubs_dir: str,
@@ -207,94 +541,33 @@ def augment_capnp_stubs_with_overloads(
         or None if lib/capnp.pyi could not be found.
 
     """
-    # Create destination path for augmented stubs
-    dest_stubs_path = Path(augmented_stubs_dir) / "capnp-stubs"
+    dest_stubs_path, dest_schema_path = _copy_augmented_stub_packages(source_stubs_path, augmented_stubs_dir)
 
-    # Copy the entire capnp-stubs directory
-    if dest_stubs_path.exists():
-        shutil.rmtree(dest_stubs_path)
-    shutil.copytree(source_stubs_path, dest_stubs_path)
-    logger.info(f"Copied capnp-stubs to: {dest_stubs_path}")
-
-    # Fix schema_capnp imports to be absolute instead of relative
-    capnp_pyi_path = dest_stubs_path / "lib" / "capnp.pyi"
-    if capnp_pyi_path.exists():
-        with capnp_pyi_path.open(encoding="utf8") as f:
-            content = f.read()
-
-        content = content.replace("from ...schema_capnp import", "from schema_capnp import")
-
-        with capnp_pyi_path.open("w", encoding="utf8") as f:
-            f.write(content)
-
-        logger.info("Fixed schema_capnp imports to be absolute")
-
-    source_schema_path = Path(source_stubs_path).parent / "schema_capnp"
-    dest_schema_path = Path(augmented_stubs_dir) / "schema_capnp"
-
-    if source_schema_path.is_dir():
-        if dest_schema_path.exists():
-            shutil.rmtree(dest_schema_path)
-        shutil.copytree(source_schema_path, dest_schema_path)
-        logger.info(f"Copied schema stubs to: {dest_schema_path}")
-    else:
-        logger.warning(f"Schema stubs not found at: {source_schema_path}")
-        dest_schema_path = None
-
-    if not interfaces and not dynamic_object_types.get("structs") and not dynamic_object_types.get("interfaces"):
+    if not interfaces and not _has_dynamic_object_overloads(dynamic_object_types):
         logger.info("No interfaces or _DynamicObjectReader types found, skipping capnp-stubs augmentation.")
         return str(dest_stubs_path), str(dest_schema_path) if dest_schema_path else None
 
-    # Path to lib/capnp.pyi
     capnp_pyi_path = dest_stubs_path / "lib" / "capnp.pyi"
-
     if not capnp_pyi_path.exists():
         logger.warning(f"Could not find lib/capnp.pyi at {capnp_pyi_path}, skipping augmentation.")
         return None
 
-    # Read the original file
-    with capnp_pyi_path.open(encoding="utf8") as f:
-        original_content = f.read()
-
-    lines = original_content.split("\n")
-
-    # Find where to add overload import
-    typing_import_idx = None
-    for i, line in enumerate(lines):
-        if line.startswith("from typing import"):
-            typing_import_idx = i
-            break
-
+    lines = _read_stub_lines(capnp_pyi_path)
+    typing_import_idx = _find_typing_import_idx(lines)
     if typing_import_idx is None:
         logger.warning("Could not find 'from typing import' in lib/capnp.pyi, skipping augmentation.")
         return str(dest_stubs_path), str(dest_schema_path) if dest_schema_path else None
 
-    # Add overload to the typing import if not already present
-    typing_line = lines[typing_import_idx]
-    if "overload" not in typing_line:
-        # Add overload to the import
-        typing_line = typing_line.replace("from typing import ", "from typing import overload, ")
-        lines[typing_import_idx] = typing_line
-
-    # Build module imports for both cast_as and _DynamicObjectReader augmentation
+    _ensure_overload_import(lines, typing_import_idx)
     module_imports = _build_module_imports(interfaces, dynamic_object_types, lines, typing_import_idx)
+    _write_stub_lines(capnp_pyi_path, lines)
 
-    # Write back the lines with imports added
-    with capnp_pyi_path.open("w", encoding="utf8") as f:
-        f.write("\n".join(lines))
-
-    # Augment cast_as if we have interfaces
     if interfaces:
         _augment_capnp_pyi(capnp_pyi_path, interfaces, module_imports)
 
-    # Augment _DynamicObjectReader if we have types
-    struct_types = dynamic_object_types.get("structs", [])
-    list_types = dynamic_object_types.get("lists", [])
-    interface_types = dynamic_object_types.get("interfaces", [])
-    if struct_types or list_types or interface_types:
+    if _has_dynamic_object_overloads(dynamic_object_types):
         _augment_dynamic_object_reader(capnp_pyi_path, dynamic_object_types, interfaces)
 
-    # Return the paths to the bundled stubs that were copied
     return str(dest_stubs_path), str(dest_schema_path) if dest_schema_path else None
 
 
@@ -316,128 +589,16 @@ def _build_module_imports(
         Dictionary mapping module names to import paths.
 
     """
-    # Find the end of ALL imports (including multi-line imports)
-    import_end_idx = typing_import_idx + 1
-    in_multiline_import = False
-
-    for i in range(typing_import_idx + 1, len(lines)):
-        line = lines[i]
-        stripped = line.strip()
-
-        # Check if we're in a multi-line import
-        if "from " in stripped and "import (" in stripped and ")" not in stripped:
-            in_multiline_import = True
-            continue
-
-        if in_multiline_import:
-            if ")" in stripped:
-                in_multiline_import = False
-            continue
-
-        # Check if this is a single-line import
-        if stripped.startswith(("import ", "from ")):
-            continue
-
-        # Empty lines or comments between imports - continue
-        if not stripped or stripped.startswith("#"):
-            continue
-
-        # We've found the first non-import line
-        import_end_idx = i
-        break
-
-    # Collect all module names from interfaces and dynamic object types
-    all_qualified_names: AbstractSet[str] = set()
-
-    # From interfaces
-    for interface_name in interfaces:
-        all_qualified_names.add(interface_name)
-
-    # From struct types
-    for protocol_name, _ in dynamic_object_types.get("structs", []):
-        all_qualified_names.add(protocol_name)
-
-    # From interface types
-    for protocol_name, _ in dynamic_object_types.get("interfaces", []):
-        all_qualified_names.add(protocol_name)
-
-    # Build module imports
     module_imports: dict[str, str] = {}
-    for qualified_name in all_qualified_names:
-        parts = qualified_name.split(".")
-
-        # Find the part that ends with _capnp
-        capnp_module_idx = None
-        for i, part in enumerate(parts):
-            if part.endswith("_capnp"):
-                capnp_module_idx = i
-                break
-
-        if capnp_module_idx is None:
+    for qualified_name in _collect_qualified_names(interfaces, dynamic_object_types):
+        module_import = _extract_module_import(qualified_name)
+        if module_import is None:
             continue
+        module_name, from_path = module_import
+        _store_preferred_module_import(module_imports, module_name, from_path)
 
-        capnp_module_name = parts[capnp_module_idx]
-
-        # Check if next part is the same name (package.module pattern like schema_capnp.schema_capnp)
-        # In this case, we need to import from the package
-        if capnp_module_idx + 1 < len(parts) and parts[capnp_module_idx + 1] == capnp_module_name:
-            # This is a package with a submodule of same name (e.g., schema_capnp.schema_capnp)
-            # Import as: from schema_capnp import schema_capnp
-            from_path = capnp_module_name if capnp_module_idx == 0 else ".".join(parts[: capnp_module_idx + 1])
-        # Normal module
-        # Build the from path - use the module annotation if present (parts before _capnp)
-        # For "mas.schema.climate.climate_capnp._ClimateSensorInterfaceModule"
-        # -> from_path = "mas.schema.climate"
-        # For "basic.advanced_features_capnp._TestIfaceInterfaceModule"
-        # -> from_path = "basic"
-        # For "climate_capnp._ClimateSensorInterfaceModule" (no annotation)
-        # -> from_path = "" (direct import)
-        elif capnp_module_idx == 0:
-            from_path = ""  # No prefix, direct import
-        else:
-            from_path = ".".join(parts[:capnp_module_idx])
-
-        # Only update if we don't have an entry yet, or if new from_path is more specific (non-empty)
-        if capnp_module_name not in module_imports or (from_path and not module_imports[capnp_module_name]):
-            module_imports[capnp_module_name] = from_path
-
-    # Build import lines
-    import_lines = [
-        "",
-        "# Generated imports for project-specific types",
-    ]
-
-    # Standard library capnp modules that should be imported from capnp package
-    capnp_stdlib_modules = {
-        "persistent_capnp",
-        "schema_capnp",
-        "c++_capnp",
-        "c_capnp",
-        "java_capnp",
-        "go_capnp",
-        "python_capnp",
-        "json_capnp",
-        "compat_capnp",
-    }
-
-    for capnp_module_name in sorted(module_imports.keys()):
-        from_path = module_imports[capnp_module_name]
-
-        # Check if this is a standard library module (no path prefix)
-        if not from_path and capnp_module_name in capnp_stdlib_modules:
-            # Import from capnp package using import...as syntax for pyright compatibility
-            import_lines.append(f"import capnp.{capnp_module_name} as {capnp_module_name}")
-        # Use "from X import Y" style when we have a module path
-        # e.g., "from mas.schema.climate import climate_capnp"
-        # Or direct import when no path: "import climate_capnp"
-        elif from_path:
-            import_lines.append(f"from {from_path} import {capnp_module_name}")
-        else:
-            import_lines.append(f"import {capnp_module_name}")
-
-    # Insert the imports after the existing imports
-    lines[import_end_idx:import_end_idx] = import_lines
-
+    import_end_idx = _find_import_end_idx(lines, typing_import_idx)
+    lines[import_end_idx:import_end_idx] = _render_module_import_lines(module_imports)
     return module_imports
 
 
@@ -455,89 +616,14 @@ def _augment_capnp_pyi(
 
     """
     capnp_pyi_path = Path(capnp_pyi_path)
-
-    # Read the file again (after imports were added)
-    with capnp_pyi_path.open(encoding="utf8") as f:
-        original_content = f.read()
-
-    lines = original_content.split("\n")
-
-    # Now find _CapabilityClient class and its cast_as method
-    cast_as_line_idx = None
-    in_castable_bootstrap = False
-
-    for i, line in enumerate(lines):
-        if "class _CapabilityClient" in line:
-            in_castable_bootstrap = True
-        elif in_castable_bootstrap and "def cast_as(self, schema:" in line:
-            cast_as_line_idx = i
-            break
-        elif in_castable_bootstrap and line.strip().startswith("class ") and "_CapabilityClient" not in line:
-            # Found another class, stop looking
-            break
-
+    lines = _read_stub_lines(capnp_pyi_path)
+    _, cast_as_line_idx = _find_method_insert_idx(lines, "_CapabilityClient", "cast_as")
     if cast_as_line_idx is None:
         logger.warning("Could not find cast_as method in _CapabilityClient class, skipping augmentation.")
         return
 
-    # Sort interfaces by inheritance depth (most derived first)
-    sorted_interfaces = _sort_interfaces_by_inheritance(interfaces)
-
-    # Build the overloads (insert before the existing cast_as method)
-    overload_lines: list[str] = []
-
-    for interface_name, client_name in sorted_interfaces:
-        # interface_name is like "calculator.calculator_capnp.Calculator" or
-        # "models.monica.monica_management_capnp.MonicaManagement"
-        parts = interface_name.split(".")
-
-        # Find the part that ends with _capnp
-        capnp_module_idx = None
-        capnp_module_name = None
-        for j, part in enumerate(parts):
-            if part.endswith("_capnp"):
-                capnp_module_idx = j
-                capnp_module_name = part
-                break
-
-        if capnp_module_idx is None or capnp_module_name is None:
-            logger.warning(f"Could not find capnp module in interface name: {interface_name}")
-            continue
-
-        # Get the from path from module_imports
-        from_path = module_imports.get(capnp_module_name)
-        if not from_path:
-            logger.warning(f"Could not find import path for module {capnp_module_name}")
-            continue
-
-        # Build qualified names: capnp_module_name.RestOfPath
-        # For "calculator.calculator_capnp.Calculator" -> "calculator_capnp.Calculator"
-        # For "models.monica.monica_management_capnp.MonicaManagement" -> "monica_management_capnp.MonicaManagement"
-        interface_suffix = ".".join(parts[capnp_module_idx:])
-        client_suffix = ".".join(client_name.split(".")[capnp_module_idx:])
-
-        qualified_interface = interface_suffix
-        qualified_client = client_suffix
-
-        overload_lines.append("    @overload")
-        overload_lines.append(
-            f"    def cast_as(self, schema: {qualified_interface}) -> {qualified_client}: ...  # type: ignore[reportOverlappingOverload]",
-        )
-
-    # Add a catchall overload that matches the original function definition
-    overload_lines.append("    @overload")
-    overload_lines.append(
-        "    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...  # type: ignore[reportOverlappingOverload]",
-    )
-
-    # Insert overloads before the original cast_as method
-    lines[cast_as_line_idx:cast_as_line_idx] = overload_lines
-
-    # Write back
-    augmented_content = "\n".join(lines)
-    with capnp_pyi_path.open("w", encoding="utf8") as f:
-        f.write(augmented_content)
-
+    lines[cast_as_line_idx:cast_as_line_idx] = _build_cast_as_overloads(interfaces, module_imports)
+    _write_stub_lines(capnp_pyi_path, lines)
     logger.info(f"Augmented {capnp_pyi_path} with {len(interfaces)} cast_as overload(s).")
 
 
@@ -567,279 +653,46 @@ def _augment_dynamic_object_reader(
         logger.info("No _DynamicObjectReader types to augment.")
         return
 
-    # Read the file
-    with capnp_pyi_path.open(encoding="utf8") as f:
-        original_content = f.read()
-
-    lines = original_content.split("\n")
-
-    # Find the _DynamicObjectReader class and its methods
-    dynamic_reader_idx = None
-    as_struct_insert_idx = None
-    as_list_insert_idx = None
-    as_interface_insert_idx = None
-
-    in_dynamic_reader = False
-    for i, line in enumerate(lines):
-        if "class _DynamicObjectReader" in line:
-            dynamic_reader_idx = i
-            in_dynamic_reader = True
-        elif in_dynamic_reader:
-            # Skip @overload decorators - we want the actual implementation
-            if line.strip().startswith("@overload"):
-                continue
-            # Look for the actual method definitions (not overloads)
-            if "def as_interface" in line and as_interface_insert_idx is None and "schema:" in line:
-                insert_at = i
-                if dynamic_reader_idx is not None:
-                    for j in range(i - 1, dynamic_reader_idx, -1):
-                        prev_line = lines[j].strip()
-                        if prev_line.startswith("@") or prev_line == "":
-                            insert_at = j
-                        else:
-                            break
-                as_interface_insert_idx = insert_at
-            elif "def as_struct" in line and as_struct_insert_idx is None and "schema:" in line:
-                insert_at = i
-                if dynamic_reader_idx is not None:
-                    for j in range(i - 1, dynamic_reader_idx, -1):
-                        prev_line = lines[j].strip()
-                        if prev_line.startswith("@") or prev_line == "":
-                            insert_at = j
-                        else:
-                            break
-                as_struct_insert_idx = insert_at
-            elif "def as_list" in line and as_list_insert_idx is None and "schema:" in line:
-                insert_at = i
-                if dynamic_reader_idx is not None:
-                    for j in range(i - 1, dynamic_reader_idx, -1):
-                        prev_line = lines[j].strip()
-                        if prev_line.startswith("@") or prev_line == "":
-                            insert_at = j
-                        else:
-                            break
-                as_list_insert_idx = insert_at
-            elif line.strip().startswith("class ") and "_DynamicObjectReader" not in line:
-                # Found another class, stop looking
-                break
+    lines = _read_stub_lines(capnp_pyi_path)
+    dynamic_reader_idx, as_struct_insert_idx = _find_method_insert_idx(lines, "_DynamicObjectReader", "as_struct")
+    _, as_list_insert_idx = _find_method_insert_idx(lines, "_DynamicObjectReader", "as_list")
+    _, as_interface_insert_idx = _find_method_insert_idx(lines, "_DynamicObjectReader", "as_interface")
 
     if dynamic_reader_idx is None:
         logger.warning("Could not find _DynamicObjectReader class in lib/capnp.pyi, skipping augmentation.")
         return
 
-    # We need at least as_struct and as_interface (as_list might not exist in older stubs)
     if as_struct_insert_idx is None or as_interface_insert_idx is None:
         logger.warning(
             f"Could not find as_struct/as_interface methods in _DynamicObjectReader (as_struct={as_struct_insert_idx}, as_interface={as_interface_insert_idx}), skipping augmentation.",
         )
         return
 
-    # Build overloads for as_struct (insert before the existing as_struct method)
-    # Sort struct types: more specific (nested) first
-    # Protocol path with more dots = more nested = more specific
-    sorted_struct_types = sorted(
-        struct_types,
-        key=lambda x: (-x[0].count("."), x[0]),  # Most nested first, then alphabetical
+    struct_overloads = _build_dynamic_reader_overloads(
+        "as_struct",
+        _sort_types_by_specificity(struct_types),
+        catchall_signature="    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...",
+    )
+    list_overloads = _build_dynamic_reader_overloads(
+        "as_list",
+        _sort_types_by_specificity(list_types),
+        wrap_schema_in_type=True,
+    )
+    interface_overloads = _build_dynamic_reader_overloads(
+        "as_interface",
+        _sort_interface_reader_types(interface_types, interfaces),
+        catchall_signature="    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...",
     )
 
-    struct_overloads: list[str] = []
-    for protocol_name, type_alias in sorted_struct_types:
-        # protocol_name is like "examples.restorer.restorer_capnp._RestorerStructModule"
-        # type_alias is like "examples.restorer.restorer_capnp.RestorerReader"
+    overload_blocks: list[tuple[int, list[str]]] = [(as_struct_insert_idx, struct_overloads)]
+    if as_list_insert_idx is not None and list_overloads:
+        overload_blocks.append((as_list_insert_idx, list_overloads))
+    overload_blocks.append((as_interface_insert_idx, interface_overloads))
+    _insert_overload_blocks(lines, overload_blocks)
+    _write_stub_lines(capnp_pyi_path, lines)
 
-        # Extract just the _capnp module part and after (remove path prefixes)
-        protocol_parts = protocol_name.split(".")
-        alias_parts = type_alias.split(".")
-
-        # Find _capnp module in both
-        protocol_capnp_idx = None
-        alias_capnp_idx = None
-
-        for i, part in enumerate(protocol_parts):
-            if part.endswith("_capnp"):
-                protocol_capnp_idx = i
-                break
-        for i, part in enumerate(alias_parts):
-            if part.endswith("_capnp"):
-                alias_capnp_idx = i
-                break
-
-        # Build the clean names starting from _capnp module
-        # But if the next part is the same (package.module pattern), include both
-        if protocol_capnp_idx is not None:
-            # Check for package.module pattern (e.g., schema_capnp.schema_capnp)
-            if (
-                protocol_capnp_idx + 1 < len(protocol_parts)
-                and protocol_parts[protocol_capnp_idx] == protocol_parts[protocol_capnp_idx + 1]
-            ):
-                # Keep both parts for package.module pattern
-                clean_protocol = ".".join(protocol_parts[protocol_capnp_idx:])
-            else:
-                clean_protocol = ".".join(protocol_parts[protocol_capnp_idx:])
-        else:
-            clean_protocol = protocol_name
-
-        if alias_capnp_idx is not None:
-            # Check for package.module pattern in alias too
-            if (
-                alias_capnp_idx + 1 < len(alias_parts)
-                and alias_parts[alias_capnp_idx] == alias_parts[alias_capnp_idx + 1]
-            ):
-                clean_alias = ".".join(alias_parts[alias_capnp_idx:])
-            else:
-                clean_alias = ".".join(alias_parts[alias_capnp_idx:])
-        else:
-            clean_alias = type_alias
-
-        struct_overloads.append("    @overload")
-        struct_overloads.append(
-            f"    def as_struct(self, schema: {clean_protocol}) -> {clean_alias}: ...  # type: ignore[reportOverlappingOverload]",
-        )
-
-    # Add catchall overload for as_struct
-    struct_overloads.append("    @overload")
-    struct_overloads.append(
-        "    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...  # type: ignore[reportOverlappingOverload]",
-    )
-
-    # Build overloads for as_list
-    # Sort: more nested (specific) first
-    sorted_list_types = sorted(
-        list_types,
-        key=lambda x: (-x[0].count("."), x[0]),  # Most nested first
-    )
-
-    list_overloads: list[str] = []
-    for list_class, type_alias in sorted_list_types:
-        # Extract just the _capnp module part and after
-        list_parts = list_class.split(".")
-        alias_parts = type_alias.split(".")
-
-        list_capnp_idx = None
-        alias_capnp_idx = None
-
-        for i, part in enumerate(list_parts):
-            if part.endswith("_capnp"):
-                list_capnp_idx = i
-                break
-        for i, part in enumerate(alias_parts):
-            if part.endswith("_capnp"):
-                alias_capnp_idx = i
-                break
-
-        clean_list = ".".join(list_parts[list_capnp_idx:]) if list_capnp_idx is not None else list_class
-
-        clean_alias = ".".join(alias_parts[alias_capnp_idx:]) if alias_capnp_idx is not None else type_alias
-
-        list_overloads.append("    @overload")
-        list_overloads.append(
-            f"    def as_list(self, schema: type[{clean_list}]) -> {clean_alias}: ...  # type: ignore[reportOverlappingOverload]",
-        )
-
-    # Add catchall overload for as_list
-    if list_overloads:  # Only add if we have list overloads
-        list_overloads.append("    @overload")
-        list_overloads.append(
-            "    def as_list(self, schema: type) -> _DynamicListReader: ...  # type: ignore[reportOverlappingOverload]",
-        )
-
-    # Build overloads for as_interface
-    # Sort by actual inheritance: most derived (specific) first
-    # Use the same sorting as cast_as which has inheritance info
-
-    if interfaces:
-        # Build a map of interface types we have
-        interface_type_map = dict(interface_types)
-
-        # Use inheritance-based sorting from _sort_interfaces_by_inheritance
-        # This returns (interface_name, client_name) sorted by inheritance depth
-        sorted_by_inheritance = _sort_interfaces_by_inheritance(interfaces)
-
-        # Build the sorted list, only including types we actually have overloads for
-        sorted_interface_types: list[tuple[str, str]] = []
-        for iface_name, _ in sorted_by_inheritance:
-            if iface_name in interface_type_map:
-                sorted_interface_types.append((iface_name, interface_type_map[iface_name]))
-
-        # Add any remaining types that weren't in the interfaces dict (shouldn't happen but safety check)
-        seen = {proto for proto, _ in sorted_interface_types}
-        for proto, client in interface_types:
-            if proto not in seen:
-                sorted_interface_types.append((proto, client))
-    else:
-        # Fallback: sort by nesting depth
-        sorted_interface_types = sorted(
-            interface_types,
-            key=lambda x: (-x[0].count("."), x[0]),
-        )
-
-    interface_overloads: list[str] = []
-    for protocol_name, type_alias in sorted_interface_types:
-        # Extract just the _capnp module part and after
-        protocol_parts = protocol_name.split(".")
-        alias_parts = type_alias.split(".")
-
-        protocol_capnp_idx = None
-        alias_capnp_idx = None
-
-        for i, part in enumerate(protocol_parts):
-            if part.endswith("_capnp"):
-                protocol_capnp_idx = i
-                break
-        for i, part in enumerate(alias_parts):
-            if part.endswith("_capnp"):
-                alias_capnp_idx = i
-                break
-
-        if protocol_capnp_idx is not None:
-            clean_protocol = ".".join(protocol_parts[protocol_capnp_idx:])
-        else:
-            clean_protocol = protocol_name
-
-        clean_alias = ".".join(alias_parts[alias_capnp_idx:]) if alias_capnp_idx is not None else type_alias
-
-        interface_overloads.append("    @overload")
-        interface_overloads.append(
-            f"    def as_interface(self, schema: {clean_protocol}) -> {clean_alias}: ...  # type: ignore[reportOverlappingOverload]",
-        )
-
-    # Add catchall overload for as_interface
-    interface_overloads.append("    @overload")
-    interface_overloads.append(
-        "    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...  # type: ignore[reportOverlappingOverload]",
-    )
-
-    # Insert overloads - ensure proper ordering
-    # Order in file: as_interface, as_list, as_struct (typically)
-    # Insert from last to first so indices don't shift
-
-    # Insert struct overloads BEFORE the def as_struct line
-    if struct_overloads and as_struct_insert_idx is not None:
-        lines[as_struct_insert_idx:as_struct_insert_idx] = struct_overloads
-
-    # Insert list overloads BEFORE the def as_list line (if it exists)
-    if list_overloads and as_list_insert_idx is not None:
-        # Adjust index if struct was inserted before list
-        if as_struct_insert_idx is not None and as_struct_insert_idx < as_list_insert_idx:
-            as_list_insert_idx += len(struct_overloads)
-        lines[as_list_insert_idx:as_list_insert_idx] = list_overloads
-
-    # Insert interface overloads BEFORE the def as_interface line
-    if interface_overloads and as_interface_insert_idx is not None:
-        # Adjust index if struct/list were inserted before interface
-        if as_struct_insert_idx is not None and as_struct_insert_idx < as_interface_insert_idx:
-            as_interface_insert_idx += len(struct_overloads)
-        if as_list_insert_idx is not None and as_list_insert_idx < as_interface_insert_idx:
-            as_interface_insert_idx += len(list_overloads)
-        lines[as_interface_insert_idx:as_interface_insert_idx] = interface_overloads
-
-    # Write back
-    augmented_content = "\n".join(lines)
-    with capnp_pyi_path.open("w", encoding="utf8") as f:
-        f.write(augmented_content)
-
-    total_overloads = len(struct_overloads) + len(interface_overloads)
-    logger.info(f"Augmented _DynamicObjectReader in {capnp_pyi_path} with {total_overloads // 2} overload(s).")
+    total_overloads = sum(len(overload_lines) // 2 for _, overload_lines in overload_blocks)
+    logger.info(f"Augmented _DynamicObjectReader in {capnp_pyi_path} with {total_overloads} overload(s).")
 
 
 def format_all_outputs(output_directories: set[str]) -> None:
@@ -1104,6 +957,95 @@ def _expand_path_pattern(root_directory: Path, pattern: str) -> set[Path]:
     return set(root_directory.glob(pattern))
 
 
+def _collect_cleanup_paths(root_path: Path, patterns: list[str]) -> set[Path]:
+    """Expand cleanup patterns into concrete file paths."""
+    cleanup_paths: set[Path] = set()
+    for pattern in patterns:
+        cleanup_paths |= _expand_path_pattern(root_path, pattern)
+    return cleanup_paths
+
+
+def _collect_excluded_paths(root_path: Path, excludes: list[str]) -> set[Path]:
+    """Resolve excluded files and glob patterns."""
+    excluded_paths: set[Path] = set()
+    for exclude in excludes:
+        exclude_path = root_path / exclude
+        if exclude_path.is_file():
+            excluded_paths.add(exclude_path)
+            continue
+        excluded_paths |= _expand_path_pattern(root_path, exclude)
+    return excluded_paths
+
+
+def _iter_capnp_files(search_path: Path, *, recursive: bool) -> set[Path]:
+    """Return schema files from a directory."""
+    if recursive:
+        return {
+            Path(root, file) for root, _, files in os.walk(search_path) for file in files if file.endswith(".capnp")
+        }
+
+    return {file_path for file_path in search_path.iterdir() if file_path.is_file() and file_path.suffix == ".capnp"}
+
+
+def _collect_search_paths(root_path: Path, paths: list[str], *, recursive: bool) -> set[Path]:
+    """Resolve input paths into the set of schema files that should be processed."""
+    search_paths: set[Path] = set()
+    for path in paths:
+        search_path = root_path / path
+        if search_path.is_dir():
+            search_paths |= _iter_capnp_files(search_path, recursive=recursive)
+            continue
+        search_paths |= _expand_path_pattern(root_path, path)
+    return search_paths
+
+
+def _create_capnpc_wrapper() -> Path:
+    """Create a temporary wrapper that invokes the bundled capnpc plugin."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix="_capnpc", delete=False) as wrapper:
+        wrapper.write(f"""#!/usr/bin/env {sys.executable}
+import sys
+sys.path.insert(0, {str(Path(__file__).parent.parent)!r})
+from capnp_stub_generator.capnpc_plugin import main
+main()
+""")
+        wrapper_path = Path(wrapper.name)
+
+    wrapper_path.chmod(0o700)
+    return wrapper_path
+
+
+def _determine_src_prefix(output_dir: str, paths: list[str], valid_paths: set[str], root_directory: str) -> str:
+    """Determine the capnp compile source prefix."""
+    if output_dir:
+        common_base = _determine_output_directory_structure(output_dir, paths, valid_paths, root_directory)
+        return common_base or root_directory
+    return str(Path(next(iter(valid_paths))).parent)
+
+
+def _build_capnp_compile_command(
+    wrapper_path: Path,
+    output_dir: str,
+    src_prefix: str,
+    absolute_import_paths: list[str],
+    valid_paths: set[str],
+) -> list[str]:
+    """Build the `capnp compile` command line."""
+    command = [_resolve_executable("capnp"), "compile"]
+    if src_prefix:
+        command.append(f"--src-prefix={src_prefix}")
+
+    command.append(f"-o{wrapper_path}:{output_dir or '.'}")
+    for import_path in absolute_import_paths:
+        command.extend(["-I", import_path])
+    command.extend(sorted(valid_paths))
+    return command
+
+
+def _validation_output_directories(output_dir: str, valid_paths: set[str]) -> set[str]:
+    """Return directories that should be checked with pyright after generation."""
+    return {output_dir} if output_dir else {str(Path(path).parent) for path in valid_paths}
+
+
 def run(args: argparse.Namespace, root_directory: str) -> None:
     """Run the stub generator on a set of paths that point to *.capnp schemas.
 
@@ -1124,127 +1066,328 @@ def run(args: argparse.Namespace, root_directory: str) -> None:
     root_path = Path(root_directory)
     output_dir_path = Path(output_dir) if output_dir else None
 
-    cleanup_paths: set[Path] = set()
-    for c in clean:
-        cleanup_paths |= _expand_path_pattern(root_path, c)
-
-    for cleanup_path in cleanup_paths:
+    for cleanup_path in _collect_cleanup_paths(root_path, clean):
         cleanup_path.unlink()
 
-    excluded_paths: set[Path] = set()
-    for exclude in excludes:
-        exclude_path = root_path / exclude
-        # Handle both specific files and glob patterns
-        if exclude_path.is_file():
-            excluded_paths.add(exclude_path)
-        else:
-            excluded_paths |= _expand_path_pattern(root_path, exclude)
-
-    search_paths: set[Path] = set()
-    for path in paths:
-        search_path = root_path / path
-
-        # If recursive flag is set and path is a directory, find all .capnp files recursively
-        if args.recursive and search_path.is_dir():
-            for root, _, files in os.walk(search_path):
-                for file in files:
-                    if file.endswith(".capnp"):
-                        search_paths.add(Path(root, file))
-        # If path is a directory without recursive flag, find only direct children
-        elif search_path.is_dir():
-            for file_path in search_path.iterdir():
-                if file_path.is_file() and file_path.suffix == ".capnp":
-                    search_paths.add(file_path)
-        # Otherwise use glob for patterns or specific files
-        else:
-            search_paths |= _expand_path_pattern(root_path, path)
-
-    # The `valid_paths` contain the automatically detected search paths, except for specifically excluded paths.
+    excluded_paths = _collect_excluded_paths(root_path, excludes)
+    search_paths = _collect_search_paths(root_path, paths, recursive=args.recursive)
     valid_paths = {str(path) for path in (search_paths - excluded_paths)}
 
     if not valid_paths:
         logger.warning("No schema files found to process")
         return
 
-    # Convert import paths to absolute paths relative to root_directory
     absolute_import_paths = [str((root_path / p).resolve()) for p in import_paths]
 
-    # Use capnp compile with our plugin to generate stubs
-    # This ensures all schemas including groups in unions are properly embedded
     logger.info(f"Compiling {len(valid_paths)} schema(s) using capnpc plugin")
 
-    # Create output directory if specified
     if output_dir_path:
         output_dir_path.mkdir(parents=True, exist_ok=True)
 
-    # Create a wrapper script to invoke our plugin
-    with tempfile.NamedTemporaryFile(mode="w", suffix="_capnpc", delete=False) as wrapper:
-        wrapper.write(f"""#!/usr/bin/env {sys.executable}
-import sys
-sys.path.insert(0, {str(Path(__file__).parent.parent)!r})
-from capnp_stub_generator.capnpc_plugin import main
-main()
-""")
-        wrapper_path = Path(wrapper.name)
-
-    # Make wrapper executable
-    wrapper_path.chmod(0o700)
+    wrapper_path = _create_capnpc_wrapper()
 
     try:
-        # Determine source prefix for output structure
-        if output_dir:
-            # Calculate common base for preserving directory structure
-            common_base = _determine_output_directory_structure(
-                output_dir,
-                paths,
-                valid_paths,
-                root_directory,
-            )
-            src_prefix = common_base or root_directory
-        else:
-            # Generate stubs next to source files - use parent of first schema
-            src_prefix = str(Path(next(iter(valid_paths))).parent)
-
-        # Build capnp compile command
-        cmd = [_resolve_executable("capnp"), "compile"]
-
-        if src_prefix:
-            cmd.append(f"--src-prefix={src_prefix}")
-
-        # Add output specification
-        output_spec = output_dir or "."
-        cmd.append(f"-o{wrapper_path}:{output_spec}")
-
-        # Add import paths
-        for import_path in absolute_import_paths:
-            cmd.extend(["-I", import_path])
-
-        # Add schema files
-        cmd.extend(list(valid_paths))
-
+        src_prefix = _determine_src_prefix(output_dir, paths, valid_paths, root_directory)
+        cmd = _build_capnp_compile_command(wrapper_path, output_dir, src_prefix, absolute_import_paths, valid_paths)
         logger.debug(f"Running: {' '.join(cmd)}")
 
-        # Run capnp compile
         result = _run_command(cmd, check=False)
-
         if result.returncode != 0:
             logger.error(f"capnp compile failed:\n{result.stderr}")
             sys.exit(1)
 
         logger.info(f"✓ Generated stubs for {len(valid_paths)} schema(s)")
 
-        # Run pyright validation if requested
         if not skip_pyright:
-            output_directories = {output_dir} if output_dir else {str(Path(p).parent) for p in valid_paths}
             try:
-                validate_with_pyright(output_directories)
+                validate_with_pyright(_validation_output_directories(output_dir, valid_paths))
             except PyrightValidationError:
                 logger.exception("Pyright validation failed")
                 sys.exit(1)
 
     finally:
-        # Clean up wrapper script
         wrapper_path.unlink(missing_ok=True)
+
+
+def _iter_loaded_schemas(
+    schema_loader: capnp.SchemaLoader,
+    file_id_to_path: dict[int, str],
+    file_schemas_only: set[int] | None,
+) -> Iterator[tuple[_Schema, str]]:
+    """Yield loadable file schemas and skip missing ones with a warning."""
+    for schema_id, path in file_id_to_path.items():
+        if file_schemas_only is not None and schema_id not in file_schemas_only:
+            continue
+        try:
+            yield schema_loader.get(schema_id), path
+        except Exception as error:
+            logger.warning(f"Could not load schema {hex(schema_id)} from {path}: {error}")
+
+
+def _schema_module_name(path_obj: Path) -> str:
+    """Return the generated Python module name for a schema file."""
+    return f"{path_obj.stem.replace('-', '_')}_capnp"
+
+
+def _python_module_path_for_schema(
+    schema: _Schema,
+    path: str,
+    context: SchemaWriterContext,
+) -> str | None:
+    """Return the Python module annotation for a schema if present."""
+    temp_writer = Writer(
+        schema=schema,
+        file_path=path,
+        schema_loader=context.schema_loader,
+        file_id_to_path=context.file_id_to_path,
+    )
+    return temp_writer._python_module_path
+
+
+def _preserved_relative_dir(path: str, path_obj: Path) -> Path:
+    """Return the schema directory while stripping any absolute-root prefix."""
+    if not path_obj.is_absolute():
+        return path_obj.parent
+
+    relative_path = path.lstrip(os.sep)
+    if ":" in relative_path:
+        relative_path = relative_path.split(":", 1)[1].lstrip(os.sep)
+    return Path(relative_path).parent
+
+
+def _output_directory_from_annotation(output_dir: str, path_obj: Path, python_module_path: str) -> Path:
+    """Build the output directory from a schema's Python module annotation."""
+    output_directory_path = Path(output_dir, *python_module_path.split("."), _schema_module_name(path_obj))
+    output_directory_path.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Using Python module annotation: {python_module_path} -> {output_directory_path}")
+    return output_directory_path
+
+
+def _output_directory_without_annotation(
+    output_dir: str,
+    path: str,
+    path_obj: Path,
+    common_base: str | None,
+    *,
+    preserve_path_structure: bool,
+) -> Path:
+    """Build the fallback output directory for a schema without module annotations."""
+    module_name = _schema_module_name(path_obj)
+    if preserve_path_structure:
+        relative_dir = _preserved_relative_dir(path, path_obj)
+    elif common_base:
+        relative_dir = Path(os.path.relpath(path_obj.resolve(), common_base)).parent
+    else:
+        relative_dir = Path()
+
+    output_directory_path = Path(output_dir, relative_dir, module_name)
+    output_directory_path.mkdir(parents=True, exist_ok=True)
+    return output_directory_path
+
+
+def _resolve_output_directory(path: str, python_module_path: str | None, options: RunFromSchemasOptions) -> Path:
+    """Resolve the output directory for a generated schema module."""
+    path_obj = Path(path)
+    if options.output_dir and python_module_path:
+        return _output_directory_from_annotation(options.output_dir, path_obj, python_module_path)
+    if options.output_dir:
+        return _output_directory_without_annotation(
+            options.output_dir,
+            path,
+            path_obj,
+            options.common_base,
+            preserve_path_structure=options.preserve_path_structure,
+        )
+    return path_obj.parent
+
+
+def _resolve_module_path_prefix(output_dir: str, output_directory: str) -> str | None:
+    """Return the Python package prefix for a generated schema output directory."""
+    if not output_dir or output_directory == output_dir:
+        return None
+
+    relative_module_path = os.path.relpath(output_directory, output_dir)
+    if relative_module_path == ".":
+        return None
+    return relative_module_path.replace(os.sep, ".")
+
+
+def _new_dynamic_object_types_bucket() -> dict[str, list[tuple[str, str]]]:
+    """Return an empty aggregation bucket for dynamic reader overload types."""
+    return {"structs": [], "lists": [], "interfaces": []}
+
+
+def _record_generated_module(
+    state: GeneratedSchemaState,
+    output_directory: str,
+    module_interfaces: dict[str, tuple[str, list[str]]],
+    dynamic_object_types: tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]],
+    path_obj: Path,
+) -> None:
+    """Record generated interfaces and dynamic object types for one output module."""
+    if module_interfaces:
+        state.interfaces_by_dir.setdefault(output_directory, {}).update(module_interfaces)
+
+    struct_types, list_types, interface_types = dynamic_object_types
+    logger.debug(
+        f"Schema {path_obj.name} returned {len(struct_types)} structs, {len(list_types)} lists, {len(interface_types)} interfaces",
+    )
+    if not struct_types and not list_types and not interface_types:
+        return
+
+    bucket = state.dynamic_object_types_by_dir.setdefault(output_directory, _new_dynamic_object_types_bucket())
+    bucket["structs"].extend(struct_types)
+    bucket["lists"].extend(list_types)
+    bucket["interfaces"].extend(interface_types)
+
+
+def _process_loaded_schema(
+    schema: _Schema,
+    path: str,
+    options: RunFromSchemasOptions,
+    context: SchemaWriterContext,
+    state: GeneratedSchemaState,
+) -> None:
+    """Generate stubs for a loaded schema and record the resulting metadata."""
+    path_obj = Path(path)
+    logger.debug(f"Processing schema {schema.node.displayName} from {path}")
+    logger.debug(f"  Schema ID: {hex(schema.node.id)}")
+    logger.debug(f"  Nested nodes in schema: {len(schema.node.nestedNodes)}")
+
+    output_directory_path = _resolve_output_directory(
+        path, _python_module_path_for_schema(schema, path, context), options
+    )
+    output_directory = str(output_directory_path)
+    state.output_directories_used.add(output_directory)
+
+    module_interfaces, dynamic_object_types = _generate_stubs_from_schema(
+        schema=schema,
+        context=context,
+        target=SchemaWriteTarget(
+            file_path=path,
+            output_file_path=str(output_directory_path / "__init__"),
+            module_path_prefix=_resolve_module_path_prefix(options.output_dir, output_directory),
+        ),
+    )
+    _record_generated_module(state, output_directory, module_interfaces, dynamic_object_types, path_obj)
+
+
+def _ensure_package_init_files(directory: Path) -> None:
+    """Create package marker files for a generated directory if needed."""
+    init_py_path = directory / "__init__.py"
+    init_pyi_path = directory / "__init__.pyi"
+
+    if not init_py_path.exists():
+        init_py_path.write_text("# Auto-generated package initialization\n", encoding="utf8")
+        logger.debug(f"Created __init__.py at {directory}")
+
+    if not init_pyi_path.exists():
+        init_pyi_path.write_text("# Auto-generated package initialization\n", encoding="utf8")
+        logger.debug(f"Created __init__.pyi at {directory}")
+
+
+def _ensure_parent_package_init_files(output_directory_path: Path, output_dir_path: Path) -> None:
+    """Create package marker files on parent directories within the output root."""
+    current_dir = output_directory_path.parent
+    output_dir_abs = output_dir_path.resolve()
+
+    while True:
+        current_dir_abs = current_dir.resolve()
+        if current_dir_abs == output_dir_abs:
+            return
+
+        try:
+            current_dir_abs.relative_to(output_dir_abs)
+        except ValueError:
+            return
+
+        _ensure_package_init_files(current_dir)
+        parent_dir = current_dir.parent
+        if parent_dir == current_dir:
+            return
+        current_dir = parent_dir
+
+
+def _ensure_output_packages(output_directories_used: set[str], output_dir_path: Path | None) -> None:
+    """Create package marker files for generated output directories and their parents."""
+    for output_directory in output_directories_used:
+        output_directory_path = Path(output_directory)
+        _ensure_package_init_files(output_directory_path)
+        if output_dir_path is not None:
+            _ensure_parent_package_init_files(output_directory_path, output_dir_path)
+
+
+def _combine_interfaces_by_dir(
+    interfaces_by_dir: dict[str, dict[str, tuple[str, list[str]]]],
+) -> dict[str, tuple[str, list[str]]]:
+    """Flatten per-directory interface metadata into one mapping."""
+    all_interfaces: dict[str, tuple[str, list[str]]] = {}
+    for interfaces in interfaces_by_dir.values():
+        all_interfaces.update(interfaces)
+    return all_interfaces
+
+
+def _combine_dynamic_object_types(
+    dynamic_object_types_by_dir: dict[str, dict[str, list[tuple[str, str]]]],
+) -> dict[str, list[tuple[str, str]]]:
+    """Flatten per-directory dynamic object metadata into one mapping."""
+    all_dynamic_object_types = _new_dynamic_object_types_bucket()
+    for types_by_name in dynamic_object_types_by_dir.values():
+        all_dynamic_object_types["structs"].extend(types_by_name["structs"])
+        all_dynamic_object_types["lists"].extend(types_by_name["lists"])
+        all_dynamic_object_types["interfaces"].extend(types_by_name["interfaces"])
+    return all_dynamic_object_types
+
+
+def _resolve_augmented_stubs_dir(
+    output_dir: str,
+    output_dir_path: Path | None,
+    output_directories_used: set[str],
+) -> str:
+    """Determine where augmented bundled stubs should be written."""
+    if output_dir:
+        assert output_dir_path is not None
+        return str(output_dir_path.resolve())
+
+    output_dirs_list = list(output_directories_used)
+    if len(output_dirs_list) == 1:
+        return output_dirs_list[0]
+    return os.path.commonpath([str(Path(directory).resolve()) for directory in output_dirs_list])
+
+
+def _augment_bundled_stubs(
+    state: GeneratedSchemaState,
+    output_dir: str,
+    output_dir_path: Path | None,
+    *,
+    augment_capnp_stubs: bool,
+) -> set[str]:
+    """Copy and augment bundled capnp stubs when requested."""
+    if not augment_capnp_stubs:
+        return set()
+
+    source_stubs_path = find_capnp_stubs_package()
+    if not source_stubs_path:
+        logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found")
+        return set()
+
+    all_interfaces = _combine_interfaces_by_dir(state.interfaces_by_dir)
+    all_dynamic_object_types = _combine_dynamic_object_types(state.dynamic_object_types_by_dir)
+    logger.info(
+        f"Augmenting capnp-stubs with {len(all_interfaces)} interfaces, {len(all_dynamic_object_types['structs'])} structs, {len(all_dynamic_object_types['lists'])} lists, {len(all_dynamic_object_types['interfaces'])} interface types",
+    )
+
+    result = augment_capnp_stubs_with_overloads(
+        source_stubs_path,
+        _resolve_augmented_stubs_dir(output_dir, output_dir_path, state.output_directories_used),
+        all_interfaces,
+        all_dynamic_object_types,
+    )
+    if result is None:
+        return set()
+
+    capnp_stubs_path, schema_capnp_path = result
+    return {path for path in (capnp_stubs_path, schema_capnp_path) if path}
 
 
 def run_from_schemas(
@@ -1260,269 +1403,24 @@ def run_from_schemas(
         options: Output and validation options for generation.
 
     """
-    output_dir = options.output_dir
-    skip_pyright = options.skip_pyright
-    augment_capnp_stubs = options.augment_capnp_stubs
-    common_base = options.common_base
-    preserve_path_structure = options.preserve_path_structure
-    file_schemas_only = options.file_schemas_only
-    output_dir_path = Path(output_dir) if output_dir else None
-
-    # Track output directories for py.typed marker
-    output_directories_used = set()
-
-    # Collect all interfaces from all modules for cast_as overloads
-    # Map of output_dir -> {interface_name: (client_name, base_client_names)}
-    all_interfaces_by_dir: dict[str, dict[str, tuple[str, list[str]]]] = {}
-
-    # Track all _DynamicObjectReader types by output directory
-    all_dynamic_object_types_by_dir: dict[str, dict[str, list[tuple[str, str]]]] = {}
+    output_dir_path = Path(options.output_dir) if options.output_dir else None
     writer_context = SchemaWriterContext(schema_loader=schema_loader, file_id_to_path=file_id_to_path)
+    state = GeneratedSchemaState()
 
-    for schema_id, path in file_id_to_path.items():
-        # Skip nested schemas if file_schemas_only is specified
-        if file_schemas_only is not None and schema_id not in file_schemas_only:
-            continue
+    for schema, path in _iter_loaded_schemas(schema_loader, file_id_to_path, options.file_schemas_only):
+        _process_loaded_schema(schema, path, options, writer_context, state)
 
-        # Get schema from loader
-        try:
-            schema = schema_loader.get(schema_id)
-        except Exception as e:
-            logger.warning(f"Could not load schema {hex(schema_id)} from {path}: {e}")
-            continue
-
-        path_obj = Path(path)
-        file_path = path
-
-        # Debug: log what we're processing
-        logger.debug(f"Processing schema {schema.node.displayName} from {path}")
-        logger.debug(f"  Schema ID: {hex(schema.node.id)}")
-        logger.debug(f"  Nested nodes in schema: {len(schema.node.nestedNodes)}")
-
-        # Create a temporary writer just to extract Python module annotation
-        from capnp_stub_generator.writer import Writer
-
-        temp_writer = Writer(
-            schema=schema,
-            file_path=path,
-            schema_loader=schema_loader,
-            file_id_to_path=file_id_to_path,
-        )
-
-        # Check if schema has Python module annotation
-        python_module_path = temp_writer._python_module_path
-
-        if output_dir and python_module_path:
-            # Use module annotation to determine output structure
-            # Convert "mas.schema.climate" -> "mas/schema/climate/climate_capnp/__init__.pyi"
-            # The module annotation should include the full module path, we add _capnp suffix
-            module_parts = python_module_path.split(".")
-
-            # Get base name from path (e.g., "climate" from "climate.capnp")
-            base_name = path_obj.stem
-            # Replace hyphens with underscores to make valid Python identifiers
-            base_name = base_name.replace("-", "_")
-            module_name = f"{base_name}_capnp"
-
-            # Build directory structure: mas/schema/climate/climate_capnp/
-            module_dir = Path(*module_parts, module_name)
-            output_directory_path = Path(output_dir, module_dir)
-            output_directory_path.mkdir(parents=True, exist_ok=True)
-
-            logger.info(f"Using Python module annotation: {python_module_path} -> {output_directory_path}")
-        elif output_dir:
-            # No Python module annotation - use flat structure but with module folder
-            # For pycapnp 2.0+, all schemas need module folders: schema_name_capnp/__init__.py
-            base_name = path_obj.stem
-            # Replace hyphens with underscores
-            base_name = base_name.replace("-", "_")
-            module_name = f"{base_name}_capnp"
-
-            if preserve_path_structure:
-                # Use the path as provided, treating it as relative to output_dir
-                # If absolute, strip root to avoid writing outside output_dir
-                rel_path = path
-                if path_obj.is_absolute():
-                    rel_path = rel_path.lstrip(os.sep)
-                    # Handle Windows drive letters if needed (simple check)
-                    if ":" in rel_path:
-                        rel_path = rel_path.split(":", 1)[1].lstrip(os.sep)
-
-                rel_dir = Path(rel_path).parent
-                # Add module folder
-                output_directory_path = Path(output_dir, rel_dir, module_name)
-            elif common_base:
-                abs_path = path_obj.resolve()
-                # Calculate relative path from common base
-                rel_path = os.path.relpath(abs_path, common_base)
-                rel_dir = Path(rel_path).parent
-
-                # Create output directory preserving structure with module folder
-                output_directory_path = Path(output_dir, rel_dir, module_name)
-            else:
-                # Flat structure with module folder
-                output_directory_path = Path(output_dir, module_name)
-
-            output_directory_path.mkdir(parents=True, exist_ok=True)
-        else:
-            # No output_dir specified: place stubs next to source files
-            output_directory_path = path_obj.parent
-
-        output_directory = str(output_directory_path)
-        output_directories_used.add(output_directory)
-
-        # For pycapnp 2.0+, all schemas use module folders with __init__.py/__init__.pyi
-        # Whether or not they have Python annotations
-        output_file_name = "__init__"  # No suffix - will be added by _generate_stubs_from_schema
-
-        # Calculate module path prefix for subdirectory structure
-        # This is used for fully qualified module names in cast_as overloads
-        module_path_prefix = None
-        if output_dir and output_directory != output_dir:
-            # Calculate the relative path from output_dir to output_directory
-            rel_module_path = os.path.relpath(output_directory, output_dir)
-            # Convert path separators to dots for Python module path
-            # Skip if it's just "." (current directory)
-            if rel_module_path != ".":
-                module_path_prefix = rel_module_path.replace(os.sep, ".")
-
-        module_interfaces, dynamic_object_types = _generate_stubs_from_schema(
-            schema=schema,
-            context=writer_context,
-            target=SchemaWriteTarget(
-                file_path=file_path,
-                output_file_path=str(output_directory_path / output_file_name),
-                module_path_prefix=module_path_prefix,
-            ),
-        )
-
-        # Collect interfaces for this output directory
-        if module_interfaces:
-            if output_directory not in all_interfaces_by_dir:
-                all_interfaces_by_dir[output_directory] = {}
-            all_interfaces_by_dir[output_directory].update(module_interfaces)
-
-        # Collect _DynamicObjectReader types for this output directory
-        struct_types, list_types, interface_types = dynamic_object_types
-        logger.debug(
-            f"Schema {path_obj.name} returned {len(struct_types)} structs, {len(list_types)} lists, {len(interface_types)} interfaces",
-        )
-        if struct_types or list_types or interface_types:
-            if output_directory not in all_dynamic_object_types_by_dir:
-                all_dynamic_object_types_by_dir[output_directory] = {"structs": [], "lists": [], "interfaces": []}
-            all_dynamic_object_types_by_dir[output_directory]["structs"].extend(struct_types)
-            all_dynamic_object_types_by_dir[output_directory]["lists"].extend(list_types)
-            all_dynamic_object_types_by_dir[output_directory]["interfaces"].extend(interface_types)
-
-    # Create py.typed marker and __init__.py/__init__.pyi in each output directory to make them packages
-    # Also create __init__.py/__init__.pyi files for all parent directories
-    for output_directory in output_directories_used:
-        # Create __init__.py and __init__.pyi to make it a package (needed for imports)
-        output_directory_path = Path(output_directory)
-        init_py_path = output_directory_path / "__init__.py"
-        init_pyi_path = output_directory_path / "__init__.pyi"
-
-        if not init_py_path.exists():
-            init_py_path.write_text("# Auto-generated package initialization\n", encoding="utf8")
-
-        if not init_pyi_path.exists():
-            init_pyi_path.write_text("# Auto-generated package initialization\n", encoding="utf8")
-
-        # Create __init__.py and __init__.pyi files for all parent directories up to output_dir
-        if output_dir_path:
-            current_dir = output_directory_path.parent
-            output_dir_abs = output_dir_path.resolve()
-
-            # Walk up the directory tree
-            while True:
-                current_dir_abs = current_dir.resolve()
-
-                # Stop if we've reached or passed the output_dir
-                if current_dir_abs == output_dir_abs:
-                    break
-                try:
-                    current_dir_abs.relative_to(output_dir_abs)
-                except ValueError:
-                    break
-
-                parent_init_py = current_dir / "__init__.py"
-                parent_init_pyi = current_dir / "__init__.pyi"
-
-                if not parent_init_py.exists():
-                    parent_init_py.write_text("# Auto-generated package initialization\n", encoding="utf8")
-                    logger.debug(f"Created __init__.py at {current_dir}")
-
-                if not parent_init_pyi.exists():
-                    parent_init_pyi.write_text("# Auto-generated package initialization\n", encoding="utf8")
-                    logger.debug(f"Created __init__.pyi at {current_dir}")
-
-                # Move up one level
-                parent_dir = current_dir.parent
-                if parent_dir == current_dir:  # Reached root
-                    break
-                current_dir = parent_dir
-
-    # Track bundled stub directories for formatting
-    bundled_stub_dirs = set()
-
-    # Augment capnp-stubs with cast_as overloads (now default behavior)
-    source_stubs_path = find_capnp_stubs_package()
-    if source_stubs_path and augment_capnp_stubs:
-        # Combine all interfaces from all directories
-        all_interfaces = {}
-        for interfaces in all_interfaces_by_dir.values():
-            all_interfaces.update(interfaces)
-
-        # Combine all _DynamicObjectReader types from all directories
-        all_dynamic_object_types = {"structs": [], "interfaces": []}
-        for types_dict in all_dynamic_object_types_by_dir.values():
-            all_dynamic_object_types["structs"].extend(types_dict["structs"])
-            all_dynamic_object_types["interfaces"].extend(types_dict["interfaces"])
-
-        # Determine where to place augmented stubs (inside output directory)
-        # If output_dir is specified, place augmented stubs inside it
-        # Otherwise, pick a common parent directory of all output directories
-        if output_dir:
-            # Place augmented stubs in the output_dir itself
-            assert output_dir_path is not None
-            augmented_stubs_dir = str(output_dir_path.resolve())
-        else:
-            # Find common parent of all output directories
-            output_dirs_list = list(output_directories_used)
-            if len(output_dirs_list) == 1:
-                augmented_stubs_dir = output_dirs_list[0]
-            else:
-                augmented_stubs_dir = os.path.commonpath([str(Path(d).resolve()) for d in output_dirs_list])
-
-        logger.info(
-            f"Augmenting capnp-stubs with {len(all_interfaces)} interfaces, {len(all_dynamic_object_types.get('structs', []))} structs, {len(all_dynamic_object_types.get('lists', []))} lists, {len(all_dynamic_object_types.get('interfaces', []))} interface types",
-        )
-
-        result = augment_capnp_stubs_with_overloads(
-            source_stubs_path,
-            augmented_stubs_dir,
-            all_interfaces,
-            all_dynamic_object_types,
-        )
-
-        # Add augmented stubs to bundled dirs for formatting
-        if result:
-            capnp_stubs_path, schema_capnp_path = result
-            if capnp_stubs_path:
-                bundled_stub_dirs.add(capnp_stubs_path)
-            if schema_capnp_path:
-                bundled_stub_dirs.add(schema_capnp_path)
-    elif augment_capnp_stubs:
-        logger.warning("--augment-capnp-stubs specified but capnp-stubs package not found")
-
-    # Combine all directories (generated stubs + bundled stubs) for formatting
-    all_output_dirs = output_directories_used | bundled_stub_dirs
-
-    # Format all generated files with ruff (includes bundled stubs)
+    _ensure_output_packages(state.output_directories_used, output_dir_path)
+    bundled_stub_dirs = _augment_bundled_stubs(
+        state,
+        options.output_dir,
+        output_dir_path,
+        augment_capnp_stubs=options.augment_capnp_stubs,
+    )
+    all_output_dirs = state.output_directories_used | bundled_stub_dirs
     format_all_outputs(all_output_dirs)
 
-    # Validate generated stubs with pyright (unless disabled)
-    if not skip_pyright:
+    if not options.skip_pyright:
         validate_with_pyright(all_output_dirs)
 
 

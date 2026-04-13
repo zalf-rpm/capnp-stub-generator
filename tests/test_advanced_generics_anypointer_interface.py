@@ -5,6 +5,44 @@ from pathlib import Path
 SCHEMAS_DIR = Path(__file__).parent / "schemas" / "basic"
 
 
+def _line_window_contains_any(lines: list[str], anchor: str, candidates: tuple[str, ...], *, lookahead: int) -> bool:
+    """Return whether lines near an anchor contain any candidate text."""
+    for index, line in enumerate(lines):
+        if anchor not in line:
+            continue
+        window_end = min(index + lookahead, len(lines))
+        for nearby_line in lines[index:window_end]:
+            if any(candidate in nearby_line for candidate in candidates):
+                return True
+    return False
+
+
+def _line_window_contains_all(lines: list[str], anchor: str, required: tuple[str, ...], *, lookahead: int) -> bool:
+    """Return whether a nearby line contains all required tokens."""
+    for index, line in enumerate(lines):
+        if anchor not in line:
+            continue
+        window_end = min(index + lookahead, len(lines))
+        for nearby_line in lines[index:window_end]:
+            if all(token in nearby_line for token in required):
+                return True
+    return False
+
+
+def _class_block_contains_any(lines: list[str], class_name: str, field_tokens: tuple[str, ...]) -> bool:
+    """Return whether a class block contains any of the expected field tokens."""
+    in_class = False
+    for line in lines:
+        if f"class {class_name}" in line:
+            in_class = True
+        elif in_class and "class " in line and class_name not in line:
+            in_class = False
+
+        if in_class and any(token in line for token in field_tokens):
+            return True
+    return False
+
+
 def test_generics_anypointer_interface(basic_stubs) -> None:
     """Test that generics with AnyPointer, generic instantiations, and interfaces are handled."""
     stub = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
@@ -29,24 +67,13 @@ def test_generics_anypointer_interface(basic_stubs) -> None:
 
     # Both should reference GenericBox (via Protocol or TypeAlias)
     lines = content.split("\n")
-    found_enum_box = False
-    found_inner_box = False
-
-    for i, line in enumerate(lines):
-        if "def enumBox(self)" in line:
-            # Check return type in next few lines - should reference _GenericBoxStructModule
-            for j in range(i, min(i + 3, len(lines))):
-                if "GenericBox" in lines[j] or "_GenericBoxStructModule" in lines[j]:
-                    found_enum_box = True
-                    break
-        if "def innerBox(self)" in line:
-            for j in range(i, min(i + 3, len(lines))):
-                if "GenericBox" in lines[j] or "_GenericBoxStructModule" in lines[j]:
-                    found_inner_box = True
-                    break
-
-    assert found_enum_box, "enumBox should be typed as GenericBox"
-    assert found_inner_box, "innerBox should be typed as GenericBox"
+    generic_box_tokens = ("GenericBox", "_GenericBoxStructModule")
+    assert _line_window_contains_any(lines, "def enumBox(self)", generic_box_tokens, lookahead=3), (
+        "enumBox should be typed as GenericBox"
+    )
+    assert _line_window_contains_any(lines, "def innerBox(self)", generic_box_tokens, lookahead=3), (
+        "innerBox should be typed as GenericBox"
+    )
 
     # Check for interface (now uses _InterfaceModule pattern)
     assert "class _TestIfaceInterfaceModule(_InterfaceModule):" in content, "TestIface _InterfaceModule should exist"
@@ -63,30 +90,9 @@ def test_generics_anypointer_interface(basic_stubs) -> None:
     assert "class PingResult" in content, "PingResult should be defined"
     assert "class StatsResult" in content, "StatsResult should be defined"
 
-    # Verify ping has proper parameter
-    found_ping_params = False
-    found_stats_result_fields = False
-
-    for i, line in enumerate(lines):
-        if "def ping(" in line:
-            # Check for count parameter
-            for j in range(i, min(i + 5, len(lines))):
-                if "count" in lines[j] and "int" in lines[j]:
-                    found_ping_params = True
-                    break
-
-    # Check StatsResult has the expected fields (value and label)
-    # Result fields are direct attributes in Protocol classes
-    in_stats_result = False
-    for line in lines:
-        if "class StatsResult" in line:
-            in_stats_result = True
-        elif in_stats_result and "class " in line and "StatsResult" not in line:
-            in_stats_result = False
-
-        if in_stats_result and ("value:" in line or "label:" in line):
-            found_stats_result_fields = True
-            break
-
-    assert found_ping_params, "ping method should have int count parameter"
-    assert found_stats_result_fields, "StatsResult should have value and label fields"
+    assert _line_window_contains_all(lines, "def ping(", ("count", "int"), lookahead=5), (
+        "ping method should have int count parameter"
+    )
+    assert _class_block_contains_any(lines, "StatsResult", ("value:", "label:")), (
+        "StatsResult should have value and label fields"
+    )

@@ -44,6 +44,8 @@ capnp.remove_import_hook()
 logger = logging.getLogger(__name__)
 
 InitChoice = tuple[str, str]
+GeneratedFieldSchema = _StructSchema | _EnumSchema | _InterfaceSchema
+GeneratedTypeAliasInfo = tuple[str, str] | tuple[str, str, list[str]]
 
 # Constants
 DISCRIMINANT_NONE = 65535  # Value indicating no discriminant (not part of a union)
@@ -138,7 +140,7 @@ class Writer:
 
         # Track all generated types for top-level TypeAliases
         # Format: {flat_name: (protocol_path, type_kind, [enum_values])} where type_kind is "Reader", "Builder", "Client", or "Enum"
-        self._all_type_aliases: dict[str, tuple[str, str] | tuple[str, str, list[str]]] = {}
+        self._all_type_aliases: dict[str, GeneratedTypeAliasInfo] = {}
 
         # Track if we need _DynamicObjectReader augmentation (for AnyPointer in interface returns)
         # Always enable this to generate as_struct/as_interface overloads for all types
@@ -202,111 +204,97 @@ class Writer:
         - All nested nodes recursively
         - Schemas from other files (for cross-file references)
         """
-
-        def add_schema_and_nested(schema: capnp_types.SchemaType) -> None:
-            """Recursively add a schema and all its nested schemas to the mapping."""
-            schema_id = schema.node.id
-            if schema_id in self._schemas_by_id:
-                return  # Already processed
-
-            self._schemas_by_id[schema_id] = schema
-
-            # Process all nested nodes
-            for nested_node in schema.node.nestedNodes:
-                nested_id = nested_node.id
-                if nested_id in self._schemas_by_id:
-                    continue  # Already processed
-
-                # Try to get the nested schema from the loader
-                try:
-                    nested_schema = self._schema_loader.get(nested_id)
-                    add_schema_and_nested(nested_schema)
-                except Exception as e:
-                    logger.debug(
-                        f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}) for {schema.node.displayName}: {e}",
-                    )
-
-            # Also collect schemas referenced by struct fields
-            # This includes groups, and field types (structs, interfaces, lists of structs, etc.)
-            if schema.node.which() == capnp_types.CapnpElementType.STRUCT:
-                for field in schema.node.struct.fields:
-                    # Handle group fields (unions/groups)
-                    if field.which() == "group":
-                        group_id = field.group.typeId
-                        if group_id not in self._schemas_by_id:
-                            try:
-                                group_schema = self._schema_loader.get(group_id)
-                                add_schema_and_nested(group_schema)
-                            except Exception as e:
-                                logger.warning(
-                                    f"Group field {field.name} references schema {hex(group_id)} not in loader: {e}",
-                                )
-                    # Handle slot fields that reference other types
-                    elif field.which() == "slot":
-                        slot = field.slot
-                        type_node = slot.type
-
-                        # Recursively extract type IDs from complex types
-                        def collect_type_ids(type_obj: TypeReader) -> list[int]:  # type: ignore[no-untyped-def]
-                            """Extract all schema IDs referenced by a type."""
-                            type_which = type_obj.which()
-                            referenced_ids: list[int] = []
-
-                            if type_which == "struct":
-                                referenced_ids = [type_obj.struct.typeId]
-                            elif type_which == "interface":
-                                referenced_ids = [type_obj.interface.typeId]
-                            elif type_which == "list":
-                                referenced_ids = collect_type_ids(type_obj.list.elementType)
-                            elif type_which == "enum":
-                                referenced_ids = [type_obj.enum.typeId]
-
-                            return referenced_ids
-
-                        referenced_ids = collect_type_ids(type_node)
-                        for ref_id in referenced_ids:
-                            if ref_id not in self._schemas_by_id:
-                                try:
-                                    ref_schema = self._schema_loader.get(ref_id)
-                                    add_schema_and_nested(ref_schema)
-                                except Exception as e:
-                                    logger.debug(
-                                        f"Could not load referenced type {hex(ref_id)} for field {field.name}: {e}",
-                                    )
-
-            # Also collect schemas referenced by interface methods (params and results)
-            # Interface method param and result structs are implicit and not listed as nested nodes
-            if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
-                for method in schema.node.interface.methods:
-                    # Collect param struct
-                    param_id = method.paramStructType
-                    if param_id not in self._schemas_by_id:
-                        try:
-                            param_schema = self._schema_loader.get(param_id)
-                            add_schema_and_nested(param_schema)
-                        except Exception as e:
-                            logger.debug(
-                                f"Could not load param struct for method {method.name} (id={hex(param_id)}): {e}",
-                            )
-
-                    # Collect result struct
-                    result_id = method.resultStructType
-                    if result_id not in self._schemas_by_id:
-                        try:
-                            result_schema = self._schema_loader.get(result_id)
-                            add_schema_and_nested(result_schema)
-                        except Exception as e:
-                            logger.debug(
-                                f"Could not load result struct for method {method.name} (id={hex(result_id)}): {e}",
-                            )
-
-        # Add the root schema and all its references
-        add_schema_and_nested(self._schema)
+        self._add_schema_and_nested(self._schema)
 
         logger.debug(f"Built schema ID mapping with {len(self._schemas_by_id)} schemas")
         if len(self._schemas_by_id) == 0:
             logger.warning("Schema ID mapping is empty! This will result in empty stubs.")
             logger.warning(f"Root schema ID: {hex(self._schema.node.id)}")
+
+    def _add_schema_and_nested(self, schema: capnp_types.SchemaType) -> None:
+        """Recursively add a schema and its nested or referenced schemas to the mapping."""
+        schema_id = schema.node.id
+        if schema_id in self._schemas_by_id:
+            return
+
+        self._schemas_by_id[schema_id] = schema
+        self._add_nested_node_schemas(schema)
+        self._add_struct_field_schemas(schema)
+        self._add_interface_method_schemas(schema)
+
+    def _add_nested_node_schemas(self, schema: capnp_types.SchemaType) -> None:
+        """Add schemas reachable from nested nodes."""
+        for nested_node in schema.node.nestedNodes:
+            nested_id = nested_node.id
+            if nested_id in self._schemas_by_id:
+                continue
+            try:
+                self._add_schema_and_nested(self._schema_loader.get(nested_id))
+            except Exception as e:
+                logger.debug(
+                    f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}) for {schema.node.displayName}: {e}",
+                )
+
+    def _collect_referenced_type_ids(self, type_obj: TypeReader) -> list[int]:
+        """Extract all schema IDs referenced by a field type."""
+        type_which = type_obj.which()
+        if type_which == "list":
+            return self._collect_referenced_type_ids(type_obj.list.elementType)
+        if type_which in {"struct", "interface", "enum"}:
+            return [getattr(type_obj, type_which).typeId]
+        return []
+
+    def _add_struct_field_schemas(self, schema: capnp_types.SchemaType) -> None:
+        """Add schemas referenced by struct fields."""
+        if schema.node.which() != capnp_types.CapnpElementType.STRUCT:
+            return
+
+        for field in schema.node.struct.fields:
+            if field.which() == "group":
+                self._add_group_field_schema(field)
+                continue
+            if field.which() == "slot":
+                self._add_slot_field_schemas(field)
+
+    def _add_group_field_schema(self, field: FieldReader) -> None:
+        """Add the schema referenced by a group field."""
+        group_id = field.group.typeId
+        if group_id in self._schemas_by_id:
+            return
+        try:
+            self._add_schema_and_nested(self._schema_loader.get(group_id))
+        except Exception as e:
+            logger.warning(f"Group field {field.name} references schema {hex(group_id)} not in loader: {e}")
+
+    def _add_slot_field_schemas(self, field: FieldReader) -> None:
+        """Add schemas referenced by a slot field."""
+        for ref_id in self._collect_referenced_type_ids(field.slot.type):
+            if ref_id in self._schemas_by_id:
+                continue
+            try:
+                self._add_schema_and_nested(self._schema_loader.get(ref_id))
+            except Exception as e:
+                logger.debug(f"Could not load referenced type {hex(ref_id)} for field {field.name}: {e}")
+
+    def _add_interface_method_schemas(self, schema: capnp_types.SchemaType) -> None:
+        """Add implicit param/result struct schemas for interface methods."""
+        if schema.node.which() != capnp_types.CapnpElementType.INTERFACE:
+            return
+
+        for method in schema.node.interface.methods:
+            self._add_method_struct_schema(method.paramStructType, method.name, "param")
+            self._add_method_struct_schema(method.resultStructType, method.name, "result")
+
+    def _add_method_struct_schema(self, schema_id: int, method_name: str, schema_kind: str) -> None:
+        """Add a method parameter or result struct schema."""
+        if schema_id in self._schemas_by_id:
+            return
+        try:
+            self._add_schema_and_nested(self._schema_loader.get(schema_id))
+        except Exception as e:
+            logger.debug(
+                f"Could not load {schema_kind} struct for method {method_name} (id={hex(schema_id)}): {e}",
+            )
 
     def _extract_name_from_protocol(self, protocol_name: str) -> str:
         """Extract user-facing name from Protocol name.
@@ -706,6 +694,62 @@ class Writer:
         # Primitive and other fields with their primary type
         return field.primary_type_nested
 
+    def _to_mutable_sequence_type(self, type_name: str) -> str:
+        """Convert Sequence[T] to MutableSequence[T] for builder-facing getters."""
+        if "Sequence[" not in type_name:
+            return type_name
+
+        self._add_typing_import("MutableSequence")
+        return type_name.replace("Sequence[", "MutableSequence[")
+
+    def _get_special_builder_property_types(
+        self,
+        field: helper.TypeHintedVariable,
+    ) -> tuple[str, str] | None:
+        """Handle special builder property cases that need alias types."""
+        if field.is_generic_param:
+            self._needs_anypointer_alias = True
+            return field.primary_type_nested, "AnyPointer"
+
+        if field.is_any_pointer:
+            self._needs_anypointer_alias = True
+            return field.get_type_with_affixes([helper.BUILDER_NAME]), "AnyPointer"
+
+        if field.is_any_struct:
+            self._needs_anystruct_alias = True
+            self._add_typing_import("Any")
+            return field.get_type_with_affixes([helper.BUILDER_NAME]), "AnyStruct | dict[str, Any]"
+
+        if field.is_any_list:
+            self._needs_anylist_alias = True
+            self._add_typing_import("Sequence")
+            self._add_typing_import("Any")
+            return field.get_type_with_affixes([helper.BUILDER_NAME]), "AnyList | Sequence[Any]"
+
+        if field.is_capability:
+            self._needs_capability_alias = True
+            return field.primary_type_nested, "Capability"
+
+        return None
+
+    def _get_affixed_builder_property_types(self, field: helper.TypeHintedVariable) -> tuple[str, str]:
+        """Build getter and setter types for struct and list fields on Builder."""
+        getter_type = self._to_mutable_sequence_type(field.get_type_with_affixes([helper.BUILDER_NAME]))
+        setter_types = field.get_type_with_affixes([helper.BUILDER_NAME, helper.READER_NAME])
+
+        if field.nesting_depth == 1:
+            self._add_typing_import("Sequence")
+            self._add_typing_import("Any")
+            return getter_type, f"{setter_types} | Sequence[dict[str, Any]]"
+
+        self._add_typing_import("Any")
+        return getter_type, f"{setter_types} | dict[str, Any]"
+
+    @staticmethod
+    def _has_interface_server_hint(field: helper.TypeHintedVariable) -> bool:
+        """Return whether a field includes an interface Server setter variant."""
+        return len(field.type_hints) > 1 and any(".Server" in str(type_hint) for type_hint in field.type_hints)
+
     def _get_builder_property_types(self, field: helper.TypeHintedVariable) -> tuple[str, str | None]:
         """Determine getter and setter types for Builder class fields.
 
@@ -716,79 +760,18 @@ class Writer:
             Tuple of (getter_type, setter_type). setter_type is None if same as getter.
 
         """
-        # Handle generic parameters (AnyPointer with parameter)
-        if field.is_generic_param:
-            # Getter returns _DynamicObjectReader
-            getter_type = field.primary_type_nested
-            # Setter accepts only pointer types (structs, lists, blobs, interfaces)
-            # Primitives (int, float, bool) are NOT allowed as Cap'n Proto generic parameters
-            setter_type = "AnyPointer"
-            self._needs_anypointer_alias = True
-            return getter_type, setter_type
-
-        # Handle AnyPointer fields (accepts all Cap'n Proto types including primitives)
-        if field.is_any_pointer:
-            getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
-            setter_type = "AnyPointer"
-            self._needs_anypointer_alias = True
-            return getter_type, setter_type
-
-        # Handle AnyStruct fields
-        if field.is_any_struct:
-            getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
-            setter_type = "AnyStruct | dict[str, Any]"
-            self._needs_anystruct_alias = True
-            self._add_typing_import("Any")
-            return getter_type, setter_type
-
-        # Handle AnyList fields (accepts Sequence/list)
-        if field.is_any_list:
-            getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
-            setter_type = "AnyList | Sequence[Any]"
-            self._needs_anylist_alias = True
-            self._add_typing_import("Sequence")
-            self._add_typing_import("Any")
-            return getter_type, setter_type
-
-        # Handle Capability fields
-        if field.is_capability:
-            getter_type = field.primary_type_nested
-            setter_type = "Capability"
-            self._needs_capability_alias = True
-            return getter_type, setter_type
+        special_types = self._get_special_builder_property_types(field)
+        if special_types is not None:
+            return special_types
 
         if field.has_type_hint_with_builder_affix:
-            # For lists, use MutableSequence for Builder (lists are mutable)
-            if field.nesting_depth == 1:
-                getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
-                # Replace Sequence with MutableSequence for builders (they support __setitem__)
-                if "Sequence[" in getter_type:
-                    getter_type = getter_type.replace("Sequence[", "MutableSequence[")
-                    self._add_typing_import("MutableSequence")
-                # Setter accepts Builder/Reader types + dict, but NOT the base type
-                setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
-                setter_type = field.get_type_with_affixes(setter_types) + " | Sequence[dict[str, Any]]"
-                self._add_typing_import("Sequence")
-                self._add_typing_import("Any")
-            else:
-                # For non-list structs: setter accepts Builder/Reader + dict
-                getter_type = field.get_type_with_affixes([helper.BUILDER_NAME])
-                setter_types = [helper.BUILDER_NAME, helper.READER_NAME]
-                setter_type = field.get_type_with_affixes(setter_types) + " | dict[str, Any]"
-                self._add_typing_import("Any")
-        # For interface fields: getter returns Protocol, setter accepts Protocol | Server
-        elif len(field.type_hints) > 1 and any(".Server" in str(h) for h in field.type_hints):
-            getter_type = field.primary_type_nested  # Protocol only
-            setter_type = field.full_type_nested  # Protocol | Server
-        else:
-            # Primitive and enum fields (including primitive lists)
-            getter_type = field.primary_type_nested
-            # For Builder properties with list types, use MutableSequence
-            if "Sequence[" in getter_type:
-                getter_type = getter_type.replace("Sequence[", "MutableSequence[")
-                self._add_typing_import("MutableSequence")
-            setter_type = field.full_type_nested if field.full_type_nested != getter_type else None
+            return self._get_affixed_builder_property_types(field)
 
+        getter_type = self._to_mutable_sequence_type(field.primary_type_nested)
+        if self._has_interface_server_hint(field):
+            return getter_type, field.full_type_nested
+
+        setter_type = field.full_type_nested if field.full_type_nested != getter_type else None
         return getter_type, setter_type
 
     def _add_properties(
@@ -857,81 +840,45 @@ class Writer:
             list_init_choices (list[tuple[str, str]]): List of (field_name, builder_type) for list fields.
 
         """
-        total_init_overloads = len(init_choices) + len(list_init_choices) if list_init_choices else len(init_choices)
+        resolved_init_choices = [
+            (field_name, self._get_flat_builder_alias(field_type) or self._build_scoped_builder_type(field_type))
+            for field_name, field_type in init_choices
+        ]
+        total_init_overloads = len(resolved_init_choices) + len(list_init_choices)
         use_overload = total_init_overloads > 1
 
         if use_overload:
             self._add_typing_import("overload")
-        if init_choices or list_init_choices:
+        if resolved_init_choices or list_init_choices:
             self._add_typing_import("Literal")
 
         # Note: The init() method parameter is now LiteralString in pycapnp stubs
         # This allows our Literal["fieldname"] overloads to be compatible
 
-        added_override = False
+        if resolved_init_choices or list_init_choices:
+            self.scope.add("@override")
 
-        # Add init method overloads for union/group fields (return their Builder type)
-        for field_name, field_type in init_choices:
-            if not added_override:
-                self.scope.add("@override")
-                added_override = True
+        for field_name, builder_type in [*resolved_init_choices, *list_init_choices]:
             if use_overload:
                 self.scope.add(helper.new_decorator("overload"))
-            # Build builder type name - try flat alias first
-            builder_alias = self._get_flat_builder_alias(field_type)
-            builder_type = builder_alias or self._build_scoped_builder_type(field_type)
-
-            # Parameter must be named "field" to match base class
-            init_params = [
-                "self",
-                helper.TypeHintedVariable("field", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                helper.TypeHintedVariable(
-                    "size",
-                    [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                    default="None",
-                ),
-            ]
-
             self.scope.add(
                 helper.new_function(
                     "init",
-                    parameters=init_params,
-                    return_type=builder_type,
-                ),
-            )
-
-        # Add init method overloads for lists (properly typed)
-        for field_name, builder_type in list_init_choices:
-            if not added_override:
-                self.scope.add("@override")
-                added_override = True
-            if use_overload:
-                self.scope.add(helper.new_decorator("overload"))
-
-            # Parameter must be named "field" to match base class
-            init_params_list = [
-                "self",
-                helper.TypeHintedVariable("field", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
-                helper.TypeHintedVariable(
-                    "size",
-                    [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
-                    default="None",
-                ),
-            ]
-
-            self.scope.add(
-                helper.new_function(
-                    "init",
-                    parameters=init_params_list,
+                    parameters=[
+                        "self",
+                        helper.TypeHintedVariable("field", [helper.TypeHint(f'Literal["{field_name}"]', primary=True)]),
+                        helper.TypeHintedVariable(
+                            "size",
+                            [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                            default="None",
+                        ),
+                    ],
                     return_type=builder_type,
                 ),
             )
 
         # Add catchall overload if we added any specific overloads
         if use_overload:
-            if not added_override:
-                self.scope.add("@override")
-                added_override = True
             self.scope.add(helper.new_decorator("overload"))
             catchall_params = [
                 "self",
@@ -1319,6 +1266,118 @@ class Writer:
 
     # ===== Slot Generation Methods =====
 
+    @staticmethod
+    def _list_builder_init_args() -> list[str]:
+        """Return the standard Builder.init signature for list items."""
+        return ["self", "index: int", "size: int | None = None"]
+
+    def _build_struct_list_class_info(self, element_type: TypeReader) -> tuple[str, str, str, str, bool, list[str]]:
+        """Build list-class typing info for struct elements."""
+        struct_name = self.get_type_name(element_type)
+        builder_alias = self._get_flat_builder_alias(struct_name)
+        reader_alias = self._get_flat_reader_alias(struct_name)
+        reader_type = reader_alias or self._build_nested_reader_type(struct_name)
+        builder_type = builder_alias or self._build_scoped_builder_type(struct_name)
+        self._add_typing_import("Any")
+
+        last_component = struct_name.split(".")[-1]
+        base_name = (
+            self._extract_name_from_protocol(last_component) if last_component.startswith("_") else last_component
+        )
+        setter_type = f"{reader_type} | {builder_type} | dict[str, Any]"
+        return reader_type, builder_type, setter_type, base_name, True, self._list_builder_init_args()
+
+    def _build_nested_list_class_info(self, element_type: TypeReader) -> tuple[str, str, str, str, bool, list[str]]:
+        """Build list-class typing info for nested list elements."""
+        inner_list_class, inner_reader_alias, inner_builder_alias = self._generate_list_class(element_type)
+        self._add_typing_import("Sequence")
+        self._add_typing_import("Any")
+        return (
+            inner_reader_alias,
+            inner_builder_alias,
+            f"{inner_reader_alias} | {inner_builder_alias} | Sequence[Any]",
+            inner_list_class.removeprefix("_"),
+            True,
+            self._list_builder_init_args(),
+        )
+
+    def _build_interface_list_class_info(self, interface_name: str) -> tuple[str, str, str, str, bool, list[str]]:
+        """Build list-class typing info for interface elements."""
+        client_alias = self._get_flat_client_alias(interface_name)
+        if not client_alias:
+            client_alias = self._get_client_type_name_from_interface_path(interface_name)
+        return (
+            client_alias,
+            client_alias,
+            f"{client_alias} | {interface_name}.Server",
+            client_alias,
+            False,
+            [],
+        )
+
+    def _build_list_class_info(self, element_type: TypeReader) -> tuple[str, str, str, str, bool, list[str]]:
+        """Build the list-class typing information for one list element type."""
+        element_which = element_type.which()
+
+        if element_which == capnp_types.CapnpElementType.STRUCT:
+            return self._build_struct_list_class_info(element_type)
+        if element_which == capnp_types.CapnpElementType.LIST:
+            return self._build_nested_list_class_info(element_type)
+        if element_which == capnp_types.CapnpElementType.ENUM:
+            enum_name = self.get_type_name(element_type)
+            return enum_name, enum_name, enum_name, enum_name.replace(".", "_"), False, []
+        if element_which == capnp_types.CapnpElementType.INTERFACE:
+            return self._build_interface_list_class_info(self.get_type_name(element_type))
+        if element_which == capnp_types.CapnpElementType.ANY_POINTER:
+            self._needs_anypointer_alias = True
+            return "_DynamicObjectReader", "_DynamicObjectBuilder", "AnyPointer", "AnyPointer", False, []
+
+        python_type = capnp_types.CAPNP_TYPE_TO_PYTHON[element_which]
+        return python_type, python_type, python_type, element_which.title(), False, []
+
+    def _add_generated_list_class(
+        self,
+        list_class_name: str,
+        aliases: tuple[str, str],
+        class_info: tuple[str, str, str, bool, list[str]],
+    ) -> None:
+        """Emit the generated list Reader/Builder classes into the root scope."""
+        reader_alias, builder_alias = aliases
+        reader_type, builder_type, setter_type, has_init, init_args = class_info
+        self._generated_list_types.add(list_class_name)
+        self._all_type_aliases[reader_alias] = (f"{list_class_name}.Reader", "Reader")
+        self._all_type_aliases[builder_alias] = (f"{list_class_name}.Builder", "Builder")
+
+        self._add_typing_import("Iterator")
+        self._add_typing_import("overload")
+        self._add_typing_import("override")
+
+        root_scope = self.scope.root
+        root_scope.add(f"class {list_class_name}:")
+        root_scope.add("    class Reader(_DynamicListReader):")
+        root_scope.add("        @override")
+        root_scope.add("        def __len__(self) -> int: ...")
+        root_scope.add("        @override")
+        root_scope.add(f"        def __getitem__(self, key: int) -> {reader_type}: ...")
+        root_scope.add("        @override")
+        root_scope.add(f"        def __iter__(self) -> Iterator[{reader_type}]: ...")
+
+        root_scope.add("    class Builder(_DynamicListBuilder):")
+        root_scope.add("        @override")
+        root_scope.add("        def __len__(self) -> int: ...")
+        root_scope.add("        @override")
+        root_scope.add(f"        def __getitem__(self, key: int) -> {builder_type}: ...")
+        root_scope.add("        @override")
+        root_scope.add(f"        def __setitem__(self, key: int, value: {setter_type}) -> None: ...")
+        root_scope.add("        @override")
+        root_scope.add(f"        def __iter__(self) -> Iterator[{builder_type}]: ...")
+
+        if has_init:
+            root_scope.add("        @override")
+            root_scope.add(f"        def init({', '.join(init_args)}) -> {builder_type}: ...")
+
+        root_scope.add("")
+
     def _generate_list_class(self, type_reader: TypeReader) -> tuple[str, str, str]:
         """Generate a specific List class for the given list type reader.
 
@@ -1330,107 +1389,9 @@ class Writer:
 
         """
         assert type_reader.which() == capnp_types.CapnpElementType.LIST
-        element_type = type_reader.list.elementType
-        element_which = element_type.which()
-
-        # Determine element types and base name
-        reader_type: str
-        builder_type: str
-        setter_type: str
-        base_name: str
-        has_init = False
-        init_args: list[str] = []
-
-        if element_which == capnp_types.CapnpElementType.STRUCT:
-            # Struct list
-            struct_name = self.get_type_name(element_type)
-            # Use flat aliases if available
-            builder_alias = self._get_flat_builder_alias(struct_name)
-            reader_alias = self._get_flat_reader_alias(struct_name)
-
-            reader_type = reader_alias or self._build_nested_reader_type(struct_name)
-            builder_type = builder_alias or self._build_scoped_builder_type(struct_name)
-
-            # Setter accepts Reader, Builder, or dict
-            setter_type = f"{reader_type} | {builder_type} | dict[str, Any]"
-            self._add_typing_import("Any")
-
-            # Base name for list class (sanitize dots)
-            # Use only the last component to avoid scoped names in list class
-            last_component = struct_name.split(".")[-1]
-            if last_component.startswith("_"):
-                # Clean up protocol names: _CalculatorStructModule -> Calculator
-                base_name = self._extract_name_from_protocol(last_component)
-            else:
-                base_name = last_component
-
-            has_init = True
-            # Match base class signature: init(self, index, size=None)
-            init_args = ["self", "index: int", "size: int | None = None"]
-
-        elif element_which == capnp_types.CapnpElementType.LIST:
-            # List of lists
-            inner_list_class, inner_reader_alias, inner_builder_alias = self._generate_list_class(element_type)
-            reader_type = inner_reader_alias
-            builder_type = inner_builder_alias
-
-            # Setter accepts Reader, Builder, or Sequence
-            setter_type = f"{reader_type} | {builder_type} | Sequence[Any]"
-            self._add_typing_import("Sequence")
-            self._add_typing_import("Any")
-
-            base_name = inner_list_class
-            base_name = base_name.removeprefix("_")  # Remove _ prefix but keep List suffix
-
-            has_init = True
-            # Match base class signature: init(self, index, size=None)
-            # Although size is required for lists, we must match the base signature for type checking
-            init_args = ["self", "index: int", "size: int | None = None"]
-
-        elif element_which == capnp_types.CapnpElementType.ENUM:
-            # Enum list
-            enum_name = self.get_type_name(element_type)
-            reader_type = enum_name
-            builder_type = enum_name
-            setter_type = enum_name
-
-            base_name = enum_name.replace(".", "_")
-
-        elif element_which == capnp_types.CapnpElementType.INTERFACE:
-            # Interface list
-            interface_name = self.get_type_name(element_type)
-            # Use Client alias
-            client_alias = self._get_flat_client_alias(interface_name)
-            if not client_alias:
-                # Try to extract from protocol name
-                parts = interface_name.split(".")
-                last = parts[-1]
-                if last.startswith("_"):
-                    client_alias = f"{self._extract_name_from_protocol(last)}Client"
-                else:
-                    client_alias = f"{interface_name}Client"
-
-            reader_type = client_alias
-            builder_type = client_alias
-            setter_type = f"{client_alias} | {interface_name}.Server"
-
-            base_name = client_alias
-
-        elif element_which == capnp_types.CapnpElementType.ANY_POINTER:
-            # AnyPointer list
-            reader_type = "_DynamicObjectReader"
-            builder_type = "_DynamicObjectBuilder"
-            setter_type = "AnyPointer"
-            self._needs_anypointer_alias = True
-            base_name = "AnyPointer"
-
-        else:
-            # Primitive list
-            python_type = capnp_types.CAPNP_TYPE_TO_PYTHON[element_which]
-            reader_type = python_type
-            builder_type = python_type
-            setter_type = python_type
-            base_name = element_which.title()  # e.g. Int32
+        reader_type, builder_type, setter_type, base_name, has_init, init_args = self._build_list_class_info(
+            type_reader.list.elementType,
+        )
 
         # Construct list class name
         list_class_name = f"_{base_name}List"
@@ -1443,49 +1404,99 @@ class Writer:
         if list_class_name in self._generated_list_types:
             return list_class_name, reader_alias, builder_alias
 
-        self._generated_list_types.add(list_class_name)
-
-        # Register in self._all_type_aliases
-        self._all_type_aliases[reader_alias] = (f"{list_class_name}.Reader", "Reader")
-        self._all_type_aliases[builder_alias] = (f"{list_class_name}.Builder", "Builder")
-
-        # Generate class
-        self._add_typing_import("Iterator")
-        self._add_typing_import("overload")
-        self._add_typing_import("override")
-
-        # We need to add this to the ROOT scope
-        root_scope = self.scope.root
-
-        # Reader class
-        root_scope.add(f"class {list_class_name}:")
-        root_scope.add("    class Reader(_DynamicListReader):")
-        root_scope.add("        @override")
-        root_scope.add("        def __len__(self) -> int: ...")
-        root_scope.add("        @override")
-        root_scope.add(f"        def __getitem__(self, key: int) -> {reader_type}: ...")
-        root_scope.add("        @override")
-        root_scope.add(f"        def __iter__(self) -> Iterator[{reader_type}]: ...")
-
-        # Builder class
-        root_scope.add("    class Builder(_DynamicListBuilder):")
-        root_scope.add("        @override")
-        root_scope.add("        def __len__(self) -> int: ...")
-        root_scope.add("        @override")
-        root_scope.add(f"        def __getitem__(self, key: int) -> {builder_type}: ...")
-        root_scope.add("        @override")
-        root_scope.add(f"        def __setitem__(self, key: int, value: {setter_type}) -> None: ...")
-        root_scope.add("        @override")
-        root_scope.add(f"        def __iter__(self) -> Iterator[{builder_type}]: ...")
-
-        if has_init:
-            init_sig = ", ".join(init_args)
-            root_scope.add("        @override")
-            root_scope.add(f"        def init({init_sig}) -> {builder_type}: ...")
-
-        root_scope.add("")
+        self._add_generated_list_class(
+            list_class_name,
+            (reader_alias, builder_alias),
+            (reader_type, builder_type, setter_type, has_init, init_args),
+        )
 
         return list_class_name, reader_alias, builder_alias
+
+    @staticmethod
+    def _add_struct_slot_type_hints(
+        hinted_variable: helper.TypeHintedVariable, builder_alias: str | None, reader_alias: str | None
+    ) -> None:
+        """Add Builder/Reader variants to a struct slot variable."""
+        if builder_alias and reader_alias:
+            hinted_variable.add_type_hint(helper.TypeHint(builder_alias, affix="Builder", flat_alias=True))
+            hinted_variable.add_type_hint(helper.TypeHint(reader_alias, affix="Reader", flat_alias=True))
+            return
+
+        hinted_variable.add_builder_from_primary_type()
+        hinted_variable.add_reader_from_primary_type()
+
+    @staticmethod
+    def _track_list_init_choice(
+        hinted_variable: helper.TypeHintedVariable | None,
+        field_name: str,
+        list_init_choices: list[tuple[str, str]] | None,
+    ) -> None:
+        """Track list field init overload information when requested."""
+        if list_init_choices is None or hinted_variable is None:
+            return
+
+        builder_type = hinted_variable.get_type_with_affixes(["Builder"])
+        list_init_choices.append((helper.sanitize_name(field_name), builder_type))
+
+    @staticmethod
+    def _require_struct_schema(raw_field: _StructSchemaField) -> _StructSchema:
+        """Extract a struct schema from a pycapnp field wrapper."""
+        schema = raw_field.schema
+        if isinstance(schema, _StructSchema):
+            return schema
+        if isinstance(schema, _Schema):
+            return schema.as_struct()
+        msg = f"Expected struct schema, got {type(schema).__name__}"
+        raise TypeError(msg)
+
+    @staticmethod
+    def _require_enum_schema(raw_field: _StructSchemaField) -> _EnumSchema:
+        """Extract an enum schema from a pycapnp field wrapper."""
+        schema = raw_field.schema
+        if isinstance(schema, _EnumSchema):
+            return schema
+        if isinstance(schema, _Schema):
+            return schema.as_enum()
+        msg = f"Expected enum schema, got {type(schema).__name__}"
+        raise TypeError(msg)
+
+    @staticmethod
+    def _require_interface_schema(raw_field: _StructSchemaField) -> _InterfaceSchema:
+        """Extract an interface schema from a pycapnp field wrapper."""
+        schema = raw_field.schema
+        if isinstance(schema, _InterfaceSchema):
+            return schema
+        if isinstance(schema, _Schema):
+            return schema.as_interface()
+        msg = f"Expected interface schema, got {type(schema).__name__}"
+        raise TypeError(msg)
+
+    def _generate_interface_slot(
+        self,
+        field: FieldReader,
+        schema: _InterfaceSchema,
+    ) -> helper.TypeHintedVariable:
+        """Generate a slot for an interface field."""
+        with contextlib.suppress(Exception):  # pragma: no cover - best effort for incomplete imported schemas
+            self.generate_nested(schema)
+        try:
+            protocol_type_name = self.get_type_name(field.slot.type)
+        except Exception:
+            protocol_type_name = "Any"
+            self._add_typing_import("Union")
+
+        client_type = protocol_type_name
+        if protocol_type_name != "Any":
+            last_part = protocol_type_name.split(".")[-1]
+            if last_part.startswith("_"):
+                client_type = f"{protocol_type_name}.{self._extract_name_from_protocol(last_part)}Client"
+            else:
+                client_type = f"{protocol_type_name}Client"
+
+        return helper.TypeHintedVariable(
+            helper.sanitize_name(field.name),
+            [helper.TypeHint(client_type, primary=True), helper.TypeHint(f"{protocol_type_name}.Server")],
+        )
 
     def gen_slot(
         self,
@@ -1507,84 +1518,36 @@ class Writer:
             helper.TypeHintedVariable | None: The type hinted variable that was created, or None otherwise.
 
         """
-        hinted_variable: helper.TypeHintedVariable | None
         field_slot_type = field.slot.type.which()
+        if field_slot_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
+            return self.gen_python_type_slot(field, field_slot_type)
+
+        if field_slot_type == capnp_types.CapnpElementType.INTERFACE:
+            return self._generate_interface_slot(field, self._require_interface_schema(raw_field))
 
         if field_slot_type == capnp_types.CapnpElementType.LIST:
             hinted_variable = self.gen_list_slot(field)
-            # Track list fields for init() overloads
-            if list_init_choices is not None and hinted_variable:
-                # Get the Builder type for the list
-                builder_type = hinted_variable.get_type_with_affixes(["Builder"])
-                list_init_choices.append((helper.sanitize_name(field.name), builder_type))
+            self._track_list_init_choice(hinted_variable, field.name, list_init_choices)
+            return hinted_variable
 
-        elif field_slot_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
-            hinted_variable = self.gen_python_type_slot(field, field_slot_type)
+        if field_slot_type == capnp_types.CapnpElementType.ENUM:
+            return self.gen_enum_slot(field, self._require_enum_schema(raw_field))
 
-        elif field_slot_type == capnp_types.CapnpElementType.ENUM:
-            hinted_variable = self.gen_enum_slot(field, raw_field.schema)
+        if field_slot_type == capnp_types.CapnpElementType.ANY_POINTER:
+            return self.gen_any_pointer_slot(field)
 
-        elif field_slot_type == capnp_types.CapnpElementType.STRUCT:
-            hinted_variable = self.gen_struct_slot(field, raw_field.schema, init_choices)
-
-            # Try to use flat TypeAliases for Builder/Reader if available
-            type_name = hinted_variable.primary_type_hint.name
-            builder_alias = self._get_flat_builder_alias(type_name)
-            reader_alias = self._get_flat_reader_alias(type_name)
-
-            if builder_alias and reader_alias:
-                # Use flat aliases with affix only for lookup (flat_alias=True prevents appending affix)
-                hinted_variable.add_type_hint(helper.TypeHint(builder_alias, affix="Builder", flat_alias=True))
-                hinted_variable.add_type_hint(helper.TypeHint(reader_alias, affix="Reader", flat_alias=True))
-            else:
-                # Fall back to scoped names with affixes (old behavior)
-                hinted_variable.add_builder_from_primary_type()
-                hinted_variable.add_reader_from_primary_type()
-
-        elif field_slot_type == capnp_types.CapnpElementType.ANY_POINTER:
-            hinted_variable = self.gen_any_pointer_slot(field)
-
-        elif field_slot_type == capnp_types.CapnpElementType.INTERFACE:
-            # Interfaces are represented as Protocols; expose attribute with Protocol type
-            # Ensure the interface type has been generated
-            with contextlib.suppress(Exception):  # pragma: no cover - best effort for incomplete imported schemas
-                self.generate_nested(raw_field.schema)
-            try:
-                type_name = self.get_type_name(field.slot.type)
-            except Exception:
-                type_name = "Any"
-                self._add_typing_import("Union")
-            # For interfaces, type_name from get_type_name is now the Protocol name (_<Name>InterfaceModule)
-            # E.g., "_HeartbeatInterfaceModule" or "Calculator._FunctionInterfaceModule"
-            if type_name != "Any":
-                # Protocol name is already in _<Name>InterfaceModule format
-                protocol_type_name = type_name
-
-                # Extract user-facing name and build nested Client reference
-                # E.g., "_HeartbeatInterfaceModule" -> "_HeartbeatInterfaceModule.HeartbeatClient"
-                # E.g., "Calculator._FunctionInterfaceModule" -> "Calculator._FunctionInterfaceModule.FunctionClient"
-                parts = type_name.split(".")
-                last_part = parts[-1]  # "_HeartbeatInterfaceModule"
-                # Extract base name: "_HeartbeatInterfaceModule" -> "Heartbeat"
-                if last_part.startswith("_"):
-                    user_facing_name = self._extract_name_from_protocol(last_part)
-                    client_type = f"{protocol_type_name}.{user_facing_name}Client"
-                else:
-                    # Fallback for edge cases
-                    client_type = f"{protocol_type_name}Client"
-            else:
-                protocol_type_name = type_name
-                client_type = type_name
-            # For reading: return the Client type (capabilities are always clients at runtime)
-            # For writing (in Builder): accept Client | Server
-            hints = [helper.TypeHint(client_type, primary=True)]
-            # Add Server as a non-primary hint for Builder setter (using Protocol name)
-            hints.append(helper.TypeHint(f"{protocol_type_name}.Server"))
-            hinted_variable = helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
-
-        else:
+        if field_slot_type != capnp_types.CapnpElementType.STRUCT:
             msg = f"Unknown field slot type {field_slot_type}."
             raise TypeError(msg)
+
+        hinted_variable = self.gen_struct_slot(field, self._require_struct_schema(raw_field), init_choices)
+        if hinted_variable is not None:
+            type_name = hinted_variable.primary_type_hint.name
+            self._add_struct_slot_type_hints(
+                hinted_variable,
+                self._get_flat_builder_alias(type_name),
+                self._get_flat_reader_alias(type_name),
+            )
 
         return hinted_variable
 
@@ -1638,7 +1601,7 @@ class Writer:
             [helper.TypeHint(python_type_name, primary=True)],
         )
 
-    def gen_enum_slot(self, field: FieldReader, schema: capnp_types.SchemaType) -> helper.TypeHintedVariable:
+    def gen_enum_slot(self, field: FieldReader, schema: _EnumSchema) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `enum`.
 
         Args:
@@ -1670,7 +1633,7 @@ class Writer:
     def gen_struct_slot(
         self,
         field: FieldReader,
-        schema: capnp_types.SchemaType,
+        schema: _StructSchema,
         init_choices: list[InitChoice],
     ) -> helper.TypeHintedVariable:
         """Generate a slot, which contains a `struct`.
@@ -2050,7 +2013,7 @@ class Writer:
         assert group_name != field.name
 
         # Generate the group struct recursively
-        group_type = self.gen_struct(raw_field.schema, type_name=group_name)
+        group_type = self.gen_struct(self._require_struct_schema(raw_field), type_name=group_name)
         group_scoped_name = group_type.scoped_name
 
         # Create hinted variable for the group field
@@ -2378,6 +2341,82 @@ class Writer:
             logger.debug(f"Could not enumerate methods for {context.type_name}: {e}")
             return []
 
+    @staticmethod
+    def _find_struct_field(param_schema: _StructSchema, field_name: str) -> FieldReader:
+        """Find a field by name inside a struct schema."""
+        return next(field for field in param_schema.node.struct.fields if field.name == field_name)
+
+    @staticmethod
+    def _get_anypointer_kind(type_reader: TypeReader) -> str:
+        """Return the unconstrained AnyPointer kind, or `anyKind` when unavailable."""
+        try:
+            if type_reader.anyPointer.which() == "unconstrained":
+                return type_reader.anyPointer.unconstrained.which()
+        except (AttributeError, IndexError):
+            pass
+        return "anyKind"
+
+    def _get_struct_builder_reader_types(self, type_name: str) -> tuple[str, str, str | None, str | None]:
+        """Return Builder/Reader type names plus any local flat aliases for a struct."""
+        return (
+            self._build_nested_builder_type(type_name),
+            self._build_nested_reader_type(type_name),
+            self._get_flat_builder_alias(type_name),
+            self._get_flat_reader_alias(type_name),
+        )
+
+    def _get_interface_client_server_types(self, interface_type: str) -> tuple[str, str]:
+        """Return nested Client and Server type names for an interface Protocol path."""
+        last_part = interface_type.rsplit(".", maxsplit=1)[-1]
+        if last_part.startswith("_"):
+            client_type = f"{interface_type}.{self._extract_name_from_protocol(last_part)}Client"
+        else:
+            client_type = f"{interface_type}Client"
+        return client_type, f"{interface_type}.Server"
+
+    def _resolve_method_parameter_types(self, field_obj: FieldReader, base_type: str) -> tuple[str, str, str]:
+        """Resolve client/server/request types for one method parameter field."""
+        field_type = field_obj.slot.type.which()
+        result = (base_type, base_type, base_type)
+
+        if field_type == capnp_types.CapnpElementType.ANY_POINTER:
+            self._needs_anypointer_alias = True
+            result = ("AnyPointer", "AnyPointer", "AnyPointer")
+        elif field_type == capnp_types.CapnpElementType.ENUM:
+            try:
+                enum_type = self.get_type_name(field_obj.slot.type)
+            except Exception as e:
+                logger.debug(f"Could not proces enum type for {field_obj.name}: {e}")
+                enum_type = "int | str"
+            result = (enum_type, enum_type, enum_type)
+        elif field_type == capnp_types.CapnpElementType.STRUCT:
+            builder_type, reader_type, builder_alias, reader_alias = self._get_struct_builder_reader_types(base_type)
+            if builder_alias and reader_alias:
+                result = (
+                    f"{builder_alias} | {reader_alias} | dict[str, Any]",
+                    reader_alias,
+                    builder_alias,
+                )
+            else:
+                result = (f"{base_type} | dict[str, Any]", reader_type, builder_type)
+        elif field_type == capnp_types.CapnpElementType.LIST:
+            _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
+            self._add_typing_import("Sequence")
+            self._add_typing_import("Any")
+            sequence_type = f"{builder_alias} | {reader_alias} | Sequence[Any]"
+            result = (sequence_type, reader_alias, sequence_type)
+        elif field_type == capnp_types.CapnpElementType.INTERFACE:
+            last_part = base_type.rsplit(".", maxsplit=1)[-1]
+            if last_part.startswith("_"):
+                client_type, server_type = self._get_interface_client_server_types(base_type)
+                union_type = f"{client_type} | {server_type}"
+                result = (union_type, client_type, union_type)
+            else:
+                union_type = f"{base_type} | {base_type}.Server"
+                result = (union_type, base_type, union_type)
+
+        return result
+
     def _process_method_parameter(
         self,
         param_name: str,
@@ -2394,96 +2433,10 @@ class Writer:
 
         """
         try:
-            field_obj = next(f for f in param_schema.node.struct.fields if f.name == param_name)
+            field_obj = self._find_struct_field(param_schema, param_name)
 
-            # Get base type
             base_type = self.get_type_name(field_obj.slot.type)
-
-            # Determine client, server, and request types based on field type
-            client_type = base_type
-            server_type = base_type
-            request_type = base_type
-
-            field_type = field_obj.slot.type.which()
-
-            # Handle ANY_POINTER: client receives DynamicObjectReader, server receives AnyPointer
-            if field_type == capnp_types.CapnpElementType.ANY_POINTER:
-                client_type = "AnyPointer"
-                server_type = "AnyPointer"
-                request_type = "AnyPointer"
-                self._needs_anypointer_alias = True
-
-            # Handle ENUM: use type alias
-            # Enum values are integers at runtime, but RPC accepts string literals
-            elif field_type == capnp_types.CapnpElementType.ENUM:
-                # Get enum type to extract name
-                try:
-                    type_name = self.get_type_name(field_obj.slot.type)
-                    client_type = type_name
-                    server_type = type_name
-                    request_type = type_name
-                except Exception as e:
-                    logger.debug(f"Could not proces enum type for {param_name}: {e}")
-                    # Fallback
-                    client_type = "int | str"
-                    server_type = client_type
-                    request_type = client_type
-
-            # Handle STRUCT: use type aliases for client if defined locally, Reader for server, Builder for request
-            elif field_type == capnp_types.CapnpElementType.STRUCT:
-                reader_type = self._build_nested_reader_type(base_type)
-                builder_type = self._build_nested_builder_type(base_type)
-                # For client methods, try to use flat type aliases if defined in this module
-                builder_alias = self._get_flat_builder_alias(base_type)
-                reader_alias = self._get_flat_reader_alias(base_type)
-                if builder_alias and reader_alias:
-                    # Type is defined in this module, use flat aliases
-                    client_type = f"{builder_alias} | {reader_alias} | dict[str, Any]"
-                    server_type = reader_alias
-                    request_type = builder_alias
-                else:
-                    # Type is imported, use the module type with dict union
-                    client_type = f"{base_type} | dict[str, Any]"
-                    server_type = reader_type
-                    request_type = builder_type  # Request fields use Builder type
-
-            # Handle LIST: use generated list aliases
-            elif field_type == capnp_types.CapnpElementType.LIST:
-                # Generate list class and get aliases
-                _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
-
-                self._add_typing_import("Sequence")
-                self._add_typing_import("Any")
-
-                # Client accepts Builder, Reader, or Sequence (list/tuple)
-                client_type = f"{builder_alias} | {reader_alias} | Sequence[Any]"
-
-                # Server receives Reader
-                server_type = reader_alias
-
-                # Request builder accepts same as client
-                request_type = client_type
-
-            # Handle INTERFACE: use Client alias if available
-            elif field_type == capnp_types.CapnpElementType.INTERFACE:
-                # Extract interface name for the Client alias
-                # base_type is like "_IdentifiableInterfaceModule" or "_ParentStructModule._NestedInterfaceModule"
-                last_part = base_type.split(".")[-1]
-                if last_part.startswith("_"):
-                    interface_name = self._extract_name_from_protocol(last_part)
-                    client_alias = f"{interface_name}Client"
-                else:
-                    client_alias = None
-
-                if client_alias:
-                    # Use the Client alias (either local or imported)
-                    client_type = f"{client_alias} | {base_type}.Server"
-                    server_type = client_alias
-                else:
-                    # Fallback to module type
-                    client_type = f"{base_type} | {base_type}.Server"
-                    server_type = base_type
-                request_type = client_type
+            client_type, server_type, request_type = self._resolve_method_parameter_types(field_obj, base_type)
 
             return ParameterInfo(
                 name=param_name,
@@ -2708,6 +2661,207 @@ class Writer:
 
         return lines
 
+    def _server_anypointer_alias_type(self, any_pointer_kind: str) -> str:
+        """Return the server-side alias type for an AnyPointer result field."""
+        alias_by_kind = {
+            "capability": ("Capability", "_needs_capability_alias"),
+            "struct": ("AnyStruct", "_needs_anystruct_alias"),
+            "list": ("AnyList", "_needs_anylist_alias"),
+        }
+        alias_name, flag_name = alias_by_kind.get(any_pointer_kind, ("AnyPointer", "_needs_anypointer_alias"))
+        setattr(self, flag_name, True)
+        return alias_name
+
+    def _resolve_named_result_field_type(
+        self,
+        field_obj: FieldReader,
+        *,
+        for_server: bool,
+    ) -> tuple[str, str | None, str | None]:
+        """Resolve the field type used by named result protocols and NamedTuples."""
+        field_type = self.get_type_name(field_obj.slot.type)
+        field_type_enum = field_obj.slot.type.which()
+
+        if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
+            return (
+                (self._server_anypointer_alias_type(self._get_anypointer_kind(field_obj.slot.type)), None, None)
+                if for_server
+                else ("_DynamicObjectReader", None, None)
+            )
+
+        if field_type_enum == capnp_types.CapnpElementType.STRUCT:
+            builder_type, reader_type, builder_alias, reader_alias = self._get_struct_builder_reader_types(field_type)
+            builder_hint = builder_alias or builder_type
+            reader_hint = reader_alias or reader_type
+            return (f"{builder_hint} | {reader_hint}" if for_server else reader_hint, builder_hint, reader_hint)
+
+        if field_type_enum == capnp_types.CapnpElementType.INTERFACE:
+            client_type, server_type = self._get_interface_client_server_types(field_type)
+            return (f"{server_type} | {client_type}" if for_server else client_type, None, None)
+
+        if field_type_enum == capnp_types.CapnpElementType.LIST:
+            _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
+            return (f"{builder_alias} | {reader_alias}" if for_server else reader_alias, builder_alias, reader_alias)
+
+        return (field_type, None, None)
+
+    def _resolve_direct_result_field_type(self, field_obj: FieldReader, *, for_server: bool) -> str:
+        """Resolve a field type for direct-struct result protocols."""
+        if field_obj.slot.type.which() != capnp_types.CapnpElementType.ANY_POINTER:
+            return self._resolve_named_result_field_type(field_obj, for_server=for_server)[0]
+
+        any_pointer_kind = self._get_anypointer_kind(field_obj.slot.type)
+        field_type = "_DynamicObjectReader"
+        if for_server:
+            if any_pointer_kind == "capability":
+                field_type = "_DynamicCapabilityClient | _DynamicCapabilityServer"
+            else:
+                self._needs_anypointer_alias = True
+                field_type = "AnyPointer"
+        elif any_pointer_kind == "capability":
+            field_type = "_DynamicCapabilityClient"
+        elif any_pointer_kind == "struct":
+            field_type = "_DynamicStructReader"
+        elif any_pointer_kind == "list":
+            field_type = "_DynamicListReader"
+        return field_type
+
+    @staticmethod
+    def _collect_union_field_names(result_schema: _StructSchema) -> list[str]:
+        """Collect union field names for a result struct."""
+        return [
+            field.name for field in result_schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
+        ]
+
+    def _build_server_result_property_lines(
+        self,
+        field_name: str,
+        field_type_enum: str,
+        field_type: str,
+        builder_hint: str | None,
+        reader_hint: str | None,
+    ) -> list[str]:
+        """Build property getter/setter lines for server-side result wrappers."""
+        getter_type = field_type
+        setter_type = field_type
+
+        if field_type_enum == capnp_types.CapnpElementType.LIST and builder_hint and reader_hint:
+            self._add_typing_import("Sequence")
+            self._add_typing_import("Any")
+            getter_type = builder_hint
+            setter_type = f"{builder_hint} | {reader_hint} | Sequence[Any]"
+        elif field_type_enum == capnp_types.CapnpElementType.STRUCT and builder_hint:
+            self._add_typing_import("Any")
+            getter_type = builder_hint
+            setter_type = f"{field_type} | dict[str, Any]"
+
+        return [
+            "    @property",
+            f"    def {field_name}(self) -> {getter_type}: ...",
+            f"    @{field_name}.setter",
+            f"    def {field_name}(self, value: {setter_type}) -> None: ...",
+        ]
+
+    def _append_server_result_init_overloads(self, lines: list[str], init_fields: list[tuple[str, str]]) -> None:
+        """Append init() overloads for server-side named result wrappers."""
+        if not init_fields:
+            return
+
+        self._add_typing_import("overload")
+        self._add_typing_import("Literal")
+        self._add_typing_import("Any")
+        for field_name, return_type in init_fields:
+            lines.extend(
+                [
+                    "    @overload",
+                    f'    def init(self, field: Literal["{field_name}"], size: int | None = None) -> {return_type}: ...',
+                ],
+            )
+        lines.extend(["    @overload", "    def init(self, field: str, size: int | None = None) -> Any: ..."])
+
+    def _generate_direct_result_protocol_lines(
+        self,
+        method_info: MethodInfo,
+        result_type: str,
+        *,
+        for_server: bool,
+    ) -> list[str]:
+        """Generate the Result protocol for a direct struct return."""
+        self._add_typing_import("Awaitable")
+        lines = [f"class {result_type}(Awaitable[{result_type}], Protocol):"]
+        if method_info.result_schema is None:
+            return lines
+
+        for field_name in method_info.result_fields:
+            try:
+                field_obj = self._find_struct_field(method_info.result_schema, field_name)
+                field_type = self._resolve_direct_result_field_type(field_obj, for_server=for_server)
+                lines.append(f"    {field_name}: {field_type}")
+            except Exception:
+                lines.append(f"    {field_name}: Any")
+
+        union_fields = self._collect_union_field_names(method_info.result_schema)
+        if union_fields:
+            self._add_typing_import("Literal")
+            union_literal = ", ".join(f'"{field_name}"' for field_name in union_fields)
+            lines.append(f"    def which(self) -> Literal[{union_literal}]: ...")
+        return lines
+
+    def _generate_void_result_protocol_lines(self, result_type: str) -> list[str]:
+        """Generate the Result protocol for a void method."""
+        self._add_typing_import("Awaitable")
+        return [f"class {result_type}(Awaitable[None], Protocol):", "    ..."]
+
+    def _generate_named_result_protocol_lines(
+        self,
+        method_info: MethodInfo,
+        result_type: str,
+        *,
+        for_server: bool,
+    ) -> list[str]:
+        """Generate the Result protocol for named-field results."""
+        if for_server:
+            lines = [f"class {result_type}(_DynamicStructBuilder):"]
+        else:
+            self._add_typing_import("Awaitable")
+            lines = [f"class {result_type}(Awaitable[{result_type}], Protocol):"]
+
+        init_fields: list[tuple[str, str]] = []
+        if method_info.result_schema is None:
+            return lines
+
+        for field_name in method_info.result_fields:
+            try:
+                field_obj = self._find_struct_field(method_info.result_schema, field_name)
+                field_type_enum = field_obj.slot.type.which()
+                field_type, builder_hint, reader_hint = self._resolve_named_result_field_type(
+                    field_obj, for_server=for_server
+                )
+                if for_server:
+                    if (
+                        field_type_enum in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.LIST}
+                        and builder_hint
+                    ):
+                        init_fields.append((field_name, builder_hint))
+                    lines.extend(
+                        self._build_server_result_property_lines(
+                            field_name,
+                            field_type_enum,
+                            field_type,
+                            builder_hint,
+                            reader_hint,
+                        ),
+                    )
+                else:
+                    lines.append(f"    {field_name}: {field_type}")
+            except Exception as e:
+                logger.warning(f"Could not get field type for {field_name}: {e}")
+                lines.append(f"    {field_name}: Any")
+
+        if for_server:
+            self._append_server_result_init_overloads(lines, init_fields)
+        return lines
+
     def _generate_result_protocol(
         self,
         method_info: MethodInfo,
@@ -2728,287 +2882,13 @@ class Writer:
             List of lines for the Result Protocol class
 
         """
-        # For direct struct returns, generate a Protocol with the struct's fields
         if is_direct_struct_return:
-            lines = []
-            result_class_name = result_type
+            return self._generate_direct_result_protocol_lines(method_info, result_type, for_server=for_server)
 
-            # Class declaration - Protocol that is Awaitable and has result fields
-            self._add_typing_import("Awaitable")
-            lines.append(f"class {result_class_name}(Awaitable[{result_class_name}], Protocol):")
-
-            # Check if the struct has a union (for which() method)
-            has_union = False
-            union_fields: list[str] = []
-
-            # Add the struct's fields
-            if method_info.result_schema is not None:
-                # Check for union
-                struct_node = method_info.result_schema.node.struct
-                for field_obj in struct_node.fields:
-                    if field_obj.discriminantValue != DISCRIMINANT_NONE:  # Field is part of a union
-                        has_union = True
-                        union_fields.append(field_obj.name)
-
-                for rf in method_info.result_fields:
-                    try:
-                        field_obj = next(f for f in struct_node.fields if f.name == rf)
-                        field_type = self.get_type_name(field_obj.slot.type)
-
-                        # For struct types, accept both Builder and Reader in Result Protocol
-                        field_type_enum = field_obj.slot.type.which()
-
-                        # For AnyPointer: different types for client vs server
-                        if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-                            # Check if it's a specific kind of AnyPointer (e.g. Capability)
-                            any_pointer_kind = "anyKind"
-                            try:
-                                if field_obj.slot.type.anyPointer.which() == "unconstrained":
-                                    any_pointer_kind = field_obj.slot.type.anyPointer.unconstrained.which()
-                            except (AttributeError, IndexError):
-                                pass
-
-                            if for_server:
-                                # Server can set any Cap'n Proto type
-                                if any_pointer_kind == "capability":
-                                    field_type = "_DynamicCapabilityClient | _DynamicCapabilityServer"
-                                else:
-                                    field_type = "AnyPointer"
-                                    self._needs_anypointer_alias = True
-                            # Client receives specific type if known, else _DynamicObjectReader
-                            elif any_pointer_kind == "capability":
-                                field_type = "_DynamicCapabilityClient"
-                            elif any_pointer_kind == "struct":
-                                field_type = "_DynamicStructReader"
-                            elif any_pointer_kind == "list":
-                                field_type = "_DynamicListReader"
-                            else:
-                                field_type = "_DynamicObjectReader"
-                        elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                            builder_type = self._build_nested_builder_type(field_type)
-                            reader_type = self._build_nested_reader_type(field_type)
-                            # For client methods, try to use flat type aliases if defined in this module
-                            builder_alias = self._get_flat_builder_alias(field_type)
-                            reader_alias = self._get_flat_reader_alias(field_type)
-
-                            if not for_server:
-                                # Client receives Reader only
-                                field_type = reader_alias or reader_type
-                            # Server returns Builder | Reader
-                            elif builder_alias and reader_alias:
-                                field_type = f"{builder_alias} | {reader_alias}"
-                            else:
-                                field_type = f"{builder_type} | {reader_type}"
-                        elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-                            # For interface types, use the nested Client class
-                            # field_type is Protocol name like "_ReaderInterfaceModule" or "_ChannelStructModule._ReaderInterfaceModule"
-                            parts = field_type.split(".")
-                            last_part = parts[-1]
-                            if last_part.startswith("_"):
-                                # Extract user-facing name: "_ReaderInterfaceModule" -> "Reader"
-                                user_facing_name = self._extract_name_from_protocol(last_part)
-                                client_type = f"{field_type}.{user_facing_name}Client"
-                                server_type = f"{field_type}.Server"
-                            else:
-                                # Fallback
-                                client_type = f"{field_type}Client"
-                                # If field_type is "Registry", then "Registry.Server" might be valid if Registry is the module
-                                # But usually field_type is the Protocol name
-                                server_type = f"{field_type}.Server"
-
-                            field_type = f"{server_type} | {client_type}" if for_server else client_type
-                        elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                            # Generate list class and get aliases
-                            _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
-
-                            field_type = reader_alias if not for_server else f"{builder_alias} | {reader_alias}"
-
-                        lines.append(f"    {rf}: {field_type}")
-                    except Exception:
-                        lines.append(f"    {rf}: Any")
-
-                # Add which() method if the struct has a union
-                if has_union and union_fields:
-                    self._add_typing_import("Literal")
-                    union_literal = ", ".join([f'"{f}"' for f in union_fields])
-                    lines.append(f"    def which(self) -> Literal[{union_literal}]: ...")
-
-            return lines
-
-        # For void methods, generate an empty Result Protocol that is just Awaitable[None]
         if not method_info.result_fields:
-            lines: list[str] = []
-            result_class_name = result_type
-            self._add_typing_import("Awaitable")
-            lines.append(f"class {result_class_name}(Awaitable[None], Protocol):")
-            lines.append("    ...")  # Empty protocol body
-            return lines
+            return self._generate_void_result_protocol_lines(result_type)
 
-        # For single or multiple named fields, generate Result Protocol
-        # This handles both `method() -> (field: Type)` and `method() -> (a: X, b: Y)`
-        lines = []
-        result_class_name = result_type
-
-        # Class declaration
-        if for_server:
-            # Server results are builders (mutable), so they inherit from _DynamicStructBuilder
-            # They are NOT Awaitable (context.results is not a promise)
-            # They are NOT Protocols (they are concrete builder wrappers in this stub)
-            lines.append(f"class {result_class_name}(_DynamicStructBuilder):")
-        else:
-            # Client results are promises (Awaitable) and Protocols
-            self._add_typing_import("Awaitable")
-            lines.append(f"class {result_class_name}(Awaitable[{result_class_name}], Protocol):")
-
-        # Collect fields for init() method generation (server only)
-        init_fields: list[tuple[str, str]] = []
-
-        # Add result fields with Builder | Reader types for structs
-        if method_info.result_schema is not None:
-            for rf in method_info.result_fields:
-                try:
-                    field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == rf)
-                    field_type = self.get_type_name(field_obj.slot.type)
-
-                    # For struct types, accept both Builder and Reader in Result Protocol
-                    field_type_enum = field_obj.slot.type.which()
-
-                    # Initialize variables to avoid unbound errors
-                    builder_alias = None
-                    reader_alias = None
-                    builder_type = None
-                    reader_type = None
-
-                    # For AnyPointer: different types for client vs server
-                    if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-                        # Check if it's a specific kind of AnyPointer (e.g. Capability)
-                        any_pointer_kind = "anyKind"
-                        try:
-                            if field_obj.slot.type.anyPointer.which() == "unconstrained":
-                                any_pointer_kind = field_obj.slot.type.anyPointer.unconstrained.which()
-                        except (AttributeError, IndexError):
-                            pass
-
-                        if for_server:
-                            # Server can set any Cap'n Proto type
-                            if any_pointer_kind == "capability":
-                                field_type = "Capability"
-                                self._needs_capability_alias = True
-                            elif any_pointer_kind == "struct":
-                                field_type = "AnyStruct"
-                                self._needs_anystruct_alias = True
-                            elif any_pointer_kind == "list":
-                                field_type = "AnyList"
-                                self._needs_anylist_alias = True
-                            else:
-                                field_type = "AnyPointer"
-                                self._needs_anypointer_alias = True
-                        # Client receives specific type if known, else _DynamicObjectReader
-                        # Note: At runtime, pycapnp returns _DynamicObjectReader for AnyStruct and AnyList too
-                        elif any_pointer_kind in {"capability", "struct", "list"}:
-                            field_type = "_DynamicObjectReader"
-                        else:
-                            field_type = "_DynamicObjectReader"
-                    elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                        builder_type = self._build_nested_builder_type(field_type)
-                        reader_type = self._build_nested_reader_type(field_type)
-                        # For client methods, try to use flat type aliases if defined in this module
-                        builder_alias = self._get_flat_builder_alias(field_type)
-                        reader_alias = self._get_flat_reader_alias(field_type)
-
-                        if not for_server:
-                            # Client receives Reader only
-                            field_type = reader_alias or reader_type
-                        # Server returns Builder | Reader
-                        elif builder_alias and reader_alias:
-                            field_type = f"{builder_alias} | {reader_alias}"
-                            # Add to init fields
-                            init_fields.append((rf, builder_alias))
-                        else:
-                            field_type = f"{builder_type} | {reader_type}"
-                            # Add to init fields
-                            init_fields.append((rf, builder_type))
-                    elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-                        # For interface types, use the nested Client class
-                        # field_type is Protocol name like "_ReaderInterfaceModule" or "_ChannelStructModule._ReaderInterfaceModule"
-                        parts = field_type.split(".")
-                        last_part = parts[-1]
-                        if last_part.startswith("_"):
-                            # Extract user-facing name: "_ReaderInterfaceModule" -> "Reader"
-                            user_facing_name = self._extract_name_from_protocol(last_part)
-                            client_type = f"{field_type}.{user_facing_name}Client"
-                            server_type = f"{field_type}.Server"
-                        else:
-                            # Fallback
-                            client_type = f"{field_type}Client"
-                            server_type = f"{field_type}.Server"
-
-                        field_type = f"{server_type} | {client_type}" if for_server else client_type
-                    elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                        # Generate list class and get aliases
-                        _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
-
-                        if not for_server:
-                            # Client receives Reader only
-                            field_type = reader_alias
-                        else:
-                            # Server returns Builder | Reader
-                            field_type = f"{builder_alias} | {reader_alias}"
-                            # Add to init fields
-                            init_fields.append((rf, builder_alias))
-
-                    if for_server:
-                        # For server, generate properties with setters
-                        # Getter returns Builder (or specific type)
-                        # Setter accepts Builder | Reader | Sequence (for lists) | dict (for structs)
-
-                        getter_type = field_type
-                        setter_type = field_type
-
-                        if field_type_enum == capnp_types.CapnpElementType.LIST:
-                            # Getter returns Builder
-                            getter_type = builder_alias
-                            # Setter accepts Builder | Reader | Sequence
-                            self._add_typing_import("Sequence")
-                            self._add_typing_import("Any")
-                            setter_type = f"{builder_alias} | {reader_alias} | Sequence[Any]"
-                        elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                            # Getter returns Builder
-                            # builder_alias might be None if not defined in this module
-                            # builder_type is always defined for structs
-                            b_type = builder_alias or builder_type
-                            getter_type = b_type
-                            # Setter accepts Builder | Reader | dict
-                            self._add_typing_import("Any")
-                            setter_type = f"{field_type} | dict[str, Any]"
-
-                        lines.append("    @property")
-                        lines.append(f"    def {rf}(self) -> {getter_type}: ...")
-                        lines.append(f"    @{rf}.setter")
-                        lines.append(f"    def {rf}(self, value: {setter_type}) -> None: ...")
-                    else:
-                        lines.append(f"    {rf}: {field_type}")
-                except Exception as e:
-                    logger.warning(f"Could not get field type for {rf}: {e}")
-                    lines.append(f"    {rf}: Any")
-
-            # Add init() methods for server results
-            if for_server and init_fields:
-                self._add_typing_import("overload")
-                self._add_typing_import("Literal")
-                self._add_typing_import("Any")
-
-                for field_name, return_type in init_fields:
-                    lines.append("    @overload")
-                    lines.append(
-                        f'    def init(self, field: Literal["{field_name}"], size: int | None = None) -> {return_type}: ...',
-                    )
-
-                # Catch-all init
-                lines.append("    @overload")
-                lines.append("    def init(self, field: str, size: int | None = None) -> Any: ...")
-
-        return lines
+        return self._generate_named_result_protocol_lines(method_info, result_type, for_server=for_server)
 
     def _generate_request_helper_method(
         self,
@@ -3084,77 +2964,8 @@ class Writer:
 
         for field_name in method_info.result_fields:
             try:
-                field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == field_name)
-
-                # Get base type
-                field_type = self.get_type_name(field_obj.slot.type)
-
-                # Check the field type
-                field_type_enum = field_obj.slot.type.which()
-
-                # For AnyPointer in server results, use Cap'n Proto type union
-                # Server can return: Text (str), Data (bytes), Struct, Interface (client or server)
-                if field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-                    # Check kind
-                    any_pointer_kind = "anyKind"
-                    try:
-                        if field_obj.slot.type.anyPointer.which() == "unconstrained":
-                            any_pointer_kind = field_obj.slot.type.anyPointer.unconstrained.which()
-                    except (AttributeError, IndexError):
-                        pass
-
-                    if any_pointer_kind == "capability":
-                        field_type = "Capability"
-                        self._needs_capability_alias = True
-                    elif any_pointer_kind == "struct":
-                        field_type = "AnyStruct"
-                        self._needs_anystruct_alias = True
-                    elif any_pointer_kind == "list":
-                        field_type = "AnyList"
-                        self._needs_anylist_alias = True
-                    else:
-                        field_type = "AnyPointer"
-                        self._needs_anypointer_alias = True
-                # For structs, accept both Builder and Reader
-                elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                    builder_type = self._build_nested_builder_type(field_type)
-                    reader_type = self._build_nested_reader_type(field_type)
-                    # For client methods, try to use flat type aliases if defined in this module
-                    builder_alias = self._get_flat_builder_alias(field_type)
-                    reader_alias = self._get_flat_reader_alias(field_type)
-
-                    # NamedTuples are always for Server, so we use Builder | Reader
-                    if builder_alias and reader_alias:
-                        field_type = f"{builder_alias} | {reader_alias}"
-                    else:
-                        field_type = f"{builder_type} | {reader_type}"
-                # For interfaces in NamedTuples, server returns Interface.Server
-                elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-                    # For interface types, use the nested Client class
-                    # field_type is Protocol name like "_ReaderInterfaceModule" or "_ChannelStructModule._ReaderInterfaceModule"
-                    parts = field_type.split(".")
-                    last_part = parts[-1]
-                    if last_part.startswith("_"):
-                        # Extract user-facing name: "_ReaderInterfaceModule" -> "Reader"
-                        user_facing_name = self._extract_name_from_protocol(last_part)
-                        client_type = f"{field_type}.{user_facing_name}Client"
-                        server_type = f"{field_type}.Server"
-                    else:
-                        # Fallback
-                        client_type = f"{field_type}Client"
-                        server_type = f"{field_type}.Server"
-
-                    # NamedTuples are always for Server, so we accept both Server and Client
-                    field_type = f"{server_type} | {client_type}"
-
-                elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                    # Generate list class and get aliases
-                    _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
-
-                    # NamedTuples are always for Server, so we use Builder | Reader
-                    field_type = f"{builder_alias} | {reader_alias}"
-
-                # Sanitize field name to avoid conflicts with tuple methods
+                field_obj = self._find_struct_field(method_info.result_schema, field_name)
+                field_type = self._resolve_named_result_field_type(field_obj, for_server=True)[0]
                 sanitized_name = self._sanitize_namedtuple_field_name(field_name)
                 fields.append((sanitized_name, field_type))
 
@@ -3163,6 +2974,74 @@ class Writer:
                 continue
 
         return fields
+
+    def _build_server_context_type(self, method_name: str) -> str:
+        """Build the fully qualified CallContext type for a server method."""
+        scope_path = self._get_scope_path()
+        context_class_name = f"{method_name.title()}CallContext"
+        return f"{scope_path}.Server.{context_class_name}" if scope_path else f"Server.{context_class_name}"
+
+    def _resolve_server_list_result_type(self, field_obj: FieldReader) -> str:
+        """Resolve the element type for a single list result in a server signature."""
+        list_type = self.get_type_name(field_obj.slot.type)
+        element_type_obj = field_obj.slot.type.list.elementType
+        if element_type_obj.which() != capnp_types.CapnpElementType.STRUCT:
+            return list_type
+
+        element_type_name = self.get_type_name(element_type_obj)
+        element_builder, element_reader, builder_alias, reader_alias = self._get_struct_builder_reader_types(
+            element_type_name
+        )
+        element_replacement = (
+            f"{builder_alias} | {reader_alias}"
+            if builder_alias and reader_alias
+            else f"{element_builder} | {element_reader}"
+        )
+        return list_type.replace(element_type_name, element_replacement)
+
+    def _get_single_server_result_type(self, method_info: MethodInfo) -> str | None:
+        """Return the specialized single-field server result type, if one exists."""
+        primitive_field_types = {
+            "void",
+            "bool",
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+            "float32",
+            "float64",
+            "text",
+            "data",
+        }
+        if len(method_info.result_fields) != 1 or method_info.result_schema is None:
+            return None
+
+        result_type: str | None = None
+        with contextlib.suppress(Exception):
+            field_obj = self._find_struct_field(method_info.result_schema, method_info.result_fields[0])
+            field_type_enum = field_obj.slot.type.which()
+            if field_type_enum in primitive_field_types:
+                result_type = self.get_type_name(field_obj.slot.type)
+            elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
+                result_type = f"{self.get_type_name(field_obj.slot.type)}.Server"
+            elif field_type_enum == capnp_types.CapnpElementType.ENUM:
+                with contextlib.suppress(Exception):
+                    result_type = self.get_type_name(field_obj.slot.type)
+                if result_type is None:
+                    result_type = "int"
+            elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
+                result_type = self._resolve_named_result_field_type(field_obj, for_server=True)[0]
+            elif field_type_enum == capnp_types.CapnpElementType.LIST:
+                result_type = self._resolve_server_list_result_type(field_obj)
+            elif field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
+                self._needs_anypointer_alias = True
+                result_type = "AnyPointer"
+
+        return result_type
 
     def _generate_server_method_signature(
         self,
@@ -3186,11 +3065,8 @@ class Writer:
 
         """
         method_name = helper.sanitize_name(method_info.method_name)
-
-        # Generate CallContext type name - it's inside Server class
         scope_path = self._get_scope_path()
-        context_class_name = f"{method_name.title()}CallContext"
-        context_type = f"{scope_path}.Server.{context_class_name}" if scope_path else f"Server.{context_class_name}"
+        context_type = self._build_server_context_type(method_name)
 
         # Server methods have: self, params..., _context: CallContext, **kwargs
         param_parts = ["self"]
@@ -3204,102 +3080,13 @@ class Writer:
         self._add_typing_import("Any")
 
         if not method_info.result_fields:
-            # Void method - returns Awaitable[None]
             return_type_str = "Awaitable[None]"
         else:
-            # Check if this is a single primitive/interface return
-            is_single_primitive_or_interface = False
-            single_field_type = None
-
-            if len(method_info.result_fields) == 1 and method_info.result_schema is not None:
-                field_name = method_info.result_fields[0]
-                with contextlib.suppress(Exception):
-                    field_obj = next(f for f in method_info.result_schema.node.struct.fields if f.name == field_name)
-                    field_type_enum = field_obj.slot.type.which()
-
-                    # Check if it's a primitive or interface
-                    # Primitives are returned as strings like "bool", "float64", etc.
-                    # Interfaces are the INTERFACE constant
-                    if field_type_enum in (
-                        "void",
-                        "bool",
-                        "int8",
-                        "int16",
-                        "int32",
-                        "int64",
-                        "uint8",
-                        "uint16",
-                        "uint32",
-                        "uint64",
-                        "float32",
-                        "float64",
-                        "text",
-                        "data",
-                    ):
-                        # Primitive type
-                        is_single_primitive_or_interface = True
-                        single_field_type = self.get_type_name(field_obj.slot.type)
-                    elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-                        # Interface type - server returns Interface.Server
-                        is_single_primitive_or_interface = True
-                        interface_type = self.get_type_name(field_obj.slot.type)
-                        single_field_type = f"{interface_type}.Server"
-                    elif field_type_enum == capnp_types.CapnpElementType.ENUM:
-                        # Enum type - server returns Enum alias
-                        is_single_primitive_or_interface = True
-                        try:
-                            single_field_type = self.get_type_name(field_obj.slot.type)
-                        except Exception:
-                            single_field_type = "int"
-                    elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                        # Struct type - server returns Builder | Reader
-                        is_single_primitive_or_interface = True
-                        struct_type = self.get_type_name(field_obj.slot.type)
-                        struct_builder = self._build_nested_builder_type(struct_type)
-                        struct_reader = self._build_nested_reader_type(struct_type)
-
-                        builder_alias = self._get_flat_builder_alias(struct_type)
-                        reader_alias = self._get_flat_reader_alias(struct_type)
-
-                        if builder_alias and reader_alias:
-                            single_field_type = f"{builder_alias} | {reader_alias}"
-                        else:
-                            single_field_type = f"{struct_builder} | {struct_reader}"
-                    elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                        # List type - server returns Sequence (list)
-                        is_single_primitive_or_interface = True
-                        single_field_type = self.get_type_name(field_obj.slot.type)
-
-                        # If list of structs, use Builder | Reader for elements
-                        element_type_obj = field_obj.slot.type.list.elementType
-                        if element_type_obj.which() == capnp_types.CapnpElementType.STRUCT:
-                            element_type_name = self.get_type_name(element_type_obj)
-                            element_builder = self._build_nested_builder_type(element_type_name)
-                            element_reader = self._build_nested_reader_type(element_type_name)
-
-                            builder_alias = self._get_flat_builder_alias(element_type_name)
-                            reader_alias = self._get_flat_reader_alias(element_type_name)
-
-                            if builder_alias and reader_alias:
-                                element_replacement = f"{builder_alias} | {reader_alias}"
-                            else:
-                                element_replacement = f"{element_builder} | {element_reader}"
-
-                            single_field_type = single_field_type.replace(element_type_name, element_replacement)
-                    elif field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-                        # AnyPointer type
-                        is_single_primitive_or_interface = True
-                        single_field_type = "AnyPointer"
-                        self._needs_anypointer_alias = True
-
-            # Generate return type - use NamedTuple with "Tuple" suffix
             full_server_path = f"{scope_path}.Server.{result_type}Tuple" if scope_path else f"Server.{result_type}Tuple"
-
-            if is_single_primitive_or_interface and single_field_type:
-                # For single primitive/interface: allow both the primitive/interface.Server and the NamedTuple
+            single_field_type = self._get_single_server_result_type(method_info)
+            if single_field_type:
                 return_type_str = f"Awaitable[{single_field_type} | {full_server_path} | None]"
             else:
-                # For struct or multiple fields: return NamedTuple
                 return_type_str = f"Awaitable[{full_server_path} | None]"
 
         return f"    def {method_name}({param_str}) -> {return_type_str}: ..."
@@ -3422,6 +3209,104 @@ class Writer:
 
         return lines
 
+    def _collect_method_parameters(self, method_info: MethodInfo) -> list[ParameterInfo]:
+        """Collect processed parameter metadata for an interface method."""
+        if method_info.param_schema is None:
+            return []
+
+        parameters: list[ParameterInfo] = []
+        for param_name in method_info.param_fields:
+            param_info = self._process_method_parameter(param_name, method_info.param_schema)
+            if param_info:
+                parameters.append(param_info)
+        return parameters
+
+    def _scope_interface_client_result_type(self, result_type: str) -> str:
+        """Qualify a result protocol for client methods inside nested interfaces."""
+        scope_path = self._get_scope_path()
+        scope_depth = len([scope for scope in self.scope.trace if not scope.is_root])
+        if scope_depth < 1 or not scope_path or result_type == "None":
+            return result_type
+
+        client_type_name = self._get_client_type_name_from_interface_path(scope_path)
+        return f"{scope_path}.{client_type_name}.{result_type}"
+
+    def _generate_method_result_protocols(
+        self,
+        method_info: MethodInfo,
+        result_type: str,
+        *,
+        is_direct_struct_return: bool,
+    ) -> tuple[list[str], list[str]]:
+        """Generate client/server result protocols for a method."""
+        client_result_lines = self._generate_result_protocol(
+            method_info,
+            result_type,
+            is_direct_struct_return=is_direct_struct_return,
+            for_server=False,
+        )
+        server_result_lines = self._generate_result_protocol(
+            method_info,
+            result_type,
+            is_direct_struct_return=is_direct_struct_return,
+            for_server=True,
+        )
+        return client_result_lines, server_result_lines
+
+    def _generate_method_callcontext_lines(
+        self,
+        method_info: MethodInfo,
+        parameters: list[ParameterInfo],
+        *,
+        is_direct_struct_return: bool,
+    ) -> list[str]:
+        """Generate Params and CallContext protocols for a server method."""
+        context_lines = self._generate_params_protocol(method_info, parameters)
+        if is_direct_struct_return:
+            if method_info.result_schema is None:
+                msg = "Result schema is None for direct struct return"
+                raise ValueError(msg)
+
+            struct_type = self.get_type_by_id(method_info.result_schema.node.id)
+            context_lines.extend(
+                self._generate_callcontext_protocol(
+                    method_info,
+                    has_results=True,
+                    result_type_for_context=struct_type.scoped_name,
+                    is_direct_struct_return=True,
+                ),
+            )
+            return context_lines
+
+        has_results = bool(method_info.result_fields)
+        result_type_for_context = f"{method_info.method_name.title()}Result" if has_results else None
+        context_lines.extend(
+            self._generate_callcontext_protocol(
+                method_info,
+                has_results=has_results,
+                result_type_for_context=result_type_for_context,
+                is_direct_struct_return=False,
+            ),
+        )
+        return context_lines
+
+    def _add_interface_server_method_artifacts(
+        self,
+        method_info: MethodInfo,
+        parameters: list[ParameterInfo],
+        result_type: str,
+        server_collection: ServerMethodsCollection,
+    ) -> None:
+        """Add server signatures and NamedTuple metadata for a method."""
+        server_collection.add_server_method(
+            self._generate_server_method_signature(method_info, parameters, result_type)
+        )
+        server_collection.add_server_method(self._generate_server_context_method_signature(method_info))
+        if method_info.result_fields:
+            namedtuple_name = f"{result_type}Tuple"
+            result_fields = self._collect_result_fields_for_namedtuple(method_info)
+            server_collection.add_namedtuple(namedtuple_name, result_fields)
+
     def _process_interface_method(
         self,
         method_info: MethodInfo,
@@ -3440,118 +3325,29 @@ class Writer:
 
         """
         collection = MethodSignatureCollection(method_info.method_name)
-
-        # Process parameters
-        parameters: list[ParameterInfo] = []
-        for param_name in method_info.param_fields:
-            if method_info.param_schema is not None:
-                param_info = self._process_method_parameter(param_name, method_info.param_schema)
-                if param_info:
-                    parameters.append(param_info)
-
-        # Process results
+        parameters = self._collect_method_parameters(method_info)
         result_type, is_direct_struct_return = self._process_method_results(method_info)
-
-        # Determine scoping for result type in client methods:
-        # Result classes are nested inside Client class
-        scope_depth = len([s for s in self.scope.trace if not s.is_root])
-        interface_path = self._get_scope_path()
-
-        if scope_depth >= 1 and interface_path and result_type != "None":
-            # Client methods return Client.ResultName (nested in Client class)
-            # e.g., "_HolderModule.HolderClient.ValueResult"
-            client_type_name = self._get_client_type_name_from_interface_path(interface_path)
-            scoped_result_type = f"{interface_path}.{client_type_name}.{result_type}"
-        else:
-            # No interface scope (shouldn't happen for interface methods)
-            scoped_result_type = result_type
-
-        # Generate client method
+        scoped_result_type = self._scope_interface_client_result_type(result_type)
         client_lines = self._generate_client_method(method_info, parameters, scoped_result_type)
         collection.set_client_method(client_lines)
+        collection.set_request_class(self._generate_request_protocol(method_info, parameters, scoped_result_type))
 
-        # Generate Request Protocol
-        request_lines = self._generate_request_protocol(method_info, parameters, scoped_result_type)
-        collection.set_request_class(request_lines)
-
-        # Generate Client Result Protocol (will be nested in Client class)
-        client_result_lines = self._generate_result_protocol(
+        client_result_lines, server_result_lines = self._generate_method_result_protocols(
             method_info,
             result_type,
             is_direct_struct_return=is_direct_struct_return,
-            for_server=False,
         )
         collection.set_client_result_class(client_result_lines)
-
-        # Generate Server Result Protocol (will be nested in Server class)
-        server_result_lines = self._generate_result_protocol(
-            method_info,
-            result_type,
-            is_direct_struct_return=is_direct_struct_return,
-            for_server=True,
-        )
         collection.set_server_result_class(server_result_lines)
-
-        # Generate CallContext for server - points to Result Protocol at interface level
-        # Also generate Params Protocol for CallContext.params
-        params_lines = self._generate_params_protocol(method_info, parameters)
-        for line in params_lines:
-            collection.server_context_lines.append(line)
-
-        if is_direct_struct_return:
-            # Direct struct return: CallContext.results points to interface-level Result Protocol
-            has_results = True
-
-            # Get struct name for Builder type generation
-            # Use get_type_by_id to ensure the type is generated and get its Protocol name
-            # e.g. "_IdInformationStructModule"
-            if method_info.result_schema is None:
-                msg = "Result schema is None for direct struct return"
-                raise ValueError(msg)
-
-            struct_type = self.get_type_by_id(method_info.result_schema.node.id)
-            struct_name = struct_type.scoped_name
-
-            callcontext_lines = self._generate_callcontext_protocol(
+        collection.server_context_lines.extend(
+            self._generate_method_callcontext_lines(
                 method_info,
-                has_results=has_results,
-                result_type_for_context=struct_name,
-                is_direct_struct_return=True,
-            )
-            for line in callcontext_lines:
-                collection.server_context_lines.append(line)
-        else:
-            # Named field return or void: CallContext.results points to Result Protocol
-            has_results = bool(method_info.result_fields)
-            # Pass result_type so CallContext can reference the Protocol
-            result_type_for_ctx = f"{method_info.method_name.title()}Result" if has_results else None
-            callcontext_lines = self._generate_callcontext_protocol(
-                method_info,
-                has_results=has_results,
-                result_type_for_context=result_type_for_ctx,
-                is_direct_struct_return=False,
-            )
-            for line in callcontext_lines:
-                collection.server_context_lines.append(line)
-
-        # Generate _request helper
-        helper_lines = self._generate_request_helper_method(method_info, parameters)
-        collection.set_request_helper(helper_lines)
-
-        # Generate server method signature
-        server_sig = self._generate_server_method_signature(method_info, parameters, result_type)
-        server_collection.add_server_method(server_sig)
-
-        # Generate server _context variant method signature
-        server_context_sig = self._generate_server_context_method_signature(method_info)
-        server_collection.add_server_method(server_context_sig)
-
-        # Collect NamedTuple definition for server results with "Tuple" suffix
-        if method_info.result_fields:
-            result_fields_for_namedtuple = self._collect_result_fields_for_namedtuple(method_info)
-            # Add "Tuple" suffix to distinguish from Protocol
-            namedtuple_name = f"{result_type}Tuple"
-            server_collection.add_namedtuple(namedtuple_name, result_fields_for_namedtuple)
+                parameters,
+                is_direct_struct_return=is_direct_struct_return,
+            ),
+        )
+        collection.set_request_helper(self._generate_request_helper_method(method_info, parameters))
+        self._add_interface_server_method_artifacts(method_info, parameters, result_type, server_collection)
 
         return collection
 
@@ -3569,74 +3365,216 @@ class Writer:
             server_result_lines: List of server Result protocol lines to add
 
         """
-        # Build Server base classes (superclass Servers)
-        server_base_classes: list[str] = []
-        if context.schema.node.which() == "interface":
-            interface_node = context.schema.node.interface
-            for superclass in interface_node.superclasses:
-                try:
-                    superclass_type = self.get_type_by_id(superclass.id)
-                    # superclass_type.name is now the Protocol name (e.g., "_IdentifiableInterfaceModule")
-                    # Use it directly instead of adding another Module suffix
-                    protocol_name = superclass_type.name
-                    if superclass_type.scope and not superclass_type.scope.is_root:
-                        server_base = f"{superclass_type.scope.scoped_name}.{protocol_name}.Server"
-                    else:
-                        server_base = f"{protocol_name}.Server"
-                    server_base_classes.append(server_base)
-                except KeyError:
-                    logger.debug(f"Could not resolve superclass {superclass.id} for Server inheritance")
-
-        # Only generate Server class if we have methods OR inheritance
+        server_base_classes = self._collect_server_base_classes(context.schema)
         if not server_collection.has_methods() and not server_base_classes:
             return
 
-        # Generate Server class declaration with inheritance
-        if server_base_classes:
-            server_declaration = helper.new_class_declaration("Server", server_base_classes)
-        else:
-            # Server inherits from _DynamicCapabilityServer
-            server_declaration = helper.new_class_declaration("Server", ["_DynamicCapabilityServer"])
+        self.scope.add(self._build_server_class_declaration(server_base_classes))
+        self._add_server_result_protocols(server_result_lines)
+        self._add_server_namedtuple_definitions(server_collection)
+        self._add_server_context_definitions(server_collection)
+        self._add_server_method_signatures(server_collection)
 
-        self.scope.add(server_declaration)
+    def _build_server_class_declaration(self, server_base_classes: list[str]) -> str:
+        """Build the class declaration for a generated Server class."""
+        return helper.new_class_declaration("Server", server_base_classes or ["_DynamicCapabilityServer"])
 
-        # Add Server Result protocols first (nested inside Server)
+    def _add_server_result_protocols(self, server_result_lines: list[str]) -> None:
+        """Add nested server result protocols inside the Server class."""
         for line in server_result_lines:
             self.scope.add(f"    {line}")
         if server_result_lines:
             self.scope.add("")
 
-        # Add NamedTuple result types
-        if server_collection.namedtuples:
-            self._add_typing_import("NamedTuple")
-            for result_type, fields in server_collection.namedtuples.items():
-                # Generate NamedTuple class
-                self.scope.add(f"    class {result_type}(NamedTuple):")
-                if fields:
-                    for field_name, field_type in fields:
-                        self.scope.add(f"        {field_name}: {field_type}")
-                else:
-                    # Empty NamedTuple (void return)
-                    self.scope.add("        pass")
-            self.scope.add("")
+    def _add_server_namedtuple_definitions(self, server_collection: ServerMethodsCollection) -> None:
+        """Add server-side NamedTuple result types."""
+        if not server_collection.namedtuples:
+            return
 
-        # Add context classes (CallContext and ResultsBuilder) inside Server class
-        if server_collection.context_classes:
-            # Update indentation for context classes to be inside Server
-            for line in server_collection.context_classes:
-                if line.startswith("class ") or line.strip():
-                    self.scope.add(f"    {line}")
-                else:
-                    self.scope.add(line)
-            self.scope.add("")
+        self._add_typing_import("NamedTuple")
+        for result_type, fields in server_collection.namedtuples.items():
+            self.scope.add(f"    class {result_type}(NamedTuple):")
+            if fields:
+                for field_name, field_type in fields:
+                    self.scope.add(f"        {field_name}: {field_type}")
+            else:
+                self.scope.add("        pass")
+        self.scope.add("")
 
-        # Add all server method signatures
+    def _add_server_context_definitions(self, server_collection: ServerMethodsCollection) -> None:
+        """Add nested Params and CallContext protocols inside the Server class."""
+        if not server_collection.context_classes:
+            return
+
+        for line in server_collection.context_classes:
+            if line.startswith("class ") or line.strip():
+                self.scope.add(f"    {line}")
+            else:
+                self.scope.add(line)
+        self.scope.add("")
+
+    def _add_server_method_signatures(self, server_collection: ServerMethodsCollection) -> None:
+        """Add server method signatures or a placeholder for inherited-only Servers."""
         if server_collection.has_methods():
             for server_method in server_collection.server_methods:
                 self.scope.add(server_method)
-        else:
-            # Empty server class (inherits everything from superclasses)
-            self.scope.add("    ...")
+            return
+
+        self.scope.add("    ...")
+
+    def _open_interface_protocol_scope(self, context: InterfaceGenerationContext) -> None:
+        """Create the protocol scope used for interface generation."""
+        base_classes = context.base_classes or ["_InterfaceModule"]
+        protocol_declaration = helper.new_class_declaration(context.protocol_class_name, base_classes)
+        _ = self.new_scope(
+            context.protocol_class_name,
+            context.schema.node,
+            scope_heading=protocol_declaration,
+        )
+
+    def _collect_interface_method_components(
+        self,
+        methods: list[MethodInfo],
+        server_collection: ServerMethodsCollection,
+    ) -> tuple[list[str], list[str], list[str], list[str], list[str]]:
+        """Generate and collect per-method interface artifacts."""
+        client_method_collection: list[str] = []
+        request_helper_collection: list[str] = []
+        client_result_collection: list[str] = []
+        server_result_collection: list[str] = []
+        result_type_names: list[str] = []
+
+        for method_info in methods:
+            method_collection = self._process_interface_method(method_info, server_collection)
+            client_method_collection.extend(method_collection.client_method_lines)
+            request_helper_collection.extend(method_collection.request_helper_lines)
+            client_result_collection.extend(method_collection.client_result_lines)
+            server_result_collection.extend(method_collection.server_result_lines)
+            result_type_names.append(f"{helper.sanitize_name(method_info.method_name).title()}Result")
+            for line in method_collection.request_class_lines:
+                self.scope.add(line)
+            server_collection.add_context_lines(method_collection.server_context_lines)
+
+        return (
+            client_method_collection,
+            request_helper_collection,
+            client_result_collection,
+            server_result_collection,
+            result_type_names,
+        )
+
+    def _maybe_add_interface_new_client(
+        self,
+        context: InterfaceGenerationContext,
+        server_collection: ServerMethodsCollection,
+        server_base_classes: list[str],
+    ) -> None:
+        """Add the module-level _new_client helper when the interface exposes a Server."""
+        if server_collection.has_methods() or server_base_classes:
+            nested_client_name = f"{context.protocol_class_name}.{context.client_type_name}"
+            self._add_new_client_method(context.type_name, client_return_type=nested_client_name)
+
+    def _extract_interface_base_client_names(self, server_base_classes: list[str]) -> list[str]:
+        """Convert inherited Server bases to their corresponding flat Client aliases."""
+        base_client_names: list[str] = []
+        for server_base in server_base_classes:
+            if ".Server" not in server_base:
+                continue
+            protocol_name = server_base.replace(".Server", "")
+            interface_name = self._extract_name_from_protocol(protocol_name.split(".")[-1])
+            base_client_names.append(f"{interface_name}Client")
+        return base_client_names
+
+    def _track_interface_client_cast_targets(
+        self,
+        context: InterfaceGenerationContext,
+        server_base_classes: list[str],
+    ) -> None:
+        """Track interface/client aliases for generated cast_as overloads."""
+        protocol_path = context.registered_type.scoped_name
+        self._all_interfaces[protocol_path] = (
+            context.client_type_name,
+            self._extract_interface_base_client_names(server_base_classes),
+        )
+
+    @staticmethod
+    def _namedtuple_method_name(namedtuple_name: str) -> str:
+        """Derive the original method name from a generated ResultTuple name."""
+        method_name = namedtuple_name.replace("ResultTuple", "Result").replace("Result", "").lower()
+        if method_name:
+            return method_name
+        return namedtuple_name.replace("Tuple", "").lower()
+
+    def _track_interface_namedtuple_exports(
+        self,
+        context: InterfaceGenerationContext,
+        server_collection: ServerMethodsCollection,
+    ) -> None:
+        """Track server NamedTuples for .py runtime module generation."""
+        if not server_collection.namedtuples:
+            return
+
+        interface_full_name = context.registered_type.scoped_name
+        namedtuple_map = self._all_server_namedtuples.setdefault(interface_full_name, {})
+        for namedtuple_name, fields in server_collection.namedtuples.items():
+            namedtuple_map[self._namedtuple_method_name(namedtuple_name)] = (namedtuple_name, fields)
+
+    @staticmethod
+    def _is_nested_interface_context(context: InterfaceGenerationContext) -> bool:
+        """Return whether an interface is nested inside another scope."""
+        return bool(context.registered_type.scope and not context.registered_type.scope.is_root)
+
+    def _build_client_alias_path(self, context: InterfaceGenerationContext, *, is_nested_interface: bool) -> str:
+        """Build the fully qualified Client alias path for an interface."""
+        if is_nested_interface:
+            return f"{context.registered_type.scoped_name}.{context.client_type_name}"
+        return f"{context.protocol_class_name}.{context.client_type_name}"
+
+    def _build_result_alias_path(
+        self,
+        context: InterfaceGenerationContext,
+        result_type_name: str,
+        *,
+        is_nested_interface: bool,
+    ) -> str:
+        """Build the fully qualified Result alias path for an interface method."""
+        if is_nested_interface:
+            return f"{context.registered_type.scoped_name}.{context.client_type_name}.{result_type_name}"
+        return f"{context.protocol_class_name}.{context.client_type_name}.{result_type_name}"
+
+    def _add_interface_type_aliases(
+        self,
+        context: InterfaceGenerationContext,
+        type_alias_scope: Scope,
+        result_type_names: list[str],
+        *,
+        should_generate_client: bool,
+        should_generate_server: bool,
+    ) -> None:
+        """Register type aliases and annotations for generated interface helpers."""
+        type_alias_scope.add(f"{context.type_name}: {context.protocol_class_name}")
+        is_nested_interface = self._is_nested_interface_context(context)
+
+        if should_generate_client:
+            client_alias_path = self._build_client_alias_path(context, is_nested_interface=is_nested_interface)
+            if is_nested_interface:
+                type_alias_scope.add(f"type {context.client_type_name} = {client_alias_path}")
+            self._all_type_aliases[context.client_type_name] = (client_alias_path, "Client")
+
+            for result_type_name in result_type_names:
+                result_alias_path = self._build_result_alias_path(
+                    context,
+                    result_type_name,
+                    is_nested_interface=is_nested_interface,
+                )
+                self._all_type_aliases[result_type_name] = (result_alias_path, "Result")
+
+        if should_generate_server:
+            server_alias_name = f"{context.type_name}Server"
+            server_alias_path = f"{context.registered_type.scoped_name}.Server"
+            if is_nested_interface:
+                type_alias_scope.add(f"type {server_alias_name} = {server_alias_path}")
+            self._all_type_aliases[server_alias_name] = (server_alias_path, "Server")
 
     def gen_interface(self, schema: _InterfaceSchema) -> CapnpType | None:
         """Generate an `interface` definition using Protocol pattern.
@@ -3661,85 +3599,30 @@ class Writer:
         """
         assert schema.node.which() == capnp_types.CapnpElementType.INTERFACE
 
-        # Phase 1: Setup and registration
         context = self._setup_interface_generation(schema)
         if context is None:
-            # Already imported
             return self.register_import(schema)
 
-        # Track the interface's parent scope (may differ from current scope when generated lazily)
         type_alias_scope = context.parent_scope or self.scope
-
-        # Add type alias import removed - using type statement now
-
-        # Create interface module class declaration - use regular class (not Protocol)
-        # Interface modules at runtime are _InterfaceModule instances, not Protocols
-        if context.base_classes:
-            # Inherit from parent interface modules only (they already inherit from _InterfaceModule)
-            protocol_declaration = helper.new_class_declaration(context.protocol_class_name, context.base_classes)
-        else:
-            # No parent interfaces - inherit directly from _InterfaceModule
-            protocol_declaration = helper.new_class_declaration(context.protocol_class_name, ["_InterfaceModule"])
-
-        # Open interface Protocol scope
-        _ = self.new_scope(
-            context.protocol_class_name,
-            context.schema.node,
-            scope_heading=protocol_declaration,
-        )
-
-        # Phase 2: Generate nested types
+        self._open_interface_protocol_scope(context)
         self._generate_nested_types_for_interface(context.schema)
 
-        # Phase 3: Enumerate and process methods
         methods = self._enumerate_interface_methods(context)
         server_collection = ServerMethodsCollection()
-        client_method_collection: list[str] = []  # Collect client methods for nested Client class
-        request_helper_collection: list[str] = []  # Collect request helpers for Client class
-        client_result_collection: list[str] = []  # Collect client Result protocols
-        server_result_collection: list[str] = []  # Collect server Result protocols
-        result_type_names: list[str] = []  # Collect result type names for top-level aliases
-
-        for method_info in methods:
-            method_collection = self._process_interface_method(method_info, server_collection)
-
-            # Collect client methods and request helpers for Client class
-            client_method_collection.extend(method_collection.client_method_lines)
-            request_helper_collection.extend(method_collection.request_helper_lines)
-            client_result_collection.extend(method_collection.client_result_lines)
-
-            # Collect result type name for top-level type alias
-            result_type_name = f"{helper.sanitize_name(method_info.method_name).title()}Result"
-            result_type_names.append(result_type_name)
-
-            # Add Request classes to interface Protocol (at module level)
-            for line in method_collection.request_class_lines:
-                self.scope.add(line)
-
-            # Collect server Result protocols for Server class
-            server_result_collection.extend(method_collection.server_result_lines)
-
-            # Store context lines for Server class
-            server_collection.add_context_lines(method_collection.server_context_lines)
-
-        # Phase 3.5: Add _new_client class method to interface Protocol
-        # Only add if Server class will be generated (has methods or inheritance)
+        (
+            client_method_collection,
+            request_helper_collection,
+            client_result_collection,
+            server_result_collection,
+            result_type_names,
+        ) = self._collect_interface_method_components(methods, server_collection)
         server_base_classes = self._collect_server_base_classes(context.schema)
-
-        # Only add _new_client if Server class will exist
-        if server_collection.has_methods() or server_base_classes:
-            # _new_client returns nested Client class
-            nested_client_name = f"{context.protocol_class_name}.{context.client_type_name}"
-            self._add_new_client_method(context.type_name, client_return_type=nested_client_name)
-
-        # Phase 4: Generate Server class inside interface Protocol
+        self._maybe_add_interface_new_client(context, server_collection, server_base_classes)
         self._generate_server_class(context, server_collection, server_result_collection)
 
-        # Phase 5: Generate Client Protocol class INSIDE interface Protocol (not at parent level)
-        should_generate_client = (
+        should_generate_client = bool(
             server_collection.has_methods() or server_base_classes or client_method_collection or methods
         )
-
         if should_generate_client:
             self._generate_client_class_nested(
                 context,
@@ -3748,104 +3631,21 @@ class Writer:
                 client_result_collection,
                 server_base_classes,
             )
+            self._track_interface_client_cast_targets(context, server_base_classes)
 
-            # Track this interface for cast_as overloads with inheritance info
-            # Store Protocol path (for parameter type) and Client TypeAlias (for return type)
-            # Protocol path: e.g., "_CalculatorInterfaceModule" or "_CalculatorInterfaceModule._FunctionInterfaceModule"
-            protocol_path = context.registered_type.scoped_name
-
-            # Client TypeAlias: Use flat name (e.g., "FunctionClient" not "Calculator.FunctionClient")
-            # The flat TypeAlias is available at module level for all interfaces
-            # E.g., "CalculatorClient", "FunctionClient", "ValueClient"
-            client_full_name = context.client_type_name  # This is already the flat name like "FunctionClient"
-
-            # Build list of base client TypeAlias names (also flat)
-            base_client_names: list[str] = []
-            for server_base in server_base_classes:
-                if ".Server" in server_base:
-                    # Extract protocol name: _IdentifiableInterfaceModule.Server -> _IdentifiableInterfaceModule
-                    protocol_name = server_base.replace(".Server", "")
-                    # Get user-facing interface name from protocol name
-                    interface_name = self._extract_name_from_protocol(protocol_name.split(".")[-1])
-                    # Use flat Client TypeAlias name
-                    base_client_names.append(f"{interface_name}Client")
-
-            # Store: protocol_path -> (client_alias, base_clients)
-            # e.g., "_CalculatorInterfaceModule._FunctionInterfaceModule" -> ("FunctionClient", [])
-            self._all_interfaces[protocol_path] = (client_full_name, base_client_names)
-            self._all_interfaces[protocol_path] = (client_full_name, base_client_names)
-
-        # Track NamedTuples globally for .py file export
-        if server_collection.namedtuples:
-            interface_full_name = context.registered_type.scoped_name
-            if interface_full_name not in self._all_server_namedtuples:
-                self._all_server_namedtuples[interface_full_name] = {}
-
-            for namedtuple_name, fields in server_collection.namedtuples.items():
-                method_name = namedtuple_name.replace("ResultTuple", "Result").replace("Result", "").lower()
-                if not method_name:
-                    method_name = namedtuple_name.replace("Tuple", "").lower()
-
-                self._all_server_namedtuples[interface_full_name][method_name] = (namedtuple_name, fields)
-
-        # Ensure interface Protocol has some content
+        self._track_interface_namedtuple_exports(context, server_collection)
         if not self.scope.lines:
             self.scope.add("...")
 
-        # Phase 6: Add type annotations and aliases at the recorded parent scope
-        # Annotation for the interface module (better matches runtime behavior)
-        type_alias_scope.add(f"{context.type_name}: {context.protocol_class_name}")
-
-        # TypeAlias for the Client class (for convenience)
-        if should_generate_client:
-            # Check if this is a nested interface
-            is_nested_interface = context.registered_type.scope and not context.registered_type.scope.is_root
-
-            # Build full client path
-            if is_nested_interface:
-                # Use scoped name for nested interfaces (e.g., "_CalculatorModule._ValueModule.ValueClient")
-                client_alias_path = f"{context.registered_type.scoped_name}.{context.client_type_name}"
-            else:
-                # Top-level interface
-                client_alias_path = f"{context.protocol_class_name}.{context.client_type_name}"
-
-            # Only add class-level type alias for nested interfaces
-            if is_nested_interface:
-                type_alias_scope.add(f"type {context.client_type_name} = {client_alias_path}")
-
-            # Track for top-level TypeAlias (both nested and top-level)
-            self._all_type_aliases[context.client_type_name] = (client_alias_path, "Client")
-
-            # Track Result types for top-level TypeAliases
-            for result_type_name in result_type_names:
-                # Result types are nested inside Client class
-                if is_nested_interface:
-                    result_alias_path = (
-                        f"{context.registered_type.scoped_name}.{context.client_type_name}.{result_type_name}"
-                    )
-                else:
-                    result_alias_path = f"{context.protocol_class_name}.{context.client_type_name}.{result_type_name}"
-
-                # Track for top-level TypeAlias
-                self._all_type_aliases[result_type_name] = (result_alias_path, "Result")
-
-        # Add TypeAlias for Server class if it exists
-        should_generate_server = server_collection.has_methods() or server_base_classes
-        if should_generate_server:
-            server_alias_name = f"{context.type_name}Server"
-            server_alias_path = f"{context.registered_type.scoped_name}.Server"
-
-            # Only add class-level type alias for nested interfaces
-            is_nested_interface = context.registered_type.scope and not context.registered_type.scope.is_root
-            if is_nested_interface:
-                type_alias_scope.add(f"type {server_alias_name} = {server_alias_path}")
-
-            # Track for top-level TypeAlias
-            self._all_type_aliases[server_alias_name] = (server_alias_path, "Server")
-
-        # Return from the interface Protocol scope
+        should_generate_server = bool(server_collection.has_methods() or server_base_classes)
+        self._add_interface_type_aliases(
+            context,
+            type_alias_scope,
+            result_type_names,
+            should_generate_client=should_generate_client,
+            should_generate_server=should_generate_server,
+        )
         self.return_from_scope()
-
         return context.registered_type
 
     def _collect_server_base_classes(self, schema: _InterfaceSchema) -> list[str]:
@@ -3927,6 +3727,84 @@ class Writer:
             # Empty client class (inherits everything from superclasses and has no Results)
             self.scope.add("    ...")
 
+    def _generate_known_nested_schema(self, schema: capnp_types.SchemaType) -> bool:
+        """Generate a schema instance when it already has a concrete runtime schema type."""
+        if isinstance(schema, _EnumSchema):
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_enum(schema)
+            return True
+        if isinstance(schema, _InterfaceSchema):
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_interface(schema)
+            return True
+        if isinstance(schema, _StructSchema):
+            if not self.is_type_id_known(schema.node.id):
+                _ = self.gen_struct(schema)
+            return True
+        return False
+
+    def _generate_const_nested_schema(self, schema: capnp_types.SchemaType) -> None:
+        """Generate a nested const schema from a generic runtime schema."""
+        if not isinstance(schema, _Schema):
+            msg = f"Expected _Schema for const node, got {type(schema).__name__}"
+            raise TypeError(msg)
+        self.gen_const(schema)
+
+    def _generate_struct_nested_schema(self, schema: capnp_types.SchemaType) -> None:
+        """Generate a nested struct schema from either a concrete or generic schema."""
+        if isinstance(schema, _StructSchema):
+            _ = self.gen_struct(schema)
+            return
+        if isinstance(schema, _Schema):
+            _ = self.gen_struct(schema.as_struct())
+            return
+        msg = f"Expected struct schema for struct node, got {type(schema).__name__}"
+        raise TypeError(msg)
+
+    def _generate_enum_nested_schema(self, schema: capnp_types.SchemaType) -> None:
+        """Generate a nested enum schema from either a concrete or generic schema."""
+        if isinstance(schema, _EnumSchema):
+            _ = self.gen_enum(schema)
+            return
+        if isinstance(schema, _Schema):
+            _ = self.gen_enum(schema.as_enum())
+            return
+        msg = f"Expected enum schema for enum node, got {type(schema).__name__}"
+        raise TypeError(msg)
+
+    def _generate_interface_nested_schema(self, schema: capnp_types.SchemaType) -> None:
+        """Generate a nested interface schema from either a concrete or generic schema."""
+        if isinstance(schema, _InterfaceSchema):
+            _ = self.gen_interface(schema)
+            return
+        if isinstance(schema, _Schema):
+            _ = self.gen_interface(schema.as_interface())
+            return
+        msg = f"Expected interface schema for interface node, got {type(schema).__name__}"
+        raise TypeError(msg)
+
+    def _generate_nested_by_node_kind(self, schema: capnp_types.SchemaType) -> None:
+        """Generate a schema based on its node kind."""
+        node_kind = schema.node.which()
+        if node_kind == "file":
+            logger.debug(f"Skipping file node: {schema.node.displayName}")
+            return
+
+        if self.is_type_id_known(schema.node.id):
+            return
+
+        generators = {
+            "const": self._generate_const_nested_schema,
+            "struct": self._generate_struct_nested_schema,
+            "enum": self._generate_enum_nested_schema,
+            "interface": self._generate_interface_nested_schema,
+        }
+        generator = generators.get(node_kind)
+        if generator is None:
+            logger.warning(f"Skipping unknown node type '{node_kind}': {schema.node.displayName}")
+            return
+        generator(schema)
+
     def generate_nested(self, schema: capnp_types.SchemaType) -> None:
         """Generate the type for a nested schema.
 
@@ -3939,41 +3817,9 @@ class Writer:
             AssertionError: If the schema belongs to an unknown type.
 
         """
-        if isinstance(schema, _EnumSchema):
-            if not self.is_type_id_known(schema.node.id):
-                _ = self.gen_enum(schema)
+        if self._generate_known_nested_schema(schema):
             return
-        if isinstance(schema, _InterfaceSchema):
-            if not self.is_type_id_known(schema.node.id):
-                _ = self.gen_interface(schema)
-            return
-        if isinstance(schema, _StructSchema):
-            if not self.is_type_id_known(schema.node.id):
-                _ = self.gen_struct(schema)
-            return
-
-        # Generate based on node type
-        if schema.node.which() == "const":
-            if not self.is_type_id_known(schema.node.id):
-                self.gen_const(schema)
-
-        elif schema.node.which() == "struct":
-            if not self.is_type_id_known(schema.node.id):
-                _ = self.gen_struct(schema.as_struct())
-        elif schema.node.which() == "enum":
-            if not self.is_type_id_known(schema.node.id):
-                _ = self.gen_enum(schema.as_enum())
-        elif schema.node.which() == "interface":
-            if not self.is_type_id_known(schema.node.id):
-                _ = self.gen_interface(schema.as_interface())
-        elif schema.node.which() == "file":
-            # File nodes are skipped - they're just containers
-            logger.debug(f"Skipping file node: {schema.node.displayName}")
-            return
-        else:
-            # Unknown node type (annotation, etc.)
-            logger.warning(f"Skipping unknown node type '{schema.node.which()}': {schema.node.displayName}")
-            return
+        self._generate_nested_by_node_kind(schema)
 
     def generate_all_nested(self) -> None:
         """Generate types for all nested nodes, recursively."""
@@ -3989,6 +3835,104 @@ class Writer:
                 # This results in "no schema node loaded" errors when trying to access them.
                 # These are harmless if the nodes are indeed unused, so we log as debug.
                 logger.debug(f"Could not generate nested node '{node.name}': {e}")
+
+    def _schema_contains_nested_id(self, schema_obj: _Schema, target_id: int) -> bool:
+        """Return whether a file schema contains the target nested schema ID."""
+        for nested_node in schema_obj.node.nestedNodes:
+            if nested_node.id == target_id:
+                return True
+            with contextlib.suppress(Exception):
+                nested_schema = self._schema_loader.get(nested_node.id)
+                if self._schema_contains_nested_id(nested_schema, target_id):
+                    return True
+        return False
+
+    def _find_import_matching_path(self, schema: capnp_types.SchemaType) -> pathlib.Path | None:
+        """Find the source file path that owns an imported schema."""
+        if schema.node.id in self._file_id_to_path:
+            return pathlib.Path(self._file_id_to_path[schema.node.id])
+
+        for file_id, path in self._file_id_to_path.items():
+            with contextlib.suppress(Exception):
+                file_schema = self._schema_loader.get(file_id)
+                if self._schema_contains_nested_id(file_schema, schema.node.id):
+                    return pathlib.Path(path)
+        return None
+
+    def _find_file_id_for_path(self, matching_path: pathlib.Path) -> int | None:
+        """Find the root file schema ID for a source path."""
+        for file_id, file_path in self._file_id_to_path.items():
+            if pathlib.Path(file_path) == matching_path:
+                return file_id
+        return None
+
+    def _build_python_import_path(self, matching_path: pathlib.Path) -> str:
+        """Build the Python import path for an imported schema file."""
+        imported_module_annotation = None
+        imported_file_schema_id = self._find_file_id_for_path(matching_path)
+        if imported_file_schema_id is not None:
+            imported_module_annotation = self.get_python_module_for_schema(imported_file_schema_id)
+
+        if self._python_module_path and imported_module_annotation:
+            return f"{imported_module_annotation}.{matching_path.stem}_capnp"
+
+        self_dir = self._module_path.parent
+        if self_dir == matching_path.parent:
+            return f"{matching_path.stem}_capnp"
+
+        common_path = os.path.commonpath([self._module_path, matching_path])
+        relative_module_path = self._module_path.relative_to(common_path)
+        relative_import_path = matching_path.relative_to(common_path)
+        dots_count = len(relative_module_path.parents) + 1
+        return "." * dots_count + helper.replace_capnp_suffix(".".join(relative_import_path.parts))
+
+    def _register_nested_import_definition(
+        self,
+        schema: capnp_types.SchemaType,
+        definition_name: str,
+        python_import_path: str,
+    ) -> str:
+        """Register imports for a nested definition and return its internal type name."""
+        root_name = definition_name.split(".", maxsplit=1)[0]
+        if schema.node.which() == capnp_types.CapnpElementType.STRUCT:
+            self._add_import(f"from {python_import_path} import _{root_name}StructModule")
+            return ".".join(f"_{part}StructModule" for part in definition_name.split("."))
+
+        if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+            self._add_import(f"from {python_import_path} import {root_name}")
+            parts = definition_name.split(".")
+            parts[-1] = f"_{parts[-1]}InterfaceModule"
+            return ".".join(parts)
+
+        self._add_import(f"from {python_import_path} import {root_name}")
+        return definition_name
+
+    def _register_top_level_import_definition(
+        self,
+        schema: capnp_types.SchemaType,
+        definition_name: str,
+        python_import_path: str,
+    ) -> str:
+        """Register imports for a top-level definition and return its internal type name."""
+        if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+            protocol_name = f"_{definition_name}InterfaceModule"
+            client_name = f"{definition_name}Client"
+            self._add_import(f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}")
+            self._imported_aliases.add(client_name)
+            return protocol_name
+
+        if schema.node.which() == capnp_types.CapnpElementType.ENUM:
+            alias_name = f"{definition_name}Enum"
+            self._add_import(f"from {python_import_path} import {alias_name}")
+            return alias_name
+
+        protocol_name = f"_{definition_name}StructModule"
+        reader_alias = f"{definition_name}Reader"
+        builder_alias = f"{definition_name}Builder"
+        self._add_import(f"from {python_import_path} import {protocol_name}, {reader_alias}, {builder_alias}")
+        self._imported_aliases.add(reader_alias)
+        self._imported_aliases.add(builder_alias)
+        return protocol_name
 
     def register_import(self, schema: capnp_types.SchemaType) -> CapnpType | None:
         """Determine, whether a schema is imported from the base module.
@@ -4009,147 +3953,16 @@ class Writer:
             # This is the base module, not an import.
             return None
 
-        common_path: str
-        matching_path: pathlib.Path | None = None
-
-        # First check if this schema is in the file_id_to_path mapping
-        if schema.node.id in self._file_id_to_path:
-            matching_path = pathlib.Path(self._file_id_to_path[schema.node.id])
-        else:
-            # Find the path by checking which file contains this schema as a nested node
-            def search_nested_nodes(schema_obj: _Schema, target_id: int) -> bool:
-                """Recursively search for a target ID in nested nodes."""
-                for nested_node in schema_obj.node.nestedNodes:
-                    if nested_node.id == target_id:
-                        return True
-                    # Recursively search deeper by getting the nested schema from loader
-                    with contextlib.suppress(Exception):
-                        nested_schema = self._schema_loader.get(nested_node.id)
-                        if search_nested_nodes(nested_schema, target_id):
-                            return True
-                return False
-
-            for file_id, path in self._file_id_to_path.items():
-                with contextlib.suppress(Exception):
-                    file_schema = self._schema_loader.get(file_id)
-                    if search_nested_nodes(file_schema, schema.node.id):
-                        matching_path = pathlib.Path(path)
-                        break
-
-        # Since this is an import, there must be a parent module.
+        matching_path = self._find_import_matching_path(schema)
         assert matching_path is not None, f"The module named {module_name} was not provided to the stub generator."
 
-        # Track this imported module path for later use in capnp.load imports
         self._imported_module_paths.add(matching_path)
-
-        # Determine import path based on Python module annotations
-        # If both current and imported schema have module annotations, use absolute imports
-        # Otherwise use relative imports
-
-        # Get the file schema ID for the imported file (not the nested type ID)
-        # Find the file schema ID from file_id_to_path by matching the path
-        imported_file_schema_id = None
-        for file_id, file_path in self._file_id_to_path.items():
-            if pathlib.Path(file_path) == matching_path:
-                imported_file_schema_id = file_id
-                break
-
-        imported_module_annotation = None
-        if imported_file_schema_id:
-            imported_module_annotation = self.get_python_module_for_schema(imported_file_schema_id)
-
-        if self._python_module_path and imported_module_annotation:
-            # Both schemas have Python module annotations - use absolute imports
-            # e.g., "from mas.schema.common.date_capnp import Date"
-            module_name_without_extension = matching_path.stem  # e.g., "date"
-            python_import_path = f"{imported_module_annotation}.{module_name_without_extension}_capnp"
-        else:
-            # No module annotations - need to build import path
-            # For pycapnp 2.0+ with module folders, use absolute imports when possible
-            # Check if both modules are in the same directory
-            self_dir = self._module_path.parent
-            import_dir = matching_path.parent
-
-            if self_dir == import_dir:
-                # Same directory - use absolute import (e.g., "from import_base_capnp import ...")
-                module_name_without_extension = matching_path.stem
-                python_import_path = f"{module_name_without_extension}_capnp"
-            else:
-                # Different directories - use relative imports
-                # Find the relative path to go from the parent module, to this imported module.
-                common_path = os.path.commonpath([self._module_path, matching_path])
-
-                relative_module_path = self._module_path.relative_to(common_path)
-                relative_import_path = matching_path.relative_to(common_path)
-
-                # Shape the relative path to a relative Python import statement.
-                # Since pycapnp 2.0+ generates stubs in module folders (e.g., schema_capnp/__init__.pyi),
-                # we need an extra level to go up from __init__.pyi to its parent directory
-                dots_count = len(relative_module_path.parents) + 1
-                python_import_path = "." * dots_count + helper.replace_capnp_suffix(
-                    ".".join(relative_import_path.parts),
-                )
-
-        # Import the regular definition name, alongside its builder and reader for structs
-        # Enums and Interfaces don't have Builder/Reader variants
-        # For deeply nested types (e.g., Params.Irrigation.Parameters), we import the root parent
-        # and Python will resolve the full path via attribute access
-
-        registered_name: str
-
-        # Check if this is a nested type (contains dots)
-        if "." in definition_name:
-            # Get the root parent (e.g., "Params" from "Params.Irrigation.Parameters")
-            root_name = definition_name.split(".")[0]
-
-            if schema.node.which() == capnp_types.CapnpElementType.STRUCT:
-                protocol_root_name = f"_{root_name}StructModule"
-                self._add_import(f"from {python_import_path} import {protocol_root_name}")
-                # Register with Protocol-based path: replace ALL struct names with Protocol names
-                # E.g., "Params.OrganicFertilization.OrganicMatterParameters"
-                # becomes "_ParamsStructModule._OrganicFertilizationStructModule._OrganicMatterParametersStructModule"
-                parts = definition_name.split(".")
-                protocol_parts = [f"_{part}StructModule" for part in parts]
-                registered_name = ".".join(protocol_parts)
-            elif schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
-                # For nested interfaces, register with Protocol name
-                # E.g., "Channel.Reader" -> "Channel._ReaderInterfaceModule"
-                parts = definition_name.split(".")
-                last_part = parts[-1]
-                parts[-1] = f"_{last_part}InterfaceModule"
-                registered_name = ".".join(parts)
-                self._add_import(f"from {python_import_path} import {root_name}")
-            else:
-                self._add_import(f"from {python_import_path} import {root_name}")
-                registered_name = definition_name
-        elif schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
-            # For interfaces, import the Protocol class, the TypeAlias, and the Client alias
-            protocol_name = f"_{definition_name}InterfaceModule"
-            client_name = f"{definition_name}Client"
-            self._add_import(f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}")
-
-            # Track imported aliases
-            self._imported_aliases.add(client_name)
-            registered_name = protocol_name
-        elif schema.node.which() == capnp_types.CapnpElementType.ENUM:
-            # Enums just need the enum itself
-            alias_name = f"{definition_name}Enum"
-            self._add_import(f"from {python_import_path} import {alias_name}")
-            registered_name = alias_name
-        else:
-            # Structs: import the Protocol class (_<Name>StructModule) for internal type references
-            # The TypeAlias can be accessed if needed, but internal references use the Protocol
-            protocol_name = f"_{definition_name}StructModule"
-            reader_alias = f"{definition_name}Reader"
-            builder_alias = f"{definition_name}Builder"
-
-            self._add_import(f"from {python_import_path} import {protocol_name}, {reader_alias}, {builder_alias}")
-
-            # Track imported aliases
-            self._imported_aliases.add(reader_alias)
-            self._imported_aliases.add(builder_alias)
-            registered_name = protocol_name
-
+        python_import_path = self._build_python_import_path(matching_path)
+        registered_name = (
+            self._register_nested_import_definition(schema, definition_name, python_import_path)
+            if "." in definition_name
+            else self._register_top_level_import_definition(schema, definition_name, python_import_path)
+        )
         return self.register_type(schema.node.id, schema, name=registered_name, scope=self.scope.root)
 
     def register_type(
@@ -4357,6 +4170,32 @@ class Writer:
 
         self.scope = self.scope.return_scope
 
+    def _ensure_registered_type_generated(self, type_id: int, type_kind: str) -> None:
+        """Generate a referenced struct or interface before resolving its registered type."""
+        if self.is_type_id_known(type_id):
+            return
+
+        try:
+            nested_schema = self._schemas_by_id.get(type_id)
+            if nested_schema is not None:
+                self.generate_nested(nested_schema)
+        except Exception as e:
+            logger.debug(f"Could not pre-generate {type_kind} with ID {type_id}: {e}")
+
+    @staticmethod
+    def _qualified_type_name(element_type: CapnpType) -> str:
+        """Return the fully scoped type name for a registered schema type."""
+        if element_type.scope.is_root:
+            return element_type.name
+        return f"{element_type.scope}.{element_type.name}"
+
+    def _get_registered_type_name(self, type_reader: TypeReader, type_kind: str) -> str:
+        """Return the registered type name for a struct, enum, or interface reader."""
+        type_id = getattr(type_reader, type_kind).typeId
+        if type_kind in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE}:
+            self._ensure_registered_type_generated(type_id, type_kind)
+        return self._qualified_type_name(self.get_type_by_id(type_id))
+
     def get_type_name(self, type_reader: TypeReader) -> str:
         """Extract the type name from a type reader.
 
@@ -4376,70 +4215,48 @@ class Writer:
             pass
 
         type_reader_type = type_reader.which()
+        if type_reader_type in {
+            capnp_types.CapnpElementType.STRUCT,
+            capnp_types.CapnpElementType.ENUM,
+            capnp_types.CapnpElementType.INTERFACE,
+        }:
+            return self._get_registered_type_name(type_reader, type_reader_type)
 
-        element_type: CapnpType | None = None
-
-        if type_reader_type == capnp_types.CapnpElementType.STRUCT:
-            # Check if the type is registered; if not, try to generate it first
-            type_id = type_reader.struct.typeId
-            if not self.is_type_id_known(type_id):
-                # Try to generate the struct before using it
-                try:
-                    # Look up the schema by ID in our mapping
-                    if type_id in self._schemas_by_id:
-                        nested_schema = self._schemas_by_id[type_id]
-                        self.generate_nested(nested_schema)
-                except Exception as e:
-                    logger.debug(f"Could not pre-generate struct with ID {type_id}: {e}")
-
-            element_type = self.get_type_by_id(type_id)
-            type_name = element_type.name
-
-        elif type_reader_type == capnp_types.CapnpElementType.ENUM:
-            element_type = self.get_type_by_id(type_reader.enum.typeId)
-            type_name = element_type.name
-
-        elif type_reader_type == capnp_types.CapnpElementType.LIST:
-            # Recursively get the element type and wrap it in Sequence
-            element_type_name = self.get_type_name(type_reader.list.elementType)
+        if type_reader_type == capnp_types.CapnpElementType.LIST:
             self._add_typing_import("Sequence")
-            type_name = f"Sequence[{element_type_name}]"
-            element_type = None  # List itself doesn't have an element_type in our registry
+            return f"Sequence[{self.get_type_name(type_reader.list.elementType)}]"
 
-        elif type_reader_type == capnp_types.CapnpElementType.INTERFACE:
-            type_id = type_reader.interface.typeId
-            if not self.is_type_id_known(type_id):
-                # Try to generate the interface before using it
-                try:
-                    # Look up the schema by ID in our mapping
-                    if type_id in self._schemas_by_id:
-                        nested_schema = self._schemas_by_id[type_id]
-                        self.generate_nested(nested_schema)
-                except Exception as e:
-                    logger.debug(f"Could not pre-generate interface with ID {type_id}: {e}")
-
-            element_type = self.get_type_by_id(type_id)
-            type_name = element_type.name
-
-            # Traverse down to the innermost nested list element.
-            while type_name == capnp_types.CapnpElementType.LIST:
-                type_name += type_reader.list.elementType.which()
-
-        elif type_reader_type == capnp_types.CapnpElementType.ANY_POINTER:
-            # AnyPointer becomes _DynamicObjectReader for better type safety
-            # Track that we need augmentation for this module
+        if type_reader_type == capnp_types.CapnpElementType.ANY_POINTER:
             self._needs_dynamic_object_reader_augmentation = True
-            type_name = "_DynamicObjectReader"
-            element_type = None
+            return "_DynamicObjectReader"
 
-        else:
-            msg = f"Unknown type reader type '{type_reader_type}'."
-            raise TypeError(msg)
+        msg = f"Unknown type reader type '{type_reader_type}'."
+        raise TypeError(msg)
 
-        if element_type and (not element_type.scope.is_root):
-            return f"{element_type.scope}.{type_name}"
+    @staticmethod
+    def _classify_dynamic_object_alias(
+        alias_name: str,
+        alias_data: GeneratedTypeAliasInfo,
+    ) -> tuple[str, str] | None:
+        """Classify an alias as a struct, list, or interface dynamic reader overload."""
+        if len(alias_data) < MIN_ALIAS_DATA_PARTS:
+            return None
 
-        return type_name
+        original_path = alias_data[0]
+        if alias_name.endswith("Reader"):
+            if "List" in alias_name and ".Reader" in original_path:
+                return "lists", original_path.removesuffix(".Reader")
+            if ".Reader" in original_path:
+                protocol_path = original_path.removesuffix(".Reader")
+                if "StructModule" in protocol_path:
+                    return "structs", protocol_path
+
+        if alias_name.endswith("Client") and "Client" in original_path:
+            parts = original_path.rsplit(".", maxsplit=1)
+            if len(parts) == MODULE_PATH_PARTS and "InterfaceModule" in parts[0]:
+                return "interfaces", parts[0]
+
+        return None
 
     def get_dynamic_object_reader_types(
         self,
@@ -4458,55 +4275,88 @@ class Writer:
         if not self._needs_dynamic_object_reader_augmentation:
             return ([], [], [])
 
-        struct_types: list[tuple[str, str]] = []
-        list_types: list[tuple[str, str]] = []
-        interface_types: list[tuple[str, str]] = []
+        collected_types: dict[str, list[tuple[str, str]]] = {"structs": [], "lists": [], "interfaces": []}
+        seen_types: dict[str, set[str]] = {"structs": set(), "lists": set(), "interfaces": set()}
 
-        # Track what we've already added to avoid duplicates
-        seen_structs: set[str] = set()
-        seen_lists: set[str] = set()
-        seen_interfaces: set[str] = set()
-
-        # Use _all_type_aliases which contains ONLY the types generated in this module
         for alias_name, alias_data in self._all_type_aliases.items():
-            if len(alias_data) >= MIN_ALIAS_DATA_PARTS:
-                original_path, _ = alias_data[0], alias_data[1]
+            dynamic_type = self._classify_dynamic_object_alias(alias_name, alias_data)
+            if dynamic_type is None:
+                continue
 
-                # For Reader types - could be struct or list
-                if alias_name.endswith("Reader"):
-                    # Check if it's a list (contains "List" in the name)
-                    if "List" in alias_name:
-                        # List type like "BoolListReader", "PersonListReader"
-                        # original_path is like "_BoolList.Reader" or "_PersonList.Reader"
-                        if ".Reader" in original_path:
-                            list_class = original_path.replace(".Reader", "")
-                            if list_class not in seen_lists:
-                                list_types.append((list_class, alias_name))
-                                seen_lists.add(list_class)
-                    # Struct type
-                    # original_path is like "_PersonStructModule.Reader"
-                    elif ".Reader" in original_path:
-                        protocol_path = original_path.replace(".Reader", "")
-                        # Only include if it's a StructModule (not a List)
-                        if "StructModule" in protocol_path and protocol_path not in seen_structs:
-                            struct_types.append((protocol_path, alias_name))
-                            seen_structs.add(protocol_path)
+            type_kind, type_path = dynamic_type
+            if type_path in seen_types[type_kind]:
+                continue
 
-                # For Client types (interfaces)
-                elif alias_name.endswith("Client") and "Client" in original_path:
-                    parts = original_path.rsplit(".", 1)
-                    if len(parts) == MODULE_PATH_PARTS:
-                        protocol_path = parts[0]
-                        # Only include InterfaceModule types
-                        if "InterfaceModule" in protocol_path and protocol_path not in seen_interfaces:
-                            interface_types.append((protocol_path, alias_name))
-                            seen_interfaces.add(protocol_path)
+            collected_types[type_kind].append((type_path, alias_name))
+            seen_types[type_kind].add(type_path)
 
         logger.debug(
-            f"Module {self._schema.node.displayName}: Found {len(struct_types)} structs, {len(list_types)} lists, {len(interface_types)} interfaces",
+            f"Module {self._schema.node.displayName}: Found {len(collected_types['structs'])} structs, {len(collected_types['lists'])} lists, {len(collected_types['interfaces'])} interfaces",
         )
 
-        return (struct_types, list_types, interface_types)
+        return (collected_types["structs"], collected_types["lists"], collected_types["interfaces"])
+
+    def _ensure_root_scope(self, *, context: str) -> None:
+        """Force the writer back to the root scope before emitting file output."""
+        if self.scope.is_root:
+            return
+
+        logger.warning(f"Scope not at root when {context}! name='{self.scope.name}', forcing return to root")
+        while self.scope.return_scope is not None:
+            self.scope = self.scope.return_scope
+
+    def _append_pointer_type_aliases(self, out: list[str]) -> None:
+        """Append optional AnyPointer-related type aliases needed by this module."""
+        alias_blocks = [
+            (
+                self._needs_anypointer_alias,
+                "# Type alias for AnyPointer parameters (accepts all Cap'n Proto pointer types)",
+                f"type AnyPointer = {ANYPOINTER_TYPE}",
+            ),
+            (
+                self._needs_capability_alias,
+                "# Type alias for Capability parameters",
+                f"type Capability = {CAPABILITY_TYPE}",
+            ),
+            (
+                self._needs_anystruct_alias,
+                "# Type alias for AnyStruct parameters",
+                f"type AnyStruct = {ANYSTRUCT_TYPE}",
+            ),
+            (
+                self._needs_anylist_alias,
+                "# Type alias for AnyList parameters",
+                f"type AnyList = {ANYLIST_TYPE}",
+            ),
+        ]
+
+        for should_add, comment, alias_line in alias_blocks:
+            if not should_add:
+                continue
+            out.extend(["", comment, alias_line])
+
+    def _format_top_level_type_alias(self, alias_name: str, alias_info: GeneratedTypeAliasInfo) -> str:
+        """Format one generated top-level type alias line."""
+        if len(alias_info) == ENUM_ALIAS_DATA_PARTS:
+            full_path, type_kind, enum_values = alias_info
+            if type_kind == "Enum":
+                literal_values = ", ".join(f'"{value}"' for value in enum_values)
+                return f"type {alias_name} = int | Literal[{literal_values}]"
+            return f"type {alias_name} = {full_path}"
+
+        full_path = alias_info[0]
+        return f"type {alias_name} = {full_path}"
+
+    def _append_top_level_type_aliases(self, out: list[str]) -> None:
+        """Append generated Reader/Builder/Client type aliases."""
+        if not self._all_type_aliases:
+            return
+
+        out.extend(["", "# Top-level type aliases for use in type annotations"])
+        out.extend(
+            self._format_top_level_type_alias(alias_name, self._all_type_aliases[alias_name])
+            for alias_name in sorted(self._all_type_aliases)
+        )
 
     def dumps_pyi(self) -> str:
         """Generate the .pyi stub output for this schema.
@@ -4515,43 +4365,15 @@ class Writer:
             str: The output string.
 
         """
-        # Ensure we're at root scope before dumping
-        if not self.scope.is_root:
-            logger.warning(f"Scope not at root when dumping! name='{self.scope.name}', forcing return to root")
-            # Force return to root
-            while self.scope.return_scope is not None:
-                self.scope = self.scope.return_scope
-
+        self._ensure_root_scope(context="dumping")
         out: list[str] = []
         out.append(self.docstring)
         out.extend(self.imports)
 
-        # Add _DynamicObjectReader import if needed (for AnyPointer types)
-        # We import the actual class from capnp.lib.capnp rather than generating a Protocol
         if self._needs_dynamic_object_reader_augmentation:
             out.append("from capnp.lib.capnp import _DynamicObjectReader")
 
-        # Add AnyPointer type alias if needed (for generic parameter fields)
-        if self._needs_anypointer_alias:
-            out.append("")
-            out.append("# Type alias for AnyPointer parameters (accepts all Cap'n Proto pointer types)")
-            out.append(f"type AnyPointer = {ANYPOINTER_TYPE}")
-
-        if self._needs_capability_alias:
-            out.append("")
-            out.append("# Type alias for Capability parameters")
-            out.append(f"type Capability = {CAPABILITY_TYPE}")
-
-        if self._needs_anystruct_alias:
-            out.append("")
-            out.append("# Type alias for AnyStruct parameters")
-            out.append(f"type AnyStruct = {ANYSTRUCT_TYPE}")
-
-        if self._needs_anylist_alias:
-            out.append("")
-            out.append("# Type alias for AnyList parameters")
-            out.append(f"type AnyList = {ANYLIST_TYPE}")
-
+        self._append_pointer_type_aliases(out)
         out.append("")
 
         if self.type_vars:
@@ -4559,33 +4381,7 @@ class Writer:
             out.append("")
 
         out.extend(self.scope.lines)
-
-        # Add top-level TypeAliases for all Reader/Builder/Client types
-        # For enums, add instance annotations instead of type aliases
-        # This allows using these types in type annotations even though module types are now variables
-        if self._all_type_aliases:
-            out.append("")
-            out.append("# Top-level type aliases for use in type annotations")
-            for alias_name in sorted(self._all_type_aliases.keys()):
-                alias_info = self._all_type_aliases[alias_name]
-
-                if len(alias_info) == ENUM_ALIAS_DATA_PARTS:
-                    # Enum with values: (full_path, type_kind, enum_values)
-                    full_path, type_kind, enum_values = alias_info
-                    if type_kind == "Enum":
-                        # For enums, generate a single type alias that accepts int | Literal[...]
-                        # This allows both Operator.add (int) and string literals to be accepted
-                        literal_values = ", ".join(f'"{v}"' for v in enum_values)
-                        out.append(f"type {alias_name} = int | Literal[{literal_values}]")
-                    else:
-                        # Regular type alias (use type statement for consistency)
-                        out.append(f"type {alias_name} = {full_path}")
-                else:
-                    # Old format: (full_path, type_kind)
-                    full_path, type_kind = alias_info
-                    # All types use type alias now
-                    out.append(f"type {alias_name} = {full_path}")
-
+        self._append_top_level_type_aliases(out)
         return "\n".join(out)
 
     def _find_runtime_schema_access_segments_from_type(
@@ -4665,6 +4461,68 @@ class Writer:
 
         return [("fields", field.name), *nested_segments]
 
+    def _find_runtime_segments_for_method_schema(
+        self,
+        schema_id: int,
+        target_id: int,
+        seen: set[int],
+        method_name: str,
+        attr_name: str,
+    ) -> list[tuple[str, str | None]] | None:
+        """Resolve runtime access segments through one method param/result schema."""
+        method_schema = self._schemas_by_id.get(schema_id)
+        if method_schema is None:
+            return None
+
+        nested_segments = self._find_runtime_schema_access_segments(method_schema, target_id, seen)
+        if nested_segments is None:
+            return None
+
+        return [("methods", method_name), ("attr", attr_name), *nested_segments]
+
+    def _find_runtime_segments_in_interface_methods(
+        self,
+        schema: capnp_types.SchemaType,
+        target_id: int,
+        seen: set[int],
+    ) -> list[tuple[str, str | None]] | None:
+        """Resolve runtime access segments through interface methods."""
+        for method in schema.node.interface.methods:
+            param_segments = self._find_runtime_segments_for_method_schema(
+                method.paramStructType,
+                target_id,
+                seen,
+                method.name,
+                "param_type",
+            )
+            if param_segments is not None:
+                return param_segments
+
+            result_segments = self._find_runtime_segments_for_method_schema(
+                method.resultStructType,
+                target_id,
+                seen,
+                method.name,
+                "result_type",
+            )
+            if result_segments is not None:
+                return result_segments
+
+        return None
+
+    def _find_runtime_segments_in_struct_fields(
+        self,
+        schema: capnp_types.SchemaType,
+        target_id: int,
+        seen: set[int],
+    ) -> list[tuple[str, str | None]] | None:
+        """Resolve runtime access segments through struct fields."""
+        for field in schema.node.struct.fields:
+            nested_segments = self._find_runtime_schema_access_segments_in_field(field, target_id, seen)
+            if nested_segments is not None:
+                return nested_segments
+        return None
+
     def _find_runtime_schema_access_segments(
         self,
         schema: capnp_types.SchemaType,
@@ -4685,24 +4543,10 @@ class Writer:
 
         node_which = schema.node.which()
         if node_which == capnp_types.CapnpElementType.INTERFACE:
-            for method in schema.node.interface.methods:
-                param_schema = self._schemas_by_id.get(method.paramStructType)
-                if param_schema is not None:
-                    nested_segments = self._find_runtime_schema_access_segments(param_schema, target_id, seen)
-                    if nested_segments is not None:
-                        return [("methods", method.name), ("attr", "param_type"), *nested_segments]
-
-                result_schema = self._schemas_by_id.get(method.resultStructType)
-                if result_schema is not None:
-                    nested_segments = self._find_runtime_schema_access_segments(result_schema, target_id, seen)
-                    if nested_segments is not None:
-                        return [("methods", method.name), ("attr", "result_type"), *nested_segments]
+            return self._find_runtime_segments_in_interface_methods(schema, target_id, seen)
 
         if node_which == capnp_types.CapnpElementType.STRUCT:
-            for field in schema.node.struct.fields:
-                nested_segments = self._find_runtime_schema_access_segments_in_field(field, target_id, seen)
-                if nested_segments is not None:
-                    return nested_segments
+            return self._find_runtime_segments_in_struct_fields(schema, target_id, seen)
 
         return None
 
@@ -4770,6 +4614,89 @@ class Writer:
             ")",
         ]
 
+    def _append_embedded_schema_nodes(self, out: list[str]) -> None:
+        """Append base64-encoded embedded schema nodes."""
+        out.extend(["# Embedded compiled schemas (base64-encoded)", "_SCHEMA_NODES = ["])
+
+        root_bytes = self._schema.node.as_builder().to_bytes_packed()
+        root_b64 = base64.b64encode(root_bytes).decode("ascii")
+        out.append(f"    {root_b64!r},  # {self._schema.node.displayName}")
+
+        seen_ids = {self._schema.node.id}
+        for schema_id, schema in self._schemas_by_id.items():
+            if schema_id in seen_ids:
+                continue
+            try:
+                schema_bytes = schema.node.as_builder().to_bytes_packed()
+                schema_b64 = base64.b64encode(schema_bytes).decode("ascii")
+                out.append(f"    {schema_b64!r},  # {schema.node.displayName}")
+                seen_ids.add(schema_id)
+            except Exception as e:
+                logger.debug(f"Could not serialize schema {hex(schema_id)}: {e}")
+
+        out.extend(["]", ""])
+
+    def _append_runtime_loader_setup(self, out: list[str]) -> None:
+        """Append runtime schema-loader initialization lines."""
+        out.extend(
+            [
+                "# Load schemas and build module structure",
+                "# Use a shared loader stored on capnp module so capabilities work across schema modules",
+                "if not hasattr(capnp, '_embedded_schema_loader'):",
+                "    capnp._embedded_schema_loader = capnp.SchemaLoader()",
+                "_loader = capnp._embedded_schema_loader",
+                "for _schema_b64 in _SCHEMA_NODES:",
+                "    _schema_data = base64.b64decode(_schema_b64)",
+                "    _node_reader = schema_capnp.Node.from_bytes_packed(_schema_data)",
+                "    _loader.load_dynamic(_node_reader)",
+                "",
+            ],
+        )
+
+    def _extend_runtime_module_construction(
+        self,
+        out: list[str],
+        schema_node: NodeReader,
+        ancestor_schemas: list[tuple[str, object]],
+        parent_path: str = "",
+    ) -> None:
+        """Append inline runtime module construction lines depth-first."""
+        for nested_node in schema_node.nestedNodes:
+            nested_schema = self._schemas_by_id.get(nested_node.id)
+            if nested_schema is None:
+                continue
+
+            full_path = f"{parent_path}.{nested_node.name}" if parent_path else nested_node.name
+            construction_lines = self._build_runtime_module_construction_lines(
+                full_path, nested_schema, ancestor_schemas
+            )
+            if construction_lines is not None:
+                out.extend(construction_lines)
+
+            node_type = nested_schema.node.which()
+            if node_type in (capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE):
+                self._extend_runtime_module_construction(
+                    out,
+                    nested_schema.node,
+                    [*ancestor_schemas, (full_path, nested_schema)],
+                    full_path,
+                )
+
+    def _append_runtime_server_namedtuples(self, out: list[str]) -> None:
+        """Append runtime NamedTuple assignments for server result tuple types."""
+        if not self._all_server_namedtuples:
+            return
+
+        out.append("")
+        for interface_name, namedtuples_dict in sorted(self._all_server_namedtuples.items()):
+            runtime_interface_name = self._protocol_path_to_runtime_path(interface_name)
+            for _, (namedtuple_name, fields) in sorted(namedtuples_dict.items()):
+                field_list = [f'("{field_name}", object)' for field_name, _ in fields]
+                out.append(
+                    f"{runtime_interface_name}.Server.{namedtuple_name} = "
+                    f"NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])",
+                )
+
     def dumps_py(self) -> str:
         """Generate the .py loader module for this schema.
 
@@ -4780,13 +4707,7 @@ class Writer:
             str: The output string.
 
         """
-        # Ensure we're at root scope before dumping
-        if not self.scope.is_root:
-            logger.warning(f"Scope not at root when dumping .py! name='{self.scope.name}', forcing return to root")
-            # Force return to root
-            while self.scope.return_scope is not None:
-                self.scope = self.scope.return_scope
-
+        self._ensure_root_scope(context="dumping .py")
         out: list[str] = []
         out.append("# pyright: reportAttributeAccessIssue=false, reportArgumentType=false")
         out.append(self.docstring)
@@ -4805,111 +4726,9 @@ class Writer:
         out.append("capnp.remove_import_hook()")
         out.append("")
 
-        # Embed schemas as binary and manually build module structure
-        # This replicates SchemaParser's behavior using SchemaLoader
-        out.append("# Embedded compiled schemas (base64-encoded)")
-        out.append("_SCHEMA_NODES = [")
-
-        # Add root schema first
-        root_bytes = self._schema.node.as_builder().to_bytes_packed()
-        root_b64 = base64.b64encode(root_bytes).decode("ascii")
-        out.append(f"    {root_b64!r},  # {self._schema.node.displayName}")
-
-        # Add all other schemas from our mapping
-        # We embed all schemas to ensure all dependencies are available at runtime.
-        # Trying to track only "necessary" schemas is error-prone because schemas can reference
-        # each other in complex ways (interface methods, const values, group fields, etc.)
-        seen_ids = {self._schema.node.id}
-        for schema_id, schema in self._schemas_by_id.items():
-            if schema_id not in seen_ids:
-                try:
-                    schema_bytes = schema.node.as_builder().to_bytes_packed()
-                    schema_b64 = base64.b64encode(schema_bytes).decode("ascii")
-                    out.append(f"    {schema_b64!r},  # {schema.node.displayName}")
-                    seen_ids.add(schema_id)
-                except Exception as e:
-                    logger.debug(f"Could not serialize schema {hex(schema_id)}: {e}")
-
-        out.append("]")
-        out.append("")
-
-        # Load schemas and build module structure
-        # Use a shared loader so capabilities work across schema modules
-        out.append("# Load schemas and build module structure")
-        out.append("# Use a shared loader stored on capnp module so capabilities work across schema modules")
-        out.append("if not hasattr(capnp, '_embedded_schema_loader'):")
-        out.append("    capnp._embedded_schema_loader = capnp.SchemaLoader()")
-        out.append("_loader = capnp._embedded_schema_loader")
-        out.append("for _schema_b64 in _SCHEMA_NODES:")
-        out.append("    _schema_data = base64.b64decode(_schema_b64)")
-        out.append("    _node_reader = schema_capnp.Node.from_bytes_packed(_schema_data)")
-        out.append("    _loader.load_dynamic(_node_reader)")
-        out.append("")
-
-        # Build module structure inline by traversing the schema hierarchy
-        # We build modules depth-first to ensure parents exist before children
-        out.append("# Build module structure inline")
-        out.append("")
-
-        # Helper function to generate inline module construction code
-        def generate_module_construction(
-            schema_node: NodeReader,
-            ancestor_schemas: list[tuple[str, object]],
-            parent_path: str = "",
-        ) -> None:
-            """Generate code to construct a module and its nested modules."""
-            # For each nested node in this schema
-            for nested_node in schema_node.nestedNodes:
-                nested_id = nested_node.id
-                nested_name = nested_node.name
-
-                # Skip nodes not in our schema mapping (shouldn't happen, but safe)
-                if nested_id not in self._schemas_by_id:
-                    continue
-
-                nested_schema = self._schemas_by_id[nested_id]
-                nested_node_proto = nested_schema.node
-
-                # Determine the full path to this module
-                full_path = f"{parent_path}.{nested_name}" if parent_path else nested_name
-
-                construction_lines = self._build_runtime_module_construction_lines(
-                    full_path=full_path,
-                    nested_schema=nested_schema,
-                    ancestor_schemas=ancestor_schemas,
-                )
-                if construction_lines is not None:
-                    out.extend(construction_lines)
-
-                # Recursively generate code for nested modules
-                # Only structs and interfaces can have nested types
-                node_type = nested_node_proto.which()
-                if node_type in (capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE):
-                    generate_module_construction(
-                        nested_node_proto,
-                        [*ancestor_schemas, (full_path, nested_schema)],
-                        full_path,
-                    )
-
-        # Start generating from the root schema
-        generate_module_construction(self._schema.node, [])
-
-        # Add Server.InfoResult NamedTuples for interfaces
-        if self._all_server_namedtuples:
-            out.append("")
-            for interface_name, namedtuples_dict in sorted(self._all_server_namedtuples.items()):
-                for _, (namedtuple_name, fields) in sorted(namedtuples_dict.items()):
-                    # Convert Protocol path to runtime path
-                    # E.g., "_HostPortResolverModule.Registrar" -> "HostPortResolver.Registrar"
-                    runtime_interface_name = self._protocol_path_to_runtime_path(interface_name)
-
-                    # Create NamedTuple and attach to Server class
-                    # Use object as type for all fields to avoid import issues in .py file
-                    # Type information is in the .pyi file for static type checkers
-                    field_list = [f'("{field_name}", object)' for field_name, _ in fields]
-                    out.append(
-                        f"{runtime_interface_name}.Server.{namedtuple_name} = "
-                        f"NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])",
-                    )
-
+        self._append_embedded_schema_nodes(out)
+        self._append_runtime_loader_setup(out)
+        out.extend(["# Build module structure inline", ""])
+        self._extend_runtime_module_construction(out, self._schema.node, [])
+        self._append_runtime_server_namedtuples(out)
         return "\n".join(out)
