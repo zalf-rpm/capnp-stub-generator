@@ -59,6 +59,13 @@ CAPABILITY_TYPE = "_DynamicCapabilityClient | _DynamicCapabilityServer | _Dynami
 ANYSTRUCT_TYPE = "_DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder"
 ANYLIST_TYPE = "_DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder"
 
+# Expected best-effort failures while traversing partially loaded pycapnp schemas.
+SCHEMA_LOOKUP_EXCEPTIONS = (capnp.KjException,)
+ANNOTATION_ACCESS_EXCEPTIONS = (*SCHEMA_LOOKUP_EXCEPTIONS, AttributeError)
+TYPE_GENERATION_EXCEPTIONS = (*SCHEMA_LOOKUP_EXCEPTIONS, KeyError, NoParentError)
+TYPE_RESOLUTION_EXCEPTIONS = (*TYPE_GENERATION_EXCEPTIONS, TypeError)
+SCHEMA_SERIALIZATION_EXCEPTIONS = (*SCHEMA_LOOKUP_EXCEPTIONS, AttributeError)
+
 
 class Writer:
     """A class that handles writing the stub file, based on a provided module definition."""
@@ -170,8 +177,8 @@ class Writer:
                     module_path = annotation.value.text
                     logger.info(f"Found Python module annotation: {module_path}")
                     return module_path
-        except Exception as e:
-            logger.debug(f"Error reading Python module annotation: {e}")
+        except ANNOTATION_ACCESS_EXCEPTIONS as error:
+            logger.debug(f"Error reading Python module annotation: {error}")
         return None
 
     def get_python_module_for_schema(self, schema_id: int) -> str | None:
@@ -191,8 +198,8 @@ class Writer:
             for annotation in schema.node.annotations:
                 if annotation.id == self._python_module_annotation_id and annotation.value.which() == "text":
                     return annotation.value.text
-        except Exception as e:
-            logger.debug(f"Error reading Python module annotation from schema {hex(schema_id)}: {e}")
+        except ANNOTATION_ACCESS_EXCEPTIONS as error:
+            logger.debug(f"Error reading Python module annotation from schema {hex(schema_id)}: {error}")
 
         return None
 
@@ -229,11 +236,13 @@ class Writer:
             if nested_id in self._schemas_by_id:
                 continue
             try:
-                self._add_schema_and_nested(self._schema_loader.get(nested_id))
-            except Exception as e:
+                nested_schema = self._schema_loader.get(nested_id)
+            except SCHEMA_LOOKUP_EXCEPTIONS as error:
                 logger.debug(
-                    f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}) for {schema.node.displayName}: {e}",
+                    f"Could not resolve nested schema {nested_node.name} (id={hex(nested_id)}) for {schema.node.displayName}: {error}",
                 )
+                continue
+            self._add_schema_and_nested(nested_schema)
 
     def _collect_referenced_type_ids(self, type_obj: TypeReader) -> list[int]:
         """Extract all schema IDs referenced by a field type."""
@@ -262,9 +271,11 @@ class Writer:
         if group_id in self._schemas_by_id:
             return
         try:
-            self._add_schema_and_nested(self._schema_loader.get(group_id))
-        except Exception as e:
-            logger.warning(f"Group field {field.name} references schema {hex(group_id)} not in loader: {e}")
+            group_schema = self._schema_loader.get(group_id)
+        except SCHEMA_LOOKUP_EXCEPTIONS as error:
+            logger.warning(f"Group field {field.name} references schema {hex(group_id)} not in loader: {error}")
+            return
+        self._add_schema_and_nested(group_schema)
 
     def _add_slot_field_schemas(self, field: FieldReader) -> None:
         """Add schemas referenced by a slot field."""
@@ -272,9 +283,11 @@ class Writer:
             if ref_id in self._schemas_by_id:
                 continue
             try:
-                self._add_schema_and_nested(self._schema_loader.get(ref_id))
-            except Exception as e:
-                logger.debug(f"Could not load referenced type {hex(ref_id)} for field {field.name}: {e}")
+                referenced_schema = self._schema_loader.get(ref_id)
+            except SCHEMA_LOOKUP_EXCEPTIONS as error:
+                logger.debug(f"Could not load referenced type {hex(ref_id)} for field {field.name}: {error}")
+                continue
+            self._add_schema_and_nested(referenced_schema)
 
     def _add_interface_method_schemas(self, schema: capnp_types.SchemaType) -> None:
         """Add implicit param/result struct schemas for interface methods."""
@@ -290,11 +303,13 @@ class Writer:
         if schema_id in self._schemas_by_id:
             return
         try:
-            self._add_schema_and_nested(self._schema_loader.get(schema_id))
-        except Exception as e:
+            method_schema = self._schema_loader.get(schema_id)
+        except SCHEMA_LOOKUP_EXCEPTIONS as error:
             logger.debug(
-                f"Could not load {schema_kind} struct for method {method_name} (id={hex(schema_id)}): {e}",
+                f"Could not load {schema_kind} struct for method {method_name} (id={hex(schema_id)}): {error}",
             )
+            return
+        self._add_schema_and_nested(method_schema)
 
     def _extract_name_from_protocol(self, protocol_name: str) -> str:
         """Extract user-facing name from Protocol name.
@@ -1157,33 +1172,16 @@ class Writer:
         if schema.node.which() == "interface":
             interface_node = schema.node.interface
             for superclass in interface_node.superclasses:
-                try:
-                    # Get the superclass type
-                    superclass_type = self.get_type_by_id(superclass.id)
-                    # superclass_type.name is now the interface module name (e.g., "_IdentifiableModule")
-                    protocol_name = superclass_type.name
-                    # Build scoped name
-                    if superclass_type.scope and not superclass_type.scope.is_root:
-                        base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
-                    else:
-                        base_protocol = protocol_name
-                    base_classes.append(base_protocol)
-                except KeyError:
-                    # Superclass not yet registered - try to generate it first
-                    try:
-                        # Try to get the superclass schema from the loader
-                        superclass_schema = self._schema_loader.get(superclass.id)
-                        self.generate_nested(superclass_schema)
-                        superclass_type = self.get_type_by_id(superclass.id)
-                        # superclass_type.name is now the interface module name
-                        protocol_name = superclass_type.name
-                        if superclass_type.scope and not superclass_type.scope.is_root:
-                            base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
-                        else:
-                            base_protocol = protocol_name
-                        base_classes.append(base_protocol)
-                    except Exception as e:
-                        logger.debug(f"Could not resolve superclass {superclass.id}: {e}")
+                superclass_type = self._maybe_get_type_by_id(superclass.id)
+                if superclass_type is None:
+                    logger.debug(f"Could not resolve superclass {superclass.id}")
+                    continue
+                protocol_name = superclass_type.name
+                if superclass_type.scope and not superclass_type.scope.is_root:
+                    base_protocol = f"{superclass_type.scope.scoped_name}.{protocol_name}"
+                else:
+                    base_protocol = protocol_name
+                base_classes.append(base_protocol)
 
         # No longer add Protocol - interface modules inherit from _InterfaceModule
         return base_classes
@@ -1211,13 +1209,13 @@ class Writer:
                         # Add it to our mapping for future reference
                         self._schemas_by_id[nested_node.id] = nested_schema
                         self.generate_nested(nested_schema)
-                    except Exception as load_error:
+                    except SCHEMA_LOOKUP_EXCEPTIONS as load_error:
                         logger.debug(
                             f"Could not find or load nested type {nested_node.name} (id={hex(nested_node.id)}) in interface {schema.node.displayName}: {load_error}",
                         )
-            except Exception as e:  # pragma: no cover
+            except TYPE_GENERATION_EXCEPTIONS as error:  # pragma: no cover
                 logger.debug(
-                    f"Could not generate nested type {nested_node.name} in interface {schema.node.displayName}: {e}",
+                    f"Could not generate nested type {nested_node.name} in interface {schema.node.displayName}: {error}",
                 )
 
         # Restore interface scope after generating nested types
@@ -1477,11 +1475,13 @@ class Writer:
         schema: _InterfaceSchema,
     ) -> helper.TypeHintedVariable:
         """Generate a slot for an interface field."""
-        with contextlib.suppress(Exception):  # pragma: no cover - best effort for incomplete imported schemas
+        with contextlib.suppress(
+            *TYPE_GENERATION_EXCEPTIONS
+        ):  # pragma: no cover - best effort for incomplete imported schemas
             self.generate_nested(schema)
         try:
             protocol_type_name = self.get_type_name(field.slot.type)
-        except Exception:
+        except TYPE_RESOLUTION_EXCEPTIONS:
             protocol_type_name = "Any"
             self._add_typing_import("Union")
 
@@ -1617,18 +1617,11 @@ class Writer:
                 self.generate_nested(schema)
 
         # Enum values are integers at runtime, but also accept string literals
-        try:
-            type_name = self.get_type_name(field.slot.type)
-            return helper.TypeHintedVariable(
-                helper.sanitize_name(field.name),
-                [helper.TypeHint(type_name, primary=True)],
-            )
-        except (AttributeError, TypeError):
-            # Fallback if we can't get enumerants
-            return helper.TypeHintedVariable(
-                helper.sanitize_name(field.name),
-                [helper.TypeHint("int", primary=True), helper.TypeHint("str")],
-            )
+        type_name = self.get_type_name(field.slot.type)
+        return helper.TypeHintedVariable(
+            helper.sanitize_name(field.name),
+            [helper.TypeHint(type_name, primary=True)],
+        )
 
     def gen_struct_slot(
         self,
@@ -1657,10 +1650,9 @@ class Writer:
         init_choices.append((helper.sanitize_name(field.name), type_name))
         hints = [helper.TypeHint(type_name, primary=True)]
         # If this is an interface type, also allow passing its Server implementation
-        with contextlib.suppress(Exception):
-            if field.slot.type.which() == capnp_types.CapnpElementType.INTERFACE:
-                # type_name is already the Protocol module name (e.g., "_GreeterModule")
-                hints.append(helper.TypeHint(f"{type_name}.Server"))
+        if field.slot.type.which() == capnp_types.CapnpElementType.INTERFACE:
+            # type_name is already the Protocol module name (e.g., "_GreeterModule")
+            hints.append(helper.TypeHint(f"{type_name}.Server"))
         return helper.TypeHintedVariable(helper.sanitize_name(field.name), hints)
 
     def gen_any_pointer_slot(self, field: FieldReader) -> helper.TypeHintedVariable | None:
@@ -1808,10 +1800,7 @@ class Writer:
         enum_declaration = helper.new_class_declaration(enum_class_name, [])
 
         # Find the parent scope for the enum (where it should be declared)
-        try:
-            enum_parent_scope = self.scopes_by_id.get(schema.node.scopeId, self.scope.root)
-        except KeyError:
-            enum_parent_scope = self.scope
+        enum_parent_scope = self.scopes_by_id.get(schema.node.scopeId, self.scope.root)
 
         # Create new scope for the Enum
         _ = self.new_scope(
@@ -2225,13 +2214,12 @@ class Writer:
         if context is None:
             # Already imported or skipped due to missing parent scope
             # Try to return the already registered type if available
-            try:
-                return self.get_type_by_id(schema.node.id)
-            except KeyError:
-                # In the NoParentError case, we need to register and return
-                if not type_name:
-                    type_name = helper.get_display_name(schema)
-                return self.register_type(schema.node.id, schema, name=type_name, scope=self.scope.root)
+            registered_type = self._maybe_get_type_by_id(schema.node.id)
+            if registered_type is not None:
+                return registered_type
+            if not type_name:
+                type_name = helper.get_display_name(schema)
+            return self.register_type(schema.node.id, schema, name=type_name, scope=self.scope.root)
 
         # Register TypeAliases early so they're available during field processing
         # This handles self-referential fields and forward references
@@ -2287,8 +2275,8 @@ class Writer:
                         _ = self.gen_interface(interface_schema.as_interface())
                     elif isinstance(interface_schema, _InterfaceSchema):
                         _ = self.gen_interface(interface_schema)
-                except Exception as e:
-                    logger.debug(f"Could not generate parent interface: {e}")
+                except TYPE_GENERATION_EXCEPTIONS as error:
+                    logger.debug(f"Could not generate parent interface: {error}")
                 # Now the parent scope should exist
                 parent_scope = self.scopes_by_id.get(schema.node.scopeId)
 
@@ -2331,15 +2319,11 @@ class Writer:
             List of MethodInfo objects
 
         """
-        try:
-            # Use the schema directly from context instead of traversing runtime objects
-            iface_schema = context.schema
-            method_items = iface_schema.methods.items()
+        # Use the schema directly from context instead of traversing runtime objects
+        iface_schema = context.schema
+        method_items = iface_schema.methods.items()
 
-            return [MethodInfo.from_runtime_method(method_name, method) for method_name, method in method_items]
-        except Exception as e:
-            logger.debug(f"Could not enumerate methods for {context.type_name}: {e}")
-            return []
+        return [MethodInfo.from_runtime_method(method_name, method) for method_name, method in method_items]
 
     @staticmethod
     def _find_struct_field(param_schema: _StructSchema, field_name: str) -> FieldReader:
@@ -2383,11 +2367,7 @@ class Writer:
             self._needs_anypointer_alias = True
             result = ("AnyPointer", "AnyPointer", "AnyPointer")
         elif field_type == capnp_types.CapnpElementType.ENUM:
-            try:
-                enum_type = self.get_type_name(field_obj.slot.type)
-            except Exception as e:
-                logger.debug(f"Could not proces enum type for {field_obj.name}: {e}")
-                enum_type = "int | str"
+            enum_type = self.get_type_name(field_obj.slot.type)
             result = (enum_type, enum_type, enum_type)
         elif field_type == capnp_types.CapnpElementType.STRUCT:
             builder_type, reader_type, builder_alias, reader_alias = self._get_struct_builder_reader_types(base_type)
@@ -2421,7 +2401,7 @@ class Writer:
         self,
         param_name: str,
         param_schema: _StructSchema,
-    ) -> ParameterInfo | None:
+    ) -> ParameterInfo:
         """Process a single method parameter and determine its types.
 
         Args:
@@ -2429,25 +2409,20 @@ class Writer:
             param_schema: Schema containing the parameter
 
         Returns:
-            ParameterInfo with client/server/request types, or None if not found
+            ParameterInfo with client/server/request types
 
         """
-        try:
-            field_obj = self._find_struct_field(param_schema, param_name)
+        field_obj = self._find_struct_field(param_schema, param_name)
 
-            base_type = self.get_type_name(field_obj.slot.type)
-            client_type, server_type, request_type = self._resolve_method_parameter_types(field_obj, base_type)
+        base_type = self.get_type_name(field_obj.slot.type)
+        client_type, server_type, request_type = self._resolve_method_parameter_types(field_obj, base_type)
 
-            return ParameterInfo(
-                name=param_name,
-                client_type=client_type,
-                server_type=server_type,
-                request_type=request_type,
-            )
-
-        except Exception as e:
-            logger.debug(f"Could not process parameter {param_name}: {e}")
-            return None
+        return ParameterInfo(
+            name=param_name,
+            client_type=client_type,
+            server_type=server_type,
+            request_type=request_type,
+        )
 
     def _process_method_results(
         self,
@@ -2526,13 +2501,12 @@ class Writer:
             return list_params
 
         for param in parameters:
-            with contextlib.suppress(Exception):
-                field_obj = next(f for f in method_info.param_schema.node.struct.fields if f.name == param.name)
+            field_obj = self._find_struct_field(method_info.param_schema, param.name)
 
-                if field_obj.slot.type.which() == capnp_types.CapnpElementType.LIST:
-                    # Generate list class and get aliases
-                    _, _, builder_alias = self._generate_list_class(field_obj.slot.type)
-                    list_params.append((param.name, builder_alias))
+            if field_obj.slot.type.which() == capnp_types.CapnpElementType.LIST:
+                # Generate list class and get aliases
+                _, _, builder_alias = self._generate_list_class(field_obj.slot.type)
+                list_params.append((param.name, builder_alias))
 
         return list_params
 
@@ -2557,15 +2531,14 @@ class Writer:
             return struct_params
 
         for param in parameters:
-            with contextlib.suppress(Exception):
-                field_obj = next(f for f in method_info.param_schema.node.struct.fields if f.name == param.name)
+            field_obj = self._find_struct_field(method_info.param_schema, param.name)
 
-                if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
-                    struct_type_name = self.get_type_name(field_obj.slot.type)
-                    # Get the Builder type for the struct - try flat alias first
-                    builder_alias = self._get_flat_builder_alias(struct_type_name)
-                    builder_type = builder_alias or self._build_scoped_builder_type(struct_type_name)
-                    struct_params.append((param.name, builder_type))
+            if field_obj.slot.type.which() == capnp_types.CapnpElementType.STRUCT:
+                struct_type_name = self.get_type_name(field_obj.slot.type)
+                # Get the Builder type for the struct - try flat alias first
+                builder_alias = self._get_flat_builder_alias(struct_type_name)
+                builder_type = builder_alias or self._build_scoped_builder_type(struct_type_name)
+                struct_params.append((param.name, builder_type))
 
         return struct_params
 
@@ -2793,12 +2766,9 @@ class Writer:
             return lines
 
         for field_name in method_info.result_fields:
-            try:
-                field_obj = self._find_struct_field(method_info.result_schema, field_name)
-                field_type = self._resolve_direct_result_field_type(field_obj, for_server=for_server)
-                lines.append(f"    {field_name}: {field_type}")
-            except Exception:
-                lines.append(f"    {field_name}: Any")
+            field_obj = self._find_struct_field(method_info.result_schema, field_name)
+            field_type = self._resolve_direct_result_field_type(field_obj, for_server=for_server)
+            lines.append(f"    {field_name}: {field_type}")
 
         union_fields = self._collect_union_field_names(method_info.result_schema)
         if union_fields:
@@ -2831,32 +2801,28 @@ class Writer:
             return lines
 
         for field_name in method_info.result_fields:
-            try:
-                field_obj = self._find_struct_field(method_info.result_schema, field_name)
-                field_type_enum = field_obj.slot.type.which()
-                field_type, builder_hint, reader_hint = self._resolve_named_result_field_type(
-                    field_obj, for_server=for_server
+            field_obj = self._find_struct_field(method_info.result_schema, field_name)
+            field_type_enum = field_obj.slot.type.which()
+            field_type, builder_hint, reader_hint = self._resolve_named_result_field_type(
+                field_obj, for_server=for_server
+            )
+            if for_server:
+                if (
+                    field_type_enum in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.LIST}
+                    and builder_hint
+                ):
+                    init_fields.append((field_name, builder_hint))
+                lines.extend(
+                    self._build_server_result_property_lines(
+                        field_name,
+                        field_type_enum,
+                        field_type,
+                        builder_hint,
+                        reader_hint,
+                    ),
                 )
-                if for_server:
-                    if (
-                        field_type_enum in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.LIST}
-                        and builder_hint
-                    ):
-                        init_fields.append((field_name, builder_hint))
-                    lines.extend(
-                        self._build_server_result_property_lines(
-                            field_name,
-                            field_type_enum,
-                            field_type,
-                            builder_hint,
-                            reader_hint,
-                        ),
-                    )
-                else:
-                    lines.append(f"    {field_name}: {field_type}")
-            except Exception as e:
-                logger.warning(f"Could not get field type for {field_name}: {e}")
-                lines.append(f"    {field_name}: Any")
+            else:
+                lines.append(f"    {field_name}: {field_type}")
 
         if for_server:
             self._append_server_result_init_overloads(lines, init_fields)
@@ -2963,15 +2929,10 @@ class Writer:
             return fields
 
         for field_name in method_info.result_fields:
-            try:
-                field_obj = self._find_struct_field(method_info.result_schema, field_name)
-                field_type = self._resolve_named_result_field_type(field_obj, for_server=True)[0]
-                sanitized_name = self._sanitize_namedtuple_field_name(field_name)
-                fields.append((sanitized_name, field_type))
-
-            except Exception as e:
-                logger.debug(f"Could not get field type for {field_name}: {e}")
-                continue
+            field_obj = self._find_struct_field(method_info.result_schema, field_name)
+            field_type = self._resolve_named_result_field_type(field_obj, for_server=True)[0]
+            sanitized_name = self._sanitize_namedtuple_field_name(field_name)
+            fields.append((sanitized_name, field_type))
 
         return fields
 
@@ -3021,25 +2982,21 @@ class Writer:
             return None
 
         result_type: str | None = None
-        with contextlib.suppress(Exception):
-            field_obj = self._find_struct_field(method_info.result_schema, method_info.result_fields[0])
-            field_type_enum = field_obj.slot.type.which()
-            if field_type_enum in primitive_field_types:
-                result_type = self.get_type_name(field_obj.slot.type)
-            elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-                result_type = f"{self.get_type_name(field_obj.slot.type)}.Server"
-            elif field_type_enum == capnp_types.CapnpElementType.ENUM:
-                with contextlib.suppress(Exception):
-                    result_type = self.get_type_name(field_obj.slot.type)
-                if result_type is None:
-                    result_type = "int"
-            elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
-                result_type = self._resolve_named_result_field_type(field_obj, for_server=True)[0]
-            elif field_type_enum == capnp_types.CapnpElementType.LIST:
-                result_type = self._resolve_server_list_result_type(field_obj)
-            elif field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-                self._needs_anypointer_alias = True
-                result_type = "AnyPointer"
+        field_obj = self._find_struct_field(method_info.result_schema, method_info.result_fields[0])
+        field_type_enum = field_obj.slot.type.which()
+        if field_type_enum in primitive_field_types:
+            result_type = self.get_type_name(field_obj.slot.type)
+        elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
+            result_type = f"{self.get_type_name(field_obj.slot.type)}.Server"
+        elif field_type_enum == capnp_types.CapnpElementType.ENUM:
+            result_type = self.get_type_name(field_obj.slot.type)
+        elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
+            result_type = self._resolve_named_result_field_type(field_obj, for_server=True)[0]
+        elif field_type_enum == capnp_types.CapnpElementType.LIST:
+            result_type = self._resolve_server_list_result_type(field_obj)
+        elif field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
+            self._needs_anypointer_alias = True
+            result_type = "AnyPointer"
 
         return result_type
 
@@ -3214,12 +3171,10 @@ class Writer:
         if method_info.param_schema is None:
             return []
 
-        parameters: list[ParameterInfo] = []
-        for param_name in method_info.param_fields:
-            param_info = self._process_method_parameter(param_name, method_info.param_schema)
-            if param_info:
-                parameters.append(param_info)
-        return parameters
+        return [
+            self._process_method_parameter(param_name, method_info.param_schema)
+            for param_name in method_info.param_fields
+        ]
 
     def _scope_interface_client_result_type(self, result_type: str) -> str:
         """Qualify a result protocol for client methods inside nested interfaces."""
@@ -3662,17 +3617,16 @@ class Writer:
         if schema.node.which() == "interface":
             interface_node = schema.node.interface
             for superclass in interface_node.superclasses:
-                try:
-                    superclass_type = self.get_type_by_id(superclass.id)
-                    # superclass_type.name is now the Protocol name
-                    protocol_name = superclass_type.name
-                    if superclass_type.scope and not superclass_type.scope.is_root:
-                        server_base = f"{superclass_type.scope.scoped_name}.{protocol_name}.Server"
-                    else:
-                        server_base = f"{protocol_name}.Server"
-                    server_base_classes.append(server_base)
-                except KeyError:
+                superclass_type = self._maybe_get_type_by_id(superclass.id)
+                if superclass_type is None:
                     logger.debug(f"Could not resolve superclass {superclass.id} for Server inheritance")
+                    continue
+                protocol_name = superclass_type.name
+                if superclass_type.scope and not superclass_type.scope.is_root:
+                    server_base = f"{superclass_type.scope.scoped_name}.{protocol_name}.Server"
+                else:
+                    server_base = f"{protocol_name}.Server"
+                server_base_classes.append(server_base)
         return server_base_classes
 
     def _generate_client_class_nested(
@@ -3830,18 +3784,18 @@ class Writer:
                     self.generate_nested(nested_schema)
                 else:
                     logger.debug(f"Could not find nested schema {node.name} (id={hex(node.id)}) in schema mapping")
-            except Exception as e:
+            except TYPE_GENERATION_EXCEPTIONS as error:
                 # capnpc may omit unused nodes from imported schemas in the CodeGeneratorRequest.
                 # This results in "no schema node loaded" errors when trying to access them.
                 # These are harmless if the nodes are indeed unused, so we log as debug.
-                logger.debug(f"Could not generate nested node '{node.name}': {e}")
+                logger.debug(f"Could not generate nested node '{node.name}': {error}")
 
     def _schema_contains_nested_id(self, schema_obj: _Schema, target_id: int) -> bool:
         """Return whether a file schema contains the target nested schema ID."""
         for nested_node in schema_obj.node.nestedNodes:
             if nested_node.id == target_id:
                 return True
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(*SCHEMA_LOOKUP_EXCEPTIONS):
                 nested_schema = self._schema_loader.get(nested_node.id)
                 if self._schema_contains_nested_id(nested_schema, target_id):
                     return True
@@ -3853,7 +3807,7 @@ class Writer:
             return pathlib.Path(self._file_id_to_path[schema.node.id])
 
         for file_id, path in self._file_id_to_path.items():
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(*SCHEMA_LOOKUP_EXCEPTIONS):
                 file_schema = self._schema_loader.get(file_id)
                 if self._schema_contains_nested_id(file_schema, schema.node.id):
                     return pathlib.Path(path)
@@ -4042,6 +3996,26 @@ class Writer:
 
         return check_nested(self._schema, schema.node.id)
 
+    def _maybe_get_type_by_id(self, type_id: int) -> CapnpType | None:
+        """Resolve and return a type by ID, or ``None`` when it cannot be registered."""
+        if self.is_type_id_known(type_id):
+            return self.type_map[type_id]
+
+        found_schema = self._schemas_by_id.get(type_id)
+        if found_schema is None:
+            try:
+                found_schema = self._schema_loader.get(type_id)
+            except SCHEMA_LOOKUP_EXCEPTIONS:
+                return None
+            self._schemas_by_id[type_id] = found_schema
+
+        if self._is_schema_in_current_module(found_schema):
+            self.generate_nested(found_schema)
+        else:
+            _ = self.register_import(found_schema)
+
+        return self.type_map.get(type_id)
+
     def get_type_by_id(self, type_id: int) -> CapnpType:
         """Look up a type in the type registry, by means of its ID.
 
@@ -4055,22 +4029,9 @@ class Writer:
             Type: The type, if it exists.
 
         """
-        if self.is_type_id_known(type_id):
-            return self.type_map[type_id]
-
-        # Try to find the type in the schema ID mapping
-        found_schema = self._schemas_by_id.get(type_id)
-        if found_schema:
-            # Found it!
-            # If it's in the current module, generate it
-            if self._is_schema_in_current_module(found_schema):
-                self.generate_nested(found_schema)
-            else:
-                # If it's in another module, register it as an import
-                _ = self.register_import(found_schema)
-
-            if self.is_type_id_known(type_id):
-                return self.type_map[type_id]
+        resolved_type = self._maybe_get_type_by_id(type_id)
+        if resolved_type is not None:
+            return resolved_type
 
         msg = f"The type ID '{type_id} was not found in the type registry.'"
         raise KeyError(msg)
@@ -4098,12 +4059,10 @@ class Writer:
 
         """
         if parent_scope is None:
-            try:
-                parent_scope = self.scopes_by_id[node.scopeId]
-
-            except KeyError as e:
+            parent_scope = self.scopes_by_id.get(node.scopeId)
+            if parent_scope is None:
                 msg = f"The scope with name '{name}' has no parent."
-                raise NoParentError(msg) from e
+                raise NoParentError(msg)
 
         # Add the heading of the scope to the parent scope.
         if scope_heading:
@@ -4179,8 +4138,8 @@ class Writer:
             nested_schema = self._schemas_by_id.get(type_id)
             if nested_schema is not None:
                 self.generate_nested(nested_schema)
-        except Exception as e:
-            logger.debug(f"Could not pre-generate {type_kind} with ID {type_id}: {e}")
+        except TYPE_GENERATION_EXCEPTIONS as error:
+            logger.debug(f"Could not pre-generate {type_kind} with ID {type_id}: {error}")
 
     @staticmethod
     def _qualified_type_name(element_type: CapnpType) -> str:
@@ -4208,13 +4167,10 @@ class Writer:
             str: The extracted type name.
 
         """
-        try:
-            return capnp_types.CAPNP_TYPE_TO_PYTHON[type_reader.which()]
-
-        except KeyError:
-            pass
-
         type_reader_type = type_reader.which()
+        primitive_type = capnp_types.CAPNP_TYPE_TO_PYTHON.get(type_reader_type)
+        if primitive_type is not None:
+            return primitive_type
         if type_reader_type in {
             capnp_types.CapnpElementType.STRUCT,
             capnp_types.CapnpElementType.ENUM,
@@ -4631,8 +4587,8 @@ class Writer:
                 schema_b64 = base64.b64encode(schema_bytes).decode("ascii")
                 out.append(f"    {schema_b64!r},  # {schema.node.displayName}")
                 seen_ids.add(schema_id)
-            except Exception as e:
-                logger.debug(f"Could not serialize schema {hex(schema_id)}: {e}")
+            except SCHEMA_SERIALIZATION_EXCEPTIONS as error:
+                logger.debug(f"Could not serialize schema {hex(schema_id)}: {error}")
 
         out.extend(["]", ""])
 

@@ -300,14 +300,7 @@ class TypeHintedVariable:
 
     def has_type_hint_with_affix(self, affix: str) -> bool:
         """Assess, whether or not the variable has a type hint with the provided affix."""
-        try:
-            _ = self.get_type_hint_for_affix(affix)
-
-        except KeyError:
-            return False
-
-        else:
-            return True
+        return any(type_hint.affix == affix for type_hint in self.type_hints)
 
     @property
     def has_type_hint_with_builder_affix(self) -> bool:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def main() -> None:
 
     try:
         request = schema_capnp.CodeGeneratorRequest.read(sys.stdin)
-    except Exception:
+    except (capnp.KjException, OSError):
         logger.exception("Failed to read CodeGeneratorRequest")
         sys.exit(1)
 
@@ -47,7 +48,7 @@ def main() -> None:
         try:
             loader.load_dynamic(node)
             logger.debug("Loaded node: %s (id=%s, which=%s)", node.displayName, hex(node.id), node.which())
-        except Exception as error:
+        except capnp.KjException as error:
             logger.warning("Failed to load node %s: %s", node.displayName, error)
 
     # Build mapping of all file IDs to paths (needed for type resolution)
@@ -86,12 +87,14 @@ def main() -> None:
                 import_paths=import_paths,
                 skip_pyright=skip_pyright,
                 augment_capnp_stubs=augment_capnp_stubs,
-                ruff_config_path=str((Path.cwd() / "pyproject.toml").resolve()) if (Path.cwd() / "pyproject.toml").is_file() else None,
+                ruff_config_path=str((Path.cwd() / "pyproject.toml").resolve())
+                if (Path.cwd() / "pyproject.toml").is_file()
+                else None,
                 preserve_path_structure=True,
                 file_schemas_only=requested_file_ids,
             ),
         )
-    except Exception:
+    except (capnp.KjException, OSError, subprocess.SubprocessError):
         logger.exception("Generation failed")
         sys.exit(1)
 

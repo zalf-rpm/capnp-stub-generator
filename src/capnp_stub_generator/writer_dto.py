@@ -6,6 +6,8 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, override
 
+import capnp
+
 from capnp_stub_generator import helper
 
 if TYPE_CHECKING:
@@ -354,8 +356,7 @@ class MethodInfo:
                 param_fields = [f.name for f in param_schema.node.struct.fields]
             if result_schema is not None:
                 result_fields = [f.name for f in result_schema.node.struct.fields]
-        except Exception:
-            # Safe defaults already set
+        except (AttributeError, TypeError, capnp.KjException):
             logger.debug("Failed to inspect runtime method %s", method_name, exc_info=True)
 
         return cls(

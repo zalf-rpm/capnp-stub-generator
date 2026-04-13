@@ -85,7 +85,6 @@ ignore = [
   "D102",
   "ERA001",
   "PTH123",
-  "BLE001",
 ]
 
 [tool.pytest.ini_options]

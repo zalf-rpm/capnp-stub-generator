@@ -775,8 +775,8 @@ def format_all_outputs(output_directories: set[str], *, ruff_config_path: str | 
         logger.exception("ruff not found. Please install ruff: pip install ruff")
     except subprocess.CalledProcessError as e:
         logger.exception("Ruff formatting failed. Stdout: %s\nStderr: %s", e.stdout, e.stderr)
-    except Exception:
-        logger.exception("Unexpected error during formatting")
+    except OSError:
+        logger.exception("Ruff formatting failed due to an OS error")
 
 
 def validate_with_pyright(output_directories: set[str]) -> None:
@@ -1155,7 +1155,7 @@ def _iter_loaded_schemas(
             continue
         try:
             yield schema_loader.get(schema_id), path
-        except Exception as error:
+        except capnp.KjException as error:
             logger.warning(f"Could not load schema {hex(schema_id)} from {path}: {error}")
 
 
@@ -1331,9 +1331,7 @@ def _ensure_parent_package_init_files(output_directory_path: Path, output_dir_pa
         if current_dir_abs == output_dir_abs:
             return
 
-        try:
-            current_dir_abs.relative_to(output_dir_abs)
-        except ValueError:
+        if not current_dir_abs.is_relative_to(output_dir_abs):
             return
 
         _ensure_package_init_files(current_dir)
@@ -1673,18 +1671,18 @@ def _extract_pattern_bases(
         absolute_bases.append(abs_base)
 
         # Track relative version for depth calculation
-        try:
-            if Path(pattern).is_absolute():
-                rel_pattern = os.path.relpath(pattern, root_directory)
-                if not rel_pattern.startswith(".."):
-                    rel_base = extract_base_from_pattern(rel_pattern)
-                    if rel_base:
-                        relative_bases.append(rel_base)
-            else:
-                relative_bases.append(base)
-        except ValueError:
-            # Paths on different drives (Windows)
-            pass
+        pattern_path = Path(pattern)
+        root_path = Path(root_directory)
+        if pattern_path.is_absolute():
+            if pattern_path.drive and root_path.drive and pattern_path.drive != root_path.drive:
+                continue
+            rel_pattern = os.path.relpath(pattern, root_directory)
+            if not rel_pattern.startswith(".."):
+                rel_base = extract_base_from_pattern(rel_pattern)
+                if rel_base:
+                    relative_bases.append(rel_base)
+        else:
+            relative_bases.append(base)
 
     return absolute_bases, relative_bases
 

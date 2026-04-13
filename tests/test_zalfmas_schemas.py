@@ -54,10 +54,7 @@ def test_generate_zalfmas_stubs(generated_zalfmas_dir) -> None:
     args = ["-p", str(ZALFMAS_DIR), "-o", str(generated_zalfmas_dir), "-I", str(ZALFMAS_DIR), "-r", "-e", *excludes]
 
     # Call the CLI main function directly
-    try:
-        run_generator(args)
-    except Exception as e:
-        pytest.fail(f"Stub generation failed for args {' '.join(args)}: {e}")
+    run_generator(args)
 
     # Verify stubs were generated
     generated_stubs = list(generated_zalfmas_dir.glob("**/__init__.pyi"))
