@@ -23,7 +23,7 @@ GENERATED_ZALFMAS_DIR = TESTS_DIR / "_generated" / "zalfmas"
 
 
 @pytest.fixture(scope="module")
-def generated_zalfmas_dir():
+def generated_zalfmas_dir() -> Path:
     """Ensure the generated zalfmas directory exists and is clean."""
     if GENERATED_ZALFMAS_DIR.exists():
         shutil.rmtree(GENERATED_ZALFMAS_DIR)
@@ -36,7 +36,7 @@ def generated_zalfmas_dir():
     # shutil.rmtree(GENERATED_ZALFMAS_DIR)
 
 
-def test_generate_zalfmas_stubs(generated_zalfmas_dir) -> None:
+def test_generate_zalfmas_stubs(generated_zalfmas_dir: Path) -> None:
     """Test generating stubs for zalfmas schemas using recursive discovery.
 
     This test uses recursive search and excludes to generate stubs

@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 MIN_GENERATED_STUB_COUNT = 10
 MIN_EXPECTED_ZALFMAS_STUB_COUNT = 20
 MIN_SCHEMA_STUB_CONTENT_LENGTH = 100
 
 
-def test_generate_zalfmas_no_annotations_stubs(zalfmas_no_annotations_stubs) -> None:
+def test_generate_zalfmas_no_annotations_stubs(zalfmas_no_annotations_stubs: Path) -> None:
     """Test that zalfmas schemas without Python annotations generate correctly."""
     # Check that stubs were generated
     assert zalfmas_no_annotations_stubs.exists(), "Generated directory should exist"
@@ -28,7 +33,7 @@ def test_generate_zalfmas_no_annotations_stubs(zalfmas_no_annotations_stubs) -> 
     assert "class _IdentifiableInterfaceModule" in content, "Should contain Identifiable interface module"
 
 
-def test_no_annotations_vs_annotations_structure(zalfmas_stubs, zalfmas_no_annotations_stubs) -> None:
+def test_no_annotations_vs_annotations_structure(zalfmas_stubs: Path, zalfmas_no_annotations_stubs: Path) -> None:
     """Compare structure of annotated vs non-annotated schemas.
 
     Without Python annotations, schemas should be generated flat at the root.
@@ -50,7 +55,7 @@ def test_no_annotations_vs_annotations_structure(zalfmas_stubs, zalfmas_no_annot
     assert "class _IdInformationStructModule" in no_ann_content
 
 
-def test_plugin_works_without_annotations(zalfmas_no_annotations_stubs) -> None:
+def test_plugin_works_without_annotations(zalfmas_no_annotations_stubs: Path) -> None:
     """Test that the capnpc plugin successfully processes schemas without Python annotations.
 
     This verifies that:

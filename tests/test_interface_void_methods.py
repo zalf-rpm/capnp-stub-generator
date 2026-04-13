@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from tests.test_helpers import log_summary
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def test_void_methods_return_result_protocol(basic_stubs) -> None:
+
+def test_void_methods_return_result_protocol(basic_stubs: Path) -> None:
     """Test that void interface methods like close() return a Result protocol (awaitable)."""
     stub_path = basic_stubs / "fbp_simple_capnp" / "__init__.pyi"
     content = stub_path.read_text()
@@ -21,7 +26,7 @@ def test_void_methods_return_result_protocol(basic_stubs) -> None:
     assert "class CloseRequest(Protocol):" in content
 
 
-def test_void_method_send_returns_result(basic_stubs) -> None:
+def test_void_method_send_returns_result(basic_stubs: Path) -> None:
     """Test that CloseRequest.send() returns Client.CloseResult (awaitable)."""
     stub_path = basic_stubs / "fbp_simple_capnp" / "__init__.pyi"
     content = stub_path.read_text()
@@ -33,7 +38,7 @@ def test_void_method_send_returns_result(basic_stubs) -> None:
     assert "def send(self)" in content
 
 
-def test_void_result_protocol_is_awaitable(basic_stubs) -> None:
+def test_void_result_protocol_is_awaitable(basic_stubs: Path) -> None:
     """Test that CloseResult is Awaitable[None]."""
     stub_path = basic_stubs / "fbp_simple_capnp" / "__init__.pyi"
     content = stub_path.read_text()
@@ -44,7 +49,7 @@ def test_void_result_protocol_is_awaitable(basic_stubs) -> None:
     )
 
 
-def test_server_void_methods_return_awaitable_none(basic_stubs) -> None:
+def test_server_void_methods_return_awaitable_none(basic_stubs: Path) -> None:
     """Test that Server implementations of void methods return Awaitable[None]."""
     stub_path = basic_stubs / "fbp_simple_capnp" / "__init__.pyi"
     content = stub_path.read_text()
@@ -53,7 +58,7 @@ def test_server_void_methods_return_awaitable_none(basic_stubs) -> None:
     assert "Awaitable[None]" in content, "Server void methods should return Awaitable[None]"
 
 
-def test_comparison_with_non_void_methods(basic_stubs) -> None:
+def test_comparison_with_non_void_methods(basic_stubs: Path) -> None:
     """Compare void methods with non-void methods to ensure consistency."""
     stub_path = basic_stubs / "fbp_simple_capnp" / "__init__.pyi"
     content = stub_path.read_text()

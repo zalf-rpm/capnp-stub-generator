@@ -17,7 +17,7 @@ from tests.schemas.examples.restorer.restorer_server import RestorerImpl
 
 async def _test_anypointer_runtime_behavior() -> None:
     # Start server on random port
-    async def new_connection(stream) -> None:
+    async def new_connection(stream: "capnp.lib.capnp.AsyncIoStream") -> None:
         await capnp.TwoPartyServer(stream, bootstrap=RestorerImpl()).on_disconnect()
 
     server = await capnp.AsyncIoStream.create_server(new_connection, "localhost", 0)

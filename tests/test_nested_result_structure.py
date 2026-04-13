@@ -10,11 +10,16 @@ This validates the refactored design where:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 class TestNestedResultStructure:
     """Test that Result protocols are properly nested in Client and Server classes."""
 
-    def test_client_result_nested_in_client(self, calculator_stubs) -> None:
+    def test_client_result_nested_in_client(self, calculator_stubs: Path) -> None:
         """Test that Client Result protocols are nested inside Client class."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -40,7 +45,7 @@ class TestNestedResultStructure:
 
         assert found_nested_result, "EvaluateResult should be nested inside CalculatorClient"
 
-    def test_server_result_nested_in_server(self, calculator_stubs) -> None:
+    def test_server_result_nested_in_server(self, calculator_stubs: Path) -> None:
         """Test that Server Result protocols are nested inside Server class."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -68,7 +73,7 @@ class TestNestedResultStructure:
 
         assert found_evaluate_result, "EvaluateResult should also be nested inside Server"
 
-    def test_client_method_returns_client_result(self, calculator_stubs) -> None:
+    def test_client_method_returns_client_result(self, calculator_stubs: Path) -> None:
         """Test that client methods return Client.Result (not module-level Result)."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -77,7 +82,7 @@ class TestNestedResultStructure:
         assert "def evaluate(" in content
         assert "-> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in content
 
-    def test_request_send_returns_client_result(self, calculator_stubs) -> None:
+    def test_request_send_returns_client_result(self, calculator_stubs: Path) -> None:
         """Test that Request.send() returns Client.Result."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -86,7 +91,7 @@ class TestNestedResultStructure:
         assert "class EvaluateRequest(Protocol):" in content
         assert "def send(self) -> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in content
 
-    def test_callcontext_results_points_to_server_result(self, calculator_stubs) -> None:
+    def test_callcontext_results_points_to_server_result(self, calculator_stubs: Path) -> None:
         """Test that CallContext.results points to Server.Result."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -96,7 +101,7 @@ class TestNestedResultStructure:
         assert "@property" in content
         assert "def results(self) -> _CalculatorInterfaceModule.Server.EvaluateResult: ..." in content
 
-    def test_result_tuple_stays_under_server(self, calculator_stubs) -> None:
+    def test_result_tuple_stays_under_server(self, calculator_stubs: Path) -> None:
         """Test that ResultTuple (NamedTuple) stays under Server."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -119,7 +124,7 @@ class TestNestedResultStructure:
 class TestNestedResultsAtDeeperLevels:
     """Test that nested Results work at deeper interface nesting levels."""
 
-    def test_nested_interface_client_result(self, calculator_stubs) -> None:
+    def test_nested_interface_client_result(self, calculator_stubs: Path) -> None:
         """Test nested interface (Calculator.Value) has Client.Result nested."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -127,7 +132,7 @@ class TestNestedResultsAtDeeperLevels:
         # Value.read() should return ValueClient.ReadResult
         assert "def read(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in content
 
-    def test_nested_interface_server_result(self, calculator_stubs) -> None:
+    def test_nested_interface_server_result(self, calculator_stubs: Path) -> None:
         """Test nested interface Server has Result nested."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -136,7 +141,7 @@ class TestNestedResultsAtDeeperLevels:
         # Just check the nested path exists in content
         assert "_ValueInterfaceModule.Server.ReadResult" in content, "ReadResult should be nested in ValueModule.Server"
 
-    def test_nested_interface_request_send(self, calculator_stubs) -> None:
+    def test_nested_interface_request_send(self, calculator_stubs: Path) -> None:
         """Test nested interface Request.send() returns nested Client.Result."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -145,7 +150,7 @@ class TestNestedResultsAtDeeperLevels:
         assert "class ReadRequest(Protocol):" in content
         assert "def send(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in content
 
-    def test_nested_interface_callcontext(self, calculator_stubs) -> None:
+    def test_nested_interface_callcontext(self, calculator_stubs: Path) -> None:
         """Test nested interface CallContext.results points to nested Server.Result."""
         stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -159,7 +164,7 @@ class TestNestedResultsAtDeeperLevels:
 class TestAnyPointerTypeDifferences:
     """Test that AnyPointer types differ between Client and Server Results."""
 
-    def test_client_anypointer_uses_dynamic_object_reader(self, zalfmas_stubs) -> None:
+    def test_client_anypointer_uses_dynamic_object_reader(self, zalfmas_stubs: Path) -> None:
         """Test that Client Result uses _DynamicObjectReader for AnyPointer."""
         stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -181,7 +186,7 @@ class TestAnyPointerTypeDifferences:
 
         assert found_dynamic_object_reader, "Client Result should use _DynamicObjectReader for AnyPointer"
 
-    def test_server_anypointer_uses_broad_union(self, zalfmas_stubs) -> None:
+    def test_server_anypointer_uses_broad_union(self, zalfmas_stubs: Path) -> None:
         """Test that Server Result uses broad type union for AnyPointer."""
         stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
         content = stub_file.read_text()
@@ -194,7 +199,7 @@ class TestAnyPointerTypeDifferences:
         assert "_DynamicCapabilityServer" in content
         assert "_DynamicStructBuilder" in content
 
-    def test_server_result_tuple_uses_broad_union(self, zalfmas_stubs) -> None:
+    def test_server_result_tuple_uses_broad_union(self, zalfmas_stubs: Path) -> None:
         """Test that Server ResultTuple also uses broad type union for AnyPointer."""
         stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
         content = stub_file.read_text()

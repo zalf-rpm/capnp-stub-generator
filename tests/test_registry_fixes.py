@@ -1,9 +1,10 @@
 """Tests for registry interface fixes."""
 
 import re
+from pathlib import Path
 
 
-def test_server_named_tuple_interface_type(zalfmas_stubs) -> None:
+def test_server_named_tuple_interface_type(zalfmas_stubs: Path) -> None:
     """Test that server NamedTuple result accepts both Server and Client for interfaces."""
     stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -30,7 +31,7 @@ def test_server_named_tuple_interface_type(zalfmas_stubs) -> None:
     ), f"Expected RegistryClient | Server in Tuple, got: {tuple_content}"
 
 
-def test_list_of_structs_not_any(zalfmas_stubs) -> None:
+def test_list_of_structs_not_any(zalfmas_stubs: Path) -> None:
     """Test that List(Struct) is not Any in results."""
     stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -60,7 +61,7 @@ def test_list_of_structs_not_any(zalfmas_stubs) -> None:
     assert "cats: IdInformationListReader" in result_content, "cats field should be IdInformationListReader"
 
 
-def test_list_of_interfaces_types(zalfmas_stubs) -> None:
+def test_list_of_interfaces_types(zalfmas_stubs: Path) -> None:
     """Test that List(Interface) uses correct Client/Server types."""
     stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()

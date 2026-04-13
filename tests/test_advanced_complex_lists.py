@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
-def test_complex_lists(basic_stubs) -> None:
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+def test_complex_lists(basic_stubs: Path) -> None:
     """Test that multi-dimensional lists are properly typed with nested Sequence types."""
     stub = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     assert stub.exists(), "Stub should be generated"

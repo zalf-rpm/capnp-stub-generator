@@ -22,7 +22,7 @@ MIN_IDENTIFIABLE_SERVER_CLASSES = 3
 
 
 @pytest.fixture(scope="module")
-def generated_dir():
+def generated_dir() -> Path:
     """Ensure the generated directory exists and is clean."""
     if GENERATED_DIR.exists():
         shutil.rmtree(GENERATED_DIR)
@@ -35,7 +35,7 @@ def generated_dir():
     # shutil.rmtree(GENERATED_DIR)
 
 
-def test_simple_interface_inheritance(generated_dir) -> None:
+def test_simple_interface_inheritance(generated_dir: Path) -> None:
     """Test that an interface extending another interface shows inheritance.
 
     ClimateInstance extends Identifiable, so the generated stub should show:
@@ -98,7 +98,7 @@ def test_simple_interface_inheritance(generated_dir) -> None:
     )
 
 
-def test_multiple_interface_inheritance(generated_dir) -> None:
+def test_multiple_interface_inheritance(generated_dir: Path) -> None:
     """Test that an interface extending multiple interfaces shows all inheritance.
 
     IdentifiableHolder extends both Identifiable and Holder(T), so:
@@ -149,7 +149,7 @@ def test_multiple_interface_inheritance(generated_dir) -> None:
     )
 
 
-def test_interface_with_persistent_inheritance(generated_dir) -> None:
+def test_interface_with_persistent_inheritance(generated_dir: Path) -> None:
     """Test interfaces that extend Persistent.
 
     Service in climate.capnp extends Identifiable and Persistent.
@@ -199,7 +199,7 @@ def test_interface_with_persistent_inheritance(generated_dir) -> None:
     )
 
 
-def test_interface_inheritance_in_nested_interfaces(generated_dir) -> None:
+def test_interface_inheritance_in_nested_interfaces(generated_dir: Path) -> None:
     """Test that nested interfaces that extend other interfaces show inheritance.
 
     In cluster_admin_service.capnp, AdminMaster, UserMaster, and Runtime
@@ -241,7 +241,7 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir) -> None:
     )
 
 
-def test_interface_method_inheritance_visibility(generated_dir) -> None:
+def test_interface_method_inheritance_visibility(generated_dir: Path) -> None:
     """Test that methods from parent interfaces are accessible via inheritance.
 
     When ClimateInstance extends Identifiable, users should be able to:
@@ -286,7 +286,7 @@ def test_interface_method_inheritance_visibility(generated_dir) -> None:
     # Python's Protocol mechanism handles this - we don't need to repeat the method
 
 
-def test_empty_interface_with_inheritance(generated_dir) -> None:
+def test_empty_interface_with_inheritance(generated_dir: Path) -> None:
     """Test that interfaces with no methods but with inheritance work correctly.
 
     IdentifiableHolder has no methods of its own, but extends two other interfaces.

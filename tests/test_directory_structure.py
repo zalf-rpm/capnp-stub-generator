@@ -5,16 +5,20 @@ from __future__ import annotations
 import shutil
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from tests.test_helpers import run_generator
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
 EXPECTED_GENERATED_PACKAGE_COUNT = 3
 
 
 @pytest.fixture
-def temp_schema_dir():
+def temp_schema_dir() -> Iterator[Path]:
     """Create a temporary directory with nested schema structure."""
     temp_dir = Path(tempfile.mkdtemp())
 
@@ -54,7 +58,7 @@ struct DeepStruct {
 
 
 @pytest.fixture
-def temp_output_dir():
+def temp_output_dir() -> Iterator[Path]:
     """Create a temporary output directory."""
     temp_dir = Path(tempfile.mkdtemp())
     try:
@@ -63,7 +67,7 @@ def temp_output_dir():
         shutil.rmtree(temp_dir)
 
 
-def test_directory_structure_preserved(temp_schema_dir, temp_output_dir) -> None:
+def test_directory_structure_preserved(temp_schema_dir: Path, temp_output_dir: Path) -> None:
     """Test that input directory structure is preserved in output."""
     # Get all schema files
     schema_files = [str(f) for f in temp_schema_dir.rglob("*.capnp")]
@@ -82,7 +86,7 @@ def test_directory_structure_preserved(temp_schema_dir, temp_output_dir) -> None
     assert not (temp_output_dir / "deep_capnp" / "__init__.pyi").exists()
 
 
-def test_directory_structure_with_glob(temp_schema_dir, temp_output_dir) -> None:
+def test_directory_structure_with_glob(temp_schema_dir: Path, temp_output_dir: Path) -> None:
     """Test directory structure preservation with glob patterns."""
     # Use glob pattern
     pattern = str(temp_schema_dir / "**" / "*.capnp")
@@ -103,7 +107,7 @@ def test_directory_structure_with_glob(temp_schema_dir, temp_output_dir) -> None
     assert any("subdir2" in name for name in package_names)
 
 
-def test_single_file_no_nested_structure(temp_schema_dir, temp_output_dir) -> None:
+def test_single_file_no_nested_structure(temp_schema_dir: Path, temp_output_dir: Path) -> None:
     """Test that single file doesn't create unnecessary nesting."""
     # Generate stub for single file
     schema_file = str(temp_schema_dir / "root.capnp")
@@ -118,7 +122,7 @@ def test_single_file_no_nested_structure(temp_schema_dir, temp_output_dir) -> No
 @pytest.mark.skip(
     reason="Plugin-based generation requires output directory; generating next to source is not currently supported",
 )
-def test_no_output_dir_places_next_to_source(temp_schema_dir) -> None:
+def test_no_output_dir_places_next_to_source(temp_schema_dir: Path) -> None:
     """Test that without -o flag, stubs are placed next to source files."""
     schema_file = str(temp_schema_dir / "root.capnp")
     args = ["-p", schema_file]
@@ -128,7 +132,7 @@ def test_no_output_dir_places_next_to_source(temp_schema_dir) -> None:
     assert (temp_schema_dir / "root_capnp" / "__init__.pyi").exists()
 
 
-def test_mixed_directory_levels(temp_schema_dir, temp_output_dir) -> None:
+def test_mixed_directory_levels(temp_schema_dir: Path, temp_output_dir: Path) -> None:
     """Test with schemas at different directory levels."""
     # Get all schemas
     schema_files = [str(f) for f in temp_schema_dir.rglob("*.capnp")]

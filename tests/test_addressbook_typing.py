@@ -18,7 +18,7 @@ from tests.test_helpers import log_summary, run_pyright
 TESTS_DIR = Path(__file__).parent
 
 
-def test_init_returns_typed_list(addressbook_stubs) -> None:
+def test_init_returns_typed_list(addressbook_stubs: Path) -> None:
     """Test that init() returns a properly typed list, not Any."""
     generated_dir = addressbook_stubs
     # Create a test file that uses init
@@ -54,7 +54,7 @@ alice.email = "alice@example.com"  # Should type check
         )
 
 
-def test_list_element_access_typed(addressbook_stubs) -> None:
+def test_list_element_access_typed(addressbook_stubs: Path) -> None:
     """Test that accessing list elements gives proper types."""
     generated_dir = addressbook_stubs
     test_code = """
@@ -91,7 +91,7 @@ bob_phones[0].number = "555-4567"
         )
 
 
-def test_iteration_typed(addressbook_stubs) -> None:
+def test_iteration_typed(addressbook_stubs: Path) -> None:
     """Test that iterating over lists gives proper types."""
     generated_dir = addressbook_stubs
     test_code = """
@@ -128,7 +128,7 @@ for person in addresses.people:
         )
 
 
-def test_union_field_access(addressbook_stubs) -> None:
+def test_union_field_access(addressbook_stubs: Path) -> None:
     """Test that union fields are properly typed."""
     generated_dir = addressbook_stubs
     test_code = """
@@ -161,7 +161,7 @@ bob.employment.unemployed = None
         )
 
 
-def test_nested_init_typed(addressbook_stubs) -> None:
+def test_nested_init_typed(addressbook_stubs: Path) -> None:
     """Test that nested init() calls return proper types."""
     generated_dir = addressbook_stubs
     test_code = """

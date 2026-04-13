@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-def test_lists_small_struct_and_listlist_fields(dummy_stub_lines) -> None:
+def test_lists_small_struct_and_listlist_fields(dummy_stub_lines: list[str]) -> None:
     lines = dummy_stub_lines
     assert any("class _TestListsStructModule(_StructModule):" in line for line in lines)
     # Representative fields from each category (now as properties)
@@ -36,7 +36,7 @@ def test_lists_small_struct_and_listlist_fields(dummy_stub_lines) -> None:
         assert any(f"def {field}(self)" in line for line in lines), f"Missing field {field}"
 
 
-def test_list_defaults_struct_and_scalar_lists_present(dummy_stub_lines) -> None:
+def test_list_defaults_struct_and_scalar_lists_present(dummy_stub_lines: list[str]) -> None:
     lines = dummy_stub_lines
     assert any("class _TestListDefaultsStructModule(_StructModule):" in line for line in lines)
     # Default values are not included in stub files (they're runtime info, not type info)
@@ -45,7 +45,7 @@ def test_list_defaults_struct_and_scalar_lists_present(dummy_stub_lines) -> None
         assert any(f"def {field}(self)" in line for line in lines), f"Missing field {field}"
 
 
-def test_field_zero_bit_and_defaults(dummy_stub_lines) -> None:
+def test_field_zero_bit_and_defaults(dummy_stub_lines: list[str]) -> None:
     lines = dummy_stub_lines
     assert any("class _TestFieldZeroIsBitStructModule(_StructModule):" in line for line in lines)
     # Check fields exist (now as properties)

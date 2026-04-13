@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture(scope="module")
-def basic_low_stub_lines(basic_stubs):
+def basic_low_stub_lines(basic_stubs: Path) -> list[str]:
     """Read basic_low.capnp stub lines."""
     stub_path = basic_stubs / "basic_low_capnp" / "__init__.pyi"
     with open(stub_path, encoding="utf8") as f:
         return f.readlines()
 
 
-def test_enum_color_defined(basic_low_stub_lines) -> None:
+def test_enum_color_defined(basic_low_stub_lines: list[str]) -> None:
     lines = basic_low_stub_lines
     # Enums are now generated as simple classes with int attributes
     assert any("class _ColorEnumModule:" in line for line in lines)
@@ -25,7 +30,7 @@ def test_enum_color_defined(basic_low_stub_lines) -> None:
     assert any('type ColorEnum = int | Literal["red", "green", "blue"]' in line for line in lines)
 
 
-def test_basiclow_struct_and_fields(basic_low_stub_lines) -> None:
+def test_basiclow_struct_and_fields(basic_low_stub_lines: list[str]) -> None:
     lines = basic_low_stub_lines
     assert any("class _BasicLowStructModule(_StructModule):" in line for line in lines)
     content = "".join(lines)
@@ -33,7 +38,7 @@ def test_basiclow_struct_and_fields(basic_low_stub_lines) -> None:
     assert "id" in content
 
 
-def test_builder_reader_presence(basic_low_stub_lines) -> None:
+def test_builder_reader_presence(basic_low_stub_lines: list[str]) -> None:
     lines = basic_low_stub_lines
     content = "".join(lines)
     assert "BasicLowBuilder" in content

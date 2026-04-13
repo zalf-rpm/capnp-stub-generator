@@ -1,11 +1,13 @@
 """Test that Result types are available as top-level type aliases like Builder and Reader."""
 
+from pathlib import Path
+
 import pytest
 
 from tests.test_helpers import log_summary
 
 
-def test_result_type_aliases_exist(calculator_stubs) -> None:
+def test_result_type_aliases_exist(calculator_stubs: Path) -> None:
     """Test that Result type aliases are generated at the top level."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -18,7 +20,7 @@ def test_result_type_aliases_exist(calculator_stubs) -> None:
     assert "type CallResult = " in content, "CallResult type alias should exist"
 
 
-def test_result_type_aliases_point_to_client_nested_types(calculator_stubs) -> None:
+def test_result_type_aliases_point_to_client_nested_types(calculator_stubs: Path) -> None:
     """Test that Result type aliases point to Client-nested Result classes."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -37,7 +39,7 @@ def test_result_type_aliases_point_to_client_nested_types(calculator_stubs) -> N
     ), "CallResult should point to FunctionClient.CallResult"
 
 
-def test_result_type_aliases_alongside_builder_reader(calculator_stubs) -> None:
+def test_result_type_aliases_alongside_builder_reader(calculator_stubs: Path) -> None:
     """Test that Result type aliases appear alongside Builder and Reader aliases."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -63,7 +65,7 @@ def test_result_type_aliases_alongside_builder_reader(calculator_stubs) -> None:
     assert any("Result" in line for line in type_alias_section), "Should have Result aliases"
 
 
-def test_result_type_aliases_in_sorted_order(calculator_stubs) -> None:
+def test_result_type_aliases_in_sorted_order(calculator_stubs: Path) -> None:
     """Test that Result type aliases are sorted alphabetically with other aliases."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -89,7 +91,7 @@ def test_result_type_aliases_in_sorted_order(calculator_stubs) -> None:
     assert type_aliases == sorted_aliases, f"Type aliases should be sorted. Got: {type_aliases}"
 
 
-def test_void_method_result_type_alias_exists(calculator_stubs) -> None:
+def test_void_method_result_type_alias_exists(calculator_stubs: Path) -> None:
     """Test that void methods also have Result type aliases."""
     # For the channel example with void methods
     channel_stub = calculator_stubs.parent.parent / "basic" / "interfaces_capnp" / "__init__.pyi"
@@ -105,7 +107,7 @@ def test_void_method_result_type_alias_exists(calculator_stubs) -> None:
         assert "type CloseResult = " in content, "Void method should also have Result type alias"
 
 
-def test_nested_interface_result_type_aliases(calculator_stubs) -> None:
+def test_nested_interface_result_type_aliases(calculator_stubs: Path) -> None:
     """Test that nested interfaces (Value, Function) have Result type aliases."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -119,7 +121,7 @@ def test_nested_interface_result_type_aliases(calculator_stubs) -> None:
     assert "FunctionClient.CallResult" in content
 
 
-def test_result_type_alias_usage_in_type_hints(calculator_stubs) -> None:
+def test_result_type_alias_usage_in_type_hints(calculator_stubs: Path) -> None:
     """Test that Result type aliases can be used in type hints (manual check)."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -134,7 +136,7 @@ def test_result_type_alias_usage_in_type_hints(calculator_stubs) -> None:
     assert "    class CalculatorClient" in content
 
 
-def test_result_type_count_matches_method_count(calculator_stubs) -> None:
+def test_result_type_count_matches_method_count(calculator_stubs: Path) -> None:
     """Test that we have Result type aliases for all interface methods."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()

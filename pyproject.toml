@@ -73,18 +73,21 @@ ignore = [
   "COM812",
   # Keep assertions allowed for now
   "S101",
-  "PYI021",
-  "PYI016",
-  "ANN001",
-  "ANN201",
-  "N802",
+  # Allow private member access
   "SLF001",
+  # Allow doc comments in pyi files
+  "PYI021",
+  # Allow upper case in methods names etc for type stubs for now
+  "N802",
+
   "G004",
   "ANN401",
   "D103",
   "D102",
+
   "ERA001",
   "PTH123",
+  "PYI016",
 ]
 
 [tool.pytest.ini_options]

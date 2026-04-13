@@ -1,7 +1,9 @@
 """Tests for handling Cap'n Proto name annotations in generated stubs."""
 
+from pathlib import Path
 
-def test_name_annotations(basic_stubs) -> None:
+
+def test_name_annotations(basic_stubs: Path) -> None:
     """Test that Cap'n Proto name annotations ($Cxx.name) are handled.
 
     Note: The generator currently uses the original schema names rather than

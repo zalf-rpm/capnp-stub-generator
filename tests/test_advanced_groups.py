@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
-def test_complex_group_presence_and_nested_union_symbols(basic_stubs) -> None:
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+def test_complex_group_presence_and_nested_union_symbols(basic_stubs: Path) -> None:
     path = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
     with open(path, encoding="utf8") as f:
         lines = f.readlines()

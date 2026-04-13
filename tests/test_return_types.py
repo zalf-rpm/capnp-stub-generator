@@ -1,16 +1,18 @@
 """Test that struct and interface return types are accurate and match runtime behavior."""
 
+from pathlib import Path
+
 import pytest
 
 
 @pytest.fixture(scope="module")
-def dummy_stub_file(basic_stubs):
+def dummy_stub_file(basic_stubs: Path) -> Path:
     """Get pre-generated dummy schema stub."""
     return basic_stubs / "dummy_capnp" / "__init__.pyi"
 
 
 @pytest.fixture(scope="module")
-def interface_stub_file(basic_stubs):
+def interface_stub_file(basic_stubs: Path) -> Path:
     """Get pre-generated interface schema stub."""
     return basic_stubs / "interfaces_capnp" / "__init__.pyi"
 
@@ -18,7 +20,7 @@ def interface_stub_file(basic_stubs):
 class TestStructReturnTypes:
     """Test that struct field return types are correctly narrowed per class."""
 
-    def test_base_class_has_no_field_properties(self, dummy_stub_file) -> None:
+    def test_base_class_has_no_field_properties(self, dummy_stub_file: Path) -> None:
         """Base class should not have field properties (these are on Reader/Builder)."""
         content = dummy_stub_file.read_text()
         lines = content.split("\n")
@@ -43,7 +45,7 @@ class TestStructReturnTypes:
 
         assert not has_struct_field, "Base class should NOT have field properties"
 
-    def test_reader_class_returns_reader_type(self, dummy_stub_file) -> None:
+    def test_reader_class_returns_reader_type(self, dummy_stub_file: Path) -> None:
         """Reader class properties should return Reader types."""
         content = dummy_stub_file.read_text()
 
@@ -52,7 +54,7 @@ class TestStructReturnTypes:
             "Reader class should return TestAllTypesReader type"
         )
 
-    def test_builder_class_returns_builder_type(self, dummy_stub_file) -> None:
+    def test_builder_class_returns_builder_type(self, dummy_stub_file: Path) -> None:
         """Builder class properties should return Builder types."""
         content = dummy_stub_file.read_text()
 
@@ -61,7 +63,7 @@ class TestStructReturnTypes:
             "Builder class getter should return TestAllTypesBuilder type"
         )
 
-    def test_builder_setter_accepts_union(self, dummy_stub_file) -> None:
+    def test_builder_setter_accepts_union(self, dummy_stub_file: Path) -> None:
         """Builder class setters should accept Builder, Reader, or dict types (not base)."""
         content = dummy_stub_file.read_text()
 
@@ -71,7 +73,7 @@ class TestStructReturnTypes:
             "Builder setter should accept union of Builder, Reader, and dict types (not base)"
         )
 
-    def test_list_fields_follow_same_pattern(self, dummy_stub_file) -> None:
+    def test_list_fields_follow_same_pattern(self, dummy_stub_file: Path) -> None:
         """List fields should follow the same narrowing pattern."""
         content = dummy_stub_file.read_text()
 
@@ -84,7 +86,7 @@ class TestStructReturnTypes:
 class TestInterfaceReturnTypes:
     """Test that interface types don't have Builder/Reader variants."""
 
-    def test_interface_has_no_builder_reader(self, interface_stub_file) -> None:
+    def test_interface_has_no_builder_reader(self, interface_stub_file: Path) -> None:
         """Interfaces now have an interface module and separate Client class."""
         content = interface_stub_file.read_text()
 
@@ -98,7 +100,7 @@ class TestInterfaceReturnTypes:
         assert "class GreeterBuilder" not in content, "Interfaces should not have Builder class"
         assert "class GreeterReader" not in content, "Interfaces should not have Reader class"
 
-    def test_interface_methods_return_interface_type(self, interface_stub_file) -> None:
+    def test_interface_methods_return_interface_type(self, interface_stub_file: Path) -> None:
         """Interface client methods should return result types (not Builder/Reader)."""
         content = interface_stub_file.read_text()
 
@@ -115,7 +117,7 @@ class TestInterfaceReturnTypes:
 class TestStaticMethodReturnTypes:
     """Test that static factory methods have correct return types."""
 
-    def test_new_message_returns_builder(self, dummy_stub_file) -> None:
+    def test_new_message_returns_builder(self, dummy_stub_file: Path) -> None:
         """new_message should return Builder type alias (for readability)."""
         content = dummy_stub_file.read_text()
 
@@ -123,7 +125,7 @@ class TestStaticMethodReturnTypes:
         assert "def new_message(" in content
         assert ") -> TestAllTypesBuilder:" in content, "new_message should return TestAllTypesBuilder type alias"
 
-    def test_reader_does_not_have_new_message(self, dummy_stub_file) -> None:
+    def test_reader_does_not_have_new_message(self, dummy_stub_file: Path) -> None:
         """Reader class should not have new_message method (can't create new messages)."""
         content = dummy_stub_file.read_text()
         lines = content.split("\n")

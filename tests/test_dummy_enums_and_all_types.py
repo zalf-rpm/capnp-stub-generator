@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-def test_enum_definition_and_imports(dummy_stub_lines) -> None:
+def test_enum_definition_and_imports(dummy_stub_lines: list[str]) -> None:
     lines = dummy_stub_lines
     # Enums are now simple classes with int attributes
     assert any(line.strip().startswith("class _TestEnumEnumModule:") for line in lines)
@@ -14,7 +14,7 @@ def test_enum_definition_and_imports(dummy_stub_lines) -> None:
         assert any(f"{name}: int" in line for line in lines)
 
 
-def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines) -> None:
+def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines: list[str]) -> None:
     lines = dummy_stub_lines
     # collections.abc import for Sequence (Iterator no longer needed since static methods inherited)
     assert any(line.startswith("from collections.abc import") and "Sequence" in line for line in lines)
@@ -28,7 +28,7 @@ def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines) ->
     assert any("def voidList(self) -> VoidListReader" in line for line in lines)
 
 
-def test_builder_reader_classes_for_all_types(dummy_stub_lines) -> None:
+def test_builder_reader_classes_for_all_types(dummy_stub_lines: list[str]) -> None:
     lines = dummy_stub_lines
     # With nested structure, check for TypeAlias declarations and nested classes
     assert any("TestAllTypesReader = _TestAllTypesStructModule.Reader" in line for line in lines)

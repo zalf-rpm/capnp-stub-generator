@@ -6,7 +6,7 @@ from pathlib import Path
 from capnp_stub_generator.run import run
 
 
-def test_group_struct_naming(tmp_path) -> None:
+def test_group_struct_naming(tmp_path: Path) -> None:
     """Test that a group named 'struct' is generated as 'Struct' and not 'GroupStruct'."""
     # Use absolute path for schema
     cwd = Path.cwd()

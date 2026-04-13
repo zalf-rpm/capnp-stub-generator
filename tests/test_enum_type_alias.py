@@ -14,7 +14,7 @@ def _run_pyright_sample(calculator_stubs: Path, filename: str, test_code: str) -
         test_file.unlink(missing_ok=True)
 
 
-def test_enum_type_alias_exists(calculator_stubs) -> None:
+def test_enum_type_alias_exists(calculator_stubs: Path) -> None:
     """Test that enum type aliases are generated."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -23,7 +23,7 @@ def test_enum_type_alias_exists(calculator_stubs) -> None:
     assert 'type CalculatorOperatorEnum = int | Literal["add", "subtract", "multiply", "divide"]' in content
 
 
-def test_enum_type_alias_accepts_literals(calculator_stubs) -> None:
+def test_enum_type_alias_accepts_literals(calculator_stubs: Path) -> None:
     """Test that the Operator type accepts string literals."""
     test_code = '''
 import calculator_capnp
@@ -45,7 +45,7 @@ use_operator_literal("divide")
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 
 
-def test_enum_type_alias_accepts_int(calculator_stubs) -> None:
+def test_enum_type_alias_accepts_int(calculator_stubs: Path) -> None:
     """Test that the Operator accepts integer values."""
     test_code = '''
 import calculator_capnp
@@ -67,7 +67,7 @@ use_operator_int(3)
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 
 
-def test_enum_type_alias_accepts_enum_attribute(calculator_stubs) -> None:
+def test_enum_type_alias_accepts_enum_attribute(calculator_stubs: Path) -> None:
     """Test that the Operator accepts enum dot notation."""
     test_code = '''
 import calculator_capnp
@@ -89,7 +89,7 @@ use_operator_enum(calculator_capnp.Calculator.Operator.divide)
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 
 
-def test_enum_type_alias_rejects_invalid_literals(calculator_stubs) -> None:
+def test_enum_type_alias_rejects_invalid_literals(calculator_stubs: Path) -> None:
     """Test that the Operator rejects invalid string literals."""
     test_code = '''
 import calculator_capnp
@@ -107,7 +107,7 @@ use_operator("invalid")
     assert error_count == 1, f"Type checking should reject one invalid literal:\n{result.stdout}"
 
 
-def test_enum_type_alias_in_class_init(calculator_stubs) -> None:
+def test_enum_type_alias_in_class_init(calculator_stubs: Path) -> None:
     """Test using Operator in a class __init__ method (real-world example)."""
     test_code = '''
 import calculator_capnp
@@ -146,7 +146,7 @@ impl3 = OperatorImpl(0)
     assert error_count == 0, f"Type checking failed: {result.stdout}"
 
 
-def test_enum_comparison_with_literals(calculator_stubs) -> None:
+def test_enum_comparison_with_literals(calculator_stubs: Path) -> None:
     """Test that enum values can be compared with string literals."""
     test_code = '''
 import calculator_capnp

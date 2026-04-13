@@ -7,7 +7,7 @@ from pathlib import Path
 from tests.test_helpers import run_command
 
 
-def test_capnpc_plugin_invocation(tmp_path) -> None:
+def test_capnpc_plugin_invocation(tmp_path: Path) -> None:
     """Test that capnpc can invoke our plugin."""
     # Create a wrapper script for the plugin
     plugin_name = "capnpc-python"
@@ -55,7 +55,7 @@ def test_capnpc_plugin_invocation(tmp_path) -> None:
     assert content  # Just check it's not empty (header is present)
 
 
-def test_capnpc_plugin_bundling_options(tmp_path) -> None:
+def test_capnpc_plugin_bundling_options(tmp_path: Path) -> None:
     """Test that bundling is enabled by default in plugin mode."""
     plugin_name = "capnpc-python"
     plugin_path = tmp_path / plugin_name

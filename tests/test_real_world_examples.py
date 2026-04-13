@@ -17,6 +17,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 
@@ -90,10 +91,17 @@ EXAMPLES = [
 ]
 
 
+class GeneratedExampleInfo(TypedDict):
+    """Metadata about the pre-generated stubs for one example."""
+
+    dir: Path
+    stub_files: list[Path]
+
+
 @pytest.fixture(scope="session")
-def generate_all_stubs(generated_stubs):
+def generate_all_stubs(generated_stubs: dict[str, Path]) -> dict[str, GeneratedExampleInfo]:
     """Use pre-generated stubs from session fixture."""
-    generated_info = {}
+    generated_info: dict[str, GeneratedExampleInfo] = {}
 
     for example in EXAMPLES:
         # Get the pre-generated directory
@@ -113,7 +121,7 @@ class TestExampleGeneration:
     """Test that stubs can be generated for all examples."""
 
     @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
-    def test_stub_generation(self, generate_all_stubs, example: Example) -> None:
+    def test_stub_generation(self, generate_all_stubs: dict[str, GeneratedExampleInfo], example: Example) -> None:
         """Test that stub files are generated for the example."""
         info = generate_all_stubs[example.name]
 
@@ -130,7 +138,7 @@ class TestExampleFunctionality:
     """Test that examples can actually be imported and used."""
 
     @pytest.mark.parametrize("example", EXAMPLES, ids=lambda e: e.name)
-    def test_example_imports(self, generate_all_stubs, example: Example) -> None:
+    def test_example_imports(self, generate_all_stubs: dict[str, GeneratedExampleInfo], example: Example) -> None:
         """Test that generated modules can be imported."""
         # Add generated directory to path
         sys.path.insert(0, str(example.generated_dir))
@@ -182,7 +190,7 @@ class TestExampleFunctionality:
 
 
 # Summary test to show overall status
-def test_all_examples_summary(generate_all_stubs) -> None:
+def test_all_examples_summary(generate_all_stubs: dict[str, GeneratedExampleInfo]) -> None:
     """Provide a summary of all examples tested."""
     summary = []
 

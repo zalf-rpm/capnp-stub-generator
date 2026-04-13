@@ -250,7 +250,7 @@ def generate_all_stubs() -> dict[str, Path]:
 
 
 @pytest.fixture(scope="session")
-def generated_stubs(generate_all_stubs):
+def generated_stubs(generate_all_stubs: dict[str, Path]) -> dict[str, Path]:
     """Provide access to generated stub directories.
 
     Returns:
@@ -262,50 +262,50 @@ def generated_stubs(generate_all_stubs):
 
 
 @pytest.fixture(scope="session")
-def calculator_stubs(generated_stubs):
+def calculator_stubs(generated_stubs: dict[str, Path]) -> Path:
     """Provide path to generated calculator stubs."""
     return generated_stubs["examples"] / "calculator"
 
 
 @pytest.fixture(scope="session")
-def addressbook_stubs(generated_stubs):
+def addressbook_stubs(generated_stubs: dict[str, Path]) -> Path:
     """Provide path to generated addressbook stubs."""
     return generated_stubs["examples"] / "addressbook"
 
 
 @pytest.fixture(scope="session")
-def basic_stubs(generated_stubs):
+def basic_stubs(generated_stubs: dict[str, Path]) -> Path:
     """Provide path to generated basic test stubs."""
     return generated_stubs["basic"]
 
 
 @pytest.fixture(scope="session")
-def zalfmas_stubs(generated_stubs):
+def zalfmas_stubs(generated_stubs: dict[str, Path]) -> Path:
     """Provide path to generated zalfmas stubs (with annotations)."""
     return generated_stubs["zalfmas"]
 
 
 @pytest.fixture(scope="session")
-def zalfmas_no_annotations_stubs(generated_stubs):
+def zalfmas_no_annotations_stubs(generated_stubs: dict[str, Path]) -> Path:
     """Provide path to generated zalfmas stubs (without annotations)."""
     return generated_stubs["zalfmas_no_annotations"]
 
 
 @pytest.fixture(scope="session")
-def capnp_stubs(generated_stubs):
+def capnp_stubs(generated_stubs: dict[str, Path]) -> Path:
     """Provide path to generated capnp stubs (schema.capnp, c++.capnp)."""
     return generated_stubs["capnp"]
 
 
 # Legacy fixtures for backward compatibility (deprecated)
 @pytest.fixture
-def generate_calculator_stubs(calculator_stubs):
+def generate_calculator_stubs(calculator_stubs: Path) -> Path:
     """Use the calculator_stubs fixture instead."""
     return calculator_stubs
 
 
 @pytest.fixture
-def calculator_stub_lines(calculator_stubs):
+def calculator_stub_lines(calculator_stubs: Path) -> list[str]:
     """Read calculator stub file lines."""
     stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
     with open(stub_file) as f:
@@ -389,12 +389,12 @@ def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
 
 # Specific stub fixtures for individual files
 @pytest.fixture(scope="session")
-def dummy_stub_file(basic_stubs):
+def dummy_stub_file(basic_stubs: Path) -> Path:
     """Provide path to dummy_capnp __init__.pyi."""
     return basic_stubs / "dummy_capnp" / "__init__.pyi"
 
 
 @pytest.fixture(scope="session")
-def dummy_stub_lines(dummy_stub_file):
+def dummy_stub_lines(dummy_stub_file: Path) -> list[str]:
     """Read dummy stub file lines."""
     return read_stub_file(dummy_stub_file)

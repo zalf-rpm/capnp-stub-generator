@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import base64
 import re
+from typing import TYPE_CHECKING
 
 import schema_capnp
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 MIN_EMBEDDED_SCHEMA_COUNT = 10
 
 
-def test_interface_result_structs_are_embedded(calculator_stubs) -> None:
+def test_interface_result_structs_are_embedded(calculator_stubs: Path) -> None:
     """Verify that interface method result structs are embedded in the binary.
 
     Before the fix, only the explicit param structs were embedded,
@@ -45,7 +49,7 @@ def test_interface_result_structs_are_embedded(calculator_stubs) -> None:
     assert evaluate_results_id in embedded_ids, "Calculator.evaluate$Results not embedded"
 
 
-def test_result_struct_has_fields(calculator_stubs) -> None:
+def test_result_struct_has_fields(calculator_stubs: Path) -> None:
     """Verify that the embedded result struct can be loaded and has the expected fields."""
     # Just check that result structs are present in the generated file
     # Runtime test would require complex import handling
@@ -58,7 +62,7 @@ def test_result_struct_has_fields(calculator_stubs) -> None:
     assert "load_dynamic" in content  # Schemas are loaded
 
 
-def test_param_structs_are_embedded(calculator_stubs) -> None:
+def test_param_structs_are_embedded(calculator_stubs: Path) -> None:
     """Verify that interface method param structs are also embedded.
 
     While explicit param structs are usually in nestedNodes,
@@ -87,7 +91,7 @@ def test_param_structs_are_embedded(calculator_stubs) -> None:
     assert len(embedded_ids) > MIN_EMBEDDED_SCHEMA_COUNT, "Should have many schemas including params/results"
 
 
-def test_runtime_result_field_access(calculator_stubs) -> None:
+def test_runtime_result_field_access(calculator_stubs: Path) -> None:
     """Test that result structs are accessible (check generated code structure)."""
     stub_file = calculator_stubs / "calculator_capnp/__init__.py"
     content = stub_file.read_text()

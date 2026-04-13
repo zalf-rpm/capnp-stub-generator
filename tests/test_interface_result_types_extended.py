@@ -1,9 +1,10 @@
 """Tests for interface result types in generated stubs."""
 
 import re
+from pathlib import Path
 
 
-def test_registry_result_type(zalfmas_stubs) -> None:
+def test_registry_result_type(zalfmas_stubs: Path) -> None:
     """Test that RegistryResult has proper interface type, not Any."""
     # The Admin interface is in registry.capnp
     stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
@@ -45,7 +46,7 @@ def test_registry_result_type(zalfmas_stubs) -> None:
     )
 
 
-def test_server_registry_result_type(zalfmas_stubs) -> None:
+def test_server_registry_result_type(zalfmas_stubs: Path) -> None:
     """Test that Server RegistryResult has proper interface type."""
     stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
     content = stub_file.read_text()

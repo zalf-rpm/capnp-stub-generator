@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from tests.test_helpers import run_pyright
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def test_any_pointer_setters(basic_stubs) -> None:
+
+def test_any_pointer_setters(basic_stubs: Path) -> None:
     """Test that AnyPointer fields accept various types in setters."""
     stub_file = basic_stubs / "any_pointer_capnp" / "__init__.pyi"
     content = stub_file.read_text()
@@ -29,7 +34,7 @@ def test_any_pointer_setters(basic_stubs) -> None:
     assert "l: AnyList | Sequence[Any] | None = None" in content
 
 
-def test_any_pointer_type_checking(basic_stubs) -> None:
+def test_any_pointer_type_checking(basic_stubs: Path) -> None:
     """Test type checking for AnyPointer assignments."""
     test_code = """
 from typing import Any
