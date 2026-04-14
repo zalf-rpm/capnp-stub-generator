@@ -151,6 +151,7 @@ class Writer:
         # Format: {flat_name: (protocol_path, type_kind, [enum_values])} where type_kind is "Reader", "Builder", "Client", or "Enum"
         self._all_type_aliases: dict[str, GeneratedTypeAliasInfo] = {}
         self._runtime_server_aliases: dict[str, str] = {}
+        self._root_module_class_names: set[str] = set()
 
         # Track if we need _DynamicObjectReader augmentation (for AnyPointer in interface returns)
         # Always enable this to generate as_struct/as_interface overloads for all types
@@ -2228,6 +2229,8 @@ class Writer:
 
         # Add Protocol class declaration to parent scope
         if self.scope.parent:
+            if self.scope.parent.is_root:
+                self._root_module_class_names.add(protocol_class_name)
             self.scope.parent.add(protocol_declaration)
 
         # Generate the runtime Reader/Builder markers nested inside the struct module.
@@ -3487,6 +3490,8 @@ class Writer:
         """Create the protocol scope used for interface generation."""
         base_classes = context.base_classes or ["_InterfaceModule"]
         protocol_declaration = helper.new_class_declaration(context.protocol_class_name, base_classes)
+        if context.parent_scope and context.parent_scope.is_root:
+            self._root_module_class_names.add(context.protocol_class_name)
         _ = self.new_scope(
             context.protocol_class_name,
             context.schema.node,
@@ -3908,13 +3913,14 @@ class Writer:
         """Register imports for a nested definition and return its internal type name."""
         root_name = definition_name.split(".", maxsplit=1)[0]
         if schema.node.which() == capnp_types.CapnpElementType.STRUCT:
-            self._add_import(f"from {python_import_path} import _{root_name}StructModule")
+            self._add_import(f"from {python_import_path}.types.modules import _{root_name}StructModule")
             return ".".join(f"_{part}StructModule" for part in definition_name.split("."))
 
         if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
             client_name = f"{definition_name.rsplit('.', maxsplit=1)[-1]}Client"
             self._add_import(f"from {python_import_path} import {root_name}")
             self._add_import(f"from {python_import_path}.types.clients import {client_name}")
+            self._add_import(f"from {python_import_path}.types.modules import _{root_name}InterfaceModule")
             self._imported_aliases.add(client_name)
             parts = definition_name.split(".")
             parts[-1] = f"_{parts[-1]}InterfaceModule"
@@ -3933,8 +3939,9 @@ class Writer:
         if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
             protocol_name = f"_{definition_name}InterfaceModule"
             client_name = f"{definition_name}Client"
-            self._add_import(f"from {python_import_path} import {protocol_name}, {definition_name}")
+            self._add_import(f"from {python_import_path} import {definition_name}")
             self._add_import(f"from {python_import_path}.types.clients import {client_name}")
+            self._add_import(f"from {python_import_path}.types.modules import {protocol_name}")
             self._imported_aliases.add(client_name)
             return protocol_name
 
@@ -3946,7 +3953,7 @@ class Writer:
         protocol_name = f"_{definition_name}StructModule"
         reader_alias = f"{definition_name}Reader"
         builder_alias = f"{definition_name}Builder"
-        self._add_import(f"from {python_import_path} import {protocol_name}")
+        self._add_import(f"from {python_import_path}.types.modules import {protocol_name}")
         self._add_import(f"from {python_import_path}.types.readers import {reader_alias}")
         self._add_import(f"from {python_import_path}.types.builders import {builder_alias}")
         self._imported_aliases.add(reader_alias)
@@ -4435,6 +4442,7 @@ class Writer:
             "common": set(),
             "servers": set(),
             "enums": set(),
+            "modules": set(),
             "results/client": set(),
             "results/server": set(),
             "results/tuples": set(),
@@ -4495,12 +4503,18 @@ class Writer:
             exports["common"].add("AnyStruct")
         if self._needs_anylist_alias:
             exports["common"].add("AnyList")
+        if self._root_module_class_names:
+            exports["modules"].update(self._root_module_class_names)
 
         return {module_name: sorted(names) for module_name, names in exports.items()}
 
     def _build_runtime_helper_class_names(self) -> set[str]:
         """Collect top-level helper classes that should be hidden from the runtime stub."""
-        helper_class_names = set(self._generated_list_types) | set(self._generated_interface_helper_types)
+        helper_class_names = (
+            set(self._generated_list_types)
+            | set(self._generated_interface_helper_types)
+            | set(self._root_module_class_names)
+        )
 
         for alias_name, alias_info in self._all_type_aliases.items():
             if alias_info[1] in {"ReaderClass", "BuilderClass", "ClientClass"}:
@@ -4527,6 +4541,31 @@ class Writer:
         return stripped.removeprefix("type ").split("=", maxsplit=1)[0].strip()
 
     @staticmethod
+    def _extract_public_api_name(line: str) -> str | None:
+        """Extract one public top-level API name from a generated line."""
+        if line.startswith((" ", "\t")):
+            return None
+
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "from ", "import ")):
+            return None
+
+        class_name = Writer._extract_top_level_class_name(stripped)
+        if class_name is not None:
+            return class_name if not class_name.startswith("_") else None
+
+        alias_name = Writer._extract_alias_name(stripped)
+        if alias_name is not None:
+            return alias_name if not alias_name.startswith("_") else None
+
+        assignment_match = re.match(r"(?P<name>[A-Za-z][A-Za-z0-9_]*)\s*[:=]", stripped)
+        if assignment_match is None:
+            return None
+
+        public_name = assignment_match.group("name")
+        return public_name if not public_name.startswith("_") else None
+
+    @staticmethod
     def _collapse_blank_lines(lines: list[str]) -> list[str]:
         """Collapse repeated blank lines while preserving section spacing."""
         collapsed: list[str] = []
@@ -4544,6 +4583,34 @@ class Writer:
             collapsed.pop()
 
         return collapsed
+
+    def _build_module_types_scope_lines(self) -> list[str]:
+        """Collect the top-level struct/interface module classes for `types.modules`."""
+        if not self._root_module_class_names:
+            return []
+
+        extracted_lines: list[str] = []
+        index = 0
+        scope_lines = self.scope.lines
+
+        while index < len(scope_lines):
+            line = scope_lines[index]
+            class_name = self._extract_top_level_class_name(line) if not line.startswith((" ", "\t")) else None
+            if class_name is None or class_name not in self._root_module_class_names:
+                index += 1
+                continue
+
+            if extracted_lines and extracted_lines[-1].strip():
+                extracted_lines.append("")
+
+            while index < len(scope_lines):
+                current_line = scope_lines[index]
+                if current_line and not current_line.startswith((" ", "\t")) and current_line != line:
+                    break
+                extracted_lines.append(current_line)
+                index += 1
+
+        return self._collapse_blank_lines(extracted_lines)
 
     def _build_runtime_scope_lines(self, exports: dict[str, list[str]]) -> list[str]:
         """Filter helper-only root-scope declarations out of the runtime stub."""
@@ -4579,21 +4646,11 @@ class Writer:
         return self._collapse_blank_lines(filtered_lines)
 
     @staticmethod
-    def _runtime_helper_module_aliases() -> dict[str, str]:
-        """Return private module aliases used by runtime stubs for local helper modules."""
-        return {
-            "builders": "_builders",
-            "readers": "_readers",
-            "clients": "_clients",
-            "requests": "_requests",
-            "contexts": "_contexts",
-            "common": "_common",
-            "servers": "_servers",
-            "enums": "_enums",
-            "results/client": "_client_results",
-            "results/server": "_server_results",
-            "results/tuples": "_result_tuples",
-        }
+    def _types_package_module_path(module_name: str) -> str:
+        """Return the public local `types` module path for one helper module."""
+        if module_name.startswith("results/"):
+            return f"types.results.{module_name.rsplit('/', maxsplit=1)[-1]}"
+        return f"types.{module_name}"
 
     @staticmethod
     def _render_runtime_helper_module_import(import_path: str, module_name: str, alias_name: str) -> str:
@@ -4609,26 +4666,22 @@ class Writer:
         self,
         exports: dict[str, list[str]],
     ) -> tuple[dict[str, str], list[str]]:
-        """Build private imports and qualified references for local helper names."""
+        """Build qualified references through the public local `types` package."""
         references: dict[str, str] = {}
-        import_lines: list[str] = []
-        module_aliases = self._runtime_helper_module_aliases()
-
-        for module_name, alias_name in module_aliases.items():
-            exported_names = exports[module_name]
+        for module_name, exported_names in exports.items():
             if not exported_names:
                 continue
 
-            import_lines.append(self._render_runtime_helper_module_import(".", module_name, alias_name))
-            references.update({name: f"{alias_name}.{name}" for name in exported_names})
+            module_path = self._types_package_module_path(module_name)
+            references.update({name: f"{module_path}.{name}" for name in exported_names})
 
-        return references, import_lines
+        return references, ["from . import types as types"] if references else []
 
     @staticmethod
     def _parse_runtime_helper_import_line(import_line: str) -> tuple[str, str, str] | None:
         """Parse one direct helper import into (base module, helper module, imported name)."""
         direct_match = re.fullmatch(
-            r"from (?P<module>.+)\.types\.(?P<helper>builders|readers|clients|requests|contexts|common|servers|enums) import (?P<name>\w+)",
+            r"from (?P<module>.+)\.types\.(?P<helper>builders|readers|clients|requests|contexts|common|servers|enums|modules) import (?P<name>\w+)",
             import_line,
         )
         if direct_match is not None:
@@ -4695,6 +4748,11 @@ class Writer:
 
         for line in lines:
             stripped = line.lstrip()
+            if stripped.startswith("type "):
+                line_prefix, separator, line_suffix = line.partition("=")
+                rewritten_suffix = pattern.sub(lambda match: references[match.group(0)], line_suffix)
+                rewritten_lines.append(f"{line_prefix}{separator}{rewritten_suffix}")
+                continue
             if stripped.startswith(("def ", "class ", "@")) or ":" not in line:
                 rewritten_lines.append(pattern.sub(lambda match: references[match.group(0)], line))
                 continue
@@ -4719,6 +4777,8 @@ class Writer:
         helper_import_lines = [*local_import_lines, *external_import_lines]
         if helper_import_lines:
             runtime_imports.extend(helper_import_lines)
+        if "from . import types as types" not in runtime_imports:
+            runtime_imports.append("from . import types as types")
 
         helper_references = {**external_references, **local_references}
         runtime_scope_lines = self._rewrite_runtime_helper_references(
@@ -4733,38 +4793,92 @@ class Writer:
         out.extend(["", *(body_lines or ["pass"])])
         return "\n".join(out)
 
+    @staticmethod
+    def _render_string_list_assignment(name: str, values: list[str]) -> str:
+        """Render a deterministic list assignment for generated modules."""
+        joined_values = ", ".join(f'"{value}"' for value in values)
+        return f"{name} = [{joined_values}]"
+
+    @staticmethod
+    def _public_types_package_modules() -> list[str]:
+        """Return the public helper submodules exposed from `types`."""
+        return [
+            "builders",
+            "readers",
+            "clients",
+            "requests",
+            "contexts",
+            "common",
+            "servers",
+            "enums",
+            "modules",
+            "results",
+        ]
+
+    @staticmethod
+    def _public_result_package_modules() -> list[str]:
+        """Return the public helper submodules exposed from `types.results`."""
+        return ["client", "server", "tuples"]
+
+    def _build_types_package_init_lines(self) -> list[str]:
+        """Build the public import surface for `types/__init__`."""
+        modules = self._public_types_package_modules()
+        import_lines = [f"from . import {module_name} as {module_name}" for module_name in modules]
+        return ["from . import _all as _all", *import_lines, "", self._render_string_list_assignment("__all__", modules)]
+
+    def _build_results_package_init_lines(self) -> list[str]:
+        """Build the public import surface for `types.results.__init__`."""
+        modules = self._public_result_package_modules()
+        import_lines = [f"from . import {module_name} as {module_name}" for module_name in modules]
+        return [*import_lines, "", self._render_string_list_assignment("__all__", modules)]
+
     def _build_types_reexport_lines(self, module_name: str) -> list[str]:
         """Build the public re-export lines for one types submodule."""
         exports = self._build_types_module_exports()
         import_path = ".._all" if module_name.startswith("results/") else "._all"
         return [f"from {import_path} import {name} as {name}" for name in exports[module_name]]
 
+    def _dump_modules_types_pyi(self) -> str:
+        """Generate the companion `types.modules` stub containing module helper classes."""
+        exports = self._build_types_module_exports()
+        module_scope_lines = self._build_module_types_scope_lines()
+        local_helper_names = {
+            name for module_name, names in exports.items() if module_name != "modules" for name in names
+        }
+        local_references = {name: f"_all.{name}" for name in local_helper_names}
+
+        out: list[str] = [f'"""Module helper types for `{self._module_path.name}`."""']
+        out.extend(self.imports)
+        if self._needs_dynamic_object_reader_augmentation:
+            out.append("from capnp.lib.capnp import _DynamicObjectReader")
+        if local_references:
+            out.append("from . import _all as _all")
+        if self.type_vars:
+            out.extend(["", *(f'{name} = TypeVar("{name}")' for name in sorted(self.type_vars))])
+
+        rewritten_scope_lines = self._rewrite_runtime_helper_references(module_scope_lines, local_references)
+        out.extend(["", *(rewritten_scope_lines or ["pass"])])
+        return "\n".join(out)
+
+    def _build_public_runtime_exports(self, runtime_scope_lines: list[str]) -> list[str]:
+        """Collect the public names that should be advertised from the runtime stub."""
+        public_names = {
+            public_name
+            for line in runtime_scope_lines
+            if (public_name := self._extract_public_api_name(line)) is not None
+        }
+        public_names.add("types")
+        return sorted(public_names)
+
     def dumps_types_pyi_files(self) -> dict[str, str]:
         """Generate the companion types-package .pyi files for this schema."""
-        type_package_imports = [
-            "from . import _all as _all",
-            "from . import builders as builders",
-            "from . import readers as readers",
-            "from . import clients as clients",
-            "from . import requests as requests",
-            "from . import contexts as contexts",
-            "from . import common as common",
-            "from . import servers as servers",
-            "from . import enums as enums",
-            "from . import results as results",
-        ]
-        result_package_imports = [
-            "from . import client as client",
-            "from . import server as server",
-            "from . import tuples as tuples",
-        ]
-
         return {
             "types/__init__.pyi": self._render_stub_module(
                 f'"""Public typing helper modules for `{self._module_path.name}`."""',
-                type_package_imports,
+                self._build_types_package_init_lines(),
             ),
             "types/_all.pyi": self._dump_all_types_pyi(),
+            "types/modules.pyi": self._dump_modules_types_pyi(),
             "types/builders.pyi": self._render_stub_module(
                 f'"""Builder helper types for `{self._module_path.name}`."""',
                 self._build_types_reexport_lines("builders"),
@@ -4799,7 +4913,7 @@ class Writer:
             ),
             "types/results/__init__.pyi": self._render_stub_module(
                 f'"""Result helper modules for `{self._module_path.name}`."""',
-                result_package_imports,
+                self._build_results_package_init_lines(),
             ),
             "types/results/client.pyi": self._render_stub_module(
                 f'"""Client result helper types for `{self._module_path.name}`."""',
@@ -4825,11 +4939,17 @@ class Writer:
 
     def dumps_types_py_files(self) -> dict[str, str]:
         """Generate runtime placeholder files for the companion types package."""
+        type_modules = self._public_types_package_modules()
+        result_modules = self._public_result_package_modules()
         type_package_imports = [
-            "from . import _all, builders, readers, clients, requests, contexts, common, servers, enums, results",
+            f"from . import _all, {', '.join(type_modules)}",
+            "",
+            self._render_string_list_assignment("__all__", type_modules),
         ]
         result_package_imports = [
-            "from . import client, server, tuples",
+            f"from . import {', '.join(result_modules)}",
+            "",
+            self._render_string_list_assignment("__all__", result_modules),
         ]
         server_module_lines: list[str] = []
         if self._runtime_server_aliases:
@@ -4854,6 +4974,10 @@ class Writer:
             ),
             "types/_all.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for private typing helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/modules.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for module helper types of `{self._module_path.name}`."""',
                 [],
             ),
             "types/builders.py": self._render_runtime_module(
@@ -4928,6 +5052,9 @@ class Writer:
             out.append("")
 
         out.extend(runtime_scope_lines)
+        public_exports = self._build_public_runtime_exports(runtime_scope_lines)
+        if public_exports:
+            out.extend(["", self._render_string_list_assignment("__all__", public_exports)])
         return "\n".join(out)
 
     def _find_runtime_schema_access_segments_from_type(

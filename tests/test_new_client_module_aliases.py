@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 def test_new_client_uses_module_aliases_for_current_interface(generate_calculator_stubs: Path) -> None:
     """Test that _new_client uses module alias for the current interface's Server type."""
-    stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "modules.pyi"
     content = stub_file.read_text()
 
     # Value._new_client should accept _DynamicCapabilityServer
@@ -29,7 +29,7 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
     )
 
     # Calculator._new_client should return the private clients helper type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _clients.CalculatorClient:" in content, (
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _all.CalculatorClient:" in content, (
         "_new_client should use the private clients helper return type"
     )
 
@@ -37,16 +37,16 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
 def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs: Path) -> None:
     """Test that _new_client uses module aliases for inherited interface Server types."""
     # Use pre-generated zalfmas stubs which include common.capnp with interface inheritance
-    stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "types" / "modules.pyi"
     content = stub_file.read_text()
 
     # Identifiable._new_client should return the private clients helper type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _clients.IdentifiableClient:" in content, (
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _all.IdentifiableClient:" in content, (
         "Identifiable._new_client should use the private clients helper return type"
     )
 
     # Holder._new_client should return the private clients helper type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _clients.HolderClient:" in content, (
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _all.HolderClient:" in content, (
         "Holder._new_client should use the private clients helper return type"
     )
 
@@ -79,7 +79,7 @@ def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs: 
 
 def test_new_client_nested_interface_uses_full_module_path(basic_stubs: Path) -> None:
     """Test that nested interface _new_client methods use full module path."""
-    stub_file = basic_stubs / "channel_capnp" / "__init__.pyi"
+    stub_file = basic_stubs / "channel_capnp" / "types" / "modules.pyi"
     content = stub_file.read_text()
 
     # Channel.Reader._new_client should use _DynamicCapabilityServer
@@ -95,18 +95,18 @@ def test_new_client_nested_interface_uses_full_module_path(basic_stubs: Path) ->
 
 def test_new_client_return_types_use_private_client_imports(zalfmas_stubs: Path) -> None:
     """Test that _new_client return types use private client helper imports."""
-    stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "types" / "modules.pyi"
     content = stub_file.read_text()
 
     # _new_client should return private helper-module client types
-    assert "-> _clients.IdentifiableClient:" in content
-    assert "-> _clients.HolderClient:" in content
-    assert "-> _clients.IdentifiableHolderClient:" in content
+    assert "-> _all.IdentifiableClient:" in content
+    assert "-> _all.HolderClient:" in content
+    assert "-> _all.IdentifiableHolderClient:" in content
 
     # The runtime stub should not expose those helpers as top-level aliases.
-    assert "IdentifiableClient = _clients.IdentifiableClient" not in content
-    assert "HolderClient = _clients.HolderClient" not in content
-    assert "IdentifiableHolderClient = _clients.IdentifiableHolderClient" not in content
+    assert "IdentifiableClient = _all.IdentifiableClient" not in content
+    assert "HolderClient = _all.HolderClient" not in content
+    assert "IdentifiableHolderClient = _all.IdentifiableHolderClient" not in content
 
 
 if __name__ == "__main__":

@@ -25,10 +25,12 @@ def test_generate_zalfmas_no_annotations_stubs(zalfmas_no_annotations_stubs: Pat
 
     # Check a specific schema exists
     common_stub = zalfmas_no_annotations_stubs / "common_capnp" / "__init__.pyi"
+    common_modules_stub = zalfmas_no_annotations_stubs / "common_capnp" / "types" / "modules.pyi"
     assert common_stub.exists(), "common_capnp stub should exist"
+    assert common_modules_stub.exists(), "common_capnp module helper stub should exist"
 
     # Verify content
-    content = common_stub.read_text()
+    content = common_modules_stub.read_text()
     assert "class _IdInformationStructModule" in content, "Should contain IdInformation struct module"
     assert "class _IdentifiableInterfaceModule" in content, "Should contain Identifiable interface module"
 
@@ -40,11 +42,11 @@ def test_no_annotations_vs_annotations_structure(zalfmas_stubs: Path, zalfmas_no
     With Python annotations, schemas should be in namespace directories.
     """
     # Annotated: should have mas/schema/common/common_capnp structure
-    annotated_common = zalfmas_stubs / "mas" / "schema" / "common" / "common_capnp" / "__init__.pyi"
+    annotated_common = zalfmas_stubs / "mas" / "schema" / "common" / "common_capnp" / "types" / "modules.pyi"
     assert annotated_common.exists(), "Annotated schemas should use namespace structure"
 
     # Non-annotated: should be flat at root
-    no_ann_common = zalfmas_no_annotations_stubs / "common_capnp" / "__init__.pyi"
+    no_ann_common = zalfmas_no_annotations_stubs / "common_capnp" / "types" / "modules.pyi"
     assert no_ann_common.exists(), "Non-annotated schemas should be flat at root"
 
     # Content should be similar (same structs/interfaces)

@@ -15,6 +15,10 @@ def _calculator_types_all(calculator_stubs: Path) -> str:
     return (calculator_stubs / "calculator_capnp" / "types" / "_all.pyi").read_text()
 
 
+def _calculator_types_modules(calculator_stubs: Path) -> str:
+    return (calculator_stubs / "calculator_capnp" / "types" / "modules.pyi").read_text()
+
+
 def _calculator_client_results(calculator_stubs: Path) -> str:
     return (calculator_stubs / "calculator_capnp" / "types" / "results" / "client.pyi").read_text()
 
@@ -45,14 +49,14 @@ def test_result_helpers_are_used_directly(calculator_stubs: Path) -> None:
 
 
 def test_result_helpers_alongside_builder_reader(calculator_stubs: Path) -> None:
-    """Runtime stubs should use only the private helper modules they actually need."""
+    """Runtime stubs should route helper references through the public types package surface."""
     runtime_content = _calculator_runtime_stub(calculator_stubs)
     builders_content = (calculator_stubs / "calculator_capnp" / "types" / "builders.pyi").read_text()
 
-    assert "from .types import builders as _builders" in runtime_content
-    assert "from .types.results import tuples as _result_tuples" in runtime_content
-    assert "ExpressionBuilder = _builders.ExpressionBuilder" not in runtime_content
-    assert "EvaluateResult = _client_results.EvaluateResult" not in runtime_content
+    assert "from . import types as types" in runtime_content
+    assert "Calculator: types.modules._CalculatorInterfaceModule" in runtime_content
+    assert "ExpressionBuilder = types.builders.ExpressionBuilder" not in runtime_content
+    assert "EvaluateResult = types.results.client.EvaluateResult" not in runtime_content
     assert "from ._all import ExpressionBuilder as ExpressionBuilder" in builders_content
 
 
@@ -92,14 +96,15 @@ def test_nested_interface_result_helpers(calculator_stubs: Path) -> None:
 
 
 def test_result_helper_usage_in_type_hints(calculator_stubs: Path) -> None:
-    """The runtime stub should point directly at private helper modules in annotations."""
+    """Module helper stubs should point at the shared internal helper definitions."""
     runtime_content = _calculator_runtime_stub(calculator_stubs)
+    modules_content = _calculator_types_modules(calculator_stubs)
     all_content = _calculator_types_all(calculator_stubs)
 
     assert "def evaluate(" in all_content
     assert "-> EvaluateResult:" in all_content
-    assert "-> _builders.ExpressionBuilder" in runtime_content or "_builders.ExpressionBuilder" in runtime_content
-    assert "CalculatorClient = _clients.CalculatorClient" not in runtime_content
+    assert "-> _all.ExpressionBuilder" in modules_content or "_all.ExpressionBuilder" in modules_content
+    assert "CalculatorClient = types.clients.CalculatorClient" not in runtime_content
 
 
 def test_result_helper_count_matches_method_count(calculator_stubs: Path) -> None:

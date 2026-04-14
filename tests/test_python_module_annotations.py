@@ -43,13 +43,14 @@ def test_module_annotation_uses_absolute_imports(tmp_path: Path) -> None:
     # Check for absolute imports (not relative with .)
     assert "from mas.schema.common.date_capnp.types." in content, "Should use absolute import for date_capnp"
     assert "from mas.schema.geo.geo_capnp.types." in content, "Should use absolute import for geo_capnp"
-    assert "from mas.schema.persistence.persistence_capnp import" in content, (
+    assert "from mas.schema.persistence.persistence_capnp.types.modules import" in content, (
         "Should use absolute import for persistence_capnp"
     )
 
     # Make sure there are no relative imports to these modules
     assert "from .date_capnp import" not in content, "Should not use relative import for date_capnp"
     assert "from .geo_capnp import" not in content, "Should not use relative import for geo_capnp"
+    assert "from .persistence_capnp import" not in content, "Should not use relative import for persistence_capnp"
 
 
 def test_schema_without_annotation_still_works(tmp_path: Path) -> None:

@@ -21,6 +21,11 @@ GENERATED_DIR = TESTS_DIR / "_generated" / "interface_inheritance"
 MIN_IDENTIFIABLE_SERVER_CLASSES = 3
 
 
+def _modules_stub_text(stub_file: Path) -> str:
+    """Read the companion types/modules.pyi content for a generated stub."""
+    return (stub_file.parent / "types" / "modules.pyi").read_text()
+
+
 @pytest.fixture(scope="module")
 def generated_dir() -> Path:
     """Ensure the generated directory exists and is clean."""
@@ -65,11 +70,14 @@ def test_simple_interface_inheritance(generated_dir: Path) -> None:
     assert stub_file.exists(), f"Stub file was not generated at {stub_file}"
 
     content = stub_file.read_text()
+    modules_content = _modules_stub_text(stub_file)
     client_content = (generated_dir / "mas" / "schema" / "model" / "model_capnp" / "types" / "_all.pyi").read_text()
 
     # Check that ClimateInstance interface exists as Protocol
-    assert "class _ClimateInstanceInterfaceModule(" in content, "ClimateInstance Protocol module should exist"
-    assert "ClimateInstance: _ClimateInstanceInterfaceModule" in content, "ClimateInstance annotation should exist"
+    assert "class _ClimateInstanceInterfaceModule(" in modules_content, "ClimateInstance Protocol module should exist"
+    assert (
+        "ClimateInstance: types.modules._ClimateInstanceInterfaceModule" in content
+    ), "ClimateInstance annotation should exist"
 
     # Check that ClimateInstanceClient extends the flattened IdentifiableClient
     assert "class ClimateInstanceClient(IdentifiableClient)" in client_content, (
@@ -78,7 +86,7 @@ def test_simple_interface_inheritance(generated_dir: Path) -> None:
 
     # Check that _ClimateInstanceInterfaceModule.Server extends _IdentifiableInterfaceModule.Server
     # The Server class should be nested inside _ClimateInstanceInterfaceModule
-    lines = content.split("\n")
+    lines = modules_content.split("\n")
     in_climate_instance = False
     found_server_inheritance = False
 
@@ -113,11 +121,12 @@ def test_multiple_interface_inheritance(generated_dir: Path) -> None:
     assert stub_file.exists(), "Stub file was not generated"
 
     content = stub_file.read_text()
+    modules_content = _modules_stub_text(stub_file)
     client_content = (generated_dir / "mas" / "schema" / "common" / "common_capnp" / "types" / "_all.pyi").read_text()
 
     # Check that IdentifiableHolder exists as Protocol
-    assert "class _IdentifiableHolderInterfaceModule(" in content, "IdentifiableHolder Protocol module should exist"
-    assert "IdentifiableHolder: _IdentifiableHolderInterfaceModule" in content, (
+    assert "class _IdentifiableHolderInterfaceModule(" in modules_content, "IdentifiableHolder Protocol module should exist"
+    assert "IdentifiableHolder: types.modules._IdentifiableHolderInterfaceModule" in content, (
         "IdentifiableHolder annotation should exist"
     )
 
@@ -128,7 +137,7 @@ def test_multiple_interface_inheritance(generated_dir: Path) -> None:
     assert "HolderClient" in client_content
 
     # Check that IdentifiableHolder.Server extends both base Servers
-    lines = content.split("\n")
+    lines = modules_content.split("\n")
     in_identifiable_holder = False
     found_server_inheritance = False
 
@@ -170,15 +179,15 @@ def test_interface_with_persistent_inheritance(generated_dir: Path) -> None:
     stub_file = generated_dir / "mas" / "schema" / "climate" / "climate_capnp" / "__init__.pyi"
     assert stub_file.exists(), "Stub file was not generated"
 
-    content = stub_file.read_text()
+    modules_content = _modules_stub_text(stub_file)
 
     # Check that Service extends both Identifiable and Persistent (no longer needs Protocol suffix)
-    assert "class _ServiceInterfaceModule(_IdentifiableInterfaceModule, _PersistentInterfaceModule):" in content, (
+    assert "class _ServiceInterfaceModule(_IdentifiableInterfaceModule, _PersistentInterfaceModule):" in modules_content, (
         "Service Module should extend both Identifiable and Persistent"
     )
 
     # Check Server class inheritance - Service.Server should extend both base Servers
-    lines = content.split("\n")
+    lines = modules_content.split("\n")
     in_service = False
     found_server_inheritance = False
 
@@ -217,22 +226,22 @@ def test_interface_inheritance_in_nested_interfaces(generated_dir: Path) -> None
     stub_file = generated_dir / "mas" / "schema" / "cluster" / "cluster_admin_service_capnp" / "__init__.pyi"
     assert stub_file.exists(), "Stub file was not generated"
 
-    content = stub_file.read_text()
+    modules_content = _modules_stub_text(stub_file)
 
     # Check nested interfaces extend Identifiable (no longer needs Protocol suffix)
-    assert "class _AdminMasterInterfaceModule(_IdentifiableInterfaceModule):" in content, (
+    assert "class _AdminMasterInterfaceModule(_IdentifiableInterfaceModule):" in modules_content, (
         "AdminMaster Module should extend Identifiable"
     )
-    assert "class _UserMasterInterfaceModule(_IdentifiableInterfaceModule):" in content, (
+    assert "class _UserMasterInterfaceModule(_IdentifiableInterfaceModule):" in modules_content, (
         "UserMaster Module should extend Identifiable"
     )
-    assert "class _RuntimeInterfaceModule(_IdentifiableInterfaceModule):" in content, (
+    assert "class _RuntimeInterfaceModule(_IdentifiableInterfaceModule):" in modules_content, (
         "Runtime Module should extend Identifiable"
     )
 
     # Check that all Server classes extend _IdentifiableInterfaceModule.Server
     # Count how many times we see "class Server(_IdentifiableInterfaceModule.Server"
-    server_inheritance_count = content.count("class Server(_IdentifiableInterfaceModule.Server")
+    server_inheritance_count = modules_content.count("class Server(_IdentifiableInterfaceModule.Server")
 
     # We should find at least 3 Server classes extending _IdentifiableInterfaceModule.Server
     # (one for each of AdminMaster, UserMaster, and Runtime)
@@ -268,7 +277,9 @@ def test_interface_method_inheritance_visibility(generated_dir: Path) -> None:
     run_generator(args)
 
     # Read both stub files
-    model_stub = (generated_dir / "mas" / "schema" / "model" / "model_capnp" / "__init__.pyi").read_text()
+    model_stub_path = generated_dir / "mas" / "schema" / "model" / "model_capnp" / "__init__.pyi"
+    model_stub = model_stub_path.read_text()
+    model_modules_stub = _modules_stub_text(model_stub_path)
     model_types_stub = (generated_dir / "mas" / "schema" / "model" / "model_capnp" / "types" / "_all.pyi").read_text()
     common_types_stub = (
         generated_dir / "mas" / "schema" / "common" / "common_capnp" / "types" / "_all.pyi"
@@ -280,7 +291,8 @@ def test_interface_method_inheritance_visibility(generated_dir: Path) -> None:
     assert "def info(self)" in common_types_stub, "Identifiable should have info() method"
 
     # Verify ClimateInstance interface exists and ClimateInstanceClient extends IdentifiableClient
-    assert "class _ClimateInstanceInterfaceModule(" in model_stub, "ClimateInstance Module should exist"
+    assert "class _ClimateInstanceInterfaceModule(" in model_modules_stub, "ClimateInstance Module should exist"
+    assert "ClimateInstance: types.modules._ClimateInstanceInterfaceModule" in model_stub
     assert "class ClimateInstanceClient(IdentifiableClient)" in model_types_stub, (
         "ClimateInstanceClient should extend IdentifiableClient"
     )
@@ -301,10 +313,10 @@ def test_empty_interface_with_inheritance(generated_dir: Path) -> None:
     stub_file = generated_dir / "mas" / "schema" / "common" / "common_capnp" / "__init__.pyi"
     assert stub_file.exists(), "Stub file was not generated"
 
-    content = stub_file.read_text()
+    modules_content = _modules_stub_text(stub_file)
 
     # Find _IdentifiableHolderInterfaceModule class
-    lines = content.split("\n")
+    lines = modules_content.split("\n")
     in_identifiable_holder = False
     holder_content = []
 

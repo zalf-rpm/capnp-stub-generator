@@ -929,7 +929,7 @@ def _generate_stubs_from_schema(
     interfaces_with_module = {}
     for interface_name, (client_name, base_client_names) in writer._all_interfaces.items():
         # Add module prefix to make fully qualified names
-        qualified_interface = f"{full_module_name}.{interface_name}"
+        qualified_interface = f"{full_module_name}.types.modules.{interface_name}"
         qualified_client = f"{full_module_name}.types.clients.{client_name}"
 
         # Also qualify the base client names
@@ -950,14 +950,15 @@ def _generate_stubs_from_schema(
 
     # Qualify the types with module prefix
     qualified_struct_types = [
-        (f"{full_module_name}.{proto}", f"{full_module_name}.types.readers.{reader}") for proto, reader in struct_types
+        (f"{full_module_name}.types.modules.{proto}", f"{full_module_name}.types.readers.{reader}")
+        for proto, reader in struct_types
     ]
     qualified_list_types = [
         (f"{full_module_name}.types._all.{list_class}", f"{full_module_name}.types.readers.{reader}")
         for list_class, reader in list_types
     ]
     qualified_interface_types = [
-        (f"{full_module_name}.{proto}", f"{full_module_name}.types.clients.{client}")
+        (f"{full_module_name}.types.modules.{proto}", f"{full_module_name}.types.clients.{client}")
         for proto, client in interface_types
     ]
 
