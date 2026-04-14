@@ -1,4 +1,4 @@
-"""Test that Result types are available as top-level type aliases like Builder and Reader."""
+"""Test that Result helper types live under the generated types package."""
 
 from pathlib import Path
 
@@ -7,168 +7,131 @@ import pytest
 from tests.test_helpers import log_summary
 
 
-def test_result_type_aliases_exist(calculator_stubs: Path) -> None:
-    """Test that Result type aliases are generated at the top level."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
-    content = stub_file.read_text()
-
-    # Check for Result type aliases in the top-level section
-    assert "type EvaluateResult = " in content, "EvaluateResult type alias should exist"
-    assert "type DeffunctionResult = " in content, "DeffunctionResult type alias should exist"
-    assert "type GetoperatorResult = " in content, "GetoperatorResult type alias should exist"
-    assert "type ReadResult = " in content, "ReadResult type alias should exist"
-    assert "type CallResult = " in content, "CallResult type alias should exist"
+def _calculator_runtime_stub(calculator_stubs: Path) -> str:
+    return (calculator_stubs / "calculator_capnp" / "__init__.pyi").read_text()
 
 
-def test_result_type_aliases_point_to_client_nested_types(calculator_stubs: Path) -> None:
-    """Test that Result type aliases point to Client-nested Result classes."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
-    content = stub_file.read_text()
-
-    # Result types should point to Client.Result (not Server.Result)
-    assert "type EvaluateResult = _CalculatorInterfaceModule.CalculatorClient.EvaluateResult" in content, (
-        "EvaluateResult should point to CalculatorClient.EvaluateResult"
-    )
-
-    assert "type ReadResult = _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult" in content, (
-        "ReadResult should point to ValueClient.ReadResult"
-    )
-
-    assert (
-        "type CallResult = _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient.CallResult" in content
-    ), "CallResult should point to FunctionClient.CallResult"
+def _calculator_types_all(calculator_stubs: Path) -> str:
+    return (calculator_stubs / "calculator_capnp" / "types" / "_all.pyi").read_text()
 
 
-def test_result_type_aliases_alongside_builder_reader(calculator_stubs: Path) -> None:
-    """Test that Result type aliases appear alongside Builder and Reader aliases."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
-    content = stub_file.read_text()
-
-    # Find the type alias section
-    lines = content.split("\n")
-    type_alias_section = []
-    in_type_alias_section = False
-
-    for line in lines:
-        if "# Top-level type aliases" in line:
-            in_type_alias_section = True
-        elif in_type_alias_section:
-            if line.startswith("type "):
-                type_alias_section.append(line)
-            elif line and not line.startswith("#"):
-                break
-
-    # Should have Builder, Reader, Client, and Result type aliases
-    assert any("Builder" in line for line in type_alias_section), "Should have Builder aliases"
-    assert any("Reader" in line for line in type_alias_section), "Should have Reader aliases"
-    assert any("Client" in line for line in type_alias_section), "Should have Client aliases"
-    assert any("Result" in line for line in type_alias_section), "Should have Result aliases"
+def _calculator_client_results(calculator_stubs: Path) -> str:
+    return (calculator_stubs / "calculator_capnp" / "types" / "results" / "client.pyi").read_text()
 
 
-def test_result_type_aliases_in_sorted_order(calculator_stubs: Path) -> None:
-    """Test that Result type aliases are sorted alphabetically with other aliases."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
-    content = stub_file.read_text()
+def test_result_helper_classes_exist(calculator_stubs: Path) -> None:
+    """Client Result helper classes should be defined in the internal types stub and re-exported publicly."""
+    all_content = _calculator_types_all(calculator_stubs)
+    public_content = _calculator_client_results(calculator_stubs)
 
-    # Extract all type aliases
-    lines = content.split("\n")
-    type_aliases = []
-    in_type_alias_section = False
-
-    for line in lines:
-        if "# Top-level type aliases" in line:
-            in_type_alias_section = True
-        elif in_type_alias_section:
-            if line.startswith("type "):
-                # Extract alias name: "type Name = ..." -> "Name"
-                alias_name = line.split("=")[0].replace("type ", "").strip()
-                type_aliases.append(alias_name)
-            elif line and not line.startswith("#"):
-                break
-
-    # Check that aliases are sorted
-    sorted_aliases = sorted(type_aliases)
-    assert type_aliases == sorted_aliases, f"Type aliases should be sorted. Got: {type_aliases}"
+    for result_name in ("EvaluateResult", "DeffunctionResult", "GetoperatorResult", "ReadResult", "CallResult"):
+        assert f"class {result_name}(Awaitable[{result_name}], Protocol):" in all_content
+        assert f"from .._all import {result_name} as {result_name}" in public_content
 
 
-def test_void_method_result_type_alias_exists(calculator_stubs: Path) -> None:
-    """Test that void methods also have Result type aliases."""
-    # For the channel example with void methods
-    channel_stub = calculator_stubs.parent.parent / "basic" / "interfaces_capnp" / "__init__.pyi"
+def test_result_helpers_are_used_directly(calculator_stubs: Path) -> None:
+    """Runtime-facing method signatures should still use the flattened Result names via compatibility re-exports."""
+    runtime_content = _calculator_runtime_stub(calculator_stubs)
+    all_content = _calculator_types_all(calculator_stubs)
 
-    if not channel_stub.exists():
-        pytest.skip("Channel stub not available")
-
-    content = channel_stub.read_text()
-
-    # Check for CloseResult (void method)
-    if "CloseResult" in content:
-        # Should have type alias for void method result too
-        assert "type CloseResult = " in content, "Void method should also have Result type alias"
+    assert "def evaluate(" in all_content
+    assert "-> EvaluateResult:" in all_content
+    assert "def read(self) -> ReadResult:" in all_content
+    assert "def call(" in all_content
+    assert "-> CallResult:" in all_content
+    assert "def send(self) -> EvaluateResult:" in all_content
+    assert "EvaluateResult = _client_results.EvaluateResult" in runtime_content
 
 
-def test_nested_interface_result_type_aliases(calculator_stubs: Path) -> None:
-    """Test that nested interfaces (Value, Function) have Result type aliases."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
-    content = stub_file.read_text()
+def test_result_helpers_alongside_builder_reader(calculator_stubs: Path) -> None:
+    """Compatibility re-exports in the runtime stub should point at the targeted public helper modules."""
+    runtime_content = _calculator_runtime_stub(calculator_stubs)
+    builders_content = (calculator_stubs / "calculator_capnp" / "types" / "builders.pyi").read_text()
 
-    # Value interface has read() -> ReadResult
-    assert "type ReadResult = " in content
-    assert "ValueClient.ReadResult" in content
-
-    # Function interface has call() -> CallResult
-    assert "type CallResult = " in content
-    assert "FunctionClient.CallResult" in content
+    assert "from .types import builders as _builders" in runtime_content
+    assert "from .types.results import client as _client_results" in runtime_content
+    assert "ExpressionBuilder = _builders.ExpressionBuilder" in runtime_content
+    assert "EvaluateResult = _client_results.EvaluateResult" in runtime_content
+    assert "from ._all import ExpressionBuilder as ExpressionBuilder" in builders_content
 
 
-def test_result_type_alias_usage_in_type_hints(calculator_stubs: Path) -> None:
-    """Test that Result type aliases can be used in type hints (manual check)."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
-    content = stub_file.read_text()
+def test_result_helpers_do_not_use_type_aliases(calculator_stubs: Path) -> None:
+    """Result helpers should stay as classes, not type aliases, in both internal and public types stubs."""
+    runtime_content = _calculator_runtime_stub(calculator_stubs)
+    all_content = _calculator_types_all(calculator_stubs)
+    public_content = _calculator_client_results(calculator_stubs)
 
-    # The type aliases should be at module level, making them usable:
-    # This is verified by the presence of the type alias definition
-    assert "type EvaluateResult = _CalculatorInterfaceModule.CalculatorClient.EvaluateResult" in content
-
-    # And the actual Result class should be nested in Client
-    assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in content
-    assert "    class CalculatorClient" in content
+    assert "type EvaluateResult = " not in runtime_content
+    assert "type EvaluateResult = " not in public_content
+    assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in all_content
 
 
-def test_result_type_count_matches_method_count(calculator_stubs: Path) -> None:
-    """Test that we have Result type aliases for all interface methods."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
-    content = stub_file.read_text()
+def test_void_method_result_helper_exists(calculator_stubs: Path) -> None:
+    """Void methods should still expose Result helpers from the public results module."""
+    channel_results = calculator_stubs.parent.parent / "basic" / "interfaces_capnp" / "types" / "results" / "client.pyi"
 
-    # Count Result type aliases for Calculator methods
-    # Note: method names are titled using .title() which lowercases everything except first char after space
+    if not channel_results.exists():
+        pytest.skip("Channel result helper module not available")
+
+    content = channel_results.read_text()
+    if "ReaderCloseResult" in content:
+        assert "from .._all import ReaderCloseResult as ReaderCloseResult" in content
+
+
+def test_nested_interface_result_helpers(calculator_stubs: Path) -> None:
+    """Nested interfaces should publish their Result helpers through the shared public result module."""
+    all_content = _calculator_types_all(calculator_stubs)
+    public_content = _calculator_client_results(calculator_stubs)
+
+    assert "from .._all import ReadResult as ReadResult" in public_content
+    assert "from .._all import CallResult as CallResult" in public_content
+    assert "def read(self) -> ReadResult:" in all_content
+    assert "def call(" in all_content
+    assert "-> CallResult:" in all_content
+
+
+def test_result_helper_usage_in_type_hints(calculator_stubs: Path) -> None:
+    """The runtime stub should continue to expose flattened Result names for annotations."""
+    runtime_content = _calculator_runtime_stub(calculator_stubs)
+    all_content = _calculator_types_all(calculator_stubs)
+
+    assert "def evaluate(" in all_content
+    assert "-> EvaluateResult:" in all_content
+    assert "EvaluateResult = _client_results.EvaluateResult" in runtime_content
+    assert "CalculatorClient = _clients.CalculatorClient" in runtime_content
+
+
+def test_result_helper_count_matches_method_count(calculator_stubs: Path) -> None:
+    """Every RPC method with a client result should have both an internal class and a public re-export."""
+    all_content = _calculator_types_all(calculator_stubs)
+    public_content = _calculator_client_results(calculator_stubs)
+
     calculator_results = [
         ("evaluate", "EvaluateResult"),
-        ("defFunction", "DeffunctionResult"),  # .title() makes it "Deffunction"
-        ("getOperator", "GetoperatorResult"),  # .title() makes it "Getoperator"
+        ("defFunction", "DeffunctionResult"),
+        ("getOperator", "GetoperatorResult"),
+        ("read", "ReadResult"),
+        ("call", "CallResult"),
     ]
 
     for method_name, result_name in calculator_results:
-        assert f"type {result_name} = " in content, f"Should have {result_name} type alias for {method_name}"
-
-    # Count Result type aliases for Value methods
-    assert "type ReadResult = " in content, "Should have ReadResult type alias"
-
-    # Count Result type aliases for Function methods
-    assert "type CallResult = " in content, "Should have CallResult type alias"
+        assert f"class {result_name}(Awaitable[{result_name}], Protocol):" in all_content, (
+            f"Should have {result_name} helper class for {method_name}"
+        )
+        assert f"from .._all import {result_name} as {result_name}" in public_content, (
+            f"Should publicly re-export {result_name} for {method_name}"
+        )
 
 
 def test_summary() -> None:
-    """Summary of Result type alias tests."""
+    """Summary of Result helper module tests."""
     log_summary(
         "RESULT TYPE ALIAS SUMMARY",
         [
-            "✓ Result type aliases generated",
-            "✓ Result aliases point to Client-nested types",
-            "✓ Result aliases appear alongside Builder/Reader aliases",
-            "✓ Result aliases are sorted alphabetically",
-            "✓ Void method Results have aliases",
-            "✓ Nested interface Results have aliases",
-            "✓ Result alias count matches method count",
+            "✓ Result helper classes live in types/_all",
+            "✓ Result helpers are re-exported from types.results.client",
+            "✓ Runtime signatures still use flattened Result names",
+            "✓ Compatibility re-exports replace old top-level class definitions",
+            "✓ Nested and void Result helpers remain available",
         ],
     )

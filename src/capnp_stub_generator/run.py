@@ -872,11 +872,26 @@ def _generate_stubs_from_schema(
     )
     writer.generate_all_nested()
 
-    for outputs, suffix in zip((writer.dumps_pyi(), writer.dumps_py()), (PYI_SUFFIX, PY_SUFFIX), strict=False):
-        formatted_output = format_outputs(outputs)
+    output_directory = Path(target.output_file_path).parent
+    generated_outputs = {
+        Path(target.output_file_path + PYI_SUFFIX): writer.dumps_pyi(),
+        Path(target.output_file_path + PY_SUFFIX): writer.dumps_py(),
+    }
 
-        output_path_with_suffix = Path(target.output_file_path + suffix)
-        with output_path_with_suffix.open("w", encoding="utf8") as output_file:
+    generated_outputs.update(
+        {
+            output_directory / relative_path: content
+            for relative_path, content in writer.dumps_types_pyi_files().items()
+        },
+    )
+    generated_outputs.update(
+        {output_directory / relative_path: content for relative_path, content in writer.dumps_types_py_files().items()},
+    )
+
+    for output_path, outputs in generated_outputs.items():
+        formatted_output = format_outputs(outputs)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf8") as output_file:
             output_file.write(formatted_output)
 
     logger.info("Wrote stubs to '%s(%s/%s)'.", target.output_file_path, PYI_SUFFIX, PY_SUFFIX)
@@ -915,10 +930,10 @@ def _generate_stubs_from_schema(
     for interface_name, (client_name, base_client_names) in writer._all_interfaces.items():
         # Add module prefix to make fully qualified names
         qualified_interface = f"{full_module_name}.{interface_name}"
-        qualified_client = f"{full_module_name}.{client_name}"
+        qualified_client = f"{full_module_name}.types.clients.{client_name}"
 
         # Also qualify the base client names
-        qualified_base_clients = [f"{full_module_name}.{base}" for base in base_client_names]
+        qualified_base_clients = [f"{full_module_name}.types.clients.{base}" for base in base_client_names]
 
         interfaces_with_module[qualified_interface] = (qualified_client, qualified_base_clients)
 
@@ -935,13 +950,15 @@ def _generate_stubs_from_schema(
 
     # Qualify the types with module prefix
     qualified_struct_types = [
-        (f"{full_module_name}.{proto}", f"{full_module_name}.{reader}") for proto, reader in struct_types
+        (f"{full_module_name}.{proto}", f"{full_module_name}.types.readers.{reader}") for proto, reader in struct_types
     ]
     qualified_list_types = [
-        (f"{full_module_name}.{list_class}", f"{full_module_name}.{reader}") for list_class, reader in list_types
+        (f"{full_module_name}.types._all.{list_class}", f"{full_module_name}.types.readers.{reader}")
+        for list_class, reader in list_types
     ]
     qualified_interface_types = [
-        (f"{full_module_name}.{proto}", f"{full_module_name}.{client}") for proto, client in interface_types
+        (f"{full_module_name}.{proto}", f"{full_module_name}.types.clients.{client}")
+        for proto, client in interface_types
     ]
 
     return interfaces_with_module, (qualified_struct_types, qualified_list_types, qualified_interface_types)

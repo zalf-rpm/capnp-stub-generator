@@ -11,7 +11,7 @@ def test_name_annotations(basic_stubs: Path) -> None:
     the Python API, which uses the original names. The annotations are
     primarily for C++ code generation.
     """
-    stub = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
+    stub = basic_stubs / "advanced_features_capnp" / "types" / "_all.pyi"
     assert stub.exists(), "Stub should be generated"
 
     content = stub.read_text()

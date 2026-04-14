@@ -20,20 +20,20 @@ class TestCalculatorInterfaceMethodTypes:
 
     def test_evaluate_has_expression_parameter(self, generate_calculator_stubs: Path) -> None:
         """Test that evaluate() has ExpressionBuilder | ExpressionReader parameter type."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have evaluate with Expression parameter (optional) and EvaluateResult return type
         assert "def evaluate(" in stub_content
         assert "expression: ExpressionBuilder | ExpressionReader | dict[str, Any] | None = None" in stub_content
-        assert ") -> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in stub_content
+        assert ") -> EvaluateResult:" in stub_content
 
         # Should NOT have Any for the expression parameter
         assert "def evaluate(self, expression: Any)" not in stub_content
 
     def test_deffunction_has_proper_types(self, generate_calculator_stubs: Path) -> None:
         """Test that defFunction() has proper parameter types."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have defFunction with int and Expression parameters (both optional) and DeffunctionResult return
@@ -47,7 +47,7 @@ class TestCalculatorInterfaceMethodTypes:
 
     def test_getoperator_has_enum_parameter(self, generate_calculator_stubs: Path) -> None:
         """Test that getOperator() has Operator enum parameter."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have getOperator with enum parameter as int | Literal[...]
@@ -61,26 +61,24 @@ class TestCalculatorInterfaceMethodTypes:
 
     def test_function_call_has_list_parameter(self, generate_calculator_stubs: Path) -> None:
         """Test that Function.call() has Sequence[float] parameter."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have call with Sequence[float] parameter (optional) and CallResult return type
         assert "def call(" in stub_content
         assert "params: Float64ListBuilder | Float64ListReader | Sequence[Any] | None = None" in stub_content
-        assert ") -> _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient.CallResult:" in stub_content
+        assert ") -> CallResult:" in stub_content
 
         # Should NOT have Any for the params parameter
         assert "def call(self, params: Any)" not in stub_content
 
     def test_value_read_has_float_return(self, generate_calculator_stubs: Path) -> None:
         """Test that Value.read() returns float."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have read returning ReadResult
-        assert (
-            "def read(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in stub_content
-        )
+        assert "def read(self) -> ReadResult:" in stub_content
 
         # ReadResult should have float value field
         assert "class ReadResult" in stub_content
@@ -97,21 +95,21 @@ class TestCalculatorInterfaceMethodTypes:
 
     def test_all_methods_have_request_variants(self, generate_calculator_stubs: Path) -> None:
         """Test that all interface methods have *_request variants."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # All main methods should have _request variants with proper return types
         # Check for method name and return type (allowing for kwargs parameters)
         assert "def evaluate_request(" in stub_content
-        assert ") -> _CalculatorInterfaceModule.EvaluateRequest:" in stub_content
+        assert ") -> EvaluateRequest:" in stub_content
         assert "def defFunction_request(" in stub_content
-        assert ") -> _CalculatorInterfaceModule.DeffunctionRequest:" in stub_content
+        assert ") -> DeffunctionRequest:" in stub_content
         assert "def getOperator_request(" in stub_content
-        assert ") -> _CalculatorInterfaceModule.GetoperatorRequest:" in stub_content
+        assert ") -> GetoperatorRequest:" in stub_content
         assert "def read_request(" in stub_content
-        assert ") -> _CalculatorInterfaceModule._ValueInterfaceModule.ReadRequest:" in stub_content
+        assert ") -> ReadRequest:" in stub_content
         assert "def call_request(" in stub_content
-        assert ") -> _CalculatorInterfaceModule._FunctionInterfaceModule.CallRequest:" in stub_content
+        assert ") -> CallRequest:" in stub_content
 
 
 class TestInterfaceMethodTypeRegression:
@@ -119,7 +117,7 @@ class TestInterfaceMethodTypeRegression:
 
     def test_no_any_in_calculator_main_methods(self, generate_calculator_stubs: Path) -> None:
         """Test that main Calculator methods don't use Any for known types."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Extract just the Calculator interface methods
@@ -148,7 +146,7 @@ class TestInterfaceMethodTypeRegression:
 
     def test_nested_interface_methods_typed(self, generate_calculator_stubs: Path) -> None:
         """Test that nested interface methods (Value, Function) are properly typed."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Function.call should have Sequence[float] (optional), not Any
@@ -156,16 +154,14 @@ class TestInterfaceMethodTypeRegression:
         assert "class _FunctionInterfaceModule(_InterfaceModule):" in stub_content
         assert "class FunctionClient(_DynamicCapabilityClient):" in stub_content
         assert "def call(" in stub_content
-        # call() returns CallResult (nested in FunctionClient)
-        assert ") -> _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient.CallResult:" in stub_content
+        # call() returns the flattened top-level CallResult
+        assert ") -> CallResult:" in stub_content
 
         # Value.read should return ReadResult with float field, not Any
         # Value is now an interface module inheriting from _InterfaceModule
         assert "class _ValueInterfaceModule(_InterfaceModule):" in stub_content
         assert "class ValueClient(_DynamicCapabilityClient):" in stub_content
-        assert (
-            "def read(self) -> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in stub_content
-        )
+        assert "def read(self) -> ReadResult:" in stub_content
 
 
 class TestInterfaceMethodComplexTypes:
@@ -173,7 +169,7 @@ class TestInterfaceMethodComplexTypes:
 
     def test_struct_parameter_types(self, generate_calculator_stubs: Path) -> None:
         """Test that struct types in parameters are resolved correctly."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Expression is a struct, should be typed with Builder | Reader type aliases for better IDE support
@@ -182,21 +178,21 @@ class TestInterfaceMethodComplexTypes:
 
     def test_interface_return_types(self, generate_calculator_stubs: Path) -> None:
         """Test that interface return types are resolved correctly."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
-        # evaluate returns EvaluateResult which has a .value field of type ValueClient (nested capability)
-        assert "-> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in stub_content
+        # evaluate returns EvaluateResult which has a .value field of type ValueClient
+        assert "-> EvaluateResult:" in stub_content
         assert "class EvaluateResult" in stub_content
-        assert "value: _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient" in stub_content
+        assert "value: ValueClient" in stub_content
 
-        # defFunction and getOperator return results which have .func field of type FunctionClient (nested capability)
-        assert "-> _CalculatorInterfaceModule.CalculatorClient.DeffunctionResult:" in stub_content
-        assert "func: _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient" in stub_content
+        # defFunction and getOperator return results which have .func field of type FunctionClient
+        assert "-> DeffunctionResult:" in stub_content
+        assert "func: FunctionClient" in stub_content
 
     def test_enum_parameter_types(self, generate_calculator_stubs: Path) -> None:
         """Test that enum parameters are typed correctly."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # getOperator takes an int or Literal enum value -> now uses CalculatorOperatorEnum
@@ -211,7 +207,7 @@ class TestInterfaceMethodComplexTypes:
 
     def test_list_parameter_types(self, generate_calculator_stubs: Path) -> None:
         """Test that list parameters use Sequence with proper element types."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Function.call takes List(Float64), should be Sequence[float]

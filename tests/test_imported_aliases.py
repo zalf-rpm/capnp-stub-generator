@@ -10,11 +10,11 @@ def test_imported_type_aliases_used(zalfmas_stubs: Path) -> None:
     # It imports IdInformation from common_capnp
     # Admin.addCategory takes IdInformation
 
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # Check that AdminClient exists
-    assert "class AdminClient(_IdentifiableInterfaceModule.IdentifiableClient):" in content
+    assert "class AdminClient(IdentifiableClient):" in content
 
     # Check that addCategory is defined with proper alias
     assert "def addCategory(" in content
@@ -31,27 +31,17 @@ def test_imported_type_aliases_used(zalfmas_stubs: Path) -> None:
 
 
 def test_imported_return_type_aliases(zalfmas_stubs: Path) -> None:
-    """Test that imported type aliases are used in return types."""
+    """Test that imported type aliases are used in flattened top-level result helpers."""
     # Check registry_capnp.pyi
     # Admin.removeCategory returns List(Identifiable)
     # Identifiable is imported from common_capnp
 
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "__init__.pyi"
+    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
-    # Find AdminClient
-    client_match = re.search(
-        r"class AdminClient\(_IdentifiableInterfaceModule.IdentifiableClient\):(.*?)(?=\nclass _|\Z)",
-        content,
-        re.DOTALL,
-    )
-    assert client_match, "AdminClient class not found"
-    client_content = client_match.group(1)
-
-    # Find RemovecategoryResult in AdminClient
     result_match = re.search(
-        r"class RemovecategoryResult\(Awaitable\[RemovecategoryResult\], Protocol\):(.*?)(?=\n\s+class|\n\s+def|\Z)",
-        client_content,
+        r"class RemovecategoryResult\(Awaitable\[RemovecategoryResult\], Protocol\):(.*?)(?=\nclass |\Z)",
+        content,
         re.DOTALL,
     )
     assert result_match

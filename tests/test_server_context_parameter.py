@@ -20,14 +20,14 @@ class TestServerContextParameter:
 
     def test_context_is_in_stubs(self, generate_calculator_stubs: Path) -> None:
         """Verify that generated stubs explicitly list _context with proper typing."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         assert stub_file.exists(), "Calculator stub file not generated"
 
         stub_content = stub_file.read_text()
 
-        # Check that CallContext types are generated inside Server class
+        # Check that CallContext helper types are generated
         assert "CallContext(Protocol):" in stub_content
-        # ResultsBuilder no longer exists - CallContext.results now points to NamedTuple
+        # ResultsBuilder no longer exists - CallContext.results now points to top-level helper types
 
         server_methods = re.findall(
             r"class Server\(_DynamicCapabilityServer\):.*?(?=\n    class |\n\nclass |\Z)",
@@ -61,7 +61,7 @@ class TestServerContextParameter:
 
     def test_context_parameter_position(self, generate_calculator_stubs: Path) -> None:
         """Test that _context comes after regular parameters, before **kwargs."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         content = stub_file.read_text()
 
         # Test _CalculatorInterfaceModule._FunctionInterfaceModule.call
@@ -100,7 +100,7 @@ class TestContextTypeHints:
 
     def test_context_has_callcontext_type(self, generate_calculator_stubs: Path) -> None:
         """Test that _context parameter uses CallContext types."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         content = stub_file.read_text()
 
         # Look for read method in Value.Server (may span multiple lines)
@@ -109,14 +109,14 @@ class TestContextTypeHints:
 
         context_type = match.group(1)
         assert "CallContext" in context_type, f"_context should have CallContext type, got: {context_type}"
-        assert "_CalculatorInterfaceModule._ValueInterfaceModule" in context_type, (
-            f"CallContext should be scoped, got: {context_type}"
+        assert context_type == "ReadCallContext", (
+            f"CallContext should use the flattened helper name, got: {context_type}"
         )
 
 
 def test_server_context_parameter_summary(generate_calculator_stubs: Path) -> None:
     """Summary test showing _context parameter is now mandatory and typed."""
-    stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # Count CallContext types generated
@@ -143,6 +143,6 @@ def test_server_context_parameter_summary(generate_calculator_stubs: Path) -> No
             "",
             "The _context parameter is explicitly listed in all Server method signatures",
             "with proper CallContext typing for full type safety and IDE autocomplete.",
-            "CallContext.results now points to NamedTuple (which accepts Builder|Reader).",
+            "CallContext.results now points to top-level ServerResult helpers.",
         ],
     )

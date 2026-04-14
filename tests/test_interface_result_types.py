@@ -20,50 +20,50 @@ class TestRPCResultTypes:
 
     def test_evaluate_returns_result_with_value_field(self, generate_calculator_stubs: Path) -> None:
         """Test that evaluate() returns a result with .value attribute."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have EvaluateResult class nested in CalculatorClient
+        # Should have top-level EvaluateResult class
         assert "class EvaluateResult" in stub_content
 
         # Should have value field (using nested Protocol naming)
-        assert "value: _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient" in stub_content
+        assert "value: ValueClient" in stub_content
 
-        # evaluate should return _CalculatorInterfaceModule.CalculatorClient.EvaluateResult (which is Awaitable)
+        # evaluate should return the flattened top-level EvaluateResult
         assert "def evaluate(" in stub_content
-        assert "-> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in stub_content
+        assert "-> EvaluateResult:" in stub_content
 
     def test_deffunction_returns_result_with_func_field(self, generate_calculator_stubs: Path) -> None:
         """Test that defFunction() returns a result with .func attribute."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
-        # Should have DeffunctionResult class nested in CalculatorClient
+        # Should have top-level DeffunctionResult class
         assert "class DeffunctionResult" in stub_content
 
         # Should have func field (using nested Protocol naming)
-        assert "func: _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient" in stub_content
+        assert "func: FunctionClient" in stub_content
 
-        # defFunction should return _CalculatorInterfaceModule.CalculatorClient.DeffunctionResult (which is Awaitable)
+        # defFunction should return the flattened top-level DeffunctionResult
         assert "def defFunction(" in stub_content
         assert "paramCount: int | None = None" in stub_content
         assert "body: ExpressionBuilder | ExpressionReader | dict[str, Any] | None = None" in stub_content
-        assert "-> _CalculatorInterfaceModule.CalculatorClient.DeffunctionResult:" in stub_content
+        assert "-> DeffunctionResult:" in stub_content
 
     def test_getoperator_returns_result_with_func_field(self, generate_calculator_stubs: Path) -> None:
         """Test that getOperator() returns a result with .func attribute."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have GetoperatorResult class
         assert "class GetoperatorResult" in stub_content
 
         # Should have func field (using nested Protocol naming)
-        assert "func: _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient" in stub_content
+        assert "func: FunctionClient" in stub_content
 
     def test_nested_interface_read_returns_result(self, generate_calculator_stubs: Path) -> None:
         """Test that nested interface Value.read() returns result with .value."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have ReadResult class
@@ -87,17 +87,17 @@ class TestRPCResultTypes:
 
     def test_nested_interface_call_returns_result(self, generate_calculator_stubs: Path) -> None:
         """Test that nested interface Function.call() returns result with .value."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have CallResult class
         assert "class CallResult" in stub_content
 
-        # call should return _CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient.CallResult (which is Awaitable)
+        # call should return the flattened top-level CallResult
         # Note: method signature may span multiple lines
         assert "def call(" in stub_content
         assert "params: Float64ListBuilder | Float64ListReader | Sequence[Any]" in stub_content
-        assert "_CalculatorInterfaceModule._FunctionInterfaceModule.FunctionClient.CallResult" in stub_content
+        assert "-> CallResult:" in stub_content
 
 
 class TestRPCResultsAreAwaitable:
@@ -105,24 +105,23 @@ class TestRPCResultsAreAwaitable:
 
     def test_result_types_are_protocols(self, generate_calculator_stubs: Path) -> None:
         """Test that result types are Protocol classes that inherit from Awaitable."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # All result types should inherit from Awaitable[Result] for promise pipelining
-        # Now nested in Client and Server classes
         assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in stub_content
         assert "class DeffunctionResult(Awaitable[DeffunctionResult], Protocol):" in stub_content
         assert "class GetoperatorResult(Awaitable[GetoperatorResult], Protocol):" in stub_content
         assert "class ReadResult(Awaitable[ReadResult], Protocol):" in stub_content
         assert "class CallResult(Awaitable[CallResult], Protocol):" in stub_content
 
-        # Methods should return Client.Result (nested in Client class)
-        assert "-> _CalculatorInterfaceModule.CalculatorClient.EvaluateResult:" in stub_content
-        assert "-> _CalculatorInterfaceModule._ValueInterfaceModule.ValueClient.ReadResult:" in stub_content
+        # Methods should return the flattened top-level Result helpers
+        assert "-> EvaluateResult:" in stub_content
+        assert "-> ReadResult:" in stub_content
 
     def test_awaitable_imported(self, generate_calculator_stubs: Path) -> None:
         """Test that Awaitable is imported from typing."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should import Awaitable
@@ -135,7 +134,7 @@ class TestEnumParametersAcceptLiterals:
 
     def test_getoperator_accepts_string_literals(self, generate_calculator_stubs: Path) -> None:
         """Test that getOperator op parameter accepts string literals."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # getOperator should accept int | Literal[...] | None (optional) -> now uses CalculatorOperatorEnum alias
@@ -144,7 +143,7 @@ class TestEnumParametersAcceptLiterals:
 
     def test_enum_literals_match_enum_values(self, generate_calculator_stubs: Path) -> None:
         """Test that the enum literal values match the actual enum."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Just check that the literal types are present somewhere (client method)
@@ -152,7 +151,7 @@ class TestEnumParametersAcceptLiterals:
 
     def test_literal_imported(self, generate_calculator_stubs: Path) -> None:
         """Test that Literal is imported."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should import Literal
@@ -165,7 +164,7 @@ class TestRPCResultFieldTypes:
 
     def test_interface_result_fields(self, generate_calculator_stubs: Path) -> None:
         """Test that interface-typed result fields are correct."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # EvaluateResult.value should include _ValueInterfaceModule types
@@ -175,7 +174,7 @@ class TestRPCResultFieldTypes:
 
     def test_primitive_result_fields(self, generate_calculator_stubs: Path) -> None:
         """Test that primitive-typed result fields are correct."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # ReadResult.value should be float (primitive type)

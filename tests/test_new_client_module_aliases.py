@@ -28,11 +28,10 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
         "_new_client should use _DynamicCapabilityServer"
     )
 
-    # Calculator._new_client should accept _DynamicCapabilityServer
-    assert (
-        "def _new_client(self, server: _DynamicCapabilityServer) -> _CalculatorInterfaceModule.CalculatorClient:"
-        in content
-    ), "_new_client should use _DynamicCapabilityServer"
+    # Calculator._new_client should return the flattened top-level client type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> CalculatorClient:" in content, (
+        "_new_client should use the flattened CalculatorClient return type"
+    )
 
 
 def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs: Path) -> None:
@@ -41,16 +40,15 @@ def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs: 
     stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
-    # Identifiable._new_client should accept _DynamicCapabilityServer
-    assert (
-        "def _new_client(self, server: _DynamicCapabilityServer) -> _IdentifiableInterfaceModule.IdentifiableClient:"
-        in content
-    ), "Identifiable._new_client should use _DynamicCapabilityServer"
+    # Identifiable._new_client should return the flattened top-level client type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> IdentifiableClient:" in content, (
+        "Identifiable._new_client should use the flattened IdentifiableClient return type"
+    )
 
-    # Holder._new_client should accept _DynamicCapabilityServer
-    assert (
-        "def _new_client(self, server: _DynamicCapabilityServer) -> _HolderInterfaceModule.HolderClient:" in content
-    ), "Holder._new_client should use _DynamicCapabilityServer"
+    # Holder._new_client should return the flattened top-level client type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> HolderClient:" in content, (
+        "Holder._new_client should use the flattened HolderClient return type"
+    )
 
     # IdentifiableHolder extends both Identifiable and Holder
     # Its _new_client should accept _DynamicCapabilityServer
@@ -100,10 +98,10 @@ def test_new_client_return_types_use_client_aliases(zalfmas_stubs: Path) -> None
     stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
-    # _new_client should return Client types
-    assert "_IdentifiableInterfaceModule.IdentifiableClient:" in content
-    assert "_HolderInterfaceModule.HolderClient:" in content
-    assert "_IdentifiableHolderInterfaceModule.IdentifiableHolderClient:" in content
+    # _new_client should return flattened top-level Client types
+    assert "-> IdentifiableClient:" in content
+    assert "-> HolderClient:" in content
+    assert "-> IdentifiableHolderClient:" in content
 
 
 if __name__ == "__main__":

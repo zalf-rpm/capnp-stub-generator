@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from typing import TYPE_CHECKING
 
 import capnp
 
 from tests._generated.examples.calculator import calculator_capnp
 
+if TYPE_CHECKING:
+    from tests._generated.examples.calculator.calculator_capnp.types.servers import FunctionServer
+else:
+    FunctionServer = calculator_capnp.Calculator.Function.Server
 
-class PowerFunction(calculator_capnp.Calculator.Function.Server):
+
+class PowerFunction(FunctionServer):
     """An implementation of the Function interface wrapping pow().  Note that
     we're implementing this on the client side and will pass a reference to
     the server.  The server will then be able to make calls back to the client.

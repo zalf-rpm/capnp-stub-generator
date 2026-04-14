@@ -36,7 +36,7 @@ def test_server_methods_have_signatures(calculator_stub_lines: list[str]) -> Non
 
     # Value.Server should have read method with _context parameter
     assert "def read(" in content
-    assert "_context: _CalculatorInterfaceModule._ValueInterfaceModule.Server.ReadCallContext" in content
+    assert "_context: ReadCallContext" in content
 
     # Calculator.Server should have evaluate method with Reader type
     assert "def evaluate(" in content
@@ -108,5 +108,5 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines: list[str
     # Find Function.Server's call method - should have params, _context, and **kwargs
     # Note: method signatures may span multiple lines
     assert "params: Float64ListReader" in content
-    assert "_context: _CalculatorInterfaceModule._FunctionInterfaceModule.Server.CallCallContext" in content
+    assert "_context: CallCallContext" in content
     assert "**kwargs: Any" in content

@@ -16,7 +16,7 @@ def _run_pyright_sample(calculator_stubs: Path, filename: str, test_code: str) -
 
 def test_enum_type_alias_exists(calculator_stubs: Path) -> None:
     """Test that enum type aliases are generated."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # Check that the enum type alias exists (flattened name)

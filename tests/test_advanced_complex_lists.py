@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 def test_complex_lists(basic_stubs: Path) -> None:
     """Test that multi-dimensional lists are properly typed with nested Sequence types."""
-    stub = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
+    stub = basic_stubs / "advanced_features_capnp" / "types" / "_all.pyi"
     assert stub.exists(), "Stub should be generated"
 
     content = stub.read_text()

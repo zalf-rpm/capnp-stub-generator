@@ -65,15 +65,15 @@ def test_simple_interface_inheritance(generated_dir: Path) -> None:
     assert stub_file.exists(), f"Stub file was not generated at {stub_file}"
 
     content = stub_file.read_text()
+    client_content = (generated_dir / "mas" / "schema" / "model" / "model_capnp" / "types" / "_all.pyi").read_text()
 
     # Check that ClimateInstance interface exists as Protocol
     assert "class _ClimateInstanceInterfaceModule(" in content, "ClimateInstance Protocol module should exist"
     assert "ClimateInstance: _ClimateInstanceInterfaceModule" in content, "ClimateInstance annotation should exist"
 
-    # Check that ClimateInstanceClient extends IdentifiableClient (nested in Protocol)
-    # The Client inherits from the full Protocol path
-    assert "class ClimateInstanceClient(_IdentifiableInterfaceModule.IdentifiableClient)" in content, (
-        "ClimateInstanceClient should extend _IdentifiableInterfaceModule.IdentifiableClient"
+    # Check that ClimateInstanceClient extends the flattened IdentifiableClient
+    assert "class ClimateInstanceClient(IdentifiableClient)" in client_content, (
+        "ClimateInstanceClient should extend IdentifiableClient"
     )
 
     # Check that _ClimateInstanceInterfaceModule.Server extends _IdentifiableInterfaceModule.Server
@@ -113,6 +113,7 @@ def test_multiple_interface_inheritance(generated_dir: Path) -> None:
     assert stub_file.exists(), "Stub file was not generated"
 
     content = stub_file.read_text()
+    client_content = (generated_dir / "mas" / "schema" / "common" / "common_capnp" / "types" / "_all.pyi").read_text()
 
     # Check that IdentifiableHolder exists as Protocol
     assert "class _IdentifiableHolderInterfaceModule(" in content, "IdentifiableHolder Protocol module should exist"
@@ -122,9 +123,9 @@ def test_multiple_interface_inheritance(generated_dir: Path) -> None:
 
     # Check that IdentifiableHolderClient extends both IdentifiableClient and HolderClient
     # Note: may be multi-line
-    assert "class IdentifiableHolderClient(" in content
-    assert "_IdentifiableInterfaceModule.IdentifiableClient" in content
-    assert "_HolderInterfaceModule.HolderClient" in content
+    assert "class IdentifiableHolderClient(" in client_content
+    assert "IdentifiableClient" in client_content
+    assert "HolderClient" in client_content
 
     # Check that IdentifiableHolder.Server extends both base Servers
     lines = content.split("\n")
@@ -268,17 +269,20 @@ def test_interface_method_inheritance_visibility(generated_dir: Path) -> None:
 
     # Read both stub files
     model_stub = (generated_dir / "mas" / "schema" / "model" / "model_capnp" / "__init__.pyi").read_text()
-    common_stub = (generated_dir / "mas" / "schema" / "common" / "common_capnp" / "__init__.pyi").read_text()
+    model_types_stub = (generated_dir / "mas" / "schema" / "model" / "model_capnp" / "types" / "_all.pyi").read_text()
+    common_types_stub = (
+        generated_dir / "mas" / "schema" / "common" / "common_capnp" / "types" / "_all.pyi"
+    ).read_text()
 
     # Verify Identifiable has info() method
     # This should be in the IdentifiableClient class
-    assert "class IdentifiableClient(_DynamicCapabilityClient):" in common_stub, "Should have IdentifiableClient"
-    assert "def info(self)" in common_stub, "Identifiable should have info() method"
+    assert "class IdentifiableClient(_DynamicCapabilityClient):" in common_types_stub, "Should have IdentifiableClient"
+    assert "def info(self)" in common_types_stub, "Identifiable should have info() method"
 
     # Verify ClimateInstance interface exists and ClimateInstanceClient extends IdentifiableClient
     assert "class _ClimateInstanceInterfaceModule(" in model_stub, "ClimateInstance Module should exist"
-    assert "class ClimateInstanceClient(_IdentifiableInterfaceModule.IdentifiableClient)" in model_stub, (
-        "ClimateInstanceClient should extend _IdentifiableInterfaceModule.IdentifiableClient"
+    assert "class ClimateInstanceClient(IdentifiableClient)" in model_types_stub, (
+        "ClimateInstanceClient should extend IdentifiableClient"
     )
 
     # The actual info() method will be inherited from IdentifiableClient via inheritance

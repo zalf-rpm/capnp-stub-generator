@@ -27,7 +27,7 @@ def test_group_struct_naming(tmp_path: Path) -> None:
 
     run(args, str(cwd))
 
-    stub_file = output_dir / "repro_group_struct_capnp" / "__init__.pyi"
+    stub_file = output_dir / "repro_group_struct_capnp" / "types" / "_all.pyi"
     assert stub_file.exists()
 
     content = stub_file.read_text()
@@ -36,9 +36,9 @@ def test_group_struct_naming(tmp_path: Path) -> None:
     # Parent is TestGroupStruct, so group name should be TestGroupStructStruct
     assert "class _TestGroupStructStructStructModule(_StructModule):" in content
     assert "class TestGroupStructStructReader(" in content
-    assert "_TestGroupStructStructStructModule.Reader" in content
+    assert "class TestGroupStructStructReader(_DynamicStructReader):" in content
     assert "class TestGroupStructStructBuilder(" in content
-    assert "_TestGroupStructStructStructModule.Builder" in content
+    assert "class TestGroupStructStructBuilder(_DynamicStructBuilder):" in content
 
     # Check that generic Struct is NOT used (to avoid collisions)
     assert "class _StructStructModule" not in content
@@ -50,9 +50,9 @@ def test_group_struct_naming(tmp_path: Path) -> None:
     # Parent is TestGroupEnum, so group name should be TestGroupEnumEnum
     assert "class _TestGroupEnumEnumStructModule(_StructModule):" in content
     assert "class TestGroupEnumEnumReader(" in content
-    assert "_TestGroupEnumEnumStructModule.Reader" in content
+    assert "class TestGroupEnumEnumReader(_DynamicStructReader):" in content
     assert "class TestGroupEnumEnumBuilder(" in content
-    assert "_TestGroupEnumEnumStructModule.Builder" in content
+    assert "class TestGroupEnumEnumBuilder(_DynamicStructBuilder):" in content
 
     # Check that generic Enum is NOT used (to avoid collisions)
     assert "class _EnumStructModule" not in content

@@ -306,6 +306,18 @@ class InterfaceGenerationContext:
 
 
 @dataclass
+class InterfaceMethodTypeNames:
+    """Flattened helper type names for one interface method."""
+
+    request_type_name: str
+    client_result_type_name: str
+    server_result_type_name: str
+    params_type_name: str
+    call_context_type_name: str
+    result_tuple_type_name: str
+
+
+@dataclass
 class MethodInfo:
     """Information about a single RPC method.
 

@@ -26,6 +26,7 @@ from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
 from capnp_stub_generator.writer_dto import (
     EnumGenerationContext,
     InterfaceGenerationContext,
+    InterfaceMethodTypeNames,
     MethodInfo,
     MethodSignatureCollection,
     ParameterInfo,
@@ -148,6 +149,7 @@ class Writer:
         # Track all generated types for top-level TypeAliases
         # Format: {flat_name: (protocol_path, type_kind, [enum_values])} where type_kind is "Reader", "Builder", "Client", or "Enum"
         self._all_type_aliases: dict[str, GeneratedTypeAliasInfo] = {}
+        self._runtime_server_aliases: dict[str, str] = {}
 
         # Track if we need _DynamicObjectReader augmentation (for AnyPointer in interface returns)
         # Always enable this to generate as_struct/as_interface overloads for all types
@@ -161,6 +163,8 @@ class Writer:
 
         # Track generated list types to avoid duplicates
         self._generated_list_types: set[str] = set()
+        self._generated_client_classes: set[str] = set()
+        self._generated_interface_helper_types: set[str] = set()
 
         self.docstring: str = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
@@ -423,6 +427,10 @@ class Writer:
             or None if the type is imported from another module
 
         """
+        interface_info = self._all_interfaces.get(module_type)
+        if interface_info is not None:
+            return interface_info[0]
+
         # Extract the last component (e.g., "_ValueInterfaceModule")
         last_part = module_type.rsplit(".", maxsplit=1)[-1]
         # Remove "_" prefix and "Module" suffix to get the base name
@@ -1249,19 +1257,7 @@ class Writer:
         server_param_type = "_DynamicCapabilityServer"
 
         # Determine return type (narrow, specific client type)
-        if client_return_type:
-            # For nested interfaces: Calculator.Value -> Calculator.ValueClient
-            # For top-level: Greeter -> GreeterClient
-            # Use unquoted forward reference
-            if scope_path and "." in scope_path:
-                # Nested interface - replace last component with client name
-                parts = scope_path.rsplit(".", 1)
-                return_type = f"{parts[0]}.{client_return_type}"
-            else:
-                # Top-level interface
-                return_type = client_return_type
-        else:
-            return_type = fully_qualified_interface
+        return_type = client_return_type or fully_qualified_interface
 
         self._add_typing_import("override")
         self.scope.add("@override")
@@ -1497,16 +1493,13 @@ class Writer:
             self._add_typing_import("Union")
 
         client_type = protocol_type_name
+        server_type = f"{protocol_type_name}.Server"
         if protocol_type_name != "Any":
-            last_part = protocol_type_name.split(".")[-1]
-            if last_part.startswith("_"):
-                client_type = f"{protocol_type_name}.{self._extract_name_from_protocol(last_part)}Client"
-            else:
-                client_type = f"{protocol_type_name}Client"
+            client_type, server_type = self._get_interface_client_server_types(protocol_type_name)
 
         return helper.TypeHintedVariable(
             helper.sanitize_name(field.name),
-            [helper.TypeHint(client_type, primary=True), helper.TypeHint(f"{protocol_type_name}.Server")],
+            [helper.TypeHint(client_type, primary=True), helper.TypeHint(server_type)],
         )
 
     def gen_slot(
@@ -1939,6 +1932,16 @@ class Writer:
             and helper.get_display_name(local_schema) == type_name
         )
 
+    def _count_local_interface_name_occurrences(self, type_name: str) -> int:
+        """Count local interface definitions that share the same display name."""
+        return sum(
+            1
+            for local_schema in self._schemas_by_id.values()
+            if local_schema.node.which() == capnp_types.CapnpElementType.INTERFACE
+            and self._is_schema_in_current_module(local_schema)
+            and helper.get_display_name(local_schema) == type_name
+        )
+
     def _build_flat_name_from_scope(self, base_name: str, scope: Scope) -> str:
         """Prefix a flat name with its containing scope names to make it unique."""
         flat_name = base_name
@@ -1967,6 +1970,15 @@ class Writer:
         if has_local_collision or has_existing_collision:
             return self._build_flat_name_from_scope(type_name, scope)
         return type_name
+
+    def _resolve_flat_interface_client_name(self, type_name: str, scope: Scope) -> str:
+        """Resolve the flattened top-level Client class name for an interface."""
+        candidate_name = f"{type_name}Client"
+        has_local_collision = self._count_local_interface_name_occurrences(type_name) > 1
+        has_existing_collision = candidate_name in self._all_type_aliases or candidate_name in self._imported_aliases
+        if has_local_collision or has_existing_collision:
+            return f"{self._build_flat_name_from_scope(type_name, scope)}Client"
+        return candidate_name
 
     def _resolve_nested_schema(
         self,
@@ -2147,11 +2159,15 @@ class Writer:
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
     ) -> None:
-        """Generate the precise flattened top-level Reader typing class."""
+        """Generate the precise flattened top-level Reader typing class.
+
+        This models the dynamic object returned at runtime more closely than the
+        runtime-only ``Struct.Reader`` marker class.
+        """
         root_scope = self.scope.root
         reader_class_declaration = helper.new_class_declaration(
             context.reader_type_name,
-            parameters=[context.scoped_reader_type_name],
+            parameters=["_DynamicStructReader"],
         )
         root_scope.add(reader_class_declaration)
         _ = self.new_scope(context.reader_type_name, context.schema.node, register=False, parent_scope=root_scope)
@@ -2167,11 +2183,15 @@ class Writer:
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
     ) -> None:
-        """Generate the precise flattened top-level Builder typing class."""
+        """Generate the precise flattened top-level Builder typing class.
+
+        This models the dynamic object returned at runtime more closely than the
+        runtime-only ``Struct.Builder`` marker class.
+        """
         root_scope = self.scope.root
         builder_class_declaration = helper.new_class_declaration(
             context.builder_type_name,
-            parameters=[context.scoped_builder_type_name],
+            parameters=["_DynamicStructBuilder"],
         )
         root_scope.add(builder_class_declaration)
         _ = self.new_scope(context.builder_type_name, context.schema.node, register=False, parent_scope=root_scope)
@@ -2298,6 +2318,8 @@ class Writer:
         imported = self.register_import(schema)
         if imported is not None:
             return None
+        if self.is_type_id_known(schema.node.id):
+            return None
 
         # IMPORTANT: Ensure parent scope exists before registering this interface
         # For nested interfaces, the parent interface must be generated first
@@ -2346,13 +2368,16 @@ class Writer:
         base_classes = self._collect_interface_base_classes(schema)
 
         # Create and return context
-        return InterfaceGenerationContext.create(
+        context = InterfaceGenerationContext.create(
             schema=schema,
             type_name=name,
             registered_type=registered_type,
             base_classes=base_classes,
             parent_scope=parent_scope,
         )
+        context.client_type_name = self._resolve_flat_interface_client_name(name, registered_type.scope)
+        self._all_interfaces[registered_type.scoped_name] = (context.client_type_name, [])
+        return context
 
     def _enumerate_interface_methods(self, context: InterfaceGenerationContext) -> list[MethodInfo]:
         """Enumerate methods from runtime interface.
@@ -2396,9 +2421,13 @@ class Writer:
 
     def _get_interface_client_server_types(self, interface_type: str) -> tuple[str, str]:
         """Return nested Client and Server type names for an interface Protocol path."""
+        client_alias = self._get_flat_client_alias(interface_type)
+        if client_alias:
+            return client_alias, f"{interface_type}.Server"
+
         last_part = interface_type.rsplit(".", maxsplit=1)[-1]
         if last_part.startswith("_"):
-            client_type = f"{interface_type}.{self._extract_name_from_protocol(last_part)}Client"
+            client_type = f"{self._extract_name_from_protocol(last_part)}Client"
         else:
             client_type = f"{interface_type}Client"
         return client_type, f"{interface_type}.Server"
@@ -2518,12 +2547,96 @@ class Writer:
             The client type name
 
         """
+        interface_info = self._all_interfaces.get(interface_path)
+        if interface_info is not None:
+            return interface_info[0]
+
         # Get the last component: "_HolderInterfaceModule" -> "_HolderInterfaceModule"
         last_component = interface_path.rsplit(".", maxsplit=1)[-1]
         # Remove "_" prefix and "Module" suffix: "_HolderInterfaceModule" -> "Holder"
         name = self._extract_name_from_protocol(last_component)
         # Add "Client" suffix: "Holder" -> "HolderClient"
         return f"{name}Client"
+
+    def _count_local_interface_helper_name_occurrences(self, helper_name: str) -> int:
+        """Count helper class names shared by local interface methods in this module."""
+        count = 0
+        for local_schema in self._schemas_by_id.values():
+            if (
+                local_schema.node.which() != capnp_types.CapnpElementType.INTERFACE
+                or not self._is_schema_in_current_module(local_schema)
+            ):
+                continue
+
+            for method in local_schema.node.interface.methods:
+                method_base = helper.sanitize_name(method.name).title()
+                generated_names = {
+                    f"{method_base}Request",
+                    f"{method_base}Result",
+                    f"{method_base}ServerResult",
+                    f"{method_base}Params",
+                    f"{method_base}CallContext",
+                    f"{method_base}ResultTuple",
+                }
+                if helper_name in generated_names:
+                    count += 1
+        return count
+
+    def _build_interface_method_type_names(
+        self,
+        context: InterfaceGenerationContext,
+        method_info: MethodInfo,
+    ) -> InterfaceMethodTypeNames:
+        """Build flattened helper type names for one interface method."""
+        method_base = helper.sanitize_name(method_info.method_name).title()
+        interface_prefix = context.client_type_name.removesuffix("Client")
+
+        def resolve(candidate: str) -> str:
+            reserved_names = (
+                set(self._all_type_aliases) | self._imported_aliases | self._generated_interface_helper_types
+            )
+            if self._count_local_interface_helper_name_occurrences(candidate) > 1 or candidate in reserved_names:
+                return f"{interface_prefix}{candidate}"
+            return candidate
+
+        return InterfaceMethodTypeNames(
+            request_type_name=resolve(f"{method_base}Request"),
+            client_result_type_name=resolve(f"{method_base}Result"),
+            server_result_type_name=resolve(f"{method_base}ServerResult"),
+            params_type_name=resolve(f"{method_base}Params"),
+            call_context_type_name=resolve(f"{method_base}CallContext"),
+            result_tuple_type_name=resolve(f"{method_base}ResultTuple"),
+        )
+
+    def _emit_top_level_helper_class(self, class_name: str, lines: list[str]) -> None:
+        """Emit a typing-only helper class at module top level once."""
+        if not lines or class_name in self._generated_interface_helper_types:
+            return
+
+        self._generated_interface_helper_types.add(class_name)
+        root_scope = self.scope.root
+        if root_scope.lines and root_scope.lines[-1] != "":
+            root_scope.add("")
+        for line in lines:
+            root_scope.add(line)
+
+    def _emit_top_level_namedtuple_class(
+        self,
+        class_name: str,
+        fields: list[tuple[str, str]],
+    ) -> None:
+        """Emit a server result NamedTuple at module top level once."""
+        if class_name in self._generated_interface_helper_types:
+            return
+
+        self._add_typing_import("NamedTuple")
+        lines = [f"class {class_name}(NamedTuple):"]
+        if fields:
+            for field_name, field_type in fields:
+                lines.append(f"    {field_name}: {field_type}")
+        else:
+            lines.append("    pass")
+        self._emit_top_level_helper_class(class_name, lines)
 
     def _get_list_parameters(
         self,
@@ -2621,6 +2734,7 @@ class Writer:
         self,
         method_info: MethodInfo,
         parameters: list[ParameterInfo],
+        request_class_name: str,
         result_type: str,
     ) -> list[str]:
         """Generate Request Protocol class for a method.
@@ -2628,13 +2742,13 @@ class Writer:
         Args:
             method_info: Information about the method
             parameters: List of processed parameters
+            request_class_name: Name of the request helper class to generate
             result_type: The return type for send()
 
         Returns:
             List of lines for the Request Protocol class
 
         """
-        request_class_name = f"{helper.sanitize_name(method_info.method_name).title()}Request"
         lines: list[str] = []
 
         # Class declaration
@@ -2797,6 +2911,22 @@ class Writer:
             )
         lines.extend(["    @overload", "    def init(self, field: str, size: int | None = None) -> Any: ..."])
 
+    def _resolve_server_result_assignment_type(self, field_obj: FieldReader) -> str:
+        """Resolve the input type accepted when a server assigns or returns a result field."""
+        field_type_enum = field_obj.slot.type.which()
+        field_type, builder_hint, reader_hint = self._resolve_named_result_field_type(field_obj, for_server=True)
+
+        if field_type_enum == capnp_types.CapnpElementType.LIST and builder_hint and reader_hint:
+            self._add_typing_import("Sequence")
+            self._add_typing_import("Any")
+            return f"{builder_hint} | {reader_hint} | Sequence[Any]"
+
+        if field_type_enum == capnp_types.CapnpElementType.STRUCT and builder_hint:
+            self._add_typing_import("Any")
+            return f"{field_type} | dict[str, Any]"
+
+        return field_type
+
     def _generate_direct_result_protocol_lines(
         self,
         method_info: MethodInfo,
@@ -2905,30 +3035,26 @@ class Writer:
         self,
         method_info: MethodInfo,
         parameters: list[ParameterInfo],
+        request_class_name: str,
     ) -> list[str]:
         """Generate _request helper method for creating Request objects.
 
         Args:
             method_info: Information about the method
             parameters: List of processed parameters
+            request_class_name: Name of the request helper type returned by the method
 
         Returns:
             List of lines for the _request helper method
 
         """
         method_name = helper.sanitize_name(method_info.method_name)
-        request_class_name = f"{method_name.title()}Request"
-
-        # Scope the request class name to the interface
-        # Request classes are nested in the interface module, so we need the interface path
-        interface_path = self._get_scope_path()
-        scoped_request_class = f"{interface_path}.{request_class_name}" if interface_path else request_class_name
 
         # Build parameter list (similar to client method)
         param_list = ["self"] + [p.to_request_param() for p in parameters]
         param_str = ", ".join(param_list)
 
-        return [f"def {method_name}_request({param_str}) -> {scoped_request_class}: ..."]
+        return [f"def {method_name}_request({param_str}) -> {request_class_name}: ..."]
 
     @staticmethod
     def _sanitize_namedtuple_field_name(field_name: str) -> str:
@@ -2957,9 +3083,9 @@ class Writer:
     ) -> list[tuple[str, str]]:
         """Collect result fields for NamedTuple definition.
 
-        Gets the field names and their types for Server NamedTuple result types.
-        For structs, accepts both Builder and Reader types.
-        For AnyPointer, uses Any since servers can return any Python type.
+        Gets the field names and assignment-friendly types for server NamedTuple
+        result types so tuple construction matches what `context.results` setters
+        accept.
 
         Args:
             method_info: Information about the method
@@ -2975,35 +3101,11 @@ class Writer:
 
         for field_name in method_info.result_fields:
             field_obj = self._find_struct_field(method_info.result_schema, field_name)
-            field_type = self._resolve_named_result_field_type(field_obj, for_server=True)[0]
+            field_type = self._resolve_server_result_assignment_type(field_obj)
             sanitized_name = self._sanitize_namedtuple_field_name(field_name)
             fields.append((sanitized_name, field_type))
 
         return fields
-
-    def _build_server_context_type(self, method_name: str) -> str:
-        """Build the fully qualified CallContext type for a server method."""
-        scope_path = self._get_scope_path()
-        context_class_name = f"{method_name.title()}CallContext"
-        return f"{scope_path}.Server.{context_class_name}" if scope_path else f"Server.{context_class_name}"
-
-    def _resolve_server_list_result_type(self, field_obj: FieldReader) -> str:
-        """Resolve the element type for a single list result in a server signature."""
-        list_type = self.get_type_name(field_obj.slot.type)
-        element_type_obj = field_obj.slot.type.list.elementType
-        if element_type_obj.which() != capnp_types.CapnpElementType.STRUCT:
-            return list_type
-
-        element_type_name = self.get_type_name(element_type_obj)
-        element_builder, element_reader, builder_alias, reader_alias = self._get_struct_builder_reader_types(
-            element_type_name
-        )
-        element_replacement = (
-            f"{builder_alias} | {reader_alias}"
-            if builder_alias and reader_alias
-            else f"{element_builder} | {element_reader}"
-        )
-        return list_type.replace(element_type_name, element_replacement)
 
     def _get_single_server_result_type(self, method_info: MethodInfo) -> str | None:
         """Return the specialized single-field server result type, if one exists."""
@@ -3029,19 +3131,10 @@ class Writer:
         result_type: str | None = None
         field_obj = self._find_struct_field(method_info.result_schema, method_info.result_fields[0])
         field_type_enum = field_obj.slot.type.which()
-        if field_type_enum in primitive_field_types:
+        if field_type_enum in primitive_field_types or field_type_enum == capnp_types.CapnpElementType.ENUM:
             result_type = self.get_type_name(field_obj.slot.type)
-        elif field_type_enum == capnp_types.CapnpElementType.INTERFACE:
-            result_type = f"{self.get_type_name(field_obj.slot.type)}.Server"
-        elif field_type_enum == capnp_types.CapnpElementType.ENUM:
-            result_type = self.get_type_name(field_obj.slot.type)
-        elif field_type_enum == capnp_types.CapnpElementType.STRUCT:
-            result_type = self._resolve_named_result_field_type(field_obj, for_server=True)[0]
-        elif field_type_enum == capnp_types.CapnpElementType.LIST:
-            result_type = self._resolve_server_list_result_type(field_obj)
-        elif field_type_enum == capnp_types.CapnpElementType.ANY_POINTER:
-            self._needs_anypointer_alias = True
-            result_type = "AnyPointer"
+        else:
+            result_type = self._resolve_server_result_assignment_type(field_obj)
 
         return result_type
 
@@ -3049,7 +3142,8 @@ class Writer:
         self,
         method_info: MethodInfo,
         parameters: list[ParameterInfo],
-        result_type: str,
+        call_context_type: str,
+        result_tuple_type: str,
     ) -> str:
         """Generate server method signature for Server class.
 
@@ -3060,20 +3154,19 @@ class Writer:
         Args:
             method_info: Information about the method
             parameters: List of processed parameters
-            result_type: The result type (Result Protocol name)
+            call_context_type: Type name used for the `_context` parameter
+            result_tuple_type: Type name used for the server-side NamedTuple return helper
 
         Returns:
             Single-line server method signature
 
         """
         method_name = helper.sanitize_name(method_info.method_name)
-        scope_path = self._get_scope_path()
-        context_type = self._build_server_context_type(method_name)
 
         # Server methods have: self, params..., _context: CallContext, **kwargs
         param_parts = ["self"]
         param_parts.extend([p.to_server_param() for p in parameters])
-        param_parts.append(f"_context: {context_type}")
+        param_parts.append(f"_context: {call_context_type}")
         param_parts.append("**kwargs: Any")
         param_str = ", ".join(param_parts)
 
@@ -3084,18 +3177,18 @@ class Writer:
         if not method_info.result_fields:
             return_type_str = "Awaitable[None]"
         else:
-            full_server_path = f"{scope_path}.Server.{result_type}Tuple" if scope_path else f"Server.{result_type}Tuple"
             single_field_type = self._get_single_server_result_type(method_info)
             if single_field_type:
-                return_type_str = f"Awaitable[{single_field_type} | {full_server_path} | None]"
+                return_type_str = f"Awaitable[{single_field_type} | {result_tuple_type} | None]"
             else:
-                return_type_str = f"Awaitable[{full_server_path} | None]"
+                return_type_str = f"Awaitable[{result_tuple_type} | None]"
 
         return f"    def {method_name}({param_str}) -> {return_type_str}: ..."
 
     def _generate_server_context_method_signature(
         self,
         method_info: MethodInfo,
+        call_context_type: str,
     ) -> str:
         """Generate server method signature with _context suffix.
 
@@ -3104,6 +3197,7 @@ class Writer:
 
         Args:
             method_info: Information about the method
+            call_context_type: Type name used for the `context` parameter
 
         Returns:
             Single-line server method signature with _context suffix
@@ -3111,13 +3205,8 @@ class Writer:
         """
         method_name = helper.sanitize_name(method_info.method_name)
 
-        # Generate CallContext type name - it's inside Server class
-        scope_path = self._get_scope_path()
-        context_class_name = f"{method_name.title()}CallContext"
-        context_type = f"{scope_path}.Server.{context_class_name}" if scope_path else f"Server.{context_class_name}"
-
         # _context variant only takes context parameter
-        param_str = f"self, context: {context_type}"
+        param_str = f"self, context: {call_context_type}"
 
         # _context methods can return promises but not direct values (other than None)
         self._add_typing_import("Awaitable")
@@ -3127,22 +3216,19 @@ class Writer:
 
     def _generate_params_protocol(
         self,
-        method_info: MethodInfo,
         parameters: list[ParameterInfo],
+        params_class_name: str,
     ) -> list[str]:
         """Generate Params Protocol class for server context.
 
         Args:
-            method_info: Information about the method
             parameters: List of processed parameters
+            params_class_name: Name of the params helper class to generate
 
         Returns:
             List of lines for the Params Protocol class
 
         """
-        method_name = helper.sanitize_name(method_info.method_name)
-        params_class_name = f"{method_name.title()}Params"
-
         lines = [helper.new_class_declaration(params_class_name, ["Protocol"])]
 
         for param in parameters:
@@ -3156,53 +3242,33 @@ class Writer:
 
     def _generate_callcontext_protocol(
         self,
-        method_info: MethodInfo,
+        params_type_name: str,
+        call_context_type_name: str,
         *,
         has_results: bool,
         result_type_for_context: str | None = None,
-        is_direct_struct_return: bool = False,
     ) -> list[str]:
         """Generate CallContext Protocol for server _context parameter.
 
         Args:
-            method_info: Information about the method
+            params_type_name: Type name used by `CallContext.params`
+            call_context_type_name: Name of the CallContext helper class to generate
             has_results: Whether the method has results
-            result_type_for_context: Result type name (points to interface-level Protocol or struct name)
-            is_direct_struct_return: Whether this is a direct struct return
+            result_type_for_context: Result helper type exposed by `CallContext.results`
 
         Returns:
             List of lines for CallContext Protocol
 
         """
-        method_name = helper.sanitize_name(method_info.method_name)
-        context_name = f"{method_name.title()}CallContext"
+        lines = [helper.new_class_declaration(call_context_type_name, ["Protocol"])]
 
-        lines = [helper.new_class_declaration(context_name, ["Protocol"])]
+        # CallContext.params points to the flattened Params helper.
+        lines.append(f"    params: {params_type_name}")
 
-        scope_path = self._get_scope_path()
-
-        # CallContext.params points to the Params Protocol (nested in Server class)
-        params_type = f"{method_name.title()}Params"
-        fully_qualified_params = f"{scope_path}.Server.{params_type}" if scope_path else f"Server.{params_type}"
-        lines.append(f"    params: {fully_qualified_params}")
-
-        # CallContext.results points to the Server Result Protocol (nested in Server class)
-        # OR to the Builder type for direct struct returns
+        # CallContext.results points to the flattened Server Result helper
+        # or to the direct struct Builder type.
         if has_results:
-            if is_direct_struct_return and result_type_for_context:
-                # For direct struct returns, use the Builder type
-                # result_type_for_context is the struct name (e.g. "IdInformation")
-                builder_alias = self._get_flat_builder_alias(result_type_for_context)
-                fully_qualified_results = builder_alias or self._build_scoped_builder_type(result_type_for_context)
-            elif result_type_for_context:
-                if scope_path:
-                    # Use Server-nested Result Protocol: e.g., "_HolderModule.Server.ValueResult"
-                    fully_qualified_results = f"{scope_path}.Server.{result_type_for_context}"
-                else:
-                    fully_qualified_results = f"Server.{result_type_for_context}"
-            else:
-                # Shouldn't happen, but fallback
-                fully_qualified_results = "Any"
+            fully_qualified_results = result_type_for_context or "Any"
 
             # Make results a read-only property
             lines.append("    @property")
@@ -3229,86 +3295,96 @@ class Writer:
             return result_type
 
         client_type_name = self._get_client_type_name_from_interface_path(scope_path)
-        return f"{scope_path}.{client_type_name}.{result_type}"
+        return f"{client_type_name}.{result_type}"
 
     def _generate_method_result_protocols(
         self,
         method_info: MethodInfo,
-        result_type: str,
+        type_names: InterfaceMethodTypeNames,
         *,
         is_direct_struct_return: bool,
     ) -> tuple[list[str], list[str]]:
         """Generate client/server result protocols for a method."""
         client_result_lines = self._generate_result_protocol(
             method_info,
-            result_type,
+            type_names.client_result_type_name,
             is_direct_struct_return=is_direct_struct_return,
             for_server=False,
         )
-        server_result_lines = self._generate_result_protocol(
-            method_info,
-            result_type,
-            is_direct_struct_return=is_direct_struct_return,
-            for_server=True,
-        )
+        server_result_lines: list[str] = []
+        if method_info.result_fields and not is_direct_struct_return:
+            server_result_lines = self._generate_result_protocol(
+                method_info,
+                type_names.server_result_type_name,
+                is_direct_struct_return=False,
+                for_server=True,
+            )
         return client_result_lines, server_result_lines
 
     def _generate_method_callcontext_lines(
         self,
         method_info: MethodInfo,
         parameters: list[ParameterInfo],
+        type_names: InterfaceMethodTypeNames,
         *,
         is_direct_struct_return: bool,
-    ) -> list[str]:
+    ) -> tuple[list[str], list[str]]:
         """Generate Params and CallContext protocols for a server method."""
-        context_lines = self._generate_params_protocol(method_info, parameters)
+        params_lines = self._generate_params_protocol(parameters, type_names.params_type_name)
         if is_direct_struct_return:
             if method_info.result_schema is None:
                 msg = "Result schema is None for direct struct return"
                 raise ValueError(msg)
 
             struct_type = self.get_type_by_id(method_info.result_schema.node.id)
-            context_lines.extend(
+            return (
+                params_lines,
                 self._generate_callcontext_protocol(
-                    method_info,
+                    type_names.params_type_name,
+                    type_names.call_context_type_name,
                     has_results=True,
-                    result_type_for_context=struct_type.scoped_name,
-                    is_direct_struct_return=True,
+                    result_type_for_context=self._get_flat_builder_alias(struct_type.scoped_name)
+                    or self._build_scoped_builder_type(struct_type.scoped_name),
                 ),
             )
-            return context_lines
 
         has_results = bool(method_info.result_fields)
-        result_type_for_context = f"{method_info.method_name.title()}Result" if has_results else None
-        context_lines.extend(
+        return (
+            params_lines,
             self._generate_callcontext_protocol(
-                method_info,
+                type_names.params_type_name,
+                type_names.call_context_type_name,
                 has_results=has_results,
-                result_type_for_context=result_type_for_context,
-                is_direct_struct_return=False,
+                result_type_for_context=type_names.server_result_type_name if has_results else None,
             ),
         )
-        return context_lines
 
     def _add_interface_server_method_artifacts(
         self,
         method_info: MethodInfo,
         parameters: list[ParameterInfo],
-        result_type: str,
+        type_names: InterfaceMethodTypeNames,
         server_collection: ServerMethodsCollection,
     ) -> None:
         """Add server signatures and NamedTuple metadata for a method."""
         server_collection.add_server_method(
-            self._generate_server_method_signature(method_info, parameters, result_type)
+            self._generate_server_method_signature(
+                method_info,
+                parameters,
+                type_names.call_context_type_name,
+                type_names.result_tuple_type_name,
+            )
         )
-        server_collection.add_server_method(self._generate_server_context_method_signature(method_info))
+        server_collection.add_server_method(
+            self._generate_server_context_method_signature(method_info, type_names.call_context_type_name)
+        )
         if method_info.result_fields:
-            namedtuple_name = f"{result_type}Tuple"
             result_fields = self._collect_result_fields_for_namedtuple(method_info)
-            server_collection.add_namedtuple(namedtuple_name, result_fields)
+            server_collection.add_namedtuple(type_names.result_tuple_type_name, result_fields)
 
     def _process_interface_method(
         self,
+        context: InterfaceGenerationContext,
         method_info: MethodInfo,
         server_collection: ServerMethodsCollection,
     ) -> MethodSignatureCollection:
@@ -3317,6 +3393,7 @@ class Writer:
         This is the main processing method that coordinates all the sub-tasks.
 
         Args:
+            context: Interface-level metadata for the interface being generated
             method_info: Information about the method
             server_collection: Collection to add server method to
 
@@ -3326,28 +3403,49 @@ class Writer:
         """
         collection = MethodSignatureCollection(method_info.method_name)
         parameters = self._collect_method_parameters(method_info)
+        type_names = self._build_interface_method_type_names(context, method_info)
         result_type, is_direct_struct_return = self._process_method_results(method_info)
-        scoped_result_type = self._scope_interface_client_result_type(result_type)
-        client_lines = self._generate_client_method(method_info, parameters, scoped_result_type)
+        client_result_type = type_names.client_result_type_name if result_type != "None" else "None"
+        client_lines = self._generate_client_method(method_info, parameters, client_result_type)
         collection.set_client_method(client_lines)
-        collection.set_request_class(self._generate_request_protocol(method_info, parameters, scoped_result_type))
+        request_lines = self._generate_request_protocol(
+            method_info,
+            parameters,
+            type_names.request_type_name,
+            client_result_type,
+        )
+        collection.set_request_class(request_lines)
+        self._emit_top_level_helper_class(type_names.request_type_name, request_lines)
 
         client_result_lines, server_result_lines = self._generate_method_result_protocols(
             method_info,
-            result_type,
+            type_names,
             is_direct_struct_return=is_direct_struct_return,
         )
         collection.set_client_result_class(client_result_lines)
         collection.set_server_result_class(server_result_lines)
-        collection.server_context_lines.extend(
-            self._generate_method_callcontext_lines(
-                method_info,
-                parameters,
-                is_direct_struct_return=is_direct_struct_return,
-            ),
+        self._emit_top_level_helper_class(type_names.client_result_type_name, client_result_lines)
+        if server_result_lines:
+            self._emit_top_level_helper_class(type_names.server_result_type_name, server_result_lines)
+
+        params_lines, call_context_lines = self._generate_method_callcontext_lines(
+            method_info,
+            parameters,
+            type_names,
+            is_direct_struct_return=is_direct_struct_return,
         )
-        collection.set_request_helper(self._generate_request_helper_method(method_info, parameters))
-        self._add_interface_server_method_artifacts(method_info, parameters, result_type, server_collection)
+        collection.server_context_lines.extend(params_lines + call_context_lines)
+        self._emit_top_level_helper_class(type_names.params_type_name, params_lines)
+        self._emit_top_level_helper_class(type_names.call_context_type_name, call_context_lines)
+        collection.set_request_helper(
+            self._generate_request_helper_method(method_info, parameters, type_names.request_type_name)
+        )
+        self._add_interface_server_method_artifacts(method_info, parameters, type_names, server_collection)
+        if method_info.result_fields:
+            self._emit_top_level_namedtuple_class(
+                type_names.result_tuple_type_name,
+                self._collect_result_fields_for_namedtuple(method_info),
+            )
 
         return collection
 
@@ -3355,7 +3453,6 @@ class Writer:
         self,
         context: InterfaceGenerationContext,
         server_collection: ServerMethodsCollection,
-        server_result_lines: list[str],
     ) -> None:
         """Generate the Server class with all server methods.
 
@@ -3370,48 +3467,11 @@ class Writer:
             return
 
         self.scope.add(self._build_server_class_declaration(server_base_classes))
-        self._add_server_result_protocols(server_result_lines)
-        self._add_server_namedtuple_definitions(server_collection)
-        self._add_server_context_definitions(server_collection)
         self._add_server_method_signatures(server_collection)
 
     def _build_server_class_declaration(self, server_base_classes: list[str]) -> str:
         """Build the class declaration for a generated Server class."""
         return helper.new_class_declaration("Server", server_base_classes or ["_DynamicCapabilityServer"])
-
-    def _add_server_result_protocols(self, server_result_lines: list[str]) -> None:
-        """Add nested server result protocols inside the Server class."""
-        for line in server_result_lines:
-            self.scope.add(f"    {line}")
-        if server_result_lines:
-            self.scope.add("")
-
-    def _add_server_namedtuple_definitions(self, server_collection: ServerMethodsCollection) -> None:
-        """Add server-side NamedTuple result types."""
-        if not server_collection.namedtuples:
-            return
-
-        self._add_typing_import("NamedTuple")
-        for result_type, fields in server_collection.namedtuples.items():
-            self.scope.add(f"    class {result_type}(NamedTuple):")
-            if fields:
-                for field_name, field_type in fields:
-                    self.scope.add(f"        {field_name}: {field_type}")
-            else:
-                self.scope.add("        pass")
-        self.scope.add("")
-
-    def _add_server_context_definitions(self, server_collection: ServerMethodsCollection) -> None:
-        """Add nested Params and CallContext protocols inside the Server class."""
-        if not server_collection.context_classes:
-            return
-
-        for line in server_collection.context_classes:
-            if line.startswith("class ") or line.strip():
-                self.scope.add(f"    {line}")
-            else:
-                self.scope.add(line)
-        self.scope.add("")
 
     def _add_server_method_signatures(self, server_collection: ServerMethodsCollection) -> None:
         """Add server method signatures or a placeholder for inherited-only Servers."""
@@ -3434,34 +3494,19 @@ class Writer:
 
     def _collect_interface_method_components(
         self,
+        context: InterfaceGenerationContext,
         methods: list[MethodInfo],
         server_collection: ServerMethodsCollection,
-    ) -> tuple[list[str], list[str], list[str], list[str], list[str]]:
+    ) -> tuple[list[str], list[str]]:
         """Generate and collect per-method interface artifacts."""
         client_method_collection: list[str] = []
         request_helper_collection: list[str] = []
-        client_result_collection: list[str] = []
-        server_result_collection: list[str] = []
-        result_type_names: list[str] = []
 
         for method_info in methods:
-            method_collection = self._process_interface_method(method_info, server_collection)
+            method_collection = self._process_interface_method(context, method_info, server_collection)
             client_method_collection.extend(method_collection.client_method_lines)
             request_helper_collection.extend(method_collection.request_helper_lines)
-            client_result_collection.extend(method_collection.client_result_lines)
-            server_result_collection.extend(method_collection.server_result_lines)
-            result_type_names.append(f"{helper.sanitize_name(method_info.method_name).title()}Result")
-            for line in method_collection.request_class_lines:
-                self.scope.add(line)
-            server_collection.add_context_lines(method_collection.server_context_lines)
-
-        return (
-            client_method_collection,
-            request_helper_collection,
-            client_result_collection,
-            server_result_collection,
-            result_type_names,
-        )
+        return (client_method_collection, request_helper_collection)
 
     def _maybe_add_interface_new_client(
         self,
@@ -3471,8 +3516,7 @@ class Writer:
     ) -> None:
         """Add the module-level _new_client helper when the interface exposes a Server."""
         if server_collection.has_methods() or server_base_classes:
-            nested_client_name = f"{context.protocol_class_name}.{context.client_type_name}"
-            self._add_new_client_method(context.type_name, client_return_type=nested_client_name)
+            self._add_new_client_method(context.type_name, client_return_type=context.client_type_name)
 
     def _extract_interface_base_client_names(self, server_base_classes: list[str]) -> list[str]:
         """Convert inherited Server bases to their corresponding flat Client aliases."""
@@ -3481,8 +3525,10 @@ class Writer:
             if ".Server" not in server_base:
                 continue
             protocol_name = server_base.replace(".Server", "")
-            interface_name = self._extract_name_from_protocol(protocol_name.split(".")[-1])
-            base_client_names.append(f"{interface_name}Client")
+            base_client_names.append(
+                self._get_flat_client_alias(protocol_name)
+                or f"{self._extract_name_from_protocol(protocol_name.split('.')[-1])}Client"
+            )
         return base_client_names
 
     def _track_interface_client_cast_targets(
@@ -3497,14 +3543,6 @@ class Writer:
             self._extract_interface_base_client_names(server_base_classes),
         )
 
-    @staticmethod
-    def _namedtuple_method_name(namedtuple_name: str) -> str:
-        """Derive the original method name from a generated ResultTuple name."""
-        method_name = namedtuple_name.replace("ResultTuple", "Result").replace("Result", "").lower()
-        if method_name:
-            return method_name
-        return namedtuple_name.replace("Tuple", "").lower()
-
     def _track_interface_namedtuple_exports(
         self,
         context: InterfaceGenerationContext,
@@ -3517,62 +3555,41 @@ class Writer:
         interface_full_name = context.registered_type.scoped_name
         namedtuple_map = self._all_server_namedtuples.setdefault(interface_full_name, {})
         for namedtuple_name, fields in server_collection.namedtuples.items():
-            namedtuple_map[self._namedtuple_method_name(namedtuple_name)] = (namedtuple_name, fields)
+            namedtuple_map[namedtuple_name] = (namedtuple_name, fields)
 
     @staticmethod
     def _is_nested_interface_context(context: InterfaceGenerationContext) -> bool:
         """Return whether an interface is nested inside another scope."""
         return bool(context.registered_type.scope and not context.registered_type.scope.is_root)
 
-    def _build_client_alias_path(self, context: InterfaceGenerationContext, *, is_nested_interface: bool) -> str:
-        """Build the fully qualified Client alias path for an interface."""
-        if is_nested_interface:
-            return f"{context.registered_type.scoped_name}.{context.client_type_name}"
-        return f"{context.protocol_class_name}.{context.client_type_name}"
-
     def _build_result_alias_path(
         self,
         context: InterfaceGenerationContext,
         result_type_name: str,
-        *,
-        is_nested_interface: bool,
     ) -> str:
         """Build the fully qualified Result alias path for an interface method."""
-        if is_nested_interface:
-            return f"{context.registered_type.scoped_name}.{context.client_type_name}.{result_type_name}"
-        return f"{context.protocol_class_name}.{context.client_type_name}.{result_type_name}"
+        return f"{context.client_type_name}.{result_type_name}"
 
     def _add_interface_type_aliases(
         self,
         context: InterfaceGenerationContext,
         type_alias_scope: Scope,
-        result_type_names: list[str],
         *,
         should_generate_client: bool,
         should_generate_server: bool,
     ) -> None:
         """Register type aliases and annotations for generated interface helpers."""
         type_alias_scope.add(f"{context.type_name}: {context.protocol_class_name}")
-        is_nested_interface = self._is_nested_interface_context(context)
 
         if should_generate_client:
-            client_alias_path = self._build_client_alias_path(context, is_nested_interface=is_nested_interface)
-            if is_nested_interface:
-                type_alias_scope.add(f"type {context.client_type_name} = {client_alias_path}")
-            self._all_type_aliases[context.client_type_name] = (client_alias_path, "Client")
-
-            for result_type_name in result_type_names:
-                result_alias_path = self._build_result_alias_path(
-                    context,
-                    result_type_name,
-                    is_nested_interface=is_nested_interface,
-                )
-                self._all_type_aliases[result_type_name] = (result_alias_path, "Result")
+            self._all_type_aliases[context.client_type_name] = (context.registered_type.scoped_name, "ClientClass")
 
         if should_generate_server:
             server_alias_name = f"{context.type_name}Server"
             server_alias_path = f"{context.registered_type.scoped_name}.Server"
-            if is_nested_interface:
+            runtime_definition_name = context.schema.node.displayName.split(":", maxsplit=1)[1]
+            self._runtime_server_aliases[server_alias_name] = f"{runtime_definition_name}.Server"
+            if self._is_nested_interface_context(context):
                 type_alias_scope.add(f"type {server_alias_name} = {server_alias_path}")
             self._all_type_aliases[server_alias_name] = (server_alias_path, "Server")
 
@@ -3601,7 +3618,7 @@ class Writer:
 
         context = self._setup_interface_generation(schema)
         if context is None:
-            return self.register_import(schema)
+            return self.type_map.get(schema.node.id) or self.register_import(schema)
 
         type_alias_scope = context.parent_scope or self.scope
         self._open_interface_protocol_scope(context)
@@ -3609,26 +3626,23 @@ class Writer:
 
         methods = self._enumerate_interface_methods(context)
         server_collection = ServerMethodsCollection()
-        (
-            client_method_collection,
-            request_helper_collection,
-            client_result_collection,
-            server_result_collection,
-            result_type_names,
-        ) = self._collect_interface_method_components(methods, server_collection)
+        client_method_collection, request_helper_collection = self._collect_interface_method_components(
+            context,
+            methods,
+            server_collection,
+        )
         server_base_classes = self._collect_server_base_classes(context.schema)
         self._maybe_add_interface_new_client(context, server_collection, server_base_classes)
-        self._generate_server_class(context, server_collection, server_result_collection)
+        self._generate_server_class(context, server_collection)
 
         should_generate_client = bool(
             server_collection.has_methods() or server_base_classes or client_method_collection or methods
         )
         if should_generate_client:
-            self._generate_client_class_nested(
+            self._generate_flat_client_class(
                 context,
                 client_method_collection,
                 request_helper_collection,
-                client_result_collection,
                 server_base_classes,
             )
             self._track_interface_client_cast_targets(context, server_base_classes)
@@ -3641,7 +3655,6 @@ class Writer:
         self._add_interface_type_aliases(
             context,
             type_alias_scope,
-            result_type_names,
             should_generate_client=should_generate_client,
             should_generate_server=should_generate_server,
         )
@@ -3674,57 +3687,57 @@ class Writer:
                 server_base_classes.append(server_base)
         return server_base_classes
 
-    def _generate_client_class_nested(
+    def _generate_flat_client_class(
         self,
         context: InterfaceGenerationContext,
         client_method_lines: list[str],
         request_helper_lines: list[str],
-        client_result_lines: list[str],
         server_base_classes: list[str],
     ) -> None:
-        """Generate the Client Protocol class NESTED inside the interface Protocol.
+        """Generate the Client typing class at module top level.
 
         Args:
             context: The interface generation context
             client_method_lines: List of client method lines to add
             request_helper_lines: List of request helper method lines to add
-            client_result_lines: List of client Result protocol lines to add
             server_base_classes: List of server base classes for inheritance resolution
 
         """
+        if context.client_type_name in self._generated_client_classes:
+            return
+        self._generated_client_classes.add(context.client_type_name)
+
         # Build client base classes - inherit from superclass Clients
         client_base_classes: list[str] = []
         has_parent_clients = False
         for server_base in server_base_classes:
             # Extract protocol name from Server type and build Client type
-            # e.g., "_IdentifiableInterfaceModule.Server" -> "_IdentifiableInterfaceModule.IdentifiableClient"
+            # e.g., "_IdentifiableInterfaceModule.Server" -> "IdentifiableClient"
             if ".Server" in server_base:
                 protocol_name = server_base.replace(".Server", "")
-                # Extract interface name from protocol name: _IdentifiableInterfaceModule -> Identifiable
-                interface_name = self._extract_name_from_protocol(protocol_name.split(".")[-1])
-                client_base_classes.append(f"{protocol_name}.{interface_name}Client")
+                client_base_classes.append(
+                    self._get_flat_client_alias(protocol_name)
+                    or f"{self._extract_name_from_protocol(protocol_name.split('.')[-1])}Client"
+                )
                 has_parent_clients = True
 
         # Always inherit from _DynamicCapabilityClient as the base
         if not has_parent_clients:
             client_base_classes.insert(0, "_DynamicCapabilityClient")
 
-        # Generate Client class declaration
-        self.scope.add(helper.new_class_declaration(context.client_type_name, client_base_classes))
-
-        # Add client Result protocols (nested inside Client)
-        for line in client_result_lines:
-            self.scope.add(f"    {line}")
+        root_scope = self.scope.root
+        root_scope.add(helper.new_class_declaration(context.client_type_name, client_base_classes))
+        _ = self.new_scope(context.client_type_name, context.schema.node, register=False, parent_scope=root_scope)
 
         # Add client methods and request helpers with proper indentation
         all_method_lines = client_method_lines + request_helper_lines
         if all_method_lines:
             for line in all_method_lines:
-                # Methods come without indentation, add class-level indentation
-                self.scope.add(f"    {line}")
-        elif not client_result_lines:
-            # Empty client class (inherits everything from superclasses and has no Results)
-            self.scope.add("    ...")
+                self.scope.add(line)
+        else:
+            self.scope.add("...")
+
+        self.return_from_scope()
 
     def _generate_known_nested_schema(self, schema: capnp_types.SchemaType) -> bool:
         """Generate a schema instance when it already has a concrete runtime schema type."""
@@ -3898,7 +3911,10 @@ class Writer:
             return ".".join(f"_{part}StructModule" for part in definition_name.split("."))
 
         if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
+            client_name = f"{definition_name.rsplit('.', maxsplit=1)[-1]}Client"
             self._add_import(f"from {python_import_path} import {root_name}")
+            self._add_import(f"from {python_import_path}.types.clients import {client_name}")
+            self._imported_aliases.add(client_name)
             parts = definition_name.split(".")
             parts[-1] = f"_{parts[-1]}InterfaceModule"
             return ".".join(parts)
@@ -3916,19 +3932,22 @@ class Writer:
         if schema.node.which() == capnp_types.CapnpElementType.INTERFACE:
             protocol_name = f"_{definition_name}InterfaceModule"
             client_name = f"{definition_name}Client"
-            self._add_import(f"from {python_import_path} import {protocol_name}, {definition_name}, {client_name}")
+            self._add_import(f"from {python_import_path} import {protocol_name}, {definition_name}")
+            self._add_import(f"from {python_import_path}.types.clients import {client_name}")
             self._imported_aliases.add(client_name)
             return protocol_name
 
         if schema.node.which() == capnp_types.CapnpElementType.ENUM:
             alias_name = f"{definition_name}Enum"
-            self._add_import(f"from {python_import_path} import {alias_name}")
+            self._add_import(f"from {python_import_path}.types.enums import {alias_name}")
             return alias_name
 
         protocol_name = f"_{definition_name}StructModule"
         reader_alias = f"{definition_name}Reader"
         builder_alias = f"{definition_name}Builder"
-        self._add_import(f"from {python_import_path} import {protocol_name}, {reader_alias}, {builder_alias}")
+        self._add_import(f"from {python_import_path} import {protocol_name}")
+        self._add_import(f"from {python_import_path}.types.readers import {reader_alias}")
+        self._add_import(f"from {python_import_path}.types.builders import {builder_alias}")
         self._imported_aliases.add(reader_alias)
         self._imported_aliases.add(builder_alias)
         return protocol_name
@@ -4245,7 +4264,7 @@ class Writer:
         if len(alias_data) < MIN_ALIAS_DATA_PARTS:
             return None
 
-        original_path = alias_data[0]
+        original_path, type_kind = alias_data[:2]
         if alias_name.endswith("Reader"):
             if "List" in alias_name and ".Reader" in original_path:
                 return "lists", original_path.removesuffix(".Reader")
@@ -4253,6 +4272,9 @@ class Writer:
                 protocol_path = original_path.removesuffix(".Reader")
                 if "StructModule" in protocol_path:
                     return "structs", protocol_path
+
+        if alias_name.endswith("Client") and type_kind == "ClientClass":
+            return "interfaces", original_path
 
         if alias_name.endswith("Client") and "Client" in original_path:
             parts = original_path.rsplit(".", maxsplit=1)
@@ -4352,8 +4374,10 @@ class Writer:
             return f"type {alias_name} = {full_path}"
 
         full_path, type_kind = alias_info
-        if type_kind in {"ReaderClass", "BuilderClass"}:
+        if type_kind in {"ReaderClass", "BuilderClass", "ClientClass"}:
             return None
+        if type_kind == "Server":
+            return f"{alias_name} = {full_path}"
 
         return f"type {alias_name} = {full_path}"
 
@@ -4372,8 +4396,8 @@ class Writer:
 
         out.extend(["", "# Top-level type aliases for use in type annotations", *formatted_aliases])
 
-    def dumps_pyi(self) -> str:
-        """Generate the .pyi stub output for this schema.
+    def _dump_all_types_pyi(self) -> str:
+        """Generate the private monolithic typing stub for this schema.
 
         Returns:
             str: The output string.
@@ -4396,6 +4420,452 @@ class Writer:
 
         out.extend(self.scope.lines)
         self._append_top_level_type_aliases(out)
+        return "\n".join(out)
+
+    @staticmethod
+    def _empty_types_module_exports() -> dict[str, set[str]]:
+        """Create an empty export bucket for each public types submodule."""
+        return {
+            "builders": set(),
+            "readers": set(),
+            "clients": set(),
+            "requests": set(),
+            "contexts": set(),
+            "common": set(),
+            "servers": set(),
+            "enums": set(),
+            "results/client": set(),
+            "results/server": set(),
+            "results/tuples": set(),
+        }
+
+    @staticmethod
+    def _record_alias_export(exports: dict[str, set[str]], alias_name: str, type_kind: str) -> None:
+        """Add one generated alias to the correct public types submodule."""
+        export_module = {
+            "Builder": "builders",
+            "BuilderClass": "builders",
+            "Reader": "readers",
+            "ReaderClass": "readers",
+            "ClientClass": "clients",
+            "Server": "servers",
+            "Enum": "enums",
+        }.get(type_kind)
+        if export_module is not None:
+            exports[export_module].add(alias_name)
+
+    @staticmethod
+    def _record_interface_helper_export(exports: dict[str, set[str]], helper_name: str) -> None:
+        """Add one generated interface helper class to the correct public types submodule."""
+        if helper_name.endswith("ResultTuple"):
+            exports["results/tuples"].add(helper_name)
+            return
+
+        if helper_name.endswith("ServerResult"):
+            exports["results/server"].add(helper_name)
+            return
+
+        if helper_name.endswith("Result"):
+            exports["results/client"].add(helper_name)
+            return
+
+        if helper_name.endswith("Request"):
+            exports["requests"].add(helper_name)
+            return
+
+        if helper_name.endswith(("Params", "CallContext")):
+            exports["contexts"].add(helper_name)
+
+    def _build_types_module_exports(self) -> dict[str, list[str]]:
+        """Classify generated typing-only names into public types submodules."""
+        exports = self._empty_types_module_exports()
+
+        for alias_name, alias_info in self._all_type_aliases.items():
+            self._record_alias_export(exports, alias_name, alias_info[1])
+
+        for helper_name in self._generated_interface_helper_types:
+            self._record_interface_helper_export(exports, helper_name)
+
+        if self._needs_anypointer_alias:
+            exports["common"].add("AnyPointer")
+        if self._needs_capability_alias:
+            exports["common"].add("Capability")
+        if self._needs_anystruct_alias:
+            exports["common"].add("AnyStruct")
+        if self._needs_anylist_alias:
+            exports["common"].add("AnyList")
+
+        return {module_name: sorted(names) for module_name, names in exports.items()}
+
+    def _build_runtime_helper_class_names(self) -> set[str]:
+        """Collect top-level helper classes that should be hidden from the runtime stub."""
+        helper_class_names = set(self._generated_list_types) | set(self._generated_interface_helper_types)
+
+        for alias_name, alias_info in self._all_type_aliases.items():
+            if alias_info[1] in {"ReaderClass", "BuilderClass", "ClientClass"}:
+                helper_class_names.add(alias_name)
+
+        return helper_class_names
+
+    @staticmethod
+    def _extract_top_level_class_name(line: str) -> str | None:
+        """Extract the top-level class name from one root-scope line."""
+        if not line.startswith("class "):
+            return None
+
+        header = line.removeprefix("class ")
+        return header.split("(", maxsplit=1)[0].split(":", maxsplit=1)[0].strip()
+
+    @staticmethod
+    def _extract_top_level_alias_name(line: str) -> str | None:
+        """Extract the top-level type alias name from one root-scope line."""
+        if not line.startswith("type "):
+            return None
+
+        return line.removeprefix("type ").split("=", maxsplit=1)[0].strip()
+
+    @staticmethod
+    def _collapse_blank_lines(lines: list[str]) -> list[str]:
+        """Collapse repeated blank lines while preserving section spacing."""
+        collapsed: list[str] = []
+        previous_blank = False
+
+        for line in lines:
+            is_blank = not line.strip()
+            if is_blank and previous_blank:
+                continue
+
+            collapsed.append("" if is_blank else line)
+            previous_blank = is_blank
+
+        while collapsed and not collapsed[-1].strip():
+            collapsed.pop()
+
+        return collapsed
+
+    def _build_runtime_scope_lines(self, exports: dict[str, list[str]]) -> list[str]:
+        """Filter helper-only root-scope declarations out of the runtime stub."""
+        helper_class_names = self._build_runtime_helper_class_names()
+        helper_alias_names = {name for names in exports.values() for name in names}
+
+        filtered_lines: list[str] = []
+        index = 0
+        scope_lines = self.scope.lines
+
+        while index < len(scope_lines):
+            line = scope_lines[index]
+
+            if not line.startswith((" ", "\t")):
+                class_name = self._extract_top_level_class_name(line)
+                if class_name is not None and class_name in helper_class_names:
+                    index += 1
+                    while index < len(scope_lines):
+                        next_line = scope_lines[index]
+                        if next_line and not next_line.startswith((" ", "\t")):
+                            break
+                        index += 1
+                    continue
+
+                alias_name = self._extract_top_level_alias_name(line)
+                if alias_name is not None and alias_name in helper_alias_names:
+                    index += 1
+                    continue
+
+            filtered_lines.append(line)
+            index += 1
+
+        return self._collapse_blank_lines(filtered_lines)
+
+    def _append_runtime_types_imports(self, out: list[str], exports: dict[str, list[str]]) -> None:
+        """Append targeted private imports from the public types submodules."""
+        import_lines: list[str] = []
+
+        simple_imports = [
+            ("builders", "from .types import builders as _builders"),
+            ("readers", "from .types import readers as _readers"),
+            ("clients", "from .types import clients as _clients"),
+            ("requests", "from .types import requests as _requests"),
+            ("contexts", "from .types import contexts as _contexts"),
+            ("common", "from .types import common as _common"),
+            ("servers", "from .types import servers as _servers"),
+            ("enums", "from .types import enums as _enums"),
+        ]
+        results_imports = [
+            ("results/client", "from .types.results import client as _client_results"),
+            ("results/server", "from .types.results import server as _server_results"),
+            ("results/tuples", "from .types.results import tuples as _result_tuples"),
+        ]
+
+        for module_name, import_line in simple_imports + results_imports:
+            if exports[module_name]:
+                import_lines.append(import_line)
+
+        if import_lines:
+            out.extend(import_lines)
+            out.append("")
+
+    def _append_runtime_compatibility_aliases(self, out: list[str], exports: dict[str, list[str]]) -> None:
+        """Append temporary compatibility aliases that point at the public types package."""
+        module_aliases = {
+            "builders": "_builders",
+            "readers": "_readers",
+            "clients": "_clients",
+            "requests": "_requests",
+            "contexts": "_contexts",
+            "common": "_common",
+            "servers": "_servers",
+            "enums": "_enums",
+            "results/client": "_client_results",
+            "results/server": "_server_results",
+            "results/tuples": "_result_tuples",
+        }
+        assignment_modules = {
+            "builders",
+            "readers",
+            "clients",
+            "requests",
+            "contexts",
+            "servers",
+            "results/client",
+            "results/server",
+            "results/tuples",
+        }
+        alias_lines = [
+            (
+                f"{alias_name} = {module_aliases[module_name]}.{alias_name}"
+                if module_name in assignment_modules
+                else f"type {alias_name} = {module_aliases[module_name]}.{alias_name}"
+            )
+            for module_name in (
+                "builders",
+                "readers",
+                "clients",
+                "requests",
+                "contexts",
+                "common",
+                "servers",
+                "enums",
+                "results/client",
+                "results/server",
+                "results/tuples",
+            )
+            for alias_name in exports[module_name]
+        ]
+        if not alias_lines:
+            return
+
+        out.extend(
+            [
+                "",
+                "# Compatibility aliases for typing-only helpers; prefer imports from the schema `types` package.",
+                *alias_lines,
+            ],
+        )
+
+    @staticmethod
+    def _render_stub_module(docstring: str, body_lines: list[str]) -> str:
+        """Render one generated stub module."""
+        out = [docstring]
+        out.extend(["", *(body_lines or ["pass"])])
+        return "\n".join(out)
+
+    def _build_types_reexport_lines(self, module_name: str) -> list[str]:
+        """Build the public re-export lines for one types submodule."""
+        exports = self._build_types_module_exports()
+        import_path = ".._all" if module_name.startswith("results/") else "._all"
+        return [f"from {import_path} import {name} as {name}" for name in exports[module_name]]
+
+    def dumps_types_pyi_files(self) -> dict[str, str]:
+        """Generate the companion types-package .pyi files for this schema."""
+        type_package_imports = [
+            "from . import _all as _all",
+            "from . import builders as builders",
+            "from . import readers as readers",
+            "from . import clients as clients",
+            "from . import requests as requests",
+            "from . import contexts as contexts",
+            "from . import common as common",
+            "from . import servers as servers",
+            "from . import enums as enums",
+            "from . import results as results",
+        ]
+        result_package_imports = [
+            "from . import client as client",
+            "from . import server as server",
+            "from . import tuples as tuples",
+        ]
+
+        return {
+            "types/__init__.pyi": self._render_stub_module(
+                f'"""Public typing helper modules for `{self._module_path.name}`."""',
+                type_package_imports,
+            ),
+            "types/_all.pyi": self._dump_all_types_pyi(),
+            "types/builders.pyi": self._render_stub_module(
+                f'"""Builder helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("builders"),
+            ),
+            "types/readers.pyi": self._render_stub_module(
+                f'"""Reader helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("readers"),
+            ),
+            "types/clients.pyi": self._render_stub_module(
+                f'"""Client helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("clients"),
+            ),
+            "types/requests.pyi": self._render_stub_module(
+                f'"""Request helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("requests"),
+            ),
+            "types/contexts.pyi": self._render_stub_module(
+                f'"""Context helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("contexts"),
+            ),
+            "types/common.pyi": self._render_stub_module(
+                f'"""Common typing aliases for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("common"),
+            ),
+            "types/servers.pyi": self._render_stub_module(
+                f'"""Server helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("servers"),
+            ),
+            "types/enums.pyi": self._render_stub_module(
+                f'"""Enum helper aliases for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("enums"),
+            ),
+            "types/results/__init__.pyi": self._render_stub_module(
+                f'"""Result helper modules for `{self._module_path.name}`."""',
+                result_package_imports,
+            ),
+            "types/results/client.pyi": self._render_stub_module(
+                f'"""Client result helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("results/client"),
+            ),
+            "types/results/server.pyi": self._render_stub_module(
+                f'"""Server result helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("results/server"),
+            ),
+            "types/results/tuples.pyi": self._render_stub_module(
+                f'"""Result tuple helper types for `{self._module_path.name}`."""',
+                self._build_types_reexport_lines("results/tuples"),
+            ),
+        }
+
+    @staticmethod
+    def _render_runtime_module(docstring: str, body_lines: list[str]) -> str:
+        """Render one generated runtime placeholder module."""
+        out = [docstring]
+        if body_lines:
+            out.extend(["", *body_lines])
+        return "\n".join(out)
+
+    def dumps_types_py_files(self) -> dict[str, str]:
+        """Generate runtime placeholder files for the companion types package."""
+        type_package_imports = [
+            "from . import _all, builders, readers, clients, requests, contexts, common, servers, enums, results",
+        ]
+        result_package_imports = [
+            "from . import client, server, tuples",
+        ]
+        server_module_lines: list[str] = []
+        if self._runtime_server_aliases:
+            root_runtime_names = sorted(
+                {runtime_path.split(".", maxsplit=1)[0] for runtime_path in self._runtime_server_aliases.values()}
+            )
+            server_module_lines.append(f"from .. import {', '.join(root_runtime_names)}")
+            server_module_lines.extend(
+                [
+                    "",
+                    *[
+                        f"{alias_name} = {runtime_path}"
+                        for alias_name, runtime_path in sorted(self._runtime_server_aliases.items())
+                    ],
+                ],
+            )
+
+        return {
+            "types/__init__.py": self._render_runtime_module(
+                f'"""Runtime placeholder package for typing helpers of `{self._module_path.name}`."""',
+                type_package_imports,
+            ),
+            "types/_all.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for private typing helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/builders.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for builder helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/readers.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for reader helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/clients.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for client helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/requests.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for request helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/contexts.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for context helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/common.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for common typing helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/servers.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for server helpers of `{self._module_path.name}`."""',
+                server_module_lines,
+            ),
+            "types/enums.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for enum helper aliases of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/results/__init__.py": self._render_runtime_module(
+                f'"""Runtime placeholder package for result helpers of `{self._module_path.name}`."""',
+                result_package_imports,
+            ),
+            "types/results/client.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for client result helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/results/server.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for server result helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+            "types/results/tuples.py": self._render_runtime_module(
+                f'"""Runtime placeholder module for result tuple helpers of `{self._module_path.name}`."""',
+                [],
+            ),
+        }
+
+    def dumps_pyi(self) -> str:
+        """Generate the runtime-facing .pyi stub output for this schema.
+
+        Returns:
+            str: The output string.
+
+        """
+        self._ensure_root_scope(context="dumping")
+        exports = self._build_types_module_exports()
+        out: list[str] = []
+        out.append(self.docstring)
+        out.extend(self.imports)
+
+        if self._needs_dynamic_object_reader_augmentation:
+            out.append("from capnp.lib.capnp import _DynamicObjectReader")
+
+        self._append_runtime_types_imports(out, exports)
+
+        if self.type_vars:
+            out.extend(f'{name} = TypeVar("{name}")' for name in sorted(self.type_vars))
+            out.append("")
+
+        out.extend(self._build_runtime_scope_lines(exports))
+        self._append_runtime_compatibility_aliases(out, exports)
         return "\n".join(out)
 
     def _find_runtime_schema_access_segments_from_type(
@@ -4697,19 +5167,15 @@ class Writer:
                 )
 
     def _append_runtime_server_namedtuples(self, out: list[str]) -> None:
-        """Append runtime NamedTuple assignments for server result tuple types."""
+        """Append runtime NamedTuple assignments for flattened server result tuple types."""
         if not self._all_server_namedtuples:
             return
 
         out.append("")
-        for interface_name, namedtuples_dict in sorted(self._all_server_namedtuples.items()):
-            runtime_interface_name = self._protocol_path_to_runtime_path(interface_name)
+        for _, namedtuples_dict in sorted(self._all_server_namedtuples.items()):
             for _, (namedtuple_name, fields) in sorted(namedtuples_dict.items()):
                 field_list = [f'("{field_name}", object)' for field_name, _ in fields]
-                out.append(
-                    f"{runtime_interface_name}.Server.{namedtuple_name} = "
-                    f"NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])",
-                )
+                out.append(f"{namedtuple_name} = NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])")
 
     def dumps_py(self) -> str:
         """Generate the .py loader module for this schema.

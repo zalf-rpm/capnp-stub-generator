@@ -15,24 +15,24 @@ from tests.test_helpers import log_summary
 
 def test_both_method_variants_exist(calculator_stubs: Path) -> None:
     """Both regular and _context variant methods should be generated."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # Regular method with individual parameters (may be multi-line signature)
     assert "def evaluate(" in content
     assert "expression: ExpressionReader" in content
-    assert "_context: _CalculatorInterfaceModule.Server.EvaluateCallContext" in content
+    assert "_context: EvaluateCallContext" in content
     assert "**kwargs: Any" in content
 
     # _context variant with only context parameter
     assert "def evaluate_context(" in content
-    assert "context: _CalculatorInterfaceModule.Server.EvaluateCallContext" in content
+    assert "context: EvaluateCallContext" in content
     assert "-> Awaitable[None]" in content
 
 
 def test_context_variant_signature(calculator_stubs: Path) -> None:
     """_context methods should have correct signature."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     context_methods = re.findall(r"def (\w+)_context\(", content)
@@ -53,29 +53,29 @@ def test_context_variant_signature(calculator_stubs: Path) -> None:
 
 def test_callcontext_has_params_and_results(calculator_stubs: Path) -> None:
     """CallContext should have both params and results attributes."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # Check a method with parameters and results
     assert "class EvaluateCallContext(Protocol):" in content
-    assert "params: _CalculatorInterfaceModule.Server.EvaluateParams" in content
-    # Results now point to Server.Result
+    assert "params: EvaluateParams" in content
+    # Results now point to the flattened ServerResult helper
     assert "@property" in content
-    assert "def results(self) -> _CalculatorInterfaceModule.Server.EvaluateResult: ..." in content
+    assert "def results(self) -> EvaluateServerResult: ..." in content
 
 
 def test_callcontext_void_method(basic_stubs: Path) -> None:
     """CallContext for void methods should have params but no results."""
-    stub_file = basic_stubs / "channel_capnp" / "__init__.pyi"
+    stub_file = basic_stubs / "channel_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # Check void method CallContext (Reader.close is a void method)
-    assert "class CloseCallContext(Protocol):" in content
-    assert "params: _ChannelInterfaceModule._ReaderInterfaceModule.Server.CloseParams" in content
+    assert "class ReaderCloseCallContext(Protocol):" in content
+    assert "params: ReaderCloseParams" in content
 
-    # Find CloseCallContext inside Reader
+    # Find the flattened ReaderCloseCallContext helper
     close_context = re.search(
-        r"class CloseCallContext\(Protocol\):.*?(?=\n\n|\n            class |\n            def )",
+        r"class ReaderCloseCallContext\(Protocol\):.*?(?=\n\n|\nclass |\Z)",
         content,
         re.DOTALL,
     )
@@ -86,12 +86,12 @@ def test_callcontext_void_method(basic_stubs: Path) -> None:
 
 def test_nested_interface_context_methods(calculator_stubs: Path) -> None:
     """Nested interfaces should also have _context methods."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # Calculator.Value is a nested interface (now _ValueInterfaceModule inside _CalculatorInterfaceModule)
     assert "def read_context(" in content
-    assert "context: _CalculatorInterfaceModule._ValueInterfaceModule.Server.ReadCallContext" in content
+    assert "context: ReadCallContext" in content
 
     # Calculator.Function is a nested interface (now _FunctionInterfaceModule inside _CalculatorInterfaceModule)
     assert "def call_context(" in content  # Verify method exists
@@ -99,7 +99,7 @@ def test_nested_interface_context_methods(calculator_stubs: Path) -> None:
 
 def test_context_method_documentation(calculator_stubs: Path) -> None:
     """Verify the _context methods work as documented in pycapnp."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # According to documentation:
@@ -110,19 +110,19 @@ def test_context_method_documentation(calculator_stubs: Path) -> None:
 
     # Example from docs: defFunction_context(self, context)
     assert "def defFunction_context(" in content
-    assert "context: _CalculatorInterfaceModule.Server.DeffunctionCallContext" in content
+    assert "context: DeffunctionCallContext" in content
 
     # The CallContext should provide access to both params and results
     assert "class DeffunctionCallContext(Protocol):" in content
-    assert "params: _CalculatorInterfaceModule.Server.DeffunctionParams" in content
-    # Results now point to Server.Result
+    assert "params: DeffunctionParams" in content
+    # Results now point to the flattened ServerResult helper
     assert "@property" in content
-    assert "def results(self) -> _CalculatorInterfaceModule.Server.DeffunctionResult: ..." in content
+    assert "def results(self) -> DeffunctionServerResult: ..." in content
 
 
 def test_context_methods_count(calculator_stubs: Path) -> None:
     """Count that all interface methods have _context variants."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
     content = stub_file.read_text()
 
     # Find all Server class methods

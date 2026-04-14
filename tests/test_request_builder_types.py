@@ -19,7 +19,7 @@ class TestRequestBuilderStructure:
 
     def test_evaluate_request_has_expression_field(self, generate_calculator_stubs: Path) -> None:
         """Test that EvaluateRequest has expression field with Builder type."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have EvaluateRequest class
@@ -44,7 +44,7 @@ class TestRequestBuilderStructure:
 
     def test_deffunction_request_has_fields(self, generate_calculator_stubs: Path) -> None:
         """Test that DeffunctionRequest has paramCount and body fields."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have DeffunctionRequest class
@@ -74,7 +74,7 @@ class TestRequestBuilderStructure:
 
     def test_call_request_has_params_field(self, generate_calculator_stubs: Path) -> None:
         """Test that CallRequest has params field."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Should have CallRequest class
@@ -89,7 +89,7 @@ class TestRequestBuilderSendMethod:
 
     def test_evaluate_request_send_returns_evaluate_result(self, generate_calculator_stubs: Path) -> None:
         """Test that EvaluateRequest.send() returns EvaluateResult."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Find EvaluateRequest and check its send method
@@ -112,7 +112,7 @@ class TestRequestBuilderSendMethod:
 
     def test_deffunction_request_send_returns_deffunction_result(self, generate_calculator_stubs: Path) -> None:
         """Test that DeffunctionRequest.send() returns DeffunctionResult."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Find DeffunctionRequest and check its send method
@@ -134,7 +134,7 @@ class TestRequestBuilderSendMethod:
 
     def test_read_request_send_returns_read_result(self, generate_calculator_stubs: Path) -> None:
         """Test that ReadRequest.send() returns ReadResult."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Find ReadRequest and check its send method
@@ -156,7 +156,7 @@ class TestRequestBuilderSendMethod:
 
     def test_call_request_send_returns_call_result(self, generate_calculator_stubs: Path) -> None:
         """Test that CallRequest.send() returns CallResult."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Find CallRequest and check its send method
@@ -182,11 +182,11 @@ class TestRequestBuilderFieldAccess:
 
     def test_request_expression_field_has_init(self, generate_calculator_stubs: Path) -> None:
         """Test that request.expression field has init() method."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # The precise struct typing class is flattened to module top level.
-        assert "class ExpressionBuilder(_CalculatorInterfaceModule._ExpressionStructModule.Builder):" in stub_content
+        assert "class ExpressionBuilder(_DynamicStructBuilder):" in stub_content
 
         # Should have init overload for "call" that returns Call.Builder
         assert "def init(self" in stub_content
@@ -197,29 +197,29 @@ class TestRequestMethodReturnsRequest:
     """Test that *_request() methods return proper request types."""
 
     def test_evaluate_request_method_returns_evaluate_request(self, generate_calculator_stubs: Path) -> None:
-        """Test that evaluate_request() returns _CalculatorInterfaceModule.EvaluateRequest."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        """Test that evaluate_request() returns the flattened top-level EvaluateRequest."""
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         # Check for method name and return type (allowing for kwargs parameters)
         assert "def evaluate_request(" in stub_content
-        assert ") -> _CalculatorInterfaceModule.EvaluateRequest:" in stub_content
+        assert ") -> EvaluateRequest:" in stub_content
 
     def test_deffunction_request_method_returns_deffunction_request(self, generate_calculator_stubs: Path) -> None:
-        """Test that defFunction_request() returns _CalculatorInterfaceModule.DeffunctionRequest."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        """Test that defFunction_request() returns the flattened top-level DeffunctionRequest."""
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         assert "def defFunction_request(" in stub_content
-        assert ") -> _CalculatorInterfaceModule.DeffunctionRequest:" in stub_content
+        assert ") -> DeffunctionRequest:" in stub_content
 
     def test_getoperator_request_method_returns_getoperator_request(self, generate_calculator_stubs: Path) -> None:
-        """Test that getOperator_request() returns _CalculatorInterfaceModule.GetoperatorRequest."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
+        """Test that getOperator_request() returns the flattened top-level GetoperatorRequest."""
+        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
         stub_content = stub_file.read_text()
 
         assert "def getOperator_request(" in stub_content
-        assert ") -> _CalculatorInterfaceModule.GetoperatorRequest:" in stub_content
+        assert ") -> GetoperatorRequest:" in stub_content
 
 
 def test_request_builder_types_summary() -> None:

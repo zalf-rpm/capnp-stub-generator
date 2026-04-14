@@ -45,7 +45,7 @@ def _class_block_contains_any(lines: list[str], class_name: str, field_tokens: t
 
 def test_generics_anypointer_interface(basic_stubs: Path) -> None:
     """Test that generics with AnyPointer, generic instantiations, and interfaces are handled."""
-    stub = basic_stubs / "advanced_features_capnp" / "__init__.pyi"
+    stub = basic_stubs / "advanced_features_capnp" / "types" / "_all.pyi"
     assert stub.exists(), "Stub should be generated"
 
     content = stub.read_text()

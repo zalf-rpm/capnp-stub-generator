@@ -14,7 +14,7 @@ def test_module_annotation_creates_directory_structure(tmp_path: Path) -> None:
     run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
     # Check that the directory structure was created according to the annotation
-    expected_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "__init__.pyi"
+    expected_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "types" / "_all.pyi"
     assert expected_path.exists(), f"Expected stub at {expected_path}"
 
     # Check that __init__.py was also created
@@ -37,12 +37,12 @@ def test_module_annotation_uses_absolute_imports(tmp_path: Path) -> None:
 
     run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
-    stub_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "__init__.pyi"
+    stub_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "types" / "_all.pyi"
     content = stub_path.read_text()
 
     # Check for absolute imports (not relative with .)
-    assert "from mas.schema.common.date_capnp import" in content, "Should use absolute import for date_capnp"
-    assert "from mas.schema.geo.geo_capnp import" in content, "Should use absolute import for geo_capnp"
+    assert "from mas.schema.common.date_capnp.types." in content, "Should use absolute import for date_capnp"
+    assert "from mas.schema.geo.geo_capnp.types." in content, "Should use absolute import for geo_capnp"
     assert "from mas.schema.persistence.persistence_capnp import" in content, (
         "Should use absolute import for persistence_capnp"
     )
@@ -61,7 +61,7 @@ def test_schema_without_annotation_still_works(tmp_path: Path) -> None:
     run_generator(["-p", str(schema_path), "-o", str(output_dir), "--no-pyright"])
 
     # Without annotation, should create flat structure
-    expected_path = output_dir / "addressbook_capnp" / "__init__.pyi"
+    expected_path = output_dir / "addressbook_capnp" / "types" / "_all.pyi"
     assert expected_path.exists(), f"Expected stub at {expected_path}"
 
 
@@ -77,11 +77,11 @@ def test_mixed_annotated_and_non_annotated_schemas(tmp_path: Path) -> None:
     run_generator(["-p", str(non_annotated_schema), "-o", str(output_dir), "--no-pyright"])
 
     # Annotated schema should have module structure
-    annotated_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "__init__.pyi"
+    annotated_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "types" / "_all.pyi"
     assert annotated_path.exists(), "Annotated schema should use module structure"
 
     # Non-annotated schema should have flat structure
-    non_annotated_path = output_dir / "addressbook_capnp" / "__init__.pyi"
+    non_annotated_path = output_dir / "addressbook_capnp" / "types" / "_all.pyi"
     assert non_annotated_path.exists(), "Non-annotated schema should use flat structure"
 
 
@@ -93,7 +93,7 @@ def test_nested_module_paths(tmp_path: Path) -> None:
 
     run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
-    expected_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "__init__.pyi"
+    expected_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "types" / "_all.pyi"
     assert expected_path.exists(), f"Expected stub at {expected_path}"
 
     # Verify all parent directories have __init__ files

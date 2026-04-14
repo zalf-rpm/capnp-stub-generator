@@ -17,7 +17,7 @@ def _read(path: Path) -> list[str]:
 def _get_stub_path(schema: str) -> Path:
     """Get path to pre-generated stub file."""
     stub_name = f"{Path(schema).stem}_capnp"
-    return generated_dir / stub_name / "__init__.pyi"
+    return generated_dir / stub_name / "types" / "_all.pyi"
 
 
 def test_primitives_and_lists_imports_and_types() -> None:
@@ -84,7 +84,7 @@ def test_imports_cross_module_reference() -> None:
     # Use pre-generated stubs from basic directory
     # Both import_base and import_user should already be generated together
     """Test imports cross module reference."""
-    user_stub = generated_dir / "import_user_capnp" / "__init__.pyi"
+    user_stub = generated_dir / "import_user_capnp" / "types" / "_all.pyi"
     user_lines = _read(user_stub)
     # With nested structure, Shared.Reader and Shared.Builder are used
     # Reader class should return Shared.Reader

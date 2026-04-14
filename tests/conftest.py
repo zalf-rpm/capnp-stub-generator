@@ -306,8 +306,8 @@ def generate_calculator_stubs(calculator_stubs: Path) -> Path:
 
 @pytest.fixture
 def calculator_stub_lines(calculator_stubs: Path) -> list[str]:
-    """Read calculator stub file lines."""
-    stub_file = calculator_stubs / "calculator_capnp" / "__init__.pyi"
+    """Read calculator typing helper lines from the internal monolithic types stub."""
+    stub_file = types_stub_path(calculator_stubs, "calculator_capnp", "_all.pyi")
     with stub_file.open() as f:
         return f.readlines()
 
@@ -329,6 +329,16 @@ def read_stub_file(stub_path: Path) -> list[str]:
     """
     with stub_path.open() as f:
         return f.readlines()
+
+
+def runtime_stub_path(stub_root: Path, module_name: str) -> Path:
+    """Return the runtime-facing __init__.pyi for one generated schema package."""
+    return stub_root / module_name / "__init__.pyi"
+
+
+def types_stub_path(stub_root: Path, module_name: str, *relative_parts: str) -> Path:
+    """Return a file inside the generated per-schema types package."""
+    return stub_root / module_name / "types" / Path(*relative_parts)
 
 
 def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
@@ -390,8 +400,8 @@ def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
 # Specific stub fixtures for individual files
 @pytest.fixture(scope="session")
 def dummy_stub_file(basic_stubs: Path) -> Path:
-    """Provide path to dummy_capnp __init__.pyi."""
-    return basic_stubs / "dummy_capnp" / "__init__.pyi"
+    """Provide path to dummy_capnp internal monolithic types stub."""
+    return types_stub_path(basic_stubs, "dummy_capnp", "_all.pyi")
 
 
 @pytest.fixture(scope="session")

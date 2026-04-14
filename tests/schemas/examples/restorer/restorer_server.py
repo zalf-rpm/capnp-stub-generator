@@ -1,32 +1,44 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import capnp
 
 from tests._generated.examples.restorer import restorer_capnp
 
+if TYPE_CHECKING:
+    from tests._generated.examples.restorer.restorer_capnp.types.servers import (
+        AnyTesterServer,
+        BagServer,
+        RestorerServer,
+    )
+else:
+    AnyTesterServer = restorer_capnp.AnyTester.Server
+    BagServer = restorer_capnp.Bag.Server
+    RestorerServer = restorer_capnp.Restorer.Server
 
-class BagImpl(restorer_capnp.Bag.Server):
+
+class BagImpl(BagServer):
     def __init__(self, value=""):
         self.value = value
 
     async def getValue(self, _context, **kwargs):
         # Return NamedTuple
-        return restorer_capnp.Bag.Server.GetvalueResultTuple(value=self.value)
+        return restorer_capnp.GetvalueResultTuple(value=self.value)
 
     async def setValue_context(self, context):
         self.value = context.params.value
 
 
-class AnyTesterImpl(restorer_capnp.AnyTester.Server):
+class AnyTesterImpl(AnyTesterServer):
     async def getAnyStruct(self, _context, **kwargs):
         # Return a RestoreParams struct directly (single value return)
         params = restorer_capnp.Restorer.RestoreParams.new_message(localRef="test_struct")
         # We need to wrap it in the NamedTuple because the stub expects GetanystructResultTuple | None
         # The single value return optimization is only for primitives/interfaces in the stub generator logic
         # Wait, let's check writer.py logic for single field return
-        return restorer_capnp.AnyTester.Server.GetanystructResultTuple(s=params)
+        return restorer_capnp.GetanystructResultTuple(s=params)
 
     async def getAnyList_context(self, context):
         # Return a list of strings (Text)
@@ -46,7 +58,7 @@ class AnyTesterImpl(restorer_capnp.AnyTester.Server):
         pass
 
 
-class RestorerImpl(restorer_capnp.Restorer.Server):
+class RestorerImpl(RestorerServer):
     def __init__(self):
         self.bags: dict[str, capnp.lib.capnp.Capability] = {}
 

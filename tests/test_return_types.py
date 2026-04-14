@@ -8,13 +8,13 @@ import pytest
 @pytest.fixture(scope="module")
 def dummy_stub_file(basic_stubs: Path) -> Path:
     """Get pre-generated dummy schema stub."""
-    return basic_stubs / "dummy_capnp" / "__init__.pyi"
+    return basic_stubs / "dummy_capnp" / "types" / "_all.pyi"
 
 
 @pytest.fixture(scope="module")
 def interface_stub_file(basic_stubs: Path) -> Path:
     """Get pre-generated interface schema stub."""
-    return basic_stubs / "interfaces_capnp" / "__init__.pyi"
+    return basic_stubs / "interfaces_capnp" / "types" / "_all.pyi"
 
 
 class TestStructReturnTypes:

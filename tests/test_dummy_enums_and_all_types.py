@@ -34,8 +34,8 @@ def test_builder_reader_classes_for_all_types(dummy_stub_lines: list[str]) -> No
     """Test builder reader classes for all types."""
     lines = dummy_stub_lines
     # The precise typing-only classes are flattened to module top level.
-    assert any("class TestAllTypesReader(_TestAllTypesStructModule.Reader):" in line for line in lines)
-    assert any("class TestAllTypesBuilder(_TestAllTypesStructModule.Builder):" in line for line in lines)
+    assert any("class TestAllTypesReader(_DynamicStructReader):" in line for line in lines)
+    assert any("class TestAllTypesBuilder(_DynamicStructBuilder):" in line for line in lines)
     # The runtime marker classes remain nested inside the struct module.
     assert any(line.strip().startswith("class Reader(_DynamicStructReader):") for line in lines)
     assert any(line.strip().startswith("class Builder(_DynamicStructBuilder):") for line in lines)

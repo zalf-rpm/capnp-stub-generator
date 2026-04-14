@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="module")
 def basic_low_stub_lines(basic_stubs: Path) -> list[str]:
     """Read basic_low.capnp stub lines."""
-    stub_path = basic_stubs / "basic_low_capnp" / "__init__.pyi"
+    stub_path = basic_stubs / "basic_low_capnp" / "types" / "_all.pyi"
     with stub_path.open(encoding="utf8") as f:
         return f.readlines()
 

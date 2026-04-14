@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="module")
 def mid_features_stub_lines(basic_stubs: Path) -> list[str]:
     """Test mid features stub lines."""
-    stub_path = basic_stubs / "mid_features_capnp" / "__init__.pyi"
+    stub_path = basic_stubs / "mid_features_capnp" / "types" / "_all.pyi"
     with stub_path.open() as f:
         return f.readlines()
 
