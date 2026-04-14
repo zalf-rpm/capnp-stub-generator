@@ -13,9 +13,15 @@ if TYPE_CHECKING:
         BagServer,
         RestorerServer,
     )
+    from tests._generated.examples.restorer.restorer_capnp.types.results.tuples import (
+        GetanystructResultTuple,
+        GetvalueResultTuple,
+    )
 else:
     AnyTesterServer = restorer_capnp.AnyTester.Server
     BagServer = restorer_capnp.Bag.Server
+    GetanystructResultTuple = restorer_capnp.GetanystructResultTuple
+    GetvalueResultTuple = restorer_capnp.GetvalueResultTuple
     RestorerServer = restorer_capnp.Restorer.Server
 
 
@@ -25,7 +31,7 @@ class BagImpl(BagServer):
 
     async def getValue(self, _context, **kwargs):
         # Return NamedTuple
-        return restorer_capnp.GetvalueResultTuple(value=self.value)
+        return GetvalueResultTuple(value=self.value)
 
     async def setValue_context(self, context):
         self.value = context.params.value
@@ -38,7 +44,7 @@ class AnyTesterImpl(AnyTesterServer):
         # We need to wrap it in the NamedTuple because the stub expects GetanystructResultTuple | None
         # The single value return optimization is only for primitives/interfaces in the stub generator logic
         # Wait, let's check writer.py logic for single field return
-        return restorer_capnp.GetanystructResultTuple(s=params)
+        return GetanystructResultTuple(s=params)
 
     async def getAnyList_context(self, context):
         # Return a list of strings (Text)

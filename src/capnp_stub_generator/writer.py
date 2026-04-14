@@ -10,6 +10,7 @@ import contextlib
 import logging
 import os.path
 import pathlib
+import re
 from copy import copy
 from typing import TYPE_CHECKING, Literal
 
@@ -4517,12 +4518,13 @@ class Writer:
         return header.split("(", maxsplit=1)[0].split(":", maxsplit=1)[0].strip()
 
     @staticmethod
-    def _extract_top_level_alias_name(line: str) -> str | None:
-        """Extract the top-level type alias name from one root-scope line."""
-        if not line.startswith("type "):
+    def _extract_alias_name(line: str) -> str | None:
+        """Extract a type alias name from one generated scope line."""
+        stripped = line.lstrip()
+        if not stripped.startswith("type "):
             return None
 
-        return line.removeprefix("type ").split("=", maxsplit=1)[0].strip()
+        return stripped.removeprefix("type ").split("=", maxsplit=1)[0].strip()
 
     @staticmethod
     def _collapse_blank_lines(lines: list[str]) -> list[str]:
@@ -4566,47 +4568,20 @@ class Writer:
                         index += 1
                     continue
 
-                alias_name = self._extract_top_level_alias_name(line)
-                if alias_name is not None and alias_name in helper_alias_names:
-                    index += 1
-                    continue
+            alias_name = self._extract_alias_name(line)
+            if alias_name is not None and alias_name in helper_alias_names:
+                index += 1
+                continue
 
             filtered_lines.append(line)
             index += 1
 
         return self._collapse_blank_lines(filtered_lines)
 
-    def _append_runtime_types_imports(self, out: list[str], exports: dict[str, list[str]]) -> None:
-        """Append targeted private imports from the public types submodules."""
-        import_lines: list[str] = []
-
-        simple_imports = [
-            ("builders", "from .types import builders as _builders"),
-            ("readers", "from .types import readers as _readers"),
-            ("clients", "from .types import clients as _clients"),
-            ("requests", "from .types import requests as _requests"),
-            ("contexts", "from .types import contexts as _contexts"),
-            ("common", "from .types import common as _common"),
-            ("servers", "from .types import servers as _servers"),
-            ("enums", "from .types import enums as _enums"),
-        ]
-        results_imports = [
-            ("results/client", "from .types.results import client as _client_results"),
-            ("results/server", "from .types.results import server as _server_results"),
-            ("results/tuples", "from .types.results import tuples as _result_tuples"),
-        ]
-
-        for module_name, import_line in simple_imports + results_imports:
-            if exports[module_name]:
-                import_lines.append(import_line)
-
-        if import_lines:
-            out.extend(import_lines)
-            out.append("")
-
-    def _append_runtime_compatibility_aliases(self, out: list[str], exports: dict[str, list[str]]) -> None:
-        """Append temporary compatibility aliases that point at the public types package."""
-        module_aliases = {
+    @staticmethod
+    def _runtime_helper_module_aliases() -> dict[str, str]:
+        """Return private module aliases used by runtime stubs for local helper modules."""
+        return {
             "builders": "_builders",
             "readers": "_readers",
             "clients": "_clients",
@@ -4619,48 +4594,137 @@ class Writer:
             "results/server": "_server_results",
             "results/tuples": "_result_tuples",
         }
-        assignment_modules = {
-            "builders",
-            "readers",
-            "clients",
-            "requests",
-            "contexts",
-            "servers",
-            "results/client",
-            "results/server",
-            "results/tuples",
-        }
-        alias_lines = [
-            (
-                f"{alias_name} = {module_aliases[module_name]}.{alias_name}"
-                if module_name in assignment_modules
-                else f"type {alias_name} = {module_aliases[module_name]}.{alias_name}"
-            )
-            for module_name in (
-                "builders",
-                "readers",
-                "clients",
-                "requests",
-                "contexts",
-                "common",
-                "servers",
-                "enums",
-                "results/client",
-                "results/server",
-                "results/tuples",
-            )
-            for alias_name in exports[module_name]
-        ]
-        if not alias_lines:
-            return
 
-        out.extend(
-            [
-                "",
-                "# Compatibility aliases for typing-only helpers; prefer imports from the schema `types` package.",
-                *alias_lines,
-            ],
+    @staticmethod
+    def _render_runtime_helper_module_import(import_path: str, module_name: str, alias_name: str) -> str:
+        """Render one private helper-module import line for a runtime stub."""
+        base_types_import = ".types" if import_path in {"", "."} else f"{import_path}.types"
+        if module_name.startswith("results/"):
+            result_module_name = module_name.rsplit("/", maxsplit=1)[-1]
+            return f"from {base_types_import}.results import {result_module_name} as {alias_name}"
+
+        return f"from {base_types_import} import {module_name} as {alias_name}"
+
+    def _build_local_runtime_helper_references(
+        self,
+        exports: dict[str, list[str]],
+    ) -> tuple[dict[str, str], list[str]]:
+        """Build private imports and qualified references for local helper names."""
+        references: dict[str, str] = {}
+        import_lines: list[str] = []
+        module_aliases = self._runtime_helper_module_aliases()
+
+        for module_name, alias_name in module_aliases.items():
+            exported_names = exports[module_name]
+            if not exported_names:
+                continue
+
+            import_lines.append(self._render_runtime_helper_module_import(".", module_name, alias_name))
+            references.update({name: f"{alias_name}.{name}" for name in exported_names})
+
+        return references, import_lines
+
+    @staticmethod
+    def _parse_runtime_helper_import_line(import_line: str) -> tuple[str, str, str] | None:
+        """Parse one direct helper import into (base module, helper module, imported name)."""
+        direct_match = re.fullmatch(
+            r"from (?P<module>.+)\.types\.(?P<helper>builders|readers|clients|requests|contexts|common|servers|enums) import (?P<name>\w+)",
+            import_line,
         )
+        if direct_match is not None:
+            return direct_match.group("module"), direct_match.group("helper"), direct_match.group("name")
+
+        result_match = re.fullmatch(
+            r"from (?P<module>.+)\.types\.results\.(?P<helper>client|server|tuples) import (?P<name>\w+)",
+            import_line,
+        )
+        if result_match is not None:
+            helper_module = f"results/{result_match.group('helper')}"
+            return result_match.group("module"), helper_module, result_match.group("name")
+
+        return None
+
+    @staticmethod
+    def _build_external_runtime_helper_alias(import_path: str, module_name: str) -> str:
+        """Build a deterministic private alias for one imported helper module."""
+        leading_dots = len(import_path) - len(import_path.lstrip("."))
+        relative_prefix = f"rel{leading_dots}" if leading_dots else ""
+        sanitized_module_path = import_path.lstrip(".").replace(".", "_")
+        sanitized_helper_module = module_name.replace("/", "_")
+        parts = [part for part in (relative_prefix, sanitized_module_path, sanitized_helper_module) if part]
+        return "_" + "_".join(parts or ["types"])
+
+    def _build_external_runtime_helper_references(
+        self,
+    ) -> tuple[dict[str, str], list[str], set[str]]:
+        """Build private imports and qualified references for externally imported helper names."""
+        references: dict[str, str] = {}
+        filtered_import_lines: set[str] = set()
+        module_aliases: dict[tuple[str, str], str] = {}
+
+        for import_line in self.imports:
+            parsed_import = self._parse_runtime_helper_import_line(import_line)
+            if parsed_import is None:
+                continue
+
+            import_path, module_name, imported_name = parsed_import
+            filtered_import_lines.add(import_line)
+            module_key = (import_path, module_name)
+            module_alias = module_aliases.setdefault(
+                module_key,
+                self._build_external_runtime_helper_alias(import_path, module_name),
+            )
+            references[imported_name] = f"{module_alias}.{imported_name}"
+
+        import_lines = [
+            self._render_runtime_helper_module_import(
+                import_path, module_name, module_aliases[(import_path, module_name)]
+            )
+            for import_path, module_name in sorted(module_aliases)
+        ]
+        return references, import_lines, filtered_import_lines
+
+    @staticmethod
+    def _rewrite_runtime_helper_references(lines: list[str], references: dict[str, str]) -> list[str]:
+        """Rewrite helper names in runtime scope lines to private qualified references."""
+        if not references:
+            return lines
+
+        pattern = re.compile(r"\b(" + "|".join(sorted(map(re.escape, references), key=len, reverse=True)) + r")\b")
+        rewritten_lines: list[str] = []
+
+        for line in lines:
+            stripped = line.lstrip()
+            if stripped.startswith(("def ", "class ", "@")) or ":" not in line:
+                rewritten_lines.append(pattern.sub(lambda match: references[match.group(0)], line))
+                continue
+
+            line_prefix, separator, line_suffix = line.partition(":")
+            rewritten_suffix = pattern.sub(lambda match: references[match.group(0)], line_suffix)
+            rewritten_lines.append(f"{line_prefix}{separator}{rewritten_suffix}")
+
+        return rewritten_lines
+
+    def _build_runtime_imports_and_scope_lines(
+        self,
+        exports: dict[str, list[str]],
+    ) -> tuple[list[str], list[str]]:
+        """Build runtime imports and scope lines without exposing public helper aliases."""
+        local_references, local_import_lines = self._build_local_runtime_helper_references(exports)
+        external_references, external_import_lines, filtered_import_lines = (
+            self._build_external_runtime_helper_references()
+        )
+        runtime_imports = [import_line for import_line in self.imports if import_line not in filtered_import_lines]
+
+        helper_import_lines = [*local_import_lines, *external_import_lines]
+        if helper_import_lines:
+            runtime_imports.extend(helper_import_lines)
+
+        helper_references = {**external_references, **local_references}
+        runtime_scope_lines = self._rewrite_runtime_helper_references(
+            self._build_runtime_scope_lines(exports), helper_references
+        )
+        return runtime_imports, runtime_scope_lines
 
     @staticmethod
     def _render_stub_module(docstring: str, body_lines: list[str]) -> str:
@@ -4851,21 +4915,19 @@ class Writer:
         """
         self._ensure_root_scope(context="dumping")
         exports = self._build_types_module_exports()
+        runtime_imports, runtime_scope_lines = self._build_runtime_imports_and_scope_lines(exports)
         out: list[str] = []
         out.append(self.docstring)
-        out.extend(self.imports)
+        out.extend(runtime_imports)
 
         if self._needs_dynamic_object_reader_augmentation:
             out.append("from capnp.lib.capnp import _DynamicObjectReader")
-
-        self._append_runtime_types_imports(out, exports)
 
         if self.type_vars:
             out.extend(f'{name} = TypeVar("{name}")' for name in sorted(self.type_vars))
             out.append("")
 
-        out.extend(self._build_runtime_scope_lines(exports))
-        self._append_runtime_compatibility_aliases(out, exports)
+        out.extend(runtime_scope_lines)
         return "\n".join(out)
 
     def _find_runtime_schema_access_segments_from_type(

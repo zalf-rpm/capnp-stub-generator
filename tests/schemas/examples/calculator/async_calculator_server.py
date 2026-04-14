@@ -3,18 +3,24 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 import capnp
 
 from tests._generated.examples.calculator import calculator_capnp
+
+if TYPE_CHECKING:
+    from tests._generated.examples.calculator.calculator_capnp.types.builders import ExpressionBuilder
+    from tests._generated.examples.calculator.calculator_capnp.types.enums import CalculatorOperatorEnum
+    from tests._generated.examples.calculator.calculator_capnp.types.readers import ExpressionReader, Float64ListReader
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
 async def evaluate_impl(
-    expression: calculator_capnp.ExpressionBuilder | calculator_capnp.ExpressionReader,
-    params: calculator_capnp.Float64ListReader | None = None,
+    expression: ExpressionBuilder | ExpressionReader,
+    params: Float64ListReader | None = None,
 ):
     """Implementation of CalculatorImpl::evaluate(), also shared by
     FunctionImpl::call().  In the latter case, `params` are the parameter
@@ -60,9 +66,9 @@ class FunctionImpl(calculator_capnp.Calculator.Function.Server):
     function is defined by a Calculator.Expression.
     """
 
-    def __init__(self, paramCount: int, body: calculator_capnp.ExpressionReader):
+    def __init__(self, paramCount: int, body: ExpressionReader):
         self.paramCount: int = paramCount
-        self.body: calculator_capnp.ExpressionBuilder = body.as_builder()
+        self.body: ExpressionBuilder = body.as_builder()
 
     async def call(self, params, _context, **kwargs):
         """Note that we're returning a Promise object here, and bypassing the
@@ -79,8 +85,8 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     basic binary arithmetic operators.
     """
 
-    def __init__(self, op: calculator_capnp.CalculatorOperatorEnum):
-        self.op: calculator_capnp.CalculatorOperatorEnum = op
+    def __init__(self, op: CalculatorOperatorEnum):
+        self.op: CalculatorOperatorEnum = op
 
     async def call(self, params, _context, **kwargs):
         assert len(params) == 2

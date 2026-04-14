@@ -1,8 +1,8 @@
-"""Test suite for _new_client method parameter types using correct module aliases.
+"""Test suite for _new_client method parameter types using correct helper imports.
 
-This validates that _new_client methods use proper Protocol module aliases
-(e.g., _HolderModule.Server, _IdentifiableInterfaceModule.Server) instead of
-user-facing type names (e.g., Holder.Server, Identifiable.Server).
+This validates that runtime stubs use private helper-module imports for
+typing-only client return types rather than re-exporting public top-level
+aliases.
 """
 
 from __future__ import annotations
@@ -28,9 +28,9 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
         "_new_client should use _DynamicCapabilityServer"
     )
 
-    # Calculator._new_client should return the flattened top-level client type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> CalculatorClient:" in content, (
-        "_new_client should use the flattened CalculatorClient return type"
+    # Calculator._new_client should return the private clients helper type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _clients.CalculatorClient:" in content, (
+        "_new_client should use the private clients helper return type"
     )
 
 
@@ -40,14 +40,14 @@ def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs: 
     stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
-    # Identifiable._new_client should return the flattened top-level client type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> IdentifiableClient:" in content, (
-        "Identifiable._new_client should use the flattened IdentifiableClient return type"
+    # Identifiable._new_client should return the private clients helper type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _clients.IdentifiableClient:" in content, (
+        "Identifiable._new_client should use the private clients helper return type"
     )
 
-    # Holder._new_client should return the flattened top-level client type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> HolderClient:" in content, (
-        "Holder._new_client should use the flattened HolderClient return type"
+    # Holder._new_client should return the private clients helper type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _clients.HolderClient:" in content, (
+        "Holder._new_client should use the private clients helper return type"
     )
 
     # IdentifiableHolder extends both Identifiable and Holder
@@ -93,15 +93,20 @@ def test_new_client_nested_interface_uses_full_module_path(basic_stubs: Path) ->
     )
 
 
-def test_new_client_return_types_use_client_aliases(zalfmas_stubs: Path) -> None:
-    """Test that _new_client return types use proper Client type aliases."""
+def test_new_client_return_types_use_private_client_imports(zalfmas_stubs: Path) -> None:
+    """Test that _new_client return types use private client helper imports."""
     stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "__init__.pyi"
     content = stub_file.read_text()
 
-    # _new_client should return flattened top-level Client types
-    assert "-> IdentifiableClient:" in content
-    assert "-> HolderClient:" in content
-    assert "-> IdentifiableHolderClient:" in content
+    # _new_client should return private helper-module client types
+    assert "-> _clients.IdentifiableClient:" in content
+    assert "-> _clients.HolderClient:" in content
+    assert "-> _clients.IdentifiableHolderClient:" in content
+
+    # The runtime stub should not expose those helpers as top-level aliases.
+    assert "IdentifiableClient = _clients.IdentifiableClient" not in content
+    assert "HolderClient = _clients.HolderClient" not in content
+    assert "IdentifiableHolderClient = _clients.IdentifiableHolderClient" not in content
 
 
 if __name__ == "__main__":

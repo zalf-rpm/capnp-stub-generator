@@ -1,7 +1,7 @@
-"""Example demonstrating the use of Result type aliases.
+"""Example demonstrating the use of Result helper imports from the types package.
 
-This shows how Result types can now be used as top-level type aliases,
-just like Builder and Reader types.
+This shows how Result, Builder, and Reader helper types are imported from the
+generated ``types`` package rather than from the runtime-facing top-level stub.
 """
 
 from __future__ import annotations
@@ -11,44 +11,33 @@ from typing import TYPE_CHECKING
 from tests.test_helpers import log_summary
 
 if TYPE_CHECKING:
-    from tests._generated.examples.calculator import calculator_capnp
+    from tests._generated.examples.calculator.calculator_capnp.types.builders import ExpressionBuilder
+    from tests._generated.examples.calculator.calculator_capnp.types.results.client import EvaluateResult, ReadResult
 
-# Before this change, you had to use the full nested path:
-# def process_result(result: calculator_capnp._CalculatorModule.CalculatorClient.EvaluateResult) -> None:
-#     ...
-
-# After this change, you can use the convenient top-level alias:
-# def process_result(result: calculator_capnp.EvaluateResult) -> None:
-#     ...
-
-# This makes type annotations much more readable and consistent with Builder/Reader patterns:
-# - calculator_capnp.ExpressionBuilder  (was already available)
-# - calculator_capnp.ExpressionReader   (was already available)
-# - calculator_capnp.EvaluateResult     (now available!)
+# Before the types package split, helper names lived on the main module surface.
+# After the split, helper imports come from calculator_capnp.types.* instead.
+# This keeps the runtime module clean while still giving direct access to the
+# precise helper types.
 
 
 def example_usage() -> None:
-    """Show the improved type annotation style."""
+    """Show the types-package import style."""
 
-    # Type aliases are now available at module level
-    def handle_evaluate_result(result: calculator_capnp.EvaluateResult) -> None:
-        """Process an evaluation result using the convenient type alias."""
-        # The result is still the same Protocol type, just with a shorter name
-        value_client = result.value  # type: calculator_capnp.ValueClient
+    def handle_evaluate_result(result: EvaluateResult) -> None:
+        """Process an evaluation result using a targeted helper import."""
+        value_client = result.value
         _ = value_client
 
-    def handle_read_result(result: calculator_capnp.ReadResult) -> None:
+    def handle_read_result(result: ReadResult) -> None:
         """Process a read result from the Value interface."""
         value = result.value  # type: float
         _ = value
 
-    def process_expression(expr: calculator_capnp.ExpressionBuilder) -> calculator_capnp.EvaluateResult:
-        """Show that Result types work alongside Builder/Reader types.
+    def process_expression(expr: ExpressionBuilder) -> EvaluateResult:
+        """Show that Result types work alongside Builder/Reader helper imports.
 
-        All three patterns now work consistently:
-        - ExpressionBuilder (struct Builder)
-        - ExpressionReader (struct Reader)
-        - EvaluateResult (interface method Result)
+        The runtime module keeps only runtime-shaped names; helper imports come
+        from ``types``.
         """
         # This would normally make an RPC call
         # For the example, we just show the type signature
@@ -57,9 +46,9 @@ def example_usage() -> None:
     log_summary(
         "RESULT TYPE ALIAS EXAMPLE",
         [
-            "✓ Result type aliases work as expected",
-            "✓ Consistent with Builder/Reader naming patterns",
-            "✓ Makes type hints more readable",
+            "✓ Result helper imports work as expected",
+            "✓ Consistent with Builder/Reader helper imports",
+            "✓ Keeps runtime module namespace clean",
         ],
     )
 

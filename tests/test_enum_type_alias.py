@@ -27,8 +27,9 @@ def test_enum_type_alias_accepts_literals(calculator_stubs: Path) -> None:
     """Test that the Operator type accepts string literals."""
     test_code = '''
 import calculator_capnp
+from calculator_capnp.types.enums import CalculatorOperatorEnum
 
-def use_operator_literal(op: calculator_capnp.CalculatorOperatorEnum):
+def use_operator_literal(op: CalculatorOperatorEnum):
     """Function that accepts Operator."""
     pass
 
@@ -49,8 +50,9 @@ def test_enum_type_alias_accepts_int(calculator_stubs: Path) -> None:
     """Test that the Operator accepts integer values."""
     test_code = '''
 import calculator_capnp
+from calculator_capnp.types.enums import CalculatorOperatorEnum
 
-def use_operator_int(op: calculator_capnp.CalculatorOperatorEnum):
+def use_operator_int(op: CalculatorOperatorEnum):
     """Function that accepts Operator."""
     pass
 
@@ -71,8 +73,9 @@ def test_enum_type_alias_accepts_enum_attribute(calculator_stubs: Path) -> None:
     """Test that the Operator accepts enum dot notation."""
     test_code = '''
 import calculator_capnp
+from calculator_capnp.types.enums import CalculatorOperatorEnum
 
-def use_operator_enum(op: calculator_capnp.CalculatorOperatorEnum):
+def use_operator_enum(op: CalculatorOperatorEnum):
     """Function that accepts Operator."""
     pass
 
@@ -93,8 +96,9 @@ def test_enum_type_alias_rejects_invalid_literals(calculator_stubs: Path) -> Non
     """Test that the Operator rejects invalid string literals."""
     test_code = '''
 import calculator_capnp
+from calculator_capnp.types.enums import CalculatorOperatorEnum
 
-def use_operator(op: calculator_capnp.CalculatorOperatorEnum):
+def use_operator(op: CalculatorOperatorEnum):
     """Function that accepts Operator."""
     pass
 
@@ -111,11 +115,12 @@ def test_enum_type_alias_in_class_init(calculator_stubs: Path) -> None:
     """Test using Operator in a class __init__ method (real-world example)."""
     test_code = '''
 import calculator_capnp
+from calculator_capnp.types.enums import CalculatorOperatorEnum
 
 class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     """Implementation wrapping arithmetic operators."""
 
-    def __init__(self, op: calculator_capnp.CalculatorOperatorEnum):
+    def __init__(self, op: CalculatorOperatorEnum):
         self.op = op
 
     async def call(self, params, _context, **kwargs):
@@ -150,8 +155,9 @@ def test_enum_comparison_with_literals(calculator_stubs: Path) -> None:
     """Test that enum values can be compared with string literals."""
     test_code = '''
 import calculator_capnp
+from calculator_capnp.types.enums import CalculatorOperatorEnum
 
-def process_operator(op: calculator_capnp.CalculatorOperatorEnum) -> str:
+def process_operator(op: CalculatorOperatorEnum) -> str:
     """Process operator and return string description."""
     if op == "add":
         return "addition"

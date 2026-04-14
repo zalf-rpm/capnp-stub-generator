@@ -60,7 +60,9 @@ from typing import Any
 
 import list_result_capnp
 import runtime_test_capnp
+from list_result_capnp.types.contexts import GetitemsCallContext
 from list_result_capnp.types.results.tuples import GetitemsResultTuple
+from runtime_test_capnp.types.contexts import GetstructCallContext
 from runtime_test_capnp.types.clients import SubServiceClient
 from runtime_test_capnp.types.results.tuples import GetinterfaceResultTuple, GetstructResultTuple
 
@@ -78,12 +80,12 @@ def build_interface_tuple(forwarded: SubServiceClient) -> GetinterfaceResultTupl
 
 
 class RuntimeTestServiceImpl(runtime_test_capnp.TestService.Server):
-    async def getStruct(self, _context: runtime_test_capnp.GetstructCallContext, **kwargs: Any):
+    async def getStruct(self, _context: GetstructCallContext, **kwargs: Any):
         return {"name": "demo", "value": 1}
 
 
 class ItemServiceImpl(list_result_capnp.ItemService.Server):
-    async def getItems(self, _context: list_result_capnp.GetitemsCallContext, **kwargs: Any):
+    async def getItems(self, _context: GetitemsCallContext, **kwargs: Any):
         return [{"name": "demo", "value": 1}]
 """
 
