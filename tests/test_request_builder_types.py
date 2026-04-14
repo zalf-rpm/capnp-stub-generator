@@ -185,8 +185,8 @@ class TestRequestBuilderFieldAccess:
         stub_file = generate_calculator_stubs / "calculator_capnp" / "__init__.pyi"
         stub_content = stub_file.read_text()
 
-        # With Protocol structure, check for TypeAlias
-        assert "ExpressionBuilder = _ExpressionStructModule.Builder" in stub_content
+        # The precise struct typing class is flattened to module top level.
+        assert "class ExpressionBuilder(_CalculatorInterfaceModule._ExpressionStructModule.Builder):" in stub_content
 
         # Should have init overload for "call" that returns Call.Builder
         assert "def init(self" in stub_content

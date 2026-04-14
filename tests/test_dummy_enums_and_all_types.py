@@ -33,10 +33,10 @@ def test_testalltypes_field_presence_and_collections_import(dummy_stub_lines: li
 def test_builder_reader_classes_for_all_types(dummy_stub_lines: list[str]) -> None:
     """Test builder reader classes for all types."""
     lines = dummy_stub_lines
-    # With nested structure, check for TypeAlias declarations and nested classes
-    assert any("TestAllTypesReader = _TestAllTypesStructModule.Reader" in line for line in lines)
-    assert any("TestAllTypesBuilder = _TestAllTypesStructModule.Builder" in line for line in lines)
-    # Reader and Builder are now nested inside TestAllTypes as Protocols
+    # The precise typing-only classes are flattened to module top level.
+    assert any("class TestAllTypesReader(_TestAllTypesStructModule.Reader):" in line for line in lines)
+    assert any("class TestAllTypesBuilder(_TestAllTypesStructModule.Builder):" in line for line in lines)
+    # The runtime marker classes remain nested inside the struct module.
     assert any(line.strip().startswith("class Reader(_DynamicStructReader):") for line in lines)
     assert any(line.strip().startswith("class Builder(_DynamicStructBuilder):") for line in lines)
     # Static methods like from_bytes are inherited from _StructModule

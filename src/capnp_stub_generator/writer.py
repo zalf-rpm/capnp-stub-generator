@@ -1922,10 +1922,51 @@ class Writer:
         new_type = self.register_type(schema.node.id, schema, name=protocol_class_name)
 
         # Create context with auto-generated names
-        # Pass the original type_name for TypeAlias generation
         context = StructGenerationContext.create_with_protocol(schema, type_name, protocol_class_name, new_type, [])
+        flat_base_name = self._resolve_flat_struct_base_name(type_name, new_type.scope)
+        context.reader_type_name = helper.new_reader_flat(flat_base_name)
+        context.builder_type_name = helper.new_builder_flat(flat_base_name)
 
         return context, protocol_declaration
+
+    def _count_local_struct_name_occurrences(self, type_name: str) -> int:
+        """Count local struct definitions that share the same display name."""
+        return sum(
+            1
+            for local_schema in self._schemas_by_id.values()
+            if local_schema.node.which() == capnp_types.CapnpElementType.STRUCT
+            and self._is_schema_in_current_module(local_schema)
+            and helper.get_display_name(local_schema) == type_name
+        )
+
+    def _build_flat_name_from_scope(self, base_name: str, scope: Scope) -> str:
+        """Prefix a flat name with its containing scope names to make it unique."""
+        flat_name = base_name
+        current_scope: Scope | None = scope
+        while current_scope and not current_scope.is_root:
+            scope_name = (
+                self._extract_name_from_protocol(current_scope.name)
+                if current_scope.name.startswith("_")
+                else current_scope.name
+            )
+            flat_name = f"{scope_name}{flat_name}"
+            current_scope = current_scope.parent
+        return flat_name
+
+    def _resolve_flat_struct_base_name(self, type_name: str, scope: Scope) -> str:
+        """Resolve the flattened base name used for top-level Builder/Reader typing classes."""
+        candidate_reader = helper.new_reader_flat(type_name)
+        candidate_builder = helper.new_builder_flat(type_name)
+        has_local_collision = self._count_local_struct_name_occurrences(type_name) > 1
+        has_existing_collision = (
+            candidate_reader in self._all_type_aliases
+            or candidate_builder in self._all_type_aliases
+            or candidate_reader in self._imported_aliases
+            or candidate_builder in self._imported_aliases
+        )
+        if has_local_collision or has_existing_collision:
+            return self._build_flat_name_from_scope(type_name, scope)
+        return type_name
 
     def _resolve_nested_schema(
         self,
@@ -2074,67 +2115,73 @@ class Writer:
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
     ) -> None:
-        """Generate Reader class nested inside the main struct Module.
+        """Generate the runtime Reader marker nested inside the struct module.
 
         Args:
             context: The generation context
             fields_collection: The processed fields collection
 
         """
-        # Build the Reader class declaration inheriting from _DynamicStructReader
-        # Nested classes should NOT be Generic - they use TypeVars from parent scope
-        reader_class_declaration = helper.new_class_declaration("Reader", parameters=["_DynamicStructReader"])
-
-        # Add the class declaration to the current scope (the struct scope)
-        self.scope.add(reader_class_declaration)
-
-        # Create a new scope for the Reader Protocol, explicitly using current scope as parent
-        _ = self.new_scope("Reader", context.schema.node, register=False, parent_scope=self.scope)
-
-        # Use flat alias for as_builder return type
-        builder_return_type = context.builder_type_name
-
-        self._gen_struct_reader_class(
-            fields_collection.slot_fields,
-            builder_return_type,
-            context.schema,
-        )
-
-        self.return_from_scope()
+        _ = context
+        _ = fields_collection
+        self.scope.add("class Reader(_DynamicStructReader): ...")
 
     def _generate_nested_builder_class(
         self,
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
     ) -> None:
-        """Generate Builder class nested inside the main struct Module.
+        """Generate the runtime Builder marker nested inside the struct module.
 
         Args:
             context: The generation context
             fields_collection: The processed fields collection
 
         """
-        # Build the Builder class declaration inheriting from _DynamicStructBuilder
-        # Nested classes should NOT be Generic - they use TypeVars from parent scope
-        builder_class_declaration = helper.new_class_declaration("Builder", parameters=["_DynamicStructBuilder"])
+        _ = context
+        _ = fields_collection
+        self.scope.add("class Builder(_DynamicStructBuilder): ...")
 
-        # Add the class declaration to the current scope (the struct scope)
-        self.scope.add(builder_class_declaration)
+    def _generate_flat_reader_class(
+        self,
+        context: StructGenerationContext,
+        fields_collection: StructFieldsCollection,
+    ) -> None:
+        """Generate the precise flattened top-level Reader typing class."""
+        root_scope = self.scope.root
+        reader_class_declaration = helper.new_class_declaration(
+            context.reader_type_name,
+            parameters=[context.scoped_reader_type_name],
+        )
+        root_scope.add(reader_class_declaration)
+        _ = self.new_scope(context.reader_type_name, context.schema.node, register=False, parent_scope=root_scope)
+        self._gen_struct_reader_class(
+            fields_collection.slot_fields,
+            context.builder_type_name,
+            context.schema,
+        )
+        self.return_from_scope()
 
-        # Create a new scope for the Builder Protocol, explicitly using current scope as parent
-        _ = self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
-
-        # Use flat aliases for return types
-        reader_return_type = context.reader_type_name
-
+    def _generate_flat_builder_class(
+        self,
+        context: StructGenerationContext,
+        fields_collection: StructFieldsCollection,
+    ) -> None:
+        """Generate the precise flattened top-level Builder typing class."""
+        root_scope = self.scope.root
+        builder_class_declaration = helper.new_class_declaration(
+            context.builder_type_name,
+            parameters=[context.scoped_builder_type_name],
+        )
+        root_scope.add(builder_class_declaration)
+        _ = self.new_scope(context.builder_type_name, context.schema.node, register=False, parent_scope=root_scope)
         self._gen_struct_builder_class(
             fields_collection.slot_fields,
             fields_collection.init_choices,
             fields_collection.list_init_choices,
-            reader_return_type,
+            context.reader_type_name,
             context.schema,
         )
-
         self.return_from_scope()
 
     def _generate_struct_classes(
@@ -2143,13 +2190,12 @@ class Writer:
         fields_collection: StructFieldsCollection,
         protocol_declaration: str,
     ) -> None:
-        """Generate _StructModule with nested Reader and Builder classes, plus TypeAlias declarations.
+        """Generate one struct module plus flattened top-level Builder/Reader typing classes.
 
         This generates:
-        1. The _<Name>StructModule class (inheriting from _StructModule) with nested Reader and Builder classes
-        2. TypeAlias declarations for <Name>Reader and <Name>Builder
-        3. For top-level structs: TypeAlias for <Name> pointing to the Module
-        4. For nested structs: attribute annotation linking to the Module
+        1. The runtime-facing _<Name>StructModule with separate nested Reader and Builder markers
+        2. Flattened top-level <Name>Reader and <Name>Builder typing classes
+        3. The runtime module annotation linking the public struct name to _<Name>StructModule
 
         Args:
             context: Generation context with names and metadata
@@ -2158,45 +2204,31 @@ class Writer:
 
         """
         protocol_class_name = f"_{context.type_name}StructModule"
-        is_nested = self.scope.parent and not self.scope.parent.is_root
 
         # Add Protocol class declaration to parent scope
         if self.scope.parent:
             self.scope.parent.add(protocol_declaration)
 
-        # Generate nested Reader Protocol first (inside the main struct Protocol)
+        # Generate the runtime Reader/Builder markers nested inside the struct module.
         self._generate_nested_reader_class(context, fields_collection)
-
-        # Generate nested Builder Protocol (inside the main struct Protocol)
         self._generate_nested_builder_class(context, fields_collection)
 
-        # Use flat alias for new_message return type
-        builder_return_type_for_base = context.builder_type_name
-
-        # Generate base Protocol methods (static methods, to_dict, etc.)
+        # Generate struct-module methods that return the precise flattened Builder/Reader types.
         self._gen_struct_base_class(
             fields_collection.slot_fields,
             context.reader_type_name,
-            builder_return_type_for_base,
+            context.builder_type_name,
         )
+
+        # Emit the precise typing-only Builder/Reader classes at module top level.
+        self._generate_flat_reader_class(context, fields_collection)
+        self._generate_flat_builder_class(context, fields_collection)
 
         self.return_from_scope()
 
-        # After the Protocol is complete and we've returned to the parent scope,
-        # add type alias declarations at this level ONLY for nested types
-        # Top-level types get their type aliases at module level
-        if is_nested:
-            # Add aliases for Reader and Builder at current scope for nested types
-            # Use type statement (PEP 695) for consistency
-            # Use the registered type's scope to ensure it goes to the right place (parent scope)
-            target_scope = context.new_type.scope or self.scope
-            target_scope.add(f"type {context.reader_type_name} = {protocol_class_name}.Reader")
-            target_scope.add(f"type {context.builder_type_name} = {protocol_class_name}.Builder")
-
-        # Track for top-level TypeAliases (both nested and top-level)
-        # Use scoped names which include the full path (e.g., "_PersonModule._PhoneNumberModule.Reader")
-        self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
-        self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
+        # Track the flattened Builder/Reader classes so local references resolve, but don't re-emit them as aliases.
+        self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "ReaderClass")
+        self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "BuilderClass")
 
         # Add annotation for the module type at the correct parent scope
         # Use the registered type's scope to ensure it goes to the right place
@@ -2234,8 +2266,8 @@ class Writer:
 
         # Register TypeAliases early so they're available during field processing
         # This handles self-referential fields and forward references
-        self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "Reader")
-        self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "Builder")
+        self._all_type_aliases[context.reader_type_name] = (context.scoped_reader_type_name, "ReaderClass")
+        self._all_type_aliases[context.builder_type_name] = (context.scoped_builder_type_name, "BuilderClass")
 
         # Phase 2: Generate nested types (must be done before field processing)
         self._generate_nested_types(schema)
@@ -4310,7 +4342,7 @@ class Writer:
                 continue
             out.extend(["", comment, alias_line])
 
-    def _format_top_level_type_alias(self, alias_name: str, alias_info: GeneratedTypeAliasInfo) -> str:
+    def _format_top_level_type_alias(self, alias_name: str, alias_info: GeneratedTypeAliasInfo) -> str | None:
         """Format one generated top-level type alias line."""
         if len(alias_info) == ENUM_ALIAS_DATA_PARTS:
             full_path, type_kind, enum_values = alias_info
@@ -4319,7 +4351,10 @@ class Writer:
                 return f"type {alias_name} = int | Literal[{literal_values}]"
             return f"type {alias_name} = {full_path}"
 
-        full_path = alias_info[0]
+        full_path, type_kind = alias_info
+        if type_kind in {"ReaderClass", "BuilderClass"}:
+            return None
+
         return f"type {alias_name} = {full_path}"
 
     def _append_top_level_type_aliases(self, out: list[str]) -> None:
@@ -4327,11 +4362,15 @@ class Writer:
         if not self._all_type_aliases:
             return
 
-        out.extend(["", "# Top-level type aliases for use in type annotations"])
-        out.extend(
-            self._format_top_level_type_alias(alias_name, self._all_type_aliases[alias_name])
+        formatted_aliases = [
+            alias_line
             for alias_name in sorted(self._all_type_aliases)
-        )
+            if (alias_line := self._format_top_level_type_alias(alias_name, self._all_type_aliases[alias_name]))
+        ]
+        if not formatted_aliases:
+            return
+
+        out.extend(["", "# Top-level type aliases for use in type annotations", *formatted_aliases])
 
     def dumps_pyi(self) -> str:
         """Generate the .pyi stub output for this schema.
