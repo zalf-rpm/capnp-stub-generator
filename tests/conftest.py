@@ -17,8 +17,10 @@ from tests.test_helpers import run_command, run_pyright
 
 # Test directory structure
 TESTS_DIR = Path(__file__).parent
+REPO_ROOT = TESTS_DIR.parent
 SCHEMAS_DIR = TESTS_DIR / "schemas"
 GENERATED_DIR = TESTS_DIR / "_generated"
+TYPINGS_DIR = REPO_ROOT / "typings"
 
 # Schema subdirectories
 BASIC_SCHEMAS_DIR = SCHEMAS_DIR / "basic"
@@ -33,6 +35,8 @@ ZALFMAS_GENERATED_DIR = GENERATED_DIR / "zalfmas"
 ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR = GENERATED_DIR / "zalfmas_no_annotations"
 CAPNP_GENERATED_DIR = GENERATED_DIR / "capnp"
 LOGGER = logging.getLogger(__name__)
+DOGFOOD_DEPENDENCY_DIRS = ("capnp-stubs", "schema_capnp")
+DOGFOOD_IGNORED_DIRS = {"__pycache__", ".ruff_cache"}
 
 
 @dataclass(frozen=True)
@@ -73,6 +77,48 @@ def _write_generated_package_markers() -> None:
             f'"""Generated stub package container for `{package_dir.relative_to(TESTS_DIR).as_posix()}`."""\n',
             encoding="utf8",
         )
+
+
+def _replace_tree(source_dir: Path, destination_dir: Path) -> None:
+    """Replace a destination tree with a fresh copy of a generated source tree."""
+    if destination_dir.exists():
+        shutil.rmtree(destination_dir)
+    shutil.copytree(
+        source_dir,
+        destination_dir,
+        ignore=shutil.ignore_patterns(*DOGFOOD_IGNORED_DIRS),
+    )
+
+
+def _sync_dogfood_typings_from_examples() -> None:
+    """Refresh the tracked `typings/` snapshot from the generated example stubs."""
+    if not EXAMPLES_GENERATED_DIR.is_dir():
+        pytest.fail(f"Generated examples directory missing: {EXAMPLES_GENERATED_DIR}")
+
+    TYPINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    source_dirs = {path.name: path for path in EXAMPLES_GENERATED_DIR.iterdir() if path.is_dir()}
+    missing_dependency_dirs = [name for name in DOGFOOD_DEPENDENCY_DIRS if name not in source_dirs]
+    if missing_dependency_dirs:
+        pytest.fail(
+            "Generated examples are missing bundled dependency directories: "
+            + ", ".join(sorted(missing_dependency_dirs)),
+        )
+
+    stale_top_level_dirs = {path.name for path in EXAMPLES_SCHEMAS_DIR.iterdir() if path.is_dir()} | set(
+        DOGFOOD_DEPENDENCY_DIRS
+    )
+    for directory_name in stale_top_level_dirs:
+        destination_dir = TYPINGS_DIR / directory_name
+        if destination_dir.exists():
+            shutil.rmtree(destination_dir)
+
+    for directory_name, source_dir in source_dirs.items():
+        if directory_name in DOGFOOD_IGNORED_DIRS:
+            continue
+        _replace_tree(source_dir, TYPINGS_DIR / directory_name)
+
+    LOGGER.info("✓ Refreshed dogfood typings in %s", TYPINGS_DIR)
 
 
 def _get_plugin_path() -> Path:
@@ -258,6 +304,7 @@ def generate_all_stubs() -> dict[str, Path]:
 
         LOGGER.info("✓ All test stubs generated successfully using capnp compile")
         _write_generated_package_markers()
+        _sync_dogfood_typings_from_examples()
         _validate_generated_stubs_with_pyright()
 
     finally:

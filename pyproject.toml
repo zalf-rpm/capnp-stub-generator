@@ -54,12 +54,13 @@ namespaces = true
 [tool.pyright]
 reportPropertyTypeMismatch = "none"
 include = ["src", "tests"]
-extraPaths = ["src", "tests/_generated/basic"]
+stubPath = "typings"
+extraPaths = ["src", "tests/_generated/basic", "typings"]
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-extend-exclude = ["typings/capnp-stubs", "src/pycapnp_base_stubs", "tests/schemas/examples"]
+extend-exclude = ["typings", "src/pycapnp_base_stubs", "tests/schemas/examples"]
 
 [tool.ruff.lint]
 select = ["ALL"]

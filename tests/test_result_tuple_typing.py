@@ -17,7 +17,9 @@ if TYPE_CHECKING:
 
 
 async def _invoke_none_result_method(
-    server_impl: object, interface_module: object, method_name: str
+    server_impl: object,
+    interface_module: capnp.lib.capnp._InterfaceModule,
+    method_name: str,
 ) -> capnp.KjException:
     async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
         await capnp.TwoPartyServer(stream, bootstrap=server_impl).on_disconnect()
@@ -174,7 +176,11 @@ def test_result_tuple_none_values_are_rejected_at_runtime(basic_stubs: Path) -> 
         runtime_tuple_module = importlib.import_module("runtime_test_capnp.types.results.tuples")
         list_tuple_module = importlib.import_module("list_result_capnp.types.results.tuples")
 
-        async def invoke_method(server_impl: object, interface_module: object, method_name: str) -> capnp.KjException:
+        async def invoke_method(
+            server_impl: object,
+            interface_module: capnp.lib.capnp._InterfaceModule,
+            method_name: str,
+        ) -> capnp.KjException:
             return await _invoke_none_result_method(server_impl, interface_module, method_name)
 
         async def run_checks() -> dict[str, capnp.KjException]:

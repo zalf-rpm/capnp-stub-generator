@@ -2,7 +2,7 @@ import asyncio
 
 import capnp
 
-from tests._generated.examples.single_value import single_value_capnp
+from single_value import single_value_capnp
 
 
 async def main():

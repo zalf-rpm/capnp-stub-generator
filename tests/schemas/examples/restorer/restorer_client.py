@@ -4,7 +4,7 @@ import asyncio
 
 import capnp
 
-from tests._generated.examples.restorer import restorer_capnp
+from restorer import restorer_capnp
 
 
 async def main():

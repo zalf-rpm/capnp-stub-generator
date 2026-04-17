@@ -151,6 +151,15 @@ message = myschema_capnp.MyStruct.new_message()
 message.field = "value"
 ```
 
+## Repository Dogfooding
+
+When you run the test suite, it refreshes the checked-in `typings/` snapshot from the generated example schemas.
+
+- `typings/addressbook`, `typings/calculator`, `typings/restorer`, and the other example packages come from the generator output
+- `typings/capnp-stubs` and `typings/schema_capnp` are refreshed from the bundled base stubs plus the example-specific augmentation
+
+This keeps `src/pycapnp_base_stubs` as the single source of truth for the bundled `capnp` typing surface while still giving editors a ready-to-use dogfooded snapshot for autocompletion.
+
 ## Troubleshooting
 
 ### Import Resolution

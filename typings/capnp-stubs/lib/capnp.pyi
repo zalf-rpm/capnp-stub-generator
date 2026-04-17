@@ -10,23 +10,24 @@ from contextlib import AbstractContextManager, asynccontextmanager
 from ssl import SSLContext
 from typing import IO, Any, Literal, overload
 
+# Generated imports for project-specific types
+from addressbook import addressbook_capnp
+from calculator import calculator_capnp
+
+# Type alias for anypointer to reflect what is really allowed for anypointer inputs
+from capnp._internal import CapnpModule as _CapnpModule
+from capnp._internal import CapnpTypesModule as _CapnpTypesModule
+from capnp._internal import (
+    Server as _Server,
+)
+from fbp_nested_callback import fbp_nested_callback_capnp
+from restorer import restorer_capnp
+from single_value import single_value_capnp
+
 # Import schema.capnp types for precise node property types
 # These are _DynamicStructReader at runtime but typed more precisely
 from schema_capnp import FieldReader as _SchemaFieldReader
 from schema_capnp import NodeReader as _SchemaNodeReader
-
-# Type alias for anypointer to reflect what is really allowed for anypointer inputs
-# Generated imports for project-specific types
-from tests._generated.examples.addressbook import addressbook_capnp
-from tests._generated.examples.calculator import calculator_capnp
-from tests._generated.examples.restorer import restorer_capnp
-from tests._generated.examples.single_value import single_value_capnp
-
-from .._internal import CapnpModule as _CapnpModule
-from .._internal import CapnpTypesModule as _CapnpTypesModule
-from .._internal import (
-    Server as _Server,
-)
 
 type AnyPointer = (
     str
@@ -604,29 +605,53 @@ class _DynamicObjectReader:
     @overload
     def as_interface(
         self,
-        schema: calculator_capnp._CalculatorInterfaceModule,
-    ) -> calculator_capnp.CalculatorClient: ...
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule,
+    ) -> calculator_capnp.types.clients.CalculatorClient: ...
     @overload
     def as_interface(
         self,
-        schema: calculator_capnp._CalculatorInterfaceModule._FunctionInterfaceModule,
-    ) -> calculator_capnp.FunctionClient: ...
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._FunctionInterfaceModule,
+    ) -> calculator_capnp.types.clients.FunctionClient: ...
     @overload
     def as_interface(
         self,
-        schema: calculator_capnp._CalculatorInterfaceModule._ValueInterfaceModule,
-    ) -> calculator_capnp.ValueClient: ...
-    @overload
-    def as_interface(self, schema: restorer_capnp._AnyTesterInterfaceModule) -> restorer_capnp.AnyTesterClient: ...
-    @overload
-    def as_interface(self, schema: restorer_capnp._BagInterfaceModule) -> restorer_capnp.BagClient: ...
-    @overload
-    def as_interface(self, schema: restorer_capnp._RestorerInterfaceModule) -> restorer_capnp.RestorerClient: ...
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ValueInterfaceModule,
+    ) -> calculator_capnp.types.clients.ValueClient: ...
     @overload
     def as_interface(
         self,
-        schema: single_value_capnp._SingleValueInterfaceModule,
-    ) -> single_value_capnp.SingleValueClient: ...
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.ChannelClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.StatsCallbackClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.UnregisterClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._AnyTesterInterfaceModule,
+    ) -> restorer_capnp.types.clients.AnyTesterClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._BagInterfaceModule,
+    ) -> restorer_capnp.types.clients.BagClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._RestorerInterfaceModule,
+    ) -> restorer_capnp.types.clients.RestorerClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: single_value_capnp.types.modules._SingleValueInterfaceModule,
+    ) -> single_value_capnp.types.clients.SingleValueClient: ...
     @overload
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
@@ -644,7 +669,36 @@ class _DynamicObjectReader:
             iface = anyptr.as_interface(MyInterface.schema)  # Returns MyInterface
 
         """
-
+    @overload
+    def as_list(
+        self,
+        schema: type[addressbook_capnp.types._all._PersonList],
+    ) -> addressbook_capnp.types.readers.PersonListReader: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[addressbook_capnp.types._all._PhoneNumberList],
+    ) -> addressbook_capnp.types.readers.PhoneNumberListReader: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[calculator_capnp.types._all._ExpressionList],
+    ) -> calculator_capnp.types.readers.ExpressionListReader: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[calculator_capnp.types._all._Float64List],
+    ) -> calculator_capnp.types.readers.Float64ListReader: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[single_value_capnp.types._all._Int32List],
+    ) -> single_value_capnp.types.readers.Int32ListReader: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[single_value_capnp.types._all._MyStructList],
+    ) -> single_value_capnp.types.readers.MyStructListReader: ...
     def as_list(self, schema: _ListSchema) -> Any:
         """Cast this AnyPointer to a list.
 
@@ -658,39 +712,53 @@ class _DynamicObjectReader:
     @overload
     def as_struct(
         self,
-        schema: calculator_capnp._CalculatorInterfaceModule._ExpressionStructModule._ExpressionCallStructModule,
-    ) -> calculator_capnp.ExpressionCallReader: ...
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ExpressionStructModule._ExpressionCallStructModule,
+    ) -> calculator_capnp.types.readers.ExpressionCallReader: ...
     @overload
     def as_struct(
         self,
-        schema: addressbook_capnp._PersonStructModule._PersonEmploymentStructModule,
-    ) -> addressbook_capnp.PersonEmploymentReader: ...
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule,
+    ) -> fbp_nested_callback_capnp.types.readers.StatsReader: ...
     @overload
     def as_struct(
         self,
-        schema: addressbook_capnp._PersonStructModule._PersonTestGroupStructModule,
-    ) -> addressbook_capnp.PersonTestGroupReader: ...
+        schema: addressbook_capnp.types.modules._PersonStructModule._PersonEmploymentStructModule,
+    ) -> addressbook_capnp.types.readers.PersonEmploymentReader: ...
     @overload
     def as_struct(
         self,
-        schema: addressbook_capnp._PersonStructModule._PhoneNumberStructModule,
-    ) -> addressbook_capnp.PhoneNumberReader: ...
+        schema: addressbook_capnp.types.modules._PersonStructModule._PersonTestGroupStructModule,
+    ) -> addressbook_capnp.types.readers.PersonTestGroupReader: ...
     @overload
     def as_struct(
         self,
-        schema: calculator_capnp._CalculatorInterfaceModule._ExpressionStructModule,
-    ) -> calculator_capnp.ExpressionReader: ...
+        schema: addressbook_capnp.types.modules._PersonStructModule._PhoneNumberStructModule,
+    ) -> addressbook_capnp.types.readers.PhoneNumberReader: ...
     @overload
     def as_struct(
         self,
-        schema: restorer_capnp._RestorerInterfaceModule._RestoreParamsStructModule,
-    ) -> restorer_capnp.RestoreParamsReader: ...
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ExpressionStructModule,
+    ) -> calculator_capnp.types.readers.ExpressionReader: ...
     @overload
-    def as_struct(self, schema: addressbook_capnp._AddressBookStructModule) -> addressbook_capnp.AddressBookReader: ...
+    def as_struct(
+        self,
+        schema: restorer_capnp.types.modules._RestorerInterfaceModule._RestoreParamsStructModule,
+    ) -> restorer_capnp.types.readers.RestoreParamsReader: ...
     @overload
-    def as_struct(self, schema: addressbook_capnp._PersonStructModule) -> addressbook_capnp.PersonReader: ...
+    def as_struct(
+        self,
+        schema: addressbook_capnp.types.modules._AddressBookStructModule,
+    ) -> addressbook_capnp.types.readers.AddressBookReader: ...
     @overload
-    def as_struct(self, schema: single_value_capnp._MyStructStructModule) -> single_value_capnp.MyStructReader: ...
+    def as_struct(
+        self,
+        schema: addressbook_capnp.types.modules._PersonStructModule,
+    ) -> addressbook_capnp.types.readers.PersonReader: ...
+    @overload
+    def as_struct(
+        self,
+        schema: single_value_capnp.types.modules._MyStructStructModule,
+    ) -> single_value_capnp.types.readers.MyStructReader: ...
     @overload
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
@@ -1210,28 +1278,55 @@ class _CapabilityClient:
     """
 
     @overload
-    def cast_as(self, schema: calculator_capnp._CalculatorInterfaceModule) -> calculator_capnp.CalculatorClient: ...
+    def cast_as(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule,
+    ) -> calculator_capnp.types.clients.CalculatorClient: ...
     @overload
     def cast_as(
         self,
-        schema: calculator_capnp._CalculatorInterfaceModule._FunctionInterfaceModule,
-    ) -> calculator_capnp.FunctionClient: ...
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._FunctionInterfaceModule,
+    ) -> calculator_capnp.types.clients.FunctionClient: ...
     @overload
     def cast_as(
         self,
-        schema: calculator_capnp._CalculatorInterfaceModule._ValueInterfaceModule,
-    ) -> calculator_capnp.ValueClient: ...
-    @overload
-    def cast_as(self, schema: restorer_capnp._AnyTesterInterfaceModule) -> restorer_capnp.AnyTesterClient: ...
-    @overload
-    def cast_as(self, schema: restorer_capnp._BagInterfaceModule) -> restorer_capnp.BagClient: ...
-    @overload
-    def cast_as(self, schema: restorer_capnp._RestorerInterfaceModule) -> restorer_capnp.RestorerClient: ...
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ValueInterfaceModule,
+    ) -> calculator_capnp.types.clients.ValueClient: ...
     @overload
     def cast_as(
         self,
-        schema: single_value_capnp._SingleValueInterfaceModule,
-    ) -> single_value_capnp.SingleValueClient: ...
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.ChannelClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.StatsCallbackClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.UnregisterClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: restorer_capnp.types.modules._AnyTesterInterfaceModule,
+    ) -> restorer_capnp.types.clients.AnyTesterClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: restorer_capnp.types.modules._BagInterfaceModule,
+    ) -> restorer_capnp.types.clients.BagClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: restorer_capnp.types.modules._RestorerInterfaceModule,
+    ) -> restorer_capnp.types.clients.RestorerClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: single_value_capnp.types.modules._SingleValueInterfaceModule,
+    ) -> single_value_capnp.types.clients.SingleValueClient: ...
     @overload
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:

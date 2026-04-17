@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 import capnp
 
-from tests._generated.examples.calculator import calculator_capnp
+from calculator import calculator_capnp
 
 if TYPE_CHECKING:
-    from tests._generated.examples.calculator.calculator_capnp.types.servers import FunctionServer
+    from calculator.calculator_capnp.types.servers import FunctionServer
 else:
     FunctionServer = calculator_capnp.Calculator.Function.Server
 

@@ -6,7 +6,7 @@ import asyncio
 import importlib
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import capnp
 import pytest
@@ -14,7 +14,11 @@ import pytest
 # Ensure we can import from tests directory
 sys.path.append(str(Path(__file__).parent.parent))
 
-from tests._generated.examples.restorer import restorer_capnp
+if TYPE_CHECKING:
+    from restorer import restorer_capnp
+else:
+    from tests._generated.examples.restorer import restorer_capnp
+
 from tests.schemas.examples.restorer.restorer_server import RestorerImpl
 
 

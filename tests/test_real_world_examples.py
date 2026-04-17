@@ -161,29 +161,17 @@ class TestExampleFunctionality:
         if not example.python_files:
             return
 
-        # Run pyright on each python file
-        # We need to set PYTHONPATH to include the generated stubs
-        # The examples use 'from _generated.examples.xxx import xxx_capnp'
-        # So we need to add the parent of _generated (which is tests/) to PYTHONPATH
         env = os.environ.copy()
         python_path = env.get("PYTHONPATH", "")
-
-        # Add tests/ directory to PYTHONPATH so _generated package is found
         tests_dir = str(TESTS_DIR)
-        env["PYTHONPATH"] = f"{tests_dir}:{python_path}"
+        generated_examples_dir = str(GENERATED_EXAMPLES_DIR)
+        env["PYTHONPATH"] = ":".join(
+            [path for path in (generated_examples_dir, tests_dir, python_path) if path],
+        )
 
         for python_file in example.get_python_paths():
             if not python_file.exists():
                 continue
-
-            # Note: We need to ensure pyright can find the generated stubs.
-            # Usually pyright looks in the current directory or site-packages.
-            # Since stubs are in _generated/examples/<name>, we might need to configure pyright
-            # or copy stubs to a place where pyright finds them.
-            # But setting PYTHONPATH might be enough if pyright respects it for import resolution.
-
-            # Actually, pyright execution might be slow, so we should be careful.
-            # But for correctness it's valuable.
 
             result = run_pyright(python_file, env=env)
             assert result.returncode == 0, f"Type checking failed for {python_file.name}"
