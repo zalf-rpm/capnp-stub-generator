@@ -92,15 +92,18 @@ def test_param_structs_are_embedded(calculator_stubs: Path) -> None:
 
 
 def test_runtime_result_field_access(calculator_stubs: Path) -> None:
-    """Test that result structs are accessible (check generated code structure)."""
-    stub_file = calculator_stubs / "calculator_capnp/__init__.py"
-    content = stub_file.read_text()
+    """Test that result tuple helpers are generated in the runtime tuple helper module."""
+    runtime_file = calculator_stubs / "calculator_capnp/__init__.py"
+    tuple_module_file = calculator_stubs / "calculator_capnp/types/results/tuples.py"
+    runtime_content = runtime_file.read_text()
+    tuple_module_content = tuple_module_file.read_text()
 
     # Verify the generated code has the necessary structure
     # for runtime access to result fields
-    assert "_loader = capnp.SchemaLoader()" in content
-    assert "for _schema_b64 in _SCHEMA_NODES:" in content
-    assert "_loader.load_dynamic(_node_reader)" in content
+    assert "_loader = capnp.SchemaLoader()" in runtime_content
+    assert "for _schema_b64 in _SCHEMA_NODES:" in runtime_content
+    assert "_loader.load_dynamic(_node_reader)" in runtime_content
 
-    # Check that result tuple namedtuples are created
-    assert "NamedTuple" in content or "namedtuple" in content.lower()
+    # Result tuples should be created in the runtime helper module, not on the top-level runtime module.
+    assert "EvaluateResultTuple" not in runtime_content
+    assert "NamedTuple" in tuple_module_content or "namedtuple" in tuple_module_content.lower()

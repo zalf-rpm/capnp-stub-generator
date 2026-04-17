@@ -22,7 +22,7 @@ def test_both_method_variants_exist(calculator_stubs: Path) -> None:
     assert "def evaluate(" in content
     assert "expression: ExpressionReader" in content
     assert "_context: EvaluateCallContext" in content
-    assert "**kwargs: Any" in content
+    assert "**kwargs: object" in content
 
     # _context variant with only context parameter
     assert "def evaluate_context(" in content

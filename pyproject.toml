@@ -59,7 +59,7 @@ extraPaths = ["src", "tests/_generated/basic"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-extend-exclude = ["typings/capnp-stubs", "tests/schemas/examples"]
+extend-exclude = ["typings/capnp-stubs", "src/pycapnp_base_stubs", "tests/schemas/examples"]
 
 [tool.ruff.lint]
 select = ["ALL"]

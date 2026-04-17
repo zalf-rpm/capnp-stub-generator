@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tests.test_helpers import run_pyright
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -82,3 +84,16 @@ def test_plugin_works_without_annotations(zalfmas_no_annotations_stubs: Path) ->
         # Check it has content
         content = stub_path.read_text()
         assert len(content) > MIN_SCHEMA_STUB_CONTENT_LENGTH, f"{schema_name} should have substantial content"
+
+
+def test_no_annotations_schema_packages_typecheck(zalfmas_no_annotations_stubs: Path) -> None:
+    """Test that generated no-annotation schema packages type check under pyright."""
+    schema_packages = sorted(
+        str(path)
+        for path in zalfmas_no_annotations_stubs.rglob("*_capnp")
+        if path.is_dir() and "capnp-stubs" not in path.parts
+    )
+
+    result = run_pyright(*schema_packages)
+    error_count = result.stdout.count("error:")
+    assert error_count == 0, f"Pyright validation failed for no-annotation schema packages:\n{result.stdout}"

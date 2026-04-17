@@ -2,13 +2,47 @@
 
 from __future__ import annotations
 
+import asyncio
+import importlib
 import re
+import sys
 from typing import TYPE_CHECKING
+
+import capnp
 
 from tests.test_helpers import run_pyright
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+async def _invoke_none_result_method(
+    server_impl: object, interface_module: object, method_name: str
+) -> capnp.KjException:
+    async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
+        await capnp.TwoPartyServer(stream, bootstrap=server_impl).on_disconnect()
+
+    server = await capnp.AsyncIoStream.create_server(new_connection, "localhost", 0)
+    port = server.sockets[0].getsockname()[1]
+
+    try:
+        async with server:
+            connection = await capnp.AsyncIoStream.create_connection(host="localhost", port=port)
+            client = capnp.TwoPartyClient(connection)
+            bootstrap = client.bootstrap().cast_as(interface_module)
+
+            try:
+                await getattr(bootstrap, method_name)()
+            except capnp.KjException as error:
+                return error
+            finally:
+                connection.close()
+    finally:
+        server.close()
+        await server.wait_closed()
+
+    msg = f"{method_name} unexpectedly accepted None in a ResultTuple"
+    raise AssertionError(msg)
 
 
 def test_struct_result_tuple_accepts_struct_assignment_shapes(basic_stubs: Path) -> None:
@@ -80,12 +114,12 @@ def build_interface_tuple(forwarded: SubServiceClient) -> GetinterfaceResultTupl
 
 
 class RuntimeTestServiceImpl(runtime_test_capnp.TestService.Server):
-    async def getStruct(self, _context: GetstructCallContext, **kwargs: Any):
+    async def getStruct(self, _context: GetstructCallContext, **kwargs: object):
         return {"name": "demo", "value": 1}
 
 
 class ItemServiceImpl(list_result_capnp.ItemService.Server):
-    async def getItems(self, _context: GetitemsCallContext, **kwargs: Any):
+    async def getItems(self, _context: GetitemsCallContext, **kwargs: object):
         return [{"name": "demo", "value": 1}]
 """
 
@@ -94,3 +128,90 @@ class ItemServiceImpl(list_result_capnp.ItemService.Server):
 
     result = run_pyright(test_file)
     assert result.returncode == 0, f"Type checking failed: {result.stdout}"
+
+
+def test_result_tuple_runtime_helpers_live_under_tuple_module(basic_stubs: Path) -> None:
+    """Runtime ResultTuple helpers should live in types.results.tuples, not the top-level module."""
+    runtime_content = (basic_stubs / "runtime_test_capnp" / "__init__.py").read_text()
+    tuple_module_content = (basic_stubs / "runtime_test_capnp" / "types" / "results" / "tuples.py").read_text()
+
+    assert "GetstructResultTuple" not in runtime_content
+    assert "GetinterfaceResultTuple" not in runtime_content
+    assert "GetstructResultTuple" in tuple_module_content
+    assert "GetinterfaceResultTuple" in tuple_module_content
+
+
+def test_result_tuple_runtime_module_is_importable_and_instantiable(basic_stubs: Path) -> None:
+    """Generated runtime tuple helpers should be importable and constructible from types.results.tuples."""
+    sys.path.insert(0, str(basic_stubs))
+
+    try:
+        runtime_test_capnp = importlib.import_module("runtime_test_capnp")
+        tuples_module = importlib.import_module("runtime_test_capnp.types.results.tuples")
+
+        result_tuple = tuples_module.GetstructResultTuple(info={"name": "demo", "value": 1})
+
+        assert result_tuple.info == {"name": "demo", "value": 1}
+        assert not hasattr(runtime_test_capnp, "GetstructResultTuple")
+    finally:
+        for module_name in (
+            "runtime_test_capnp.types.results.tuples",
+            "runtime_test_capnp.types.results",
+            "runtime_test_capnp.types",
+            "runtime_test_capnp",
+        ):
+            sys.modules.pop(module_name, None)
+        sys.path.remove(str(basic_stubs))
+
+
+def test_result_tuple_none_values_are_rejected_at_runtime(basic_stubs: Path) -> None:
+    """ResultTuple field types should stay non-optional because pycapnp rejects None during result serialization."""
+    sys.path.insert(0, str(basic_stubs))
+
+    try:
+        runtime_test_capnp = importlib.import_module("runtime_test_capnp")
+        list_result_capnp = importlib.import_module("list_result_capnp")
+        runtime_tuple_module = importlib.import_module("runtime_test_capnp.types.results.tuples")
+        list_tuple_module = importlib.import_module("list_result_capnp.types.results.tuples")
+
+        async def invoke_method(server_impl: object, interface_module: object, method_name: str) -> capnp.KjException:
+            return await _invoke_none_result_method(server_impl, interface_module, method_name)
+
+        async def run_checks() -> dict[str, capnp.KjException]:
+            class TestServiceImpl(runtime_test_capnp.TestService.Server):
+                async def getPrimitive(self, _context: object, **_kwargs: object) -> object:
+                    return runtime_tuple_module.GetprimitiveResultTuple(result=None)
+
+                async def getStruct(self, _context: object, **_kwargs: object) -> object:
+                    return runtime_tuple_module.GetstructResultTuple(info=None)
+
+                async def getInterface(self, _context: object, **_kwargs: object) -> object:
+                    return runtime_tuple_module.GetinterfaceResultTuple(service=None)
+
+            class ItemServiceImpl(list_result_capnp.ItemService.Server):
+                async def getItems(self, _context: object, **_kwargs: object) -> object:
+                    return list_tuple_module.GetitemsResultTuple(items=None)
+
+            return {
+                "getPrimitive": await invoke_method(TestServiceImpl(), runtime_test_capnp.TestService, "getPrimitive"),
+                "getStruct": await invoke_method(TestServiceImpl(), runtime_test_capnp.TestService, "getStruct"),
+                "getInterface": await invoke_method(TestServiceImpl(), runtime_test_capnp.TestService, "getInterface"),
+                "getItems": await invoke_method(ItemServiceImpl(), list_result_capnp.ItemService, "getItems"),
+            }
+
+        errors = asyncio.run(capnp.run(run_checks()))
+        for method_name, error in errors.items():
+            assert "Value type mismatch" in str(error), f"{method_name} should reject None, got: {error}"
+    finally:
+        for module_name in (
+            "runtime_test_capnp.types.results.tuples",
+            "runtime_test_capnp.types.results",
+            "runtime_test_capnp.types",
+            "runtime_test_capnp",
+            "list_result_capnp.types.results.tuples",
+            "list_result_capnp.types.results",
+            "list_result_capnp.types",
+            "list_result_capnp",
+        ):
+            sys.modules.pop(module_name, None)
+        sys.path.remove(str(basic_stubs))

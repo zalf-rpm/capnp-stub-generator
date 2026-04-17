@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 from typing import TYPE_CHECKING
 
 import capnp
@@ -20,9 +21,17 @@ if TYPE_CHECKING:
 else:
     AnyTesterServer = restorer_capnp.AnyTester.Server
     BagServer = restorer_capnp.Bag.Server
-    GetanystructResultTuple = restorer_capnp.GetanystructResultTuple
-    GetvalueResultTuple = restorer_capnp.GetvalueResultTuple
     RestorerServer = restorer_capnp.Restorer.Server
+
+
+def _get_anystruct_result_tuple() -> type[GetanystructResultTuple]:
+    tuples_module = importlib.import_module("tests._generated.examples.restorer.restorer_capnp.types.results.tuples")
+    return tuples_module.GetanystructResultTuple
+
+
+def _get_value_result_tuple() -> type[GetvalueResultTuple]:
+    tuples_module = importlib.import_module("tests._generated.examples.restorer.restorer_capnp.types.results.tuples")
+    return tuples_module.GetvalueResultTuple
 
 
 class BagImpl(BagServer):
@@ -31,7 +40,7 @@ class BagImpl(BagServer):
 
     async def getValue(self, _context, **kwargs):
         # Return NamedTuple
-        return GetvalueResultTuple(value=self.value)
+        return _get_value_result_tuple()(value=self.value)
 
     async def setValue_context(self, context):
         self.value = context.params.value
@@ -44,7 +53,7 @@ class AnyTesterImpl(AnyTesterServer):
         # We need to wrap it in the NamedTuple because the stub expects GetanystructResultTuple | None
         # The single value return optimization is only for primitives/interfaces in the stub generator logic
         # Wait, let's check writer.py logic for single field return
-        return GetanystructResultTuple(s=params)
+        return _get_anystruct_result_tuple()(s=params)
 
     async def getAnyList_context(self, context):
         # Return a list of strings (Text)

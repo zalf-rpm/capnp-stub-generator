@@ -10,18 +10,18 @@ from contextlib import AbstractContextManager, asynccontextmanager
 from ssl import SSLContext
 from typing import IO, Any, Literal, overload
 
-from capnp._internal import CapnpModule as _CapnpModule
-from capnp._internal import CapnpTypesModule as _CapnpTypesModule
-from capnp._internal import (
-    Server as _Server,
-)
-
 # Import schema.capnp types for precise node property types
 # These are _DynamicStructReader at runtime but typed more precisely
 from schema_capnp import FieldReader as _SchemaFieldReader
 from schema_capnp import NodeReader as _SchemaNodeReader
 
 # Type alias for anypointer to reflect what is really allowed for anypointer inputs
+from capnp._internal import CapnpModule as _CapnpModule
+from capnp._internal import CapnpTypesModule as _CapnpTypesModule
+from capnp._internal import (
+    Server as _Server,
+)
+
 type AnyPointer = (
     str
     | bytes
@@ -37,12 +37,14 @@ type AnyPointer = (
 type Capability = _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicObjectReader | _DynamicObjectBuilder
 type AnyStruct = _DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder
 type AnyList = _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder
+type _CapnpModuleType = _CapnpModule
+
 types: _CapnpTypesModule
 
-class KjError(Exception):
-    """Represent an exception raised by Cap'n Proto operations.
+class KjException(Exception):
+    """Exception raised by Cap'n Proto operations.
 
-    KjError is a wrapper of the internal C++ exception type.
+    KjException is a wrapper of the internal C++ exception type.
     It contains an enum named `Type` and several properties providing
     information about the exception.
     """
@@ -80,12 +82,10 @@ class KjError(Exception):
         nature: str | None = None,
         durability: str | None = None,
         wrapper: Any = None,
-        exception_type: str | None = None,
+        type: str | None = None,
     ) -> None: ...
     def _to_python(self) -> Exception:
         """Convert to a more specific Python exception if appropriate."""
-
-KjException = KjError
 
 class _NestedNodeReader:
     """pycapnp's internal representation of a nested node in a schema.
@@ -102,7 +102,7 @@ class _NestedNodeReader:
     def name(self) -> str:
         """The name of the nested node."""
 
-class _ListNestedNodeReader:
+class _List_NestedNode_Reader:
     """pycapnp's internal list of nested nodes.
 
     This is distinct from schema_capnp list types which are _DynamicListReader.
@@ -144,7 +144,7 @@ class _NodeReader:
         """Whether this node is a struct."""
 
     @property
-    def nestedNodes(self) -> _ListNestedNodeReader:
+    def nestedNodes(self) -> _List_NestedNode_Reader:
         """List of nested nodes."""
 
     @property
@@ -167,10 +167,10 @@ class _StructSchemaField:
         """The field's schema as a schema.capnp Field reader."""
 
     @property
-    def schema(self) -> _StructSchema | _EnumSchema | _InterfaceSchema:
+    def schema(self) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
         """The schema of the field's type.
 
-        Note: For list fields, use the field's slot.type to get element type info.
+        For list fields, this returns a _ListSchema whose elementType describes the list items.
         This property may raise for primitive/unknown types.
         """
 
@@ -378,7 +378,26 @@ class _StructModule:
         buf: bytes,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> AbstractContextManager[_DynamicStructReader]: ...
+    ) -> AbstractContextManager[_DynamicStructReader]:
+        """Create a reader for this struct type from a bytes buffer (unpacked).
+
+        Returns a context manager that yields a reader. The context manager must be
+        used to ensure proper memory management.
+
+        Args:
+            buf: Bytes buffer containing the serialized message
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            Context manager yielding a reader for this struct type
+
+        Example:
+            with Person.from_bytes(data) as reader:
+                print(reader.name)
+
+        """
+
     @overload
     def from_bytes(
         self,
@@ -387,7 +406,27 @@ class _StructModule:
         nesting_limit: int | None = None,
         *,
         builder: Literal[False],
-    ) -> AbstractContextManager[_DynamicStructReader]: ...
+    ) -> AbstractContextManager[_DynamicStructReader]:
+        """Create a reader for this struct type from a bytes buffer (unpacked).
+
+        Returns a context manager that yields a reader. The context manager must be
+        used to ensure proper memory management.
+
+        Args:
+            buf: Bytes buffer containing the serialized message
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+            builder: If False, returns a reader
+
+        Returns:
+            Context manager yielding a reader for this struct type
+
+        Example:
+            with Person.from_bytes(data, builder=False) as reader:
+                print(reader.name)
+
+        """
+
     @overload
     def from_bytes(
         self,
@@ -396,7 +435,27 @@ class _StructModule:
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
-    ) -> AbstractContextManager[_DynamicStructBuilder]: ...
+    ) -> AbstractContextManager[_DynamicStructBuilder]:
+        """Create a builder for this struct type from a bytes buffer (unpacked).
+
+        Returns a context manager that yields a builder. The context manager must be
+        used to ensure proper memory management.
+
+        Args:
+            buf: Bytes buffer containing the serialized message
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+            builder: If True, returns a builder (mutable)
+
+        Returns:
+            Context manager yielding a builder for this struct type
+
+        Example:
+            with Person.from_bytes(data, builder=True) as builder:
+                builder.name = "New Name"
+
+        """
+
     def from_bytes_packed(
         self,
         buf: bytes,
@@ -562,7 +621,6 @@ class _DynamicObjectReader:
             A list reader.
 
         """
-
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
         """Cast this AnyPointer to a struct reader.
 
@@ -1038,11 +1096,11 @@ class _CallContext:
         the message memory to be freed.
         """
 
-    def tail_call(self, tail_request: _Request) -> None:
+    def tail_call(self, tailRequest: _Request) -> None:
         """Perform a tail call to another capability.
 
         Args:
-            tail_request: Request to tail call
+            tailRequest: Request to tail call
 
         """
 
@@ -1433,11 +1491,11 @@ def load(
 
     """
 
-def register_type(schema_id: int, klass: type) -> None:
+def register_type(id: int, klass: type) -> None:
     """Register a type with the given schema ID.
 
     Args:
-        schema_id: Schema node ID
+        id: Schema node ID
         klass: Python class to register
 
     """
@@ -1491,7 +1549,7 @@ def _write_packed_message_to_fd(fd: int, message: _MessageBuilder) -> None:
     """
 
 def fill_context(method_name: str, context: _CallContext, returned_data: Any) -> None:
-    """Fill RPC call context with returned data.
+    """Internal helper for filling RPC call context with returned data.
 
     Args:
         method_name: Name of the RPC method
@@ -1501,7 +1559,7 @@ def fill_context(method_name: str, context: _CallContext, returned_data: Any) ->
     """
 
 def void_task_done_callback(method_name: str, fulfiller: Any, task: Any) -> None:
-    """Handle completion of a void RPC method task.
+    """Internal callback for void RPC methods when async task completes.
 
     Args:
         method_name: Name of the RPC method
@@ -1750,8 +1808,6 @@ class AsyncIoStream:
         Args:
             host: Hostname to connect to
             port: Port number to connect to
-            ssl: Optional SSL context for securing the connection
-            ssl_handshake_timeout: Optional timeout for the SSL handshake in seconds
             **kwargs: Additional connection options
 
         Returns:
@@ -1864,8 +1920,8 @@ __all__ = [
     "_InterfaceMethod",
     "_InterfaceModule",
     "_InterfaceSchema",
-    "_ListNestedNodeReader",
     "_ListSchema",
+    "_List_NestedNode_Reader",
     "_MallocMessageBuilder",
     "_NestedNodeReader",
     "_NodeReader",

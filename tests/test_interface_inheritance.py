@@ -75,9 +75,9 @@ def test_simple_interface_inheritance(generated_dir: Path) -> None:
 
     # Check that ClimateInstance interface exists as Protocol
     assert "class _ClimateInstanceInterfaceModule(" in modules_content, "ClimateInstance Protocol module should exist"
-    assert (
-        "ClimateInstance: types.modules._ClimateInstanceInterfaceModule" in content
-    ), "ClimateInstance annotation should exist"
+    assert "ClimateInstance: types.modules._ClimateInstanceInterfaceModule" in content, (
+        "ClimateInstance annotation should exist"
+    )
 
     # Check that ClimateInstanceClient extends the flattened IdentifiableClient
     assert "class ClimateInstanceClient(IdentifiableClient)" in client_content, (
@@ -125,7 +125,9 @@ def test_multiple_interface_inheritance(generated_dir: Path) -> None:
     client_content = (generated_dir / "mas" / "schema" / "common" / "common_capnp" / "types" / "_all.pyi").read_text()
 
     # Check that IdentifiableHolder exists as Protocol
-    assert "class _IdentifiableHolderInterfaceModule(" in modules_content, "IdentifiableHolder Protocol module should exist"
+    assert "class _IdentifiableHolderInterfaceModule(" in modules_content, (
+        "IdentifiableHolder Protocol module should exist"
+    )
     assert "IdentifiableHolder: types.modules._IdentifiableHolderInterfaceModule" in content, (
         "IdentifiableHolder annotation should exist"
     )
@@ -182,9 +184,9 @@ def test_interface_with_persistent_inheritance(generated_dir: Path) -> None:
     modules_content = _modules_stub_text(stub_file)
 
     # Check that Service extends both Identifiable and Persistent (no longer needs Protocol suffix)
-    assert "class _ServiceInterfaceModule(_IdentifiableInterfaceModule, _PersistentInterfaceModule):" in modules_content, (
-        "Service Module should extend both Identifiable and Persistent"
-    )
+    assert (
+        "class _ServiceInterfaceModule(_IdentifiableInterfaceModule, _PersistentInterfaceModule):" in modules_content
+    ), "Service Module should extend both Identifiable and Persistent"
 
     # Check Server class inheritance - Service.Server should extend both base Servers
     lines = modules_content.split("\n")

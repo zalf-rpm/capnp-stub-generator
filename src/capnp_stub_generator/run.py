@@ -116,6 +116,7 @@ class SchemaWriterContext:
 
     schema_loader: capnp.SchemaLoader
     file_id_to_path: dict[int, str]
+    generated_module_names_by_schema_id: dict[int, str]
 
 
 @dataclass(frozen=True)
@@ -869,6 +870,7 @@ def _generate_stubs_from_schema(
         file_path=target.file_path,
         schema_loader=context.schema_loader,
         file_id_to_path=context.file_id_to_path,
+        generated_module_names_by_schema_id=context.generated_module_names_by_schema_id,
     )
     writer.generate_all_nested()
 
@@ -1194,16 +1196,36 @@ def _schema_module_name(path_obj: Path) -> str:
 def _python_module_path_for_schema(
     schema: _Schema,
     path: str,
-    context: SchemaWriterContext,
+    schema_loader: capnp.SchemaLoader,
+    file_id_to_path: dict[int, str],
 ) -> str | None:
     """Return the Python module annotation for a schema if present."""
     temp_writer = Writer(
         schema=schema,
         file_path=path,
-        schema_loader=context.schema_loader,
-        file_id_to_path=context.file_id_to_path,
+        schema_loader=schema_loader,
+        file_id_to_path=file_id_to_path,
     )
     return temp_writer._python_module_path
+
+
+def _relative_output_directory_without_annotation(
+    path: str,
+    path_obj: Path,
+    common_base: str | None,
+    *,
+    preserve_path_structure: bool,
+) -> Path:
+    """Build the relative output directory for a schema without module annotations."""
+    module_name = _schema_module_name(path_obj)
+    if preserve_path_structure:
+        relative_dir = _preserved_relative_dir(path, path_obj)
+    elif common_base:
+        relative_dir = Path(os.path.relpath(path_obj.resolve(), common_base)).parent
+    else:
+        relative_dir = Path()
+
+    return relative_dir / module_name
 
 
 def _preserved_relative_dir(path: str, path_obj: Path) -> Path:
@@ -1234,17 +1256,38 @@ def _output_directory_without_annotation(
     preserve_path_structure: bool,
 ) -> Path:
     """Build the fallback output directory for a schema without module annotations."""
-    module_name = _schema_module_name(path_obj)
-    if preserve_path_structure:
-        relative_dir = _preserved_relative_dir(path, path_obj)
-    elif common_base:
-        relative_dir = Path(os.path.relpath(path_obj.resolve(), common_base)).parent
-    else:
-        relative_dir = Path()
-
-    output_directory_path = Path(output_dir, relative_dir, module_name)
+    output_directory_path = Path(
+        output_dir,
+        _relative_output_directory_without_annotation(
+            path,
+            path_obj,
+            common_base,
+            preserve_path_structure=preserve_path_structure,
+        ),
+    )
     output_directory_path.mkdir(parents=True, exist_ok=True)
     return output_directory_path
+
+
+def _resolve_generated_module_name(
+    path: str,
+    python_module_path: str | None,
+    options: RunFromSchemasOptions,
+) -> str | None:
+    """Resolve the importable module name that will be generated for a schema."""
+    path_obj = Path(path)
+    if python_module_path:
+        return f"{python_module_path}.{_schema_module_name(path_obj)}"
+    if not options.output_dir:
+        return None
+
+    relative_output_directory = _relative_output_directory_without_annotation(
+        path,
+        path_obj,
+        options.common_base,
+        preserve_path_structure=options.preserve_path_structure,
+    )
+    return ".".join(relative_output_directory.parts)
 
 
 def _resolve_output_directory(path: str, python_module_path: str | None, options: RunFromSchemasOptions) -> Path:
@@ -1321,7 +1364,9 @@ def _process_loaded_schema(
     logger.debug("  Nested nodes in schema: %s", len(schema.node.nestedNodes))
 
     output_directory_path = _resolve_output_directory(
-        path, _python_module_path_for_schema(schema, path, context), options
+        path,
+        _python_module_path_for_schema(schema, path, context.schema_loader, context.file_id_to_path),
+        options,
     )
     output_directory = str(output_directory_path)
     state.output_directories_used.add(output_directory)
@@ -1379,6 +1424,25 @@ def _ensure_output_packages(output_directories_used: set[str], output_dir_path: 
         _ensure_package_init_files(output_directory_path)
         if output_dir_path is not None:
             _ensure_parent_package_init_files(output_directory_path, output_dir_path)
+
+
+def _build_generated_module_name_map(
+    schema_loader: capnp.SchemaLoader,
+    file_id_to_path: dict[int, str],
+    options: RunFromSchemasOptions,
+) -> dict[int, str]:
+    """Build a map from generated file schema IDs to their importable module names."""
+    if not options.output_dir:
+        return {}
+
+    generated_module_names_by_schema_id: dict[int, str] = {}
+    for schema, path in _iter_loaded_schemas(schema_loader, file_id_to_path, options.file_schemas_only):
+        python_module_path = _python_module_path_for_schema(schema, path, schema_loader, file_id_to_path)
+        generated_module_name = _resolve_generated_module_name(path, python_module_path, options)
+        if generated_module_name is not None:
+            generated_module_names_by_schema_id[schema.node.id] = generated_module_name
+
+    return generated_module_names_by_schema_id
 
 
 def _combine_interfaces_by_dir(
@@ -1472,7 +1536,11 @@ def run_from_schemas(
 
     """
     output_dir_path = Path(options.output_dir) if options.output_dir else None
-    writer_context = SchemaWriterContext(schema_loader=schema_loader, file_id_to_path=file_id_to_path)
+    writer_context = SchemaWriterContext(
+        schema_loader=schema_loader,
+        file_id_to_path=file_id_to_path,
+        generated_module_names_by_schema_id=_build_generated_module_name_map(schema_loader, file_id_to_path, options),
+    )
     state = GeneratedSchemaState()
 
     for schema, path in _iter_loaded_schemas(schema_loader, file_id_to_path, options.file_schemas_only):

@@ -109,4 +109,4 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines: list[str
     # Note: method signatures may span multiple lines
     assert "params: Float64ListReader" in content
     assert "_context: CallCallContext" in content
-    assert "**kwargs: Any" in content
+    assert "**kwargs: object" in content

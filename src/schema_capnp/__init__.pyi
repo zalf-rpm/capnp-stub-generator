@@ -271,7 +271,7 @@ class _ValueStructModule(_StructModule):
         struct: AnyPointer | None = None,
         interface: None = None,
         anyPointer: AnyPointer | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> ValueBuilder: ...
     @override
     @overload
@@ -351,7 +351,7 @@ class _TypeStructModule(_StructModule):
             num_first_segment_words: int | None = None,
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             elementType: TypeBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> TypeListBuilder: ...
         @override
         @overload
@@ -438,7 +438,7 @@ class _TypeStructModule(_StructModule):
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             typeId: int | None = None,
             brand: BrandBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> TypeEnumBuilder: ...
         @override
         @overload
@@ -525,7 +525,7 @@ class _TypeStructModule(_StructModule):
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             typeId: int | None = None,
             brand: BrandBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> TypeStructBuilder: ...
         @override
         @overload
@@ -612,7 +612,7 @@ class _TypeStructModule(_StructModule):
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             typeId: int | None = None,
             brand: BrandBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> TypeInterfaceBuilder: ...
         @override
         @overload
@@ -716,7 +716,7 @@ class _TypeStructModule(_StructModule):
                 struct: None = None,
                 list: None = None,
                 capability: None = None,
-                **kwargs: Any,
+                **kwargs: object,
             ) -> TypeAnyPointerUnconstrainedBuilder: ...
             @override
             @overload
@@ -801,7 +801,7 @@ class _TypeStructModule(_StructModule):
                 allocate_seg_callable: Callable[[int], bytearray] | None = None,
                 scopeId: int | None = None,
                 parameterIndex: int | None = None,
-                **kwargs: Any,
+                **kwargs: object,
             ) -> TypeAnyPointerParameterBuilder: ...
             @override
             @overload
@@ -879,7 +879,7 @@ class _TypeStructModule(_StructModule):
                 num_first_segment_words: int | None = None,
                 allocate_seg_callable: Callable[[int], bytearray] | None = None,
                 parameterIndex: int | None = None,
-                **kwargs: Any,
+                **kwargs: object,
             ) -> TypeAnyPointerImplicitMethodParameterBuilder: ...
             @override
             @overload
@@ -1002,7 +1002,7 @@ class _TypeStructModule(_StructModule):
             unconstrained: TypeAnyPointerUnconstrainedBuilder | dict[str, Any] | None = None,
             parameter: TypeAnyPointerParameterBuilder | dict[str, Any] | None = None,
             implicitMethodParameter: TypeAnyPointerImplicitMethodParameterBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> TypeAnyPointerBuilder: ...
         @override
         @overload
@@ -1266,7 +1266,7 @@ class _TypeStructModule(_StructModule):
         struct: TypeStructBuilder | dict[str, Any] | None = None,
         interface: TypeInterfaceBuilder | dict[str, Any] | None = None,
         anyPointer: TypeAnyPointerBuilder | dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> TypeBuilder: ...
     @override
     @overload
@@ -1399,7 +1399,7 @@ class _BrandStructModule(_StructModule):
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             unbound: None = None,
             type: TypeBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> BindingBuilder: ...
         @override
         @overload
@@ -1497,7 +1497,7 @@ class _BrandStructModule(_StructModule):
             scopeId: int | None = None,
             bind: BindingListBuilder | dict[str, Any] | None = None,
             inherit: None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> ScopeBuilder: ...
         @override
         @overload
@@ -1576,7 +1576,7 @@ class _BrandStructModule(_StructModule):
         num_first_segment_words: int | None = None,
         allocate_seg_callable: Callable[[int], bytearray] | None = None,
         scopes: ScopeListBuilder | dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> BrandBuilder: ...
     @override
     @overload
@@ -1674,7 +1674,7 @@ class _AnnotationStructModule(_StructModule):
         id: int | None = None,
         value: ValueBuilder | dict[str, Any] | None = None,
         brand: BrandBuilder | dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> AnnotationBuilder: ...
     @override
     @overload
@@ -1811,7 +1811,7 @@ class _FieldStructModule(_StructModule):
             type: TypeBuilder | dict[str, Any] | None = None,
             defaultValue: ValueBuilder | dict[str, Any] | None = None,
             hadExplicitDefault: bool | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> FieldSlotBuilder: ...
         @override
         @overload
@@ -1889,7 +1889,7 @@ class _FieldStructModule(_StructModule):
             num_first_segment_words: int | None = None,
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             typeId: int | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> FieldGroupBuilder: ...
         @override
         @overload
@@ -1978,7 +1978,7 @@ class _FieldStructModule(_StructModule):
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             implicit: None = None,
             explicit: int | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> FieldOrdinalBuilder: ...
         @override
         @overload
@@ -2112,7 +2112,7 @@ class _FieldStructModule(_StructModule):
         slot: FieldSlotBuilder | dict[str, Any] | None = None,
         group: FieldGroupBuilder | dict[str, Any] | None = None,
         ordinal: FieldOrdinalBuilder | dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> FieldBuilder: ...
     @override
     @overload
@@ -2226,7 +2226,7 @@ class _EnumerantStructModule(_StructModule):
         name: str | None = None,
         codeOrder: int | None = None,
         annotations: AnnotationListBuilder | dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> EnumerantBuilder: ...
     @override
     @overload
@@ -2405,7 +2405,7 @@ class _MethodStructModule(_StructModule):
         paramBrand: BrandBuilder | dict[str, Any] | None = None,
         resultBrand: BrandBuilder | dict[str, Any] | None = None,
         implicitParameters: ParameterListBuilder | dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> MethodBuilder: ...
     @override
     @overload
@@ -2512,7 +2512,7 @@ class _SuperclassStructModule(_StructModule):
         allocate_seg_callable: Callable[[int], bytearray] | None = None,
         id: int | None = None,
         brand: BrandBuilder | dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> SuperclassBuilder: ...
     @override
     @overload
@@ -2611,7 +2611,7 @@ class _NodeStructModule(_StructModule):
             num_first_segment_words: int | None = None,
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             name: str | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> ParameterBuilder: ...
         @override
         @overload
@@ -2696,7 +2696,7 @@ class _NodeStructModule(_StructModule):
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             name: str | None = None,
             id: int | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> NestedNodeBuilder: ...
         @override
         @overload
@@ -2789,7 +2789,7 @@ class _NodeStructModule(_StructModule):
                 docComment: str | None = None,
                 startByte: int | None = None,
                 endByte: int | None = None,
-                **kwargs: Any,
+                **kwargs: object,
             ) -> MemberBuilder: ...
             @override
             @overload
@@ -2896,7 +2896,7 @@ class _NodeStructModule(_StructModule):
             members: MemberListBuilder | dict[str, Any] | None = None,
             startByte: int | None = None,
             endByte: int | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> SourceInfoBuilder: ...
         @override
         @overload
@@ -3018,7 +3018,7 @@ class _NodeStructModule(_StructModule):
             discriminantCount: int | None = None,
             discriminantOffset: int | None = None,
             fields: FieldListBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> NodeStructBuilder: ...
         @override
         @overload
@@ -3098,7 +3098,7 @@ class _NodeStructModule(_StructModule):
             num_first_segment_words: int | None = None,
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             enumerants: EnumerantListBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> NodeEnumBuilder: ...
         @override
         @overload
@@ -3190,7 +3190,7 @@ class _NodeStructModule(_StructModule):
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             methods: MethodListBuilder | dict[str, Any] | None = None,
             superclasses: SuperclassListBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> NodeInterfaceBuilder: ...
         @override
         @overload
@@ -3282,7 +3282,7 @@ class _NodeStructModule(_StructModule):
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             type: TypeBuilder | dict[str, Any] | None = None,
             value: ValueBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> NodeConstBuilder: ...
         @override
         @overload
@@ -3446,7 +3446,7 @@ class _NodeStructModule(_StructModule):
             targetsMethod: bool | None = None,
             targetsParam: bool | None = None,
             targetsAnnotation: bool | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> NodeAnnotationBuilder: ...
         @override
         @overload
@@ -3651,7 +3651,7 @@ class _NodeStructModule(_StructModule):
         isGeneric: bool | None = None,
         startByte: int | None = None,
         endByte: int | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> NodeBuilder: ...
     @override
     @overload
@@ -3742,7 +3742,7 @@ class _CapnpVersionStructModule(_StructModule):
         major: int | None = None,
         minor: int | None = None,
         micro: int | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> CapnpVersionBuilder: ...
     @override
     @overload
@@ -3933,7 +3933,7 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                 allocate_seg_callable: Callable[[int], bytearray] | None = None,
                 id: int | None = None,
                 name: str | None = None,
-                **kwargs: Any,
+                **kwargs: object,
             ) -> ImportBuilder: ...
             @override
             @overload
@@ -4020,7 +4020,7 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                         allocate_seg_callable: Callable[[int], bytearray] | None = None,
                         parentTypeId: int | None = None,
                         ordinal: int | None = None,
-                        **kwargs: Any,
+                        **kwargs: object,
                     ) -> IdentifierMemberBuilder: ...
                     @override
                     @overload
@@ -4127,7 +4127,7 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                     endByte: int | None = None,
                     typeId: int | None = None,
                     member: IdentifierMemberBuilder | dict[str, Any] | None = None,
-                    **kwargs: Any,
+                    **kwargs: object,
                 ) -> IdentifierBuilder: ...
                 @override
                 @overload
@@ -4206,7 +4206,7 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                 num_first_segment_words: int | None = None,
                 allocate_seg_callable: Callable[[int], bytearray] | None = None,
                 identifiers: IdentifierListBuilder | dict[str, Any] | None = None,
-                **kwargs: Any,
+                **kwargs: object,
             ) -> FileSourceInfoBuilder: ...
             @override
             @overload
@@ -4311,7 +4311,7 @@ class _CodeGeneratorRequestStructModule(_StructModule):
             filename: str | None = None,
             imports: ImportListBuilder | dict[str, Any] | None = None,
             fileSourceInfo: FileSourceInfoBuilder | dict[str, Any] | None = None,
-            **kwargs: Any,
+            **kwargs: object,
         ) -> RequestedFileBuilder: ...
         @override
         @overload
@@ -4423,7 +4423,7 @@ class _CodeGeneratorRequestStructModule(_StructModule):
         requestedFiles: RequestedFileListBuilder | dict[str, Any] | None = None,
         capnpVersion: CapnpVersionBuilder | dict[str, Any] | None = None,
         sourceInfo: SourceInfoListBuilder | dict[str, Any] | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> CodeGeneratorRequestBuilder: ...
     @override
     @overload

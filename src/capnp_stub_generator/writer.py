@@ -99,6 +99,7 @@ class Writer:
         file_path: str,
         schema_loader: capnp.SchemaLoader,
         file_id_to_path: dict[int, str],
+        generated_module_names_by_schema_id: dict[int, str] | None = None,
     ) -> None:
         """Initialize the stub writer with schema information.
 
@@ -107,6 +108,7 @@ class Writer:
             file_path: Path to the schema file (e.g., "path/to/schema.capnp").
             schema_loader: SchemaLoader instance with all nodes loaded.
             file_id_to_path: Mapping of schema IDs to file paths for resolving imports.
+            generated_module_names_by_schema_id: Generated module names keyed by file schema ID.
 
         """
         self.scope: Scope = Scope(name="", id=schema.node.id, parent=None, return_scope=None)
@@ -115,6 +117,7 @@ class Writer:
         self._schema: _Schema = schema
         self._schema_loader: capnp.SchemaLoader = schema_loader
         self._file_id_to_path: dict[int, str] = file_id_to_path
+        self._generated_module_names_by_schema_id: dict[int, str] = generated_module_names_by_schema_id or {}
 
         self._module_path: pathlib.Path = pathlib.Path(file_path)
 
@@ -957,7 +960,6 @@ class Writer:
             builder_type_name (str): The Builder type name to return (flat alias).
 
         """
-        self._add_typing_import("Any")
         self._add_typing_import("Callable")
         new_message_params: list[helper.TypeHintedVariable | str] = [
             "self",
@@ -1038,8 +1040,8 @@ class Writer:
             )
             new_message_params.append(field_param)
 
-        # Add **kwargs: Any to match base signature
-        new_message_params.append("**kwargs: Any")
+        # Add **kwargs: object as a safe catch-all for runtime-accepted keyword forwarding.
+        new_message_params.append("**kwargs: object")
 
         # Add as instance method with @override decorator
         self.scope.add("@override")
@@ -2538,6 +2540,30 @@ class Writer:
         # Named field return (single or multiple): use Result Protocol
         return result_class_name, False
 
+    @staticmethod
+    def _is_direct_struct_parameter(method_info: MethodInfo) -> bool:
+        """Return whether a method uses direct-struct parameter shorthand."""
+        if method_info.param_schema is None:
+            return False
+        return not method_info.param_schema.node.displayName.endswith("$Params")
+
+    def _get_direct_struct_param_context_type(self, method_info: MethodInfo) -> str | None:
+        """Return the reader type exposed by CallContext.params for direct-struct params."""
+        if not self._is_direct_struct_parameter(method_info) or method_info.param_schema is None:
+            return None
+
+        struct_type = self.get_type_by_id(method_info.param_schema.node.id)
+        return self._get_flat_reader_alias(struct_type.scoped_name) or self._build_nested_reader_type(
+            struct_type.scoped_name,
+        )
+
+    def _supports_regular_server_method_signature(self, method_info: MethodInfo) -> bool:
+        """Return whether the flattened server method signature is safe to advertise."""
+        if not self._is_direct_struct_parameter(method_info) or method_info.param_schema is None:
+            return True
+
+        return method_info.param_schema.node.struct.discriminantCount == 0
+
     def _get_client_type_name_from_interface_path(self, interface_path: str) -> str:
         """Extract client type name from interface path.
 
@@ -3171,13 +3197,11 @@ class Writer:
         param_parts = ["self"]
         param_parts.extend([p.to_server_param() for p in parameters])
         param_parts.append(f"_context: {call_context_type}")
-        param_parts.append("**kwargs: Any")
+        param_parts.append("**kwargs: object")
         param_str = ", ".join(param_parts)
 
         # Determine return type
         self._add_typing_import("Awaitable")
-        self._add_typing_import("Any")
-
         if not method_info.result_fields:
             return_type_str = "Awaitable[None]"
         else:
@@ -3334,7 +3358,11 @@ class Writer:
         is_direct_struct_return: bool,
     ) -> tuple[list[str], list[str]]:
         """Generate Params and CallContext protocols for a server method."""
-        params_lines = self._generate_params_protocol(parameters, type_names.params_type_name)
+        direct_params_type = self._get_direct_struct_param_context_type(method_info)
+        params_type_for_context = direct_params_type or type_names.params_type_name
+        params_lines = (
+            [] if direct_params_type else self._generate_params_protocol(parameters, type_names.params_type_name)
+        )
         if is_direct_struct_return:
             if method_info.result_schema is None:
                 msg = "Result schema is None for direct struct return"
@@ -3344,7 +3372,7 @@ class Writer:
             return (
                 params_lines,
                 self._generate_callcontext_protocol(
-                    type_names.params_type_name,
+                    params_type_for_context,
                     type_names.call_context_type_name,
                     has_results=True,
                     result_type_for_context=self._get_flat_builder_alias(struct_type.scoped_name)
@@ -3356,7 +3384,7 @@ class Writer:
         return (
             params_lines,
             self._generate_callcontext_protocol(
-                type_names.params_type_name,
+                params_type_for_context,
                 type_names.call_context_type_name,
                 has_results=has_results,
                 result_type_for_context=type_names.server_result_type_name if has_results else None,
@@ -3371,14 +3399,15 @@ class Writer:
         server_collection: ServerMethodsCollection,
     ) -> None:
         """Add server signatures and NamedTuple metadata for a method."""
-        server_collection.add_server_method(
-            self._generate_server_method_signature(
-                method_info,
-                parameters,
-                type_names.call_context_type_name,
-                type_names.result_tuple_type_name,
+        if self._supports_regular_server_method_signature(method_info):
+            server_collection.add_server_method(
+                self._generate_server_method_signature(
+                    method_info,
+                    parameters,
+                    type_names.call_context_type_name,
+                    type_names.result_tuple_type_name,
+                ),
             )
-        )
         server_collection.add_server_method(
             self._generate_server_context_method_signature(method_info, type_names.call_context_type_name)
         )
@@ -3889,6 +3918,9 @@ class Writer:
         imported_module_annotation = None
         imported_file_schema_id = self._find_file_id_for_path(matching_path)
         if imported_file_schema_id is not None:
+            generated_module_name = self._generated_module_names_by_schema_id.get(imported_file_schema_id)
+            if generated_module_name is not None:
+                return generated_module_name
             imported_module_annotation = self.get_python_module_for_schema(imported_file_schema_id)
 
         if self._python_module_path and imported_module_annotation:
@@ -4824,7 +4856,12 @@ class Writer:
         """Build the public import surface for `types/__init__`."""
         modules = self._public_types_package_modules()
         import_lines = [f"from . import {module_name} as {module_name}" for module_name in modules]
-        return ["from . import _all as _all", *import_lines, "", self._render_string_list_assignment("__all__", modules)]
+        return [
+            "from . import _all as _all",
+            *import_lines,
+            "",
+            self._render_string_list_assignment("__all__", modules),
+        ]
 
     def _build_results_package_init_lines(self) -> list[str]:
         """Build the public import surface for `types.results.__init__`."""
@@ -4941,6 +4978,7 @@ class Writer:
         """Generate runtime placeholder files for the companion types package."""
         type_modules = self._public_types_package_modules()
         result_modules = self._public_result_package_modules()
+        result_tuple_module_lines = self._build_runtime_result_tuple_module_lines()
         type_package_imports = [
             f"from . import _all, {', '.join(type_modules)}",
             "",
@@ -5026,7 +5064,7 @@ class Writer:
             ),
             "types/results/tuples.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for result tuple helpers of `{self._module_path.name}`."""',
-                [],
+                result_tuple_module_lines,
             ),
         }
 
@@ -5355,16 +5393,21 @@ class Writer:
                     full_path,
                 )
 
-    def _append_runtime_server_namedtuples(self, out: list[str]) -> None:
-        """Append runtime NamedTuple assignments for flattened server result tuple types."""
+    def _build_runtime_result_tuple_module_lines(self) -> list[str]:
+        """Build runtime ResultTuple definitions for `types.results.tuples`."""
         if not self._all_server_namedtuples:
-            return
+            return []
 
-        out.append("")
+        out = ["from typing import NamedTuple", ""]
+        exported_names: list[str] = []
         for _, namedtuples_dict in sorted(self._all_server_namedtuples.items()):
             for _, (namedtuple_name, fields) in sorted(namedtuples_dict.items()):
                 field_list = [f'("{field_name}", object)' for field_name, _ in fields]
                 out.append(f"{namedtuple_name} = NamedTuple('{namedtuple_name}', [{', '.join(field_list)}])")
+                exported_names.append(namedtuple_name)
+
+        out.extend(["", self._render_string_list_assignment("__all__", sorted(exported_names))])
+        return out
 
     def dumps_py(self) -> str:
         """Generate the .py loader module for this schema.
@@ -5387,10 +5430,6 @@ class Writer:
         out.append("import schema_capnp")
         out.append("from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule")
 
-        # Add NamedTuple import if we have server namedtuples
-        if self._all_server_namedtuples:
-            out.append("from typing import NamedTuple")
-
         out.append("")
         out.append("capnp.remove_import_hook()")
         out.append("")
@@ -5399,5 +5438,4 @@ class Writer:
         self._append_runtime_loader_setup(out)
         out.extend(["# Build module structure inline", ""])
         self._extend_runtime_module_construction(out, self._schema.node, [])
-        self._append_runtime_server_namedtuples(out)
         return "\n".join(out)

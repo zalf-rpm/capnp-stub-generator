@@ -53,6 +53,28 @@ def _clean_generated_dir() -> None:
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _write_generated_package_markers() -> None:
+    """Ensure generated stub parent directories are importable as packages."""
+    package_dirs = (
+        GENERATED_DIR,
+        BASIC_GENERATED_DIR,
+        EXAMPLES_GENERATED_DIR,
+        ZALFMAS_GENERATED_DIR,
+        ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR,
+        CAPNP_GENERATED_DIR,
+    )
+    for package_dir in package_dirs:
+        if not package_dir.exists():
+            continue
+        init_file = package_dir / "__init__.py"
+        if init_file.exists():
+            continue
+        init_file.write_text(
+            f'"""Generated stub package container for `{package_dir.relative_to(TESTS_DIR).as_posix()}`."""\n',
+            encoding="utf8",
+        )
+
+
 def _get_plugin_path() -> Path:
     """Return the capnpc plugin path and fail loudly if it is missing."""
     plugin_path = Path(__file__).parent.parent / "src" / "capnp_stub_generator" / "capnpc_plugin.py"
@@ -235,6 +257,7 @@ def generate_all_stubs() -> dict[str, Path]:
             )
 
         LOGGER.info("✓ All test stubs generated successfully using capnp compile")
+        _write_generated_package_markers()
         _validate_generated_stubs_with_pyright()
 
     finally:
