@@ -37,7 +37,6 @@ def test_any_pointer_setters(basic_stubs: Path) -> None:
 def test_any_pointer_type_checking(basic_stubs: Path) -> None:
     """Test type checking for AnyPointer assignments."""
     test_code = """
-from typing import Any
 import any_pointer_capnp
 
 def test_assignments():
@@ -55,7 +54,7 @@ def test_assignments():
     builder.l = ["some", "list"]
 
     # new_message with AnyPointer
-    b2 = any_pointer_capnp.AnyHolder.new_message(any="text")
+    _ = any_pointer_capnp.AnyHolder.new_message(any="text")
 """
 
     test_file = basic_stubs / "test_any_pointer_usage.py"

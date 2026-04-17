@@ -92,8 +92,6 @@ def test_interface_result_tuple_accepts_forwarded_clients(basic_stubs: Path) -> 
 def test_result_tuple_type_checking(basic_stubs: Path) -> None:
     """Pyright should accept ResultTuple construction with assignment-friendly field types."""
     test_code = """
-from typing import Any
-
 import list_result_capnp
 import runtime_test_capnp
 from list_result_capnp.types.contexts import GetitemsCallContext

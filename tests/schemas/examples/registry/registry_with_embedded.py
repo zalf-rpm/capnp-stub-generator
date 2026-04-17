@@ -37,11 +37,11 @@ registry_capnp = importlib.import_module("tests._generated.zalfmas.mas.schema.re
 class Identifiable(common_capnp.Identifiable.Server):
     """Server implementation of Identifiable interface."""
 
-    async def info(self, _context, **kwargs):
+    async def info(self, _context: object, **kwargs: object) -> None:
         """Return id information."""
 
 
-async def main():
+async def main() -> None:
     """Create a Registry.Entry message with an Identifiable capability."""
     re = registry_capnp.Registry.Entry.new_message(
         categoryId="cat",

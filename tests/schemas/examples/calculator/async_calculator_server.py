@@ -21,7 +21,7 @@ logger.setLevel(logging.DEBUG)
 async def evaluate_impl(
     expression: ExpressionBuilder | ExpressionReader,
     params: Float64ListReader | None = None,
-):
+) -> float:
     """Implementation of CalculatorImpl::evaluate(), also shared by
     FunctionImpl::call().  In the latter case, `params` are the parameter
     values passed to the function; in the former case, `params` is just an
@@ -42,8 +42,8 @@ async def evaluate_impl(
         func = call.function
 
         # Evaluate each parameter.
-        paramPromises = [evaluate_impl(param, params) for param in call.params]
-        vals = await asyncio.gather(*paramPromises)
+        param_promises = [evaluate_impl(param, params) for param in call.params]
+        vals = await asyncio.gather(*param_promises)
 
         # When the parameters are complete, call the function.
         result = await func.call(vals)
@@ -54,10 +54,10 @@ async def evaluate_impl(
 class ValueImpl(calculator_capnp.Calculator.Value.Server):
     """Simple implementation of the Calculator.Value Cap'n Proto interface."""
 
-    def __init__(self, value):
+    def __init__(self, value: float) -> None:
         self.value = value
 
-    async def read(self, _context, **kwargs):
+    async def read(self, _context: object, **kwargs: object) -> float:
         return self.value
 
 
@@ -70,7 +70,7 @@ class FunctionImpl(calculator_capnp.Calculator.Function.Server):
         self.paramCount: int = paramCount
         self.body: ExpressionBuilder = body.as_builder()
 
-    async def call(self, params, _context, **kwargs):
+    async def call(self, params: Float64ListReader, _context: object, **kwargs: object) -> float:
         """Note that we're returning a Promise object here, and bypassing the
         helper functionality that normally sets the results struct from the
         returned object. Instead, we set _context.results directly inside of
@@ -88,7 +88,7 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     def __init__(self, op: CalculatorOperatorEnum):
         self.op: CalculatorOperatorEnum = op
 
-    async def call(self, params, _context, **kwargs):
+    async def call(self, params: Float64ListReader, _context: object, **kwargs: object) -> float:
         assert len(params) == 2
 
         op = self.op
@@ -107,21 +107,37 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
 class CalculatorImpl(calculator_capnp.Calculator.Server):
     """Implementation of the Calculator Cap'n Proto interface."""
 
-    async def evaluate(self, expression, _context, **kwargs):
+    async def evaluate(
+        self,
+        expression: ExpressionBuilder | ExpressionReader,
+        _context: object,
+        **kwargs: object,
+    ) -> ValueImpl:
         return ValueImpl(await evaluate_impl(expression))
 
-    async def defFunction(self, paramCount, body, _context, **kwargs):
+    async def defFunction(
+        self,
+        paramCount: int,
+        body: ExpressionReader,
+        _context: object,
+        **kwargs: object,
+    ) -> FunctionImpl:
         return FunctionImpl(paramCount, body)
 
-    async def getOperator(self, op, _context, **kwargs):
+    async def getOperator(
+        self,
+        op: CalculatorOperatorEnum,
+        _context: object,
+        **kwargs: object,
+    ) -> OperatorImpl:
         return OperatorImpl(op)
 
 
-async def new_connection(stream):
+async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
     await capnp.TwoPartyServer(stream, bootstrap=CalculatorImpl()).on_disconnect()
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(usage="""Runs the server bound to the given address/port ADDRESS. """)
 
     parser.add_argument("address", help="ADDRESS:PORT")
@@ -129,7 +145,7 @@ def parse_args():
     return parser.parse_args()
 
 
-async def main():
+async def main() -> None:
     host, port = parse_args().address.split(":")
     server = await capnp.AsyncIoStream.create_server(new_connection, host, port)
     async with server:

@@ -25,7 +25,7 @@ def main() -> None:
         logger.exception("Failed to read CodeGeneratorRequest")
         sys.exit(1)
 
-    requested_files = [f.filename for f in request.requestedFiles]
+    requested_files: list[str] = [str(requested_file.filename) for requested_file in request.requestedFiles]
 
     if not requested_files:
         logger.warning("No files requested for generation.")
@@ -39,7 +39,7 @@ def main() -> None:
     augment_capnp_stubs = True
 
     # Build import paths from the request
-    import_paths = []
+    import_paths: list[str] = []
 
     # Load all nodes from the request into the schema loader
     loader = capnp.SchemaLoader()
@@ -52,21 +52,28 @@ def main() -> None:
             logger.warning("Failed to load node %s: %s", node.displayName, error)
 
     # Build mapping of all file IDs to paths (needed for type resolution)
-    file_id_to_path = {}
+    file_id_to_path: dict[int, str] = {}
 
     # Track which files were explicitly requested (only these will have stubs generated)
-    requested_file_ids = set()
+    requested_file_ids: set[int] = set()
 
     # Map file IDs to paths for all files (requested + imports)
-    for rf in request.requestedFiles:
-        requested_file_ids.add(rf.id)
-        file_id_to_path[rf.id] = rf.filename
+    for requested_file in request.requestedFiles:
+        requested_file_id = int(requested_file.id)
+        requested_file_name = str(requested_file.filename)
+        requested_file_ids.add(requested_file_id)
+        file_id_to_path[requested_file_id] = requested_file_name
 
         # Also map imports for type resolution (but won't generate stubs for them)
-        for imp in rf.imports:
+        for imported_file in requested_file.imports:
             # Resolve import path relative to the importing file
-            path = imp.name[1:] if imp.name.startswith("/") else str(Path(rf.filename).parent / imp.name)
-            file_id_to_path[imp.id] = path
+            imported_name = str(imported_file.name)
+            path = (
+                imported_name[1:]
+                if imported_name.startswith("/")
+                else str(Path(requested_file_name).parent / imported_name)
+            )
+            file_id_to_path[int(imported_file.id)] = path
 
     logger.info(
         "Will generate stubs for %s requested files (out of %s total including imports)",

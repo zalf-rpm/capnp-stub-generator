@@ -29,6 +29,9 @@ if hasattr(capnp, "remove_import_hook"):
 
 logger = logging.getLogger(__name__)
 
+type InterfaceModuleMap = dict[str, tuple[str, list[str]]]
+type DynamicObjectReaderTypes = tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]
+
 PYI_SUFFIX = ".pyi"
 PY_SUFFIX = ".py"
 MIN_PRESERVED_PATH_DEPTH = 2
@@ -851,8 +854,8 @@ def _generate_stubs_from_schema(
     context: SchemaWriterContext,
     target: SchemaWriteTarget,
 ) -> tuple[
-    dict[str, tuple[str, list[str]]],
-    tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]],
+    InterfaceModuleMap,
+    DynamicObjectReaderTypes,
 ]:
     """Generate stub files from schema information.
 
@@ -928,7 +931,7 @@ def _generate_stubs_from_schema(
         else:
             full_module_name = module_name
 
-    interfaces_with_module = {}
+    interfaces_with_module: InterfaceModuleMap = {}
     for interface_name, (client_name, base_client_names) in writer._all_interfaces.items():
         # Add module prefix to make fully qualified names
         qualified_interface = f"{full_module_name}.types.modules.{interface_name}"
@@ -951,15 +954,15 @@ def _generate_stubs_from_schema(
     )
 
     # Qualify the types with module prefix
-    qualified_struct_types = [
+    qualified_struct_types: list[tuple[str, str]] = [
         (f"{full_module_name}.types.modules.{proto}", f"{full_module_name}.types.readers.{reader}")
         for proto, reader in struct_types
     ]
-    qualified_list_types = [
+    qualified_list_types: list[tuple[str, str]] = [
         (f"{full_module_name}.types._all.{list_class}", f"{full_module_name}.types.readers.{reader}")
         for list_class, reader in list_types
     ]
-    qualified_interface_types = [
+    qualified_interface_types: list[tuple[str, str]] = [
         (f"{full_module_name}.types.modules.{proto}", f"{full_module_name}.types.clients.{client}")
         for proto, client in interface_types
     ]
@@ -1756,8 +1759,8 @@ def _extract_pattern_bases(
         - relative_bases: Relative path (for depth calculation)
 
     """
-    absolute_bases = []
-    relative_bases = []
+    absolute_bases: list[str] = []
+    relative_bases: list[str] = []
 
     for pattern in paths:
         # Extract base from pattern (the directory before wildcards)

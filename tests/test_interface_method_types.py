@@ -123,7 +123,7 @@ class TestInterfaceMethodTypeRegression:
         # Extract just the Calculator interface methods
         lines = stub_content.split("\n")
         in_calculator = False
-        calculator_methods = []
+        calculator_methods: list[str] = []
 
         for line in lines:
             if "class Calculator(Protocol):" in line:

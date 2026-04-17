@@ -320,7 +320,7 @@ def test_empty_interface_with_inheritance(generated_dir: Path) -> None:
     # Find _IdentifiableHolderInterfaceModule class
     lines = modules_content.split("\n")
     in_identifiable_holder = False
-    holder_content = []
+    holder_content: list[str] = []
 
     for line in lines:
         if "class _IdentifiableHolderInterfaceModule(" in line:

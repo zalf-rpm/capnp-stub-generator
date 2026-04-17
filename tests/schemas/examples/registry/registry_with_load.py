@@ -28,11 +28,11 @@ common_capnp = capnp.load(str(SCHEMA_DIR / "common.capnp"), imports=CAPNP_IMPORT
 class Identifiable(common_capnp.Identifiable.Server):
     """Server implementation of Identifiable interface."""
 
-    async def info(self, _context):
+    async def info(self, _context: object, **kwargs: object) -> None:
         """Return id information."""
 
 
-async def main():
+async def main() -> None:
     """Create a Registry.Entry message with an Identifiable capability."""
     re = registry_capnp.Registry.Entry.new_message(
         categoryId="cat",

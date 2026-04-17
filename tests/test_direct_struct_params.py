@@ -6,7 +6,7 @@ import asyncio
 import importlib
 import re
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import capnp
 
@@ -14,20 +14,20 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-async def _capture_direct_union_write_context(fbp_capnp: object) -> dict[str, object]:
+async def _capture_direct_union_write_context(fbp_capnp: Any) -> dict[str, object]:
     future: asyncio.Future[dict[str, object]] = asyncio.get_running_loop().create_future()
 
-    class WriterImpl(fbp_capnp.Channel.Writer.Server):  # type: ignore[attr-defined]
-        async def write_context(self, context: object) -> None:
+    class WriterImpl(fbp_capnp.Channel.Writer.Server):
+        async def write_context(self, context: Any) -> None:
             future.set_result(
                 {
-                    "params_type": type(context.params).__name__,  # type: ignore[attr-defined]
-                    "which": context.params.which(),  # type: ignore[attr-defined]
-                    "done": context.params.done,  # type: ignore[attr-defined]
+                    "params_type": type(context.params).__name__,
+                    "which": context.params.which(),
+                    "done": context.params.done,
                 },
             )
 
-    writer = fbp_capnp.Channel.Writer._new_client(WriterImpl())  # type: ignore[attr-defined]
+    writer = fbp_capnp.Channel.Writer._new_client(WriterImpl())
     await writer.write(done=None)
     return await asyncio.wait_for(future, timeout=5)
 

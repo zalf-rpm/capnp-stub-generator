@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import capnp
 
@@ -18,12 +18,12 @@ else:
 
 
 class StatsCallback(StatsCallbackServer):
-    async def status_context(self, context) -> None:
+    async def status_context(self, context: Any) -> None:
         _ = context.params.stats
 
 
 class Channel(ChannelServer):
-    async def registerStatsCallback_context(self, context) -> None:
+    async def registerStatsCallback_context(self, context: Any) -> None:
         _ = context.params.updateIntervalInMs
 
 

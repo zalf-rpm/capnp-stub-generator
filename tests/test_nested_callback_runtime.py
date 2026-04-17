@@ -63,20 +63,27 @@ def test_generated_embedded_schema_accepts_nested_callback_server() -> None:
     asyncio.run(capnp.run(_exercise_generated_embedded_schema()))
 
 
-def test_generated_runtime_has_no_cast_calls() -> None:
-    """Generated runtime files should keep the nested schema fix compact."""
+def test_generated_runtime_uses_typed_schema_helpers() -> None:
+    """Generated runtime files should use typed schema helpers for nested schema access."""
     runtime_file = (
         TESTS_DIR / "_generated" / "examples" / "fbp_nested_callback" / "fbp_nested_callback_capnp" / "__init__.py"
     )
     content = runtime_file.read_text()
-    assert "cast(" not in content
-    assert "from typing import Any, cast" not in content
+    assert "from typing import cast" in content
+    assert "def _as_struct_schema(schema: object) -> _StructSchema:" in content
+    assert "def _struct_field(schema: _StructSchema, name: str) -> _StructSchemaField:" in content
+    assert "def _interface_method(schema: _InterfaceSchema, name: str) -> _InterfaceMethod:" in content
     assert content.splitlines()[0] == "# pyright: reportAttributeAccessIssue=false, reportArgumentType=false"
     assert "_require_" not in content
     assert "import schema_capnp" in content
     assert "capnp.schema_capnp" not in content
     assert "sys.modules.get" not in content
     assert "capnp.add_import_hook()" not in content
-    assert 'Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema' in content
-    assert 'Channel.StatsCallback.schema.methods["status"].param_type.fields["stats"].schema' in content
-    assert 'Channel.schema.methods["registerStatsCallback"].result_type.fields["unregisterCallback"].schema' in content
+    assert "_field_schema(" in content
+    assert "_method_param_type(" in content
+    assert "_method_result_type(" in content
+    assert 'Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema' not in content
+    assert 'Channel.StatsCallback.schema.methods["status"].param_type.fields["stats"].schema' not in content
+    assert (
+        'Channel.schema.methods["registerStatsCallback"].result_type.fields["unregisterCallback"].schema' not in content
+    )

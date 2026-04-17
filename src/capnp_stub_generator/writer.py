@@ -1549,13 +1549,12 @@ class Writer:
             raise TypeError(msg)
 
         hinted_variable = self.gen_struct_slot(field, self._require_struct_schema(raw_field), init_choices)
-        if hinted_variable is not None:
-            type_name = hinted_variable.primary_type_hint.name
-            self._add_struct_slot_type_hints(
-                hinted_variable,
-                self._get_flat_builder_alias(type_name),
-                self._get_flat_reader_alias(type_name),
-            )
+        type_name = hinted_variable.primary_type_hint.name
+        self._add_struct_slot_type_hints(
+            hinted_variable,
+            self._get_flat_builder_alias(type_name),
+            self._get_flat_reader_alias(type_name),
+        )
 
         return hinted_variable
 
@@ -1651,7 +1650,7 @@ class Writer:
         if not self.is_type_id_known(schema.node.id):
             # Try to register as an import first, then generate if needed
             imported = self.register_import(schema)
-            if imported is None and isinstance(schema, _StructSchema):
+            if imported is None:
                 _ = self.gen_struct(schema)
 
         type_name = self.get_type_name(field.slot.type)
@@ -2804,8 +2803,7 @@ class Writer:
                 for field_name, list_builder_type in list_params:
                     lines.append("    @overload")
                     lines.append(
-                        f'    def init(self, name: Literal["{field_name}"], '
-                        f"size: int = ...) -> {list_builder_type}: ...",
+                        f'    def init(self, name: Literal["{field_name}"], size: int = ...) -> {list_builder_type}: ...'
                     )
 
             # Add struct init overloads
@@ -4856,11 +4854,12 @@ class Writer:
         """Build the public import surface for `types/__init__`."""
         modules = self._public_types_package_modules()
         import_lines = [f"from . import {module_name} as {module_name}" for module_name in modules]
+        exported_modules = ["_all", *modules]
         return [
             "from . import _all as _all",
             *import_lines,
             "",
-            self._render_string_list_assignment("__all__", modules),
+            self._render_string_list_assignment("__all__", exported_modules),
         ]
 
     def _build_results_package_init_lines(self) -> list[str]:
@@ -4982,7 +4981,7 @@ class Writer:
         type_package_imports = [
             f"from . import _all, {', '.join(type_modules)}",
             "",
-            self._render_string_list_assignment("__all__", type_modules),
+            self._render_string_list_assignment("__all__", ["_all", *type_modules]),
         ]
         result_package_imports = [
             f"from . import {', '.join(result_modules)}",
@@ -5277,17 +5276,146 @@ class Writer:
 
             expr = f"{ancestor_path}.schema"
             for segment_kind, segment_value in nested_segments:
-                if segment_kind == "methods":
-                    expr = f"{expr}.methods[{segment_value!r}]"
-                elif segment_kind == "fields":
-                    expr = f"{expr}.fields[{segment_value!r}]"
-                elif segment_kind == "attr":
-                    expr = f"{expr}.{segment_value}"
-                elif segment_kind in {"schema", "elementType"}:
-                    expr = f"{expr}.{segment_kind}"
-            return expr
+                expr = self._advance_runtime_nested_schema_expr(expr, segment_kind, segment_value)
+            return self._wrap_runtime_schema_expr(expr, nested_schema.node.which())
 
         return None
+
+    def _advance_runtime_nested_schema_expr(
+        self,
+        expr: str,
+        segment_kind: str,
+        segment_value: str | None,
+    ) -> str:
+        """Advance one runtime schema-access expression segment."""
+        next_expr = expr
+
+        if segment_kind == "methods":
+            next_expr = f"_interface_method(_as_interface_schema({expr}), {segment_value!r})"
+        elif segment_kind == "fields":
+            next_expr = f"_struct_field(_as_struct_schema({expr}), {segment_value!r})"
+        elif segment_kind == "attr":
+            if segment_value == "param_type":
+                next_expr = f"_method_param_type({expr})"
+            elif segment_value == "result_type":
+                next_expr = f"_method_result_type({expr})"
+            else:
+                next_expr = f"{expr}.{segment_value}"
+        elif segment_kind == "schema":
+            next_expr = f"_field_schema({expr})"
+        elif segment_kind == "elementType":
+            next_expr = f"_list_element_type(_as_list_schema({expr}))"
+
+        return next_expr
+
+    @staticmethod
+    def _runtime_schema_cast_name(node_type: str) -> str | None:
+        """Return the helper name that narrows one runtime schema object."""
+        return {
+            capnp_types.CapnpElementType.STRUCT: "_as_struct_schema",
+            capnp_types.CapnpElementType.ENUM: "_as_enum_schema",
+            capnp_types.CapnpElementType.INTERFACE: "_as_interface_schema",
+            capnp_types.CapnpElementType.LIST: "_as_list_schema",
+        }.get(node_type)
+
+    def _wrap_runtime_schema_expr(self, expr: str, node_type: str) -> str:
+        """Wrap a runtime schema expression in the correct narrowing helper."""
+        cast_name = self._runtime_schema_cast_name(node_type)
+        if cast_name is None:
+            return expr
+        return f"{cast_name}({expr})"
+
+    @staticmethod
+    def _build_runtime_schema_helper_lines(
+        helper_names: list[str],
+    ) -> tuple[list[str], list[str], bool]:
+        """Build only the runtime schema helpers required by one generated module."""
+        helper_specs = {
+            "_as_struct_schema": (
+                ["def _as_struct_schema(schema: object) -> _StructSchema:", "    return cast(_StructSchema, schema)"],
+                ["_StructSchema"],
+                True,
+            ),
+            "_as_enum_schema": (
+                ["def _as_enum_schema(schema: object) -> _EnumSchema:", "    return cast(_EnumSchema, schema)"],
+                ["_EnumSchema"],
+                True,
+            ),
+            "_as_interface_schema": (
+                [
+                    "def _as_interface_schema(schema: object) -> _InterfaceSchema:",
+                    "    return cast(_InterfaceSchema, schema)",
+                ],
+                ["_InterfaceSchema"],
+                True,
+            ),
+            "_as_list_schema": (
+                ["def _as_list_schema(schema: object) -> _ListSchema:", "    return cast(_ListSchema, schema)"],
+                ["_ListSchema"],
+                True,
+            ),
+            "_struct_field": (
+                [
+                    "def _struct_field(schema: _StructSchema, name: str) -> _StructSchemaField:",
+                    "    return schema.fields[name]",
+                ],
+                ["_StructSchema", "_StructSchemaField"],
+                False,
+            ),
+            "_field_schema": (
+                ["def _field_schema(field: _StructSchemaField) -> object:", "    return cast(object, field.schema)"],
+                ["_StructSchemaField"],
+                True,
+            ),
+            "_interface_method": (
+                [
+                    "def _interface_method(schema: _InterfaceSchema, name: str) -> _InterfaceMethod:",
+                    "    return schema.methods[name]",
+                ],
+                ["_InterfaceMethod", "_InterfaceSchema"],
+                False,
+            ),
+            "_method_param_type": (
+                [
+                    "def _method_param_type(method: _InterfaceMethod) -> _StructSchema:",
+                    "    return method.param_type",
+                ],
+                ["_InterfaceMethod", "_StructSchema"],
+                False,
+            ),
+            "_method_result_type": (
+                [
+                    "def _method_result_type(method: _InterfaceMethod) -> _StructSchema:",
+                    "    return method.result_type",
+                ],
+                ["_InterfaceMethod", "_StructSchema"],
+                False,
+            ),
+            "_list_element_type": (
+                [
+                    "def _list_element_type(schema: _ListSchema) -> object:",
+                    "    return cast(object, schema.elementType)",
+                ],
+                ["_ListSchema"],
+                True,
+            ),
+        }
+
+        helper_import_names: list[str] = []
+        helper_lines: list[str] = []
+        needs_cast = False
+
+        for helper_name in helper_names:
+            helper_definition, import_names, helper_uses_cast = helper_specs[helper_name]
+            for import_name in import_names:
+                if import_name not in helper_import_names:
+                    helper_import_names.append(import_name)
+            if helper_lines:
+                helper_lines.append("")
+            helper_lines.extend(helper_definition)
+            needs_cast = needs_cast or helper_uses_cast
+
+        return helper_import_names, helper_lines, needs_cast
 
     def _build_runtime_module_construction_lines(
         self,
@@ -5420,22 +5548,53 @@ class Writer:
 
         """
         self._ensure_root_scope(context="dumping .py")
+        construction_lines: list[str] = []
+        self._extend_runtime_module_construction(construction_lines, self._schema.node, [])
+        construction_source = "\n".join(construction_lines)
+        helper_names = [
+            helper_name
+            for helper_name in (
+                "_as_struct_schema",
+                "_as_enum_schema",
+                "_as_interface_schema",
+                "_as_list_schema",
+                "_struct_field",
+                "_field_schema",
+                "_interface_method",
+                "_method_param_type",
+                "_method_result_type",
+                "_list_element_type",
+            )
+            if f"{helper_name}(" in construction_source
+        ]
+        helper_import_names, helper_lines, needs_cast = self._build_runtime_schema_helper_lines(helper_names)
+        runtime_import_names = [
+            name for name in ("_EnumModule", "_InterfaceModule", "_StructModule") if f"{name}(" in construction_source
+        ]
+        runtime_import_names.extend(name for name in helper_import_names if name not in runtime_import_names)
+
         out: list[str] = []
         out.append("# pyright: reportAttributeAccessIssue=false, reportArgumentType=false")
         out.append(self.docstring)
         out.append("")
         out.append("import base64")
         out.append("")
+        if needs_cast:
+            out.append("from typing import cast")
+            out.append("")
         out.append("import capnp")
         out.append("import schema_capnp")
-        out.append("from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule")
+        if runtime_import_names:
+            out.append(f"from capnp.lib.capnp import {', '.join(runtime_import_names)}")
 
         out.append("")
         out.append("capnp.remove_import_hook()")
         out.append("")
+        if helper_lines:
+            out.extend([*helper_lines, ""])
 
         self._append_embedded_schema_nodes(out)
         self._append_runtime_loader_setup(out)
         out.extend(["# Build module structure inline", ""])
-        self._extend_runtime_module_construction(out, self._schema.node, [])
+        out.extend(construction_lines)
         return "\n".join(out)

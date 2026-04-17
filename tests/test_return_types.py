@@ -132,7 +132,7 @@ class TestStaticMethodReturnTypes:
 
         # Find nested Reader class
         in_reader = False
-        reader_content = []
+        reader_content: list[str] = []
         for line in lines:
             if line.strip() == "class Reader:":
                 in_reader = True

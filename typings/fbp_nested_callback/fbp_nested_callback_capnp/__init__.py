@@ -2,13 +2,50 @@
 """This is an automatically generated stub for `fbp_nested_callback.capnp`."""
 
 import base64
+from typing import cast
 
 import capnp
-from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule
+from capnp.lib.capnp import (
+    _InterfaceMethod,
+    _InterfaceModule,
+    _InterfaceSchema,
+    _StructModule,
+    _StructSchema,
+    _StructSchemaField,
+)
 
 import schema_capnp
 
 capnp.remove_import_hook()
+
+
+def _as_struct_schema(schema: object) -> _StructSchema:
+    return cast("_StructSchema", schema)
+
+
+def _as_interface_schema(schema: object) -> _InterfaceSchema:
+    return cast("_InterfaceSchema", schema)
+
+
+def _struct_field(schema: _StructSchema, name: str) -> _StructSchemaField:
+    return schema.fields[name]
+
+
+def _field_schema(field: _StructSchemaField) -> object:
+    return cast("object", field.schema)
+
+
+def _interface_method(schema: _InterfaceSchema, name: str) -> _InterfaceMethod:
+    return schema.methods[name]
+
+
+def _method_param_type(method: _InterfaceMethod) -> _StructSchema:
+    return method.param_type
+
+
+def _method_result_type(method: _InterfaceMethod) -> _StructSchema:
+    return method.result_type
+
 
 # Embedded compiled schemas (base64-encoded)
 _SCHEMA_NODES = [
@@ -39,14 +76,45 @@ for _schema_b64 in _SCHEMA_NODES:
 
 Channel = _InterfaceModule(_loader.get(0x9C62C32B2FF2B1E8).as_interface(), "Channel")
 Channel.StatsCallback = _InterfaceModule(
-    Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema,
+    _as_interface_schema(
+        _field_schema(
+            _struct_field(
+                _as_struct_schema(
+                    _method_param_type(
+                        _interface_method(_as_interface_schema(Channel.schema), "registerStatsCallback")
+                    ),
+                ),
+                "callback",
+            ),
+        ),
+    ),
     "StatsCallback",
 )
 Channel.StatsCallback.Stats = _StructModule(
-    Channel.StatsCallback.schema.methods["status"].param_type.fields["stats"].schema,
+    _as_struct_schema(
+        _field_schema(
+            _struct_field(
+                _as_struct_schema(
+                    _method_param_type(_interface_method(_as_interface_schema(Channel.StatsCallback.schema), "status")),
+                ),
+                "stats",
+            ),
+        ),
+    ),
     "Stats",
 )
 Channel.StatsCallback.Unregister = _InterfaceModule(
-    Channel.schema.methods["registerStatsCallback"].result_type.fields["unregisterCallback"].schema,
+    _as_interface_schema(
+        _field_schema(
+            _struct_field(
+                _as_struct_schema(
+                    _method_result_type(
+                        _interface_method(_as_interface_schema(Channel.schema), "registerStatsCallback"),
+                    ),
+                ),
+                "unregisterCallback",
+            ),
+        ),
+    ),
     "Unregister",
 )

@@ -2,6 +2,8 @@
 
 from capnp_stub_generator.run import InterfaceNode, _sort_interfaces_by_inheritance
 
+type InterfaceMap = dict[str, tuple[str, list[str]]]
+
 LEAF_INTERFACE_DEPTH = 2
 EXPECTED_HIERARCHY_INTERFACE_COUNT = 3
 
@@ -91,14 +93,14 @@ def test_sort_interfaces_empty() -> None:
 
 def test_sort_interfaces_single() -> None:
     """Single interface works correctly."""
-    interfaces = {"Base": ("Base.Client", [])}
+    interfaces: InterfaceMap = {"Base": ("Base.Client", [])}
     result = _sort_interfaces_by_inheritance(interfaces)
     assert result == [("Base", "Base.Client")]
 
 
 def test_sort_interfaces_hierarchy() -> None:
     """Multi-level hierarchy sorts correctly (most derived first)."""
-    interfaces = {
+    interfaces: InterfaceMap = {
         "Root": ("Root.Client", []),
         "Mid": ("Mid.Client", ["Root.Client"]),
         "Leaf": ("Leaf.Client", ["Mid.Client"]),
@@ -114,7 +116,7 @@ def test_sort_interfaces_hierarchy() -> None:
 
 def test_sort_interfaces_multiple_roots() -> None:
     """Multiple independent hierarchies sort correctly."""
-    interfaces = {
+    interfaces: InterfaceMap = {
         "RootA": ("RootA.Client", []),
         "RootB": ("RootB.Client", []),
         "DerivedA": ("DerivedA.Client", ["RootA.Client"]),
@@ -132,7 +134,7 @@ def test_sort_interfaces_multiple_roots() -> None:
 
 def test_sort_interfaces_diamond_inheritance() -> None:
     """Diamond inheritance pattern sorts correctly."""
-    interfaces = {
+    interfaces: InterfaceMap = {
         "Base": ("Base.Client", []),
         "Left": ("Left.Client", ["Base.Client"]),
         "Right": ("Right.Client", ["Base.Client"]),
@@ -153,7 +155,7 @@ def test_sort_interfaces_diamond_inheritance() -> None:
 
 def test_sort_interfaces_stable_sort() -> None:
     """Interfaces with same depth are sorted alphabetically."""
-    interfaces = {
+    interfaces: InterfaceMap = {
         "Zebra": ("Zebra.Client", ["Base.Client"]),
         "Apple": ("Apple.Client", ["Base.Client"]),
         "Base": ("Base.Client", []),

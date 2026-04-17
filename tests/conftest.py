@@ -294,8 +294,7 @@ def generate_all_stubs() -> dict[str, Path]:
                 CompileRequest(
                     zalfmas_no_ann_source,
                     ZALFMAS_NO_ANNOTATIONS_GENERATED_DIR,
-                    f"{len(_filtered_schema_files(zalfmas_no_ann_source))} zalfmas schemas "
-                    "(WITHOUT Python annotations)",
+                    f"{len(_filtered_schema_files(zalfmas_no_ann_source))} zalfmas schemas (WITHOUT Python annotations)",
                     "Zalfmas schema compilation (no annotations) failed",
                     [str(zalfmas_no_ann_source)],
                 ),

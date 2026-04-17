@@ -9,6 +9,7 @@ import capnp
 from calculator import calculator_capnp
 
 if TYPE_CHECKING:
+    from calculator.calculator_capnp.types.readers import Float64ListReader
     from calculator.calculator_capnp.types.servers import FunctionServer
 else:
     FunctionServer = calculator_capnp.Calculator.Function.Server
@@ -20,7 +21,7 @@ class PowerFunction(FunctionServer):
     the server.  The server will then be able to make calls back to the client.
     """
 
-    async def call(self, params, _context, **kwargs):
+    async def call(self, params: Float64ListReader, _context: object, **kwargs: object) -> float:
         """Note the **kwargs. This is very necessary to include, since
         protocols can add parameters over time. The _context parameter
         is always passed by pycapnp and contains a results attribute
@@ -29,7 +30,7 @@ class PowerFunction(FunctionServer):
         return pow(params[0], params[1])
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(usage="Connects to the Calculator server at the given address and does some RPCs")
     parser.add_argument("host", help="HOST:PORT")
 

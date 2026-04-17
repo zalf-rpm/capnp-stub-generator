@@ -34,7 +34,7 @@ def test_interface_result_structs_are_embedded(calculator_stubs: Path) -> None:
 
     # Parse all embedded schema IDs
     schema_lines = match.group(1).strip().split("\n")
-    embedded_ids = set()
+    embedded_ids: set[int] = set()
     for raw_line in schema_lines:
         schema_line = raw_line.strip()
         if schema_line.startswith(('"', "'")):
@@ -75,7 +75,7 @@ def test_param_structs_are_embedded(calculator_stubs: Path) -> None:
     assert match
 
     schema_lines = match.group(1).strip().split("\n")
-    embedded_ids = set()
+    embedded_ids: set[int] = set()
     for raw_line in schema_lines:
         schema_line = raw_line.strip()
         if schema_line.startswith(('"', "'")):

@@ -180,7 +180,7 @@ class TestExampleFunctionality:
 # Summary test to show overall status
 def test_all_examples_summary(generate_all_stubs: dict[str, GeneratedExampleInfo]) -> None:
     """Provide a summary of all examples tested."""
-    summary = []
+    summary: list[str] = []
 
     for example in EXAMPLES:
         info = generate_all_stubs[example.name]

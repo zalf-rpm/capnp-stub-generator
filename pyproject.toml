@@ -51,11 +51,16 @@ namespaces = true
 "*" = ["*.capnp", "*.pyi", "py.typed", "LICENSE", "lib/*.pyi"]
 
 
-[tool.pyright]
-reportPropertyTypeMismatch = "none"
+[tool.basedpyright]
 include = ["src", "tests"]
-stubPath = "typings"
 extraPaths = ["src", "tests/_generated/basic", "typings"]
+baselineFile = ".basedpyright/baseline.json"
+typeCheckingMode = "strict"
+stubPath = "typings"
+reportImplicitStringConcatenation = "warning"
+reportMissingTypeStubs = "warning"
+reportPropertyTypeMismatch = "none"
+reportPrivateUsage = "none"
 
 [tool.ruff]
 line-length = 120

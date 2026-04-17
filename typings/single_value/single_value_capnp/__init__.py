@@ -4,7 +4,7 @@
 import base64
 
 import capnp
-from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule
+from capnp.lib.capnp import _InterfaceModule, _StructModule
 
 import schema_capnp
 

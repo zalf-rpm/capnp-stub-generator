@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 from tests.test_helpers import log_summary
 
 if TYPE_CHECKING:
-    from tests._generated.examples.calculator.calculator_capnp.types.builders import ExpressionBuilder
-    from tests._generated.examples.calculator.calculator_capnp.types.results.client import EvaluateResult, ReadResult
+    from calculator.calculator_capnp.types.builders import ExpressionBuilder
+    from calculator.calculator_capnp.types.results.client import EvaluateResult, ReadResult
 
 # Before the types package split, helper names lived on the main module surface.
 # After the split, helper imports come from calculator_capnp.types.* instead.
@@ -23,17 +23,17 @@ if TYPE_CHECKING:
 def example_usage() -> None:
     """Show the types-package import style."""
 
-    def handle_evaluate_result(result: EvaluateResult) -> None:
+    def _handle_evaluate_result(result: EvaluateResult) -> None:
         """Process an evaluation result using a targeted helper import."""
         value_client = result.value
         _ = value_client
 
-    def handle_read_result(result: ReadResult) -> None:
+    def _handle_read_result(result: ReadResult) -> None:
         """Process a read result from the Value interface."""
-        value = result.value  # type: float
+        value: float = result.value
         _ = value
 
-    def process_expression(expr: ExpressionBuilder) -> EvaluateResult:
+    def _process_expression(expr: ExpressionBuilder) -> EvaluateResult:
         """Show that Result types work alongside Builder/Reader helper imports.
 
         The runtime module keeps only runtime-shaped names; helper imports come
@@ -42,6 +42,8 @@ def example_usage() -> None:
         # This would normally make an RPC call
         # For the example, we just show the type signature
         raise NotImplementedError
+
+    _ = (_handle_evaluate_result, _handle_read_result, _process_expression)
 
     log_summary(
         "RESULT TYPE ALIAS EXAMPLE",

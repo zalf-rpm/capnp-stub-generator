@@ -47,10 +47,14 @@ alice.email = "alice@example.com"  # Should type check
 
     if error_count > 0:
         pytest.fail(
-            f"init() return type has {error_count} type errors.\n"
-            f"Pyright output:\n{result.stdout}\n\n"
-            f"Expected: init() should return a typed list-like object\n"
-            f"Actual: Returns Any, causing downstream type errors",
+            "".join(
+                (
+                    f"init() return type has {error_count} type errors.\n",
+                    f"Pyright output:\n{result.stdout}\n\n",
+                    "Expected: init() should return a typed list-like object\n",
+                    "Actual: Returns Any, causing downstream type errors",
+                ),
+            ),
         )
 
 
@@ -84,10 +88,14 @@ bob_phones[0].number = "555-4567"
 
     if error_count > 0:
         pytest.fail(
-            f"List element access has {error_count} type errors.\n"
-            f"Pyright output:\n{result.stdout}\n\n"
-            f"Expected: people[0] should be PersonBuilder\n"
-            f"Actual: Type not properly inferred",
+            "".join(
+                (
+                    f"List element access has {error_count} type errors.\n",
+                    f"Pyright output:\n{result.stdout}\n\n",
+                    "Expected: people[0] should be PersonBuilder\n",
+                    "Actual: Type not properly inferred",
+                ),
+            ),
         )
 
 
@@ -121,10 +129,14 @@ for person in addresses.people:
 
     if error_count > 0:
         pytest.fail(
-            f"List iteration has {error_count} type errors.\n"
-            f"Pyright output:\n{result.stdout}\n\n"
-            f"Expected: person should be PersonReader with proper fields\n"
-            f"Actual: Type not properly inferred",
+            "".join(
+                (
+                    f"List iteration has {error_count} type errors.\n",
+                    f"Pyright output:\n{result.stdout}\n\n",
+                    "Expected: person should be PersonReader with proper fields\n",
+                    "Actual: Type not properly inferred",
+                ),
+            ),
         )
 
 
@@ -154,10 +166,14 @@ bob.employment.unemployed = None
 
     if error_count > 0:
         pytest.fail(
-            f"Union field access has {error_count} type errors.\n"
-            f"Pyright output:\n{result.stdout}\n\n"
-            f"Expected: employment.school and employment.unemployed should type check\n"
-            f"Actual: Type errors in union access",
+            "".join(
+                (
+                    f"Union field access has {error_count} type errors.\n",
+                    f"Pyright output:\n{result.stdout}\n\n",
+                    "Expected: employment.school and employment.unemployed should type check\n",
+                    "Actual: Type errors in union access",
+                ),
+            ),
         )
 
 
@@ -190,10 +206,14 @@ phones[1].type = "work"
 
     if error_count > 0:
         pytest.fail(
-            f"Nested init() has {error_count} type errors.\n"
-            f"Pyright output:\n{result.stdout}\n\n"
-            f"Expected: phones should be typed list-like with PhoneNumberBuilder elements\n"
-            f"Actual: Type not properly inferred",
+            "".join(
+                (
+                    f"Nested init() has {error_count} type errors.\n",
+                    f"Pyright output:\n{result.stdout}\n\n",
+                    "Expected: phones should be typed list-like with PhoneNumberBuilder elements\n",
+                    "Actual: Type not properly inferred",
+                ),
+            ),
         )
 
 
