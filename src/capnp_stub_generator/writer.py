@@ -23,7 +23,7 @@ from capnp.lib.capnp import (
 )
 
 from capnp_stub_generator import capnp_types, helper
-from capnp_stub_generator.scope import CapnpType, NoParentError, Scope
+from capnp_stub_generator.scope import INDENT_SPACES, CapnpType, NoParentError, Scope
 from capnp_stub_generator.writer_dto import (
     EnumGenerationContext,
     InterfaceGenerationContext,
@@ -93,13 +93,14 @@ class Writer:
         "Callable",
     ]
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         schema: _Schema,
         file_path: str,
         schema_loader: capnp.SchemaLoader,
         file_id_to_path: dict[int, str],
         generated_module_names_by_schema_id: dict[int, str] | None = None,
+        inherited_interface_schema_ids: set[int] | None = None,
     ) -> None:
         """Initialize the stub writer with schema information.
 
@@ -109,6 +110,7 @@ class Writer:
             schema_loader: SchemaLoader instance with all nodes loaded.
             file_id_to_path: Mapping of schema IDs to file paths for resolving imports.
             generated_module_names_by_schema_id: Generated module names keyed by file schema ID.
+            inherited_interface_schema_ids: Interface schema IDs that appear as superclasses anywhere in the loaded graph.
 
         """
         self.scope: Scope = Scope(name="", id=schema.node.id, parent=None, return_scope=None)
@@ -128,6 +130,17 @@ class Writer:
         # Build a flat mapping of all schemas by ID for nested type resolution
         self._schemas_by_id: dict[int, capnp_types.SchemaType] = {}
         self._build_schema_id_mapping()
+        discovered_inherited_interface_schema_ids = {
+            superclass.id
+            for loaded_schema in self._schemas_by_id.values()
+            if loaded_schema.node.which() == capnp_types.CapnpElementType.INTERFACE
+            for superclass in loaded_schema.node.interface.superclasses
+        }
+        self._inherited_interface_schema_ids: set[int] = (
+            discovered_inherited_interface_schema_ids
+            if inherited_interface_schema_ids is None
+            else discovered_inherited_interface_schema_ids | inherited_interface_schema_ids
+        )
 
         self._imports: list[str] = []
         self._add_import("from __future__ import annotations")
@@ -307,9 +320,23 @@ class Writer:
         if schema.node.which() != capnp_types.CapnpElementType.INTERFACE:
             return
 
+        for superclass in schema.node.interface.superclasses:
+            self._add_interface_superclass_schema(superclass.id)
+
         for method in schema.node.interface.methods:
             self._add_method_struct_schema(method.paramStructType, method.name, "param")
             self._add_method_struct_schema(method.resultStructType, method.name, "result")
+
+    def _add_interface_superclass_schema(self, schema_id: int) -> None:
+        """Add the schema referenced by an interface superclass."""
+        if schema_id in self._schemas_by_id:
+            return
+        try:
+            superclass_schema = self._schema_loader.get(schema_id)
+        except SCHEMA_LOOKUP_EXCEPTIONS as error:
+            logger.debug("Could not load superclass schema %s: %s", hex(schema_id), error)
+            return
+        self._add_schema_and_nested(superclass_schema)
 
     def _add_method_struct_schema(self, schema_id: int, method_name: str, schema_kind: str) -> None:
         """Add a method parameter or result struct schema."""
@@ -1074,6 +1101,333 @@ class Writer:
         # Add read method overrides with correct Reader and Builder return types (flat aliases)
         self._add_from_bytes_methods(reader_type_name, builder_type_name)
         self._add_read_methods(reader_type_name)
+
+    def _ensure_schema_helper_support(self) -> None:
+        """Ensure imports required by generated schema helper types are present."""
+        self._add_import(
+            "from capnp.lib.capnp import _EnumSchema, _InterfaceMethod, _InterfaceSchema, _ListSchema, _StructSchema, _StructSchemaField",
+        )
+        self._add_typing_import("Literal")
+        self._add_typing_import("overload")
+        self._add_typing_import("override")
+
+    @staticmethod
+    def _indent_relative_lines(lines: list[str], levels: int = 1) -> list[str]:
+        """Indent helper lines relative to their containing generated scope."""
+        prefix = " " * (INDENT_SPACES * levels)
+        return [f"{prefix}{line}" if line else "" for line in lines]
+
+    @staticmethod
+    def _schema_helper_token(name: str) -> str:
+        """Build a stable private helper token without lower-casing camelCase names."""
+        parts = [part for part in re.split(r"[^0-9A-Za-z]+", helper.sanitize_name(name)) if part]
+        token = "".join(f"{part[:1].upper()}{part[1:]}" for part in parts) or "Value"
+        return f"N{token}" if token[0].isdigit() else token
+
+    def _module_schema_helper_name(self, protocol_name: str) -> str:
+        """Return the private schema-helper class name for one generated module class."""
+        return f"_{self._schema_helper_token(self._extract_name_from_protocol(protocol_name))}Schema"
+
+    def _should_emit_precise_interface_schema_helper(self, schema: capnp_types.SchemaType) -> bool:
+        """Return whether this interface schema can safely receive a generated precise helper."""
+        return schema.node.id not in self._inherited_interface_schema_ids
+
+    def _resolve_schema_reference(self, schema_id: int) -> capnp_types.SchemaType | None:
+        """Resolve a schema by ID and cache it in the local mapping."""
+        schema = self._schemas_by_id.get(schema_id)
+        if schema is not None:
+            return schema
+
+        with contextlib.suppress(*SCHEMA_LOOKUP_EXCEPTIONS):
+            schema = self._schema_loader.get(schema_id)
+            self._schemas_by_id[schema_id] = schema
+            return schema
+
+        return None
+
+    def _schema_type_annotation_for_schema(self, schema: capnp_types.SchemaType) -> str:
+        """Return the precise annotation used for a known schema object."""
+        node_kind = schema.node.which()
+        annotation = "_ListSchema"
+        if node_kind == capnp_types.CapnpElementType.ENUM:
+            annotation = "_EnumSchema"
+        elif node_kind == capnp_types.CapnpElementType.INTERFACE:
+            annotation = "_InterfaceSchema"
+            if self._is_schema_in_current_module(schema) and self._should_emit_precise_interface_schema_helper(schema):
+                resolved_type = self.get_type_by_id(schema.node.id)
+                schema_helper_name = self._module_schema_helper_name(
+                    resolved_type.scoped_name.rsplit(".", maxsplit=1)[-1]
+                )
+                annotation = f'"{resolved_type.scoped_name}.{schema_helper_name}"'
+        elif node_kind == capnp_types.CapnpElementType.STRUCT:
+            annotation = "_StructSchema"
+            if self._is_schema_in_current_module(schema):
+                resolved_type = self.get_type_by_id(schema.node.id)
+                schema_helper_name = self._module_schema_helper_name(
+                    resolved_type.scoped_name.rsplit(".", maxsplit=1)[-1]
+                )
+                annotation = f'"{resolved_type.scoped_name}.{schema_helper_name}"'
+
+        return annotation
+
+    def _render_list_schema_helper_lines(
+        self,
+        element_type: TypeReader,
+        helper_name: str,
+        helper_path: str,
+    ) -> tuple[str, list[str]]:
+        """Render a precise helper for a list schema when its element type is known."""
+        element_kind = element_type.which()
+        if element_kind not in {"list", "struct", "interface", "enum"}:
+            return "_ListSchema", []
+
+        if element_kind == "list":
+            element_annotation, nested_element_lines = self._render_list_schema_helper_lines(
+                element_type.list.elementType,
+                "_ElementSchema",
+                f"{helper_path}._ElementSchema",
+            )
+        else:
+            nested_element_lines = []
+            referenced_schema = self._resolve_schema_reference(getattr(element_type, element_kind).typeId)
+            if referenced_schema is None:
+                return "_ListSchema", []
+            element_annotation = self._schema_type_annotation_for_schema(referenced_schema)
+
+        body_lines: list[str] = []
+        body_lines.extend(nested_element_lines)
+        if body_lines:
+            body_lines.append("")
+        body_lines.extend(helper.new_property("elementType", element_annotation, add_override=True))
+        return (
+            f'"{helper_path}"',
+            [f"class {helper_name}(_ListSchema):", *self._indent_relative_lines(body_lines or ["pass"])],
+        )
+
+    def _render_field_schema_helper_lines(
+        self,
+        field: FieldReader,
+        helper_name: str,
+        helper_path: str,
+    ) -> tuple[str, list[str]] | None:
+        """Render a precise `_StructSchemaField` subclass for one slot or group field."""
+        body_lines: list[str] = []
+        schema_annotation: str
+
+        if field.which() == "group":
+            group_schema = self._resolve_schema_reference(field.group.typeId)
+            if group_schema is None:
+                return None
+            schema_annotation = self._schema_type_annotation_for_schema(group_schema)
+        elif field.which() == "slot":
+            field_kind = field.slot.type.which()
+            if field_kind == "list":
+                schema_annotation, list_helper_lines = self._render_list_schema_helper_lines(
+                    field.slot.type.list.elementType,
+                    "_Schema",
+                    f"{helper_path}._Schema",
+                )
+                body_lines.extend(list_helper_lines)
+                if body_lines:
+                    body_lines.append("")
+            elif field_kind in {"struct", "interface", "enum"}:
+                referenced_schema = self._resolve_schema_reference(getattr(field.slot.type, field_kind).typeId)
+                if referenced_schema is None:
+                    return None
+                schema_annotation = self._schema_type_annotation_for_schema(referenced_schema)
+            else:
+                return None
+        else:
+            return None
+
+        body_lines.extend(helper.new_property("schema", schema_annotation, add_override=True))
+        return (
+            helper_name,
+            [f"class {helper_name}(_StructSchemaField):", *self._indent_relative_lines(body_lines or ["pass"])],
+        )
+
+    def _render_struct_schema_helper_lines(
+        self,
+        schema: capnp_types.SchemaType,
+        helper_name: str,
+        helper_path: str,
+    ) -> list[str]:
+        """Render a precise `_StructSchema` helper for one generated module or method struct."""
+        self._ensure_schema_helper_support()
+        body_lines: list[str] = []
+        field_overloads: list[str] = []
+
+        for field in schema.node.struct.fields:
+            field_class_name = f"_{self._schema_helper_token(field.name)}Field"
+            field_helper = self._render_field_schema_helper_lines(
+                field,
+                field_class_name,
+                f"{helper_path}.{field_class_name}",
+            )
+            field_return_type = (
+                f'"{helper_path}.{field_class_name}"' if field_helper is not None else "_StructSchemaField"
+            )
+            if field_helper is not None:
+                _, field_helper_lines = field_helper
+                body_lines.extend(field_helper_lines)
+                body_lines.append("")
+
+            field_overloads.extend(
+                [
+                    "@overload",
+                    f"def __getitem__(self, key: Literal[{field.name!r}]) -> {field_return_type}: ...",
+                ],
+            )
+
+        if field_overloads:
+            field_overloads.extend(
+                [
+                    "@overload",
+                    "def __getitem__(self, key: str) -> _StructSchemaField: ...",
+                ],
+            )
+        else:
+            field_overloads.append("...")
+
+        body_lines.extend(
+            [
+                "class _Fields(dict[str, _StructSchemaField]):",
+                *self._indent_relative_lines(field_overloads),
+                "",
+                *helper.new_property("fields", f'"{helper_path}._Fields"', add_override=True),
+            ],
+        )
+
+        return [f"class {helper_name}(_StructSchema):", *self._indent_relative_lines(body_lines or ["pass"])]
+
+    def _collect_interface_method_specs(
+        self,
+        schema: capnp_types.SchemaType,
+    ) -> list[tuple[str, str, int, int]]:
+        """Collect visible interface methods, flattening inherited methods into one ordered mapping."""
+        method_specs: dict[str, tuple[str, int, int]] = {}
+
+        for superclass in schema.node.interface.superclasses:
+            superclass_schema = self._resolve_schema_reference(superclass.id)
+            if superclass_schema is None or superclass_schema.node.which() != capnp_types.CapnpElementType.INTERFACE:
+                continue
+
+            for method_name, owner_token, param_struct_type, result_struct_type in self._collect_interface_method_specs(
+                superclass_schema
+            ):
+                method_specs[method_name] = (owner_token, param_struct_type, result_struct_type)
+
+        owner_token = self._schema_helper_token(self.get_type_by_id(schema.node.id).name)
+        for method in schema.node.interface.methods:
+            method_specs[method.name] = (owner_token, method.paramStructType, method.resultStructType)
+
+        return [
+            (method_name, owner_token, param_struct_type, result_struct_type)
+            for method_name, (owner_token, param_struct_type, result_struct_type) in method_specs.items()
+        ]
+
+    def _render_interface_schema_helper_lines(
+        self,
+        schema: capnp_types.SchemaType,
+        helper_name: str,
+        helper_path: str,
+    ) -> list[str]:
+        """Render a precise `_InterfaceSchema` helper for one generated interface module."""
+        self._ensure_schema_helper_support()
+        body_lines: list[str] = []
+        method_overloads: list[str] = []
+        for method_name, owner_token, param_struct_type, result_struct_type in self._collect_interface_method_specs(
+            schema
+        ):
+            method_token = self._schema_helper_token(method_name)
+            helper_token_prefix = f"{owner_token}{method_token}"
+            param_helper_name = f"_{helper_token_prefix}ParamSchema"
+            result_helper_name = f"_{helper_token_prefix}ResultSchema"
+
+            param_schema = self._resolve_schema_reference(param_struct_type)
+            result_schema = self._resolve_schema_reference(result_struct_type)
+
+            if param_schema is not None:
+                body_lines.extend(
+                    self._render_struct_schema_helper_lines(
+                        param_schema,
+                        param_helper_name,
+                        f"{helper_path}.{param_helper_name}",
+                    ),
+                )
+                body_lines.append("")
+            if result_schema is not None:
+                body_lines.extend(
+                    self._render_struct_schema_helper_lines(
+                        result_schema,
+                        result_helper_name,
+                        f"{helper_path}.{result_helper_name}",
+                    ),
+                )
+                body_lines.append("")
+
+            param_annotation = f'"{helper_path}.{param_helper_name}"' if param_schema is not None else "_StructSchema"
+            result_annotation = (
+                f'"{helper_path}.{result_helper_name}"' if result_schema is not None else "_StructSchema"
+            )
+            method_type = f"_InterfaceMethod[{param_annotation}, {result_annotation}]"
+
+            method_overloads.extend(
+                [
+                    "@overload",
+                    f"def __getitem__(self, key: Literal[{method_name!r}]) -> {method_type}: ...",
+                ],
+            )
+
+        if method_overloads:
+            method_overloads.extend(
+                [
+                    "@overload",
+                    "def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...",
+                ],
+            )
+        else:
+            method_overloads.append("...")
+
+        body_lines.extend(
+            [
+                helper.new_class_declaration(
+                    "_Methods",
+                    ["dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]"],
+                ),
+                *self._indent_relative_lines(method_overloads),
+                "",
+                *helper.new_property("methods", f'"{helper_path}._Methods"', add_override=True),
+            ],
+        )
+
+        return [
+            helper.new_class_declaration(helper_name, ["_InterfaceSchema"]),
+            *self._indent_relative_lines(body_lines or ["pass"]),
+        ]
+
+    def _add_module_schema_helpers(self, schema: capnp_types.SchemaType) -> None:
+        """Add precise `.schema` helper types to the currently open module class."""
+        helper_lines: list[str]
+        helper_name = self._module_schema_helper_name(self.scope.name)
+        helper_path = f"{self.scope.scoped_name}.{helper_name}"
+        node_kind = schema.node.which()
+        if node_kind == capnp_types.CapnpElementType.INTERFACE:
+            if not self._should_emit_precise_interface_schema_helper(schema):
+                return
+            helper_lines = self._render_interface_schema_helper_lines(schema, helper_name, helper_path)
+        elif node_kind == capnp_types.CapnpElementType.STRUCT:
+            helper_lines = self._render_struct_schema_helper_lines(schema, helper_name, helper_path)
+        else:
+            return
+
+        if self.scope.lines and self.scope.lines[-1].strip():
+            self.scope.add("")
+        for line in helper_lines:
+            self.scope.add(line)
+        self.scope.add("")
+        for line in helper.new_property("schema", f'"{helper_path}"', add_override=True):
+            self.scope.add(line)
 
     def _gen_struct_reader_class(
         self,
@@ -2237,6 +2591,7 @@ class Writer:
         # Generate the runtime Reader/Builder markers nested inside the struct module.
         self._generate_nested_reader_class(context, fields_collection)
         self._generate_nested_builder_class(context, fields_collection)
+        self._add_module_schema_helpers(context.schema)
 
         # Generate struct-module methods that return the precise flattened Builder/Reader types.
         self._gen_struct_base_class(
@@ -3656,6 +4011,7 @@ class Writer:
         type_alias_scope = context.parent_scope or self.scope
         self._open_interface_protocol_scope(context)
         self._generate_nested_types_for_interface(context.schema)
+        self._add_module_schema_helpers(context.schema)
 
         methods = self._enumerate_interface_methods(context)
         server_collection = ServerMethodsCollection()
@@ -4968,10 +5324,63 @@ class Writer:
     @staticmethod
     def _render_runtime_module(docstring: str, body_lines: list[str]) -> str:
         """Render one generated runtime placeholder module."""
-        out = [docstring]
+        out = [docstring, "", "# pyright: reportUnusedClass=none"]
         if body_lines:
             out.extend(["", *body_lines])
         return "\n".join(out)
+
+    def _build_runtime_module_helper_class_lines(self, schema: capnp_types.SchemaType) -> list[str]:
+        """Build a minimal runtime class skeleton for one generated struct/interface module."""
+        node_kind = schema.node.which()
+        if node_kind not in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE}:
+            return []
+
+        base_class = "_StructModule" if node_kind == capnp_types.CapnpElementType.STRUCT else "_InterfaceModule"
+        class_name = self.get_type_by_id(schema.node.id).name
+        body_lines: list[str] = []
+
+        for nested_node in schema.node.nestedNodes:
+            nested_schema = self._schemas_by_id.get(nested_node.id)
+            if nested_schema is None:
+                continue
+
+            nested_helper_lines = self._build_runtime_module_helper_class_lines(nested_schema)
+            if not nested_helper_lines:
+                continue
+            if body_lines:
+                body_lines.append("")
+            body_lines.extend(nested_helper_lines)
+
+        if not body_lines:
+            body_lines.append("pass")
+
+        return [f"class {class_name}({base_class}):", *self._indent_relative_lines(body_lines)]
+
+    def _build_runtime_module_types_py_lines(self) -> list[str]:
+        """Build runtime helper classes for `types.modules.py`."""
+        helper_lines: list[str] = [
+            "from __future__ import annotations",
+            "",
+            "from capnp.lib.capnp import _InterfaceModule, _StructModule",
+        ]
+
+        module_class_lines: list[str] = []
+        for nested_node in self._schema.node.nestedNodes:
+            nested_schema = self._schemas_by_id.get(nested_node.id)
+            if nested_schema is None:
+                continue
+
+            rendered_lines = self._build_runtime_module_helper_class_lines(nested_schema)
+            if not rendered_lines:
+                continue
+            if module_class_lines:
+                module_class_lines.append("")
+            module_class_lines.extend(rendered_lines)
+
+        if module_class_lines:
+            helper_lines.extend(["", *module_class_lines])
+
+        return helper_lines
 
     def dumps_types_py_files(self) -> dict[str, str]:
         """Generate runtime placeholder files for the companion types package."""
@@ -4979,12 +5388,25 @@ class Writer:
         result_modules = self._public_result_package_modules()
         result_tuple_module_lines = self._build_runtime_result_tuple_module_lines()
         type_package_imports = [
-            f"from . import _all, {', '.join(type_modules)}",
+            "from typing import TYPE_CHECKING",
+            "",
+            "if TYPE_CHECKING:",
+            *self._indent_relative_lines(
+                [
+                    "from . import _all as _all",
+                    *[f"from . import {module_name} as {module_name}" for module_name in type_modules],
+                ],
+            ),
             "",
             self._render_string_list_assignment("__all__", ["_all", *type_modules]),
         ]
         result_package_imports = [
-            f"from . import {', '.join(result_modules)}",
+            "from typing import TYPE_CHECKING",
+            "",
+            "if TYPE_CHECKING:",
+            *self._indent_relative_lines(
+                [f"from . import {module_name} as {module_name}" for module_name in result_modules]
+            ),
             "",
             self._render_string_list_assignment("__all__", result_modules),
         ]
@@ -5015,7 +5437,7 @@ class Writer:
             ),
             "types/modules.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for module helper types of `{self._module_path.name}`."""',
-                [],
+                self._build_runtime_module_types_py_lines(),
             ),
             "types/builders.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for builder helpers of `{self._module_path.name}`."""',
@@ -5269,6 +5691,11 @@ class Writer:
         for ancestor_path, ancestor_schema in reversed(ancestor_schemas):
             if not isinstance(ancestor_schema, (_EnumSchema, _InterfaceSchema, _StructSchema, _Schema)):
                 continue
+            if (
+                ancestor_schema.node.which() == capnp_types.CapnpElementType.INTERFACE
+                and not self._should_emit_precise_interface_schema_helper(ancestor_schema)
+            ):
+                continue
 
             nested_segments = self._find_runtime_schema_access_segments(ancestor_schema, nested_schema.node.id)
             if nested_segments is None:
@@ -5277,7 +5704,7 @@ class Writer:
             expr = f"{ancestor_path}.schema"
             for segment_kind, segment_value in nested_segments:
                 expr = self._advance_runtime_nested_schema_expr(expr, segment_kind, segment_value)
-            return self._wrap_runtime_schema_expr(expr, nested_schema.node.which())
+            return expr
 
         return None
 
@@ -5291,131 +5718,31 @@ class Writer:
         next_expr = expr
 
         if segment_kind == "methods":
-            next_expr = f"_interface_method(_as_interface_schema({expr}), {segment_value!r})"
+            next_expr = f"{expr}.methods[{segment_value!r}]"
         elif segment_kind == "fields":
-            next_expr = f"_struct_field(_as_struct_schema({expr}), {segment_value!r})"
+            next_expr = f"{expr}.fields[{segment_value!r}]"
         elif segment_kind == "attr":
             if segment_value == "param_type":
-                next_expr = f"_method_param_type({expr})"
+                next_expr = f"{expr}.param_type"
             elif segment_value == "result_type":
-                next_expr = f"_method_result_type({expr})"
+                next_expr = f"{expr}.result_type"
             else:
                 next_expr = f"{expr}.{segment_value}"
         elif segment_kind == "schema":
-            next_expr = f"_field_schema({expr})"
+            next_expr = f"{expr}.schema"
         elif segment_kind == "elementType":
-            next_expr = f"_list_element_type(_as_list_schema({expr}))"
+            next_expr = f"{expr}.elementType"
 
         return next_expr
 
-    @staticmethod
-    def _runtime_schema_cast_name(node_type: str) -> str | None:
-        """Return the helper name that narrows one runtime schema object."""
-        return {
-            capnp_types.CapnpElementType.STRUCT: "_as_struct_schema",
-            capnp_types.CapnpElementType.ENUM: "_as_enum_schema",
-            capnp_types.CapnpElementType.INTERFACE: "_as_interface_schema",
-            capnp_types.CapnpElementType.LIST: "_as_list_schema",
-        }.get(node_type)
-
-    def _wrap_runtime_schema_expr(self, expr: str, node_type: str) -> str:
-        """Wrap a runtime schema expression in the correct narrowing helper."""
-        cast_name = self._runtime_schema_cast_name(node_type)
-        if cast_name is None:
-            return expr
-        return f"{cast_name}({expr})"
-
-    @staticmethod
-    def _build_runtime_schema_helper_lines(
-        helper_names: list[str],
-    ) -> tuple[list[str], list[str], bool]:
-        """Build only the runtime schema helpers required by one generated module."""
-        helper_specs = {
-            "_as_struct_schema": (
-                ["def _as_struct_schema(schema: object) -> _StructSchema:", "    return cast(_StructSchema, schema)"],
-                ["_StructSchema"],
-                True,
-            ),
-            "_as_enum_schema": (
-                ["def _as_enum_schema(schema: object) -> _EnumSchema:", "    return cast(_EnumSchema, schema)"],
-                ["_EnumSchema"],
-                True,
-            ),
-            "_as_interface_schema": (
-                [
-                    "def _as_interface_schema(schema: object) -> _InterfaceSchema:",
-                    "    return cast(_InterfaceSchema, schema)",
-                ],
-                ["_InterfaceSchema"],
-                True,
-            ),
-            "_as_list_schema": (
-                ["def _as_list_schema(schema: object) -> _ListSchema:", "    return cast(_ListSchema, schema)"],
-                ["_ListSchema"],
-                True,
-            ),
-            "_struct_field": (
-                [
-                    "def _struct_field(schema: _StructSchema, name: str) -> _StructSchemaField:",
-                    "    return schema.fields[name]",
-                ],
-                ["_StructSchema", "_StructSchemaField"],
-                False,
-            ),
-            "_field_schema": (
-                ["def _field_schema(field: _StructSchemaField) -> object:", "    return cast(object, field.schema)"],
-                ["_StructSchemaField"],
-                True,
-            ),
-            "_interface_method": (
-                [
-                    "def _interface_method(schema: _InterfaceSchema, name: str) -> _InterfaceMethod:",
-                    "    return schema.methods[name]",
-                ],
-                ["_InterfaceMethod", "_InterfaceSchema"],
-                False,
-            ),
-            "_method_param_type": (
-                [
-                    "def _method_param_type(method: _InterfaceMethod) -> _StructSchema:",
-                    "    return method.param_type",
-                ],
-                ["_InterfaceMethod", "_StructSchema"],
-                False,
-            ),
-            "_method_result_type": (
-                [
-                    "def _method_result_type(method: _InterfaceMethod) -> _StructSchema:",
-                    "    return method.result_type",
-                ],
-                ["_InterfaceMethod", "_StructSchema"],
-                False,
-            ),
-            "_list_element_type": (
-                [
-                    "def _list_element_type(schema: _ListSchema) -> object:",
-                    "    return cast(object, schema.elementType)",
-                ],
-                ["_ListSchema"],
-                True,
-            ),
-        }
-
-        helper_import_names: list[str] = []
-        helper_lines: list[str] = []
-        needs_cast = False
-
-        for helper_name in helper_names:
-            helper_definition, import_names, helper_uses_cast = helper_specs[helper_name]
-            for import_name in import_names:
-                if import_name not in helper_import_names:
-                    helper_import_names.append(import_name)
-            if helper_lines:
-                helper_lines.append("")
-            helper_lines.extend(helper_definition)
-            needs_cast = needs_cast or helper_uses_cast
-
-        return helper_import_names, helper_lines, needs_cast
+    def _runtime_module_constructor_name(self, schema: capnp_types.SchemaType) -> str | None:
+        """Return the runtime constructor used for one generated module object."""
+        node_kind = schema.node.which()
+        if node_kind == capnp_types.CapnpElementType.ENUM:
+            return "_EnumModule"
+        if node_kind in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE}:
+            return self.get_type_by_id(schema.node.id).scoped_name
+        return None
 
     def _build_runtime_module_construction_lines(
         self,
@@ -5431,16 +5758,15 @@ class Writer:
         if node_type == capnp_types.CapnpElementType.CONST:
             return [f"{full_path} = _loader.get({hex(nested_id)}).as_const_value()"]
 
-        constructor_by_type = {
-            capnp_types.CapnpElementType.STRUCT: ("_StructModule", "as_struct"),
-            capnp_types.CapnpElementType.INTERFACE: ("_InterfaceModule", "as_interface"),
-            capnp_types.CapnpElementType.ENUM: ("_EnumModule", "as_enum"),
-        }
-        constructor_info = constructor_by_type.get(node_type)
-        if constructor_info is None:
+        module_constructor = self._runtime_module_constructor_name(nested_schema)
+        cast_method = {
+            capnp_types.CapnpElementType.STRUCT: "as_struct",
+            capnp_types.CapnpElementType.INTERFACE: "as_interface",
+            capnp_types.CapnpElementType.ENUM: "as_enum",
+        }.get(node_type)
+        if module_constructor is None or cast_method is None:
             return None
 
-        module_constructor, cast_method = constructor_info
         schema_expr = self._build_runtime_nested_schema_expr(ancestor_schemas, nested_schema)
         if schema_expr is None:
             schema_expr = f"_loader.get({hex(nested_id)}).{cast_method}()"
@@ -5551,27 +5877,10 @@ class Writer:
         construction_lines: list[str] = []
         self._extend_runtime_module_construction(construction_lines, self._schema.node, [])
         construction_source = "\n".join(construction_lines)
-        helper_names = [
-            helper_name
-            for helper_name in (
-                "_as_struct_schema",
-                "_as_enum_schema",
-                "_as_interface_schema",
-                "_as_list_schema",
-                "_struct_field",
-                "_field_schema",
-                "_interface_method",
-                "_method_param_type",
-                "_method_result_type",
-                "_list_element_type",
-            )
-            if f"{helper_name}(" in construction_source
+        runtime_import_names = [name for name in ("_EnumModule",) if f"{name}(" in construction_source]
+        runtime_module_class_names = [
+            name for name in sorted(self._root_module_class_names) if f"{name}(" in construction_source
         ]
-        helper_import_names, helper_lines, needs_cast = self._build_runtime_schema_helper_lines(helper_names)
-        runtime_import_names = [
-            name for name in ("_EnumModule", "_InterfaceModule", "_StructModule") if f"{name}(" in construction_source
-        ]
-        runtime_import_names.extend(name for name in helper_import_names if name not in runtime_import_names)
 
         out: list[str] = []
         out.append("# pyright: reportAttributeAccessIssue=false, reportArgumentType=false")
@@ -5579,20 +5888,16 @@ class Writer:
         out.append("")
         out.append("import base64")
         out.append("")
-        if needs_cast:
-            out.append("from typing import cast")
-            out.append("")
         out.append("import capnp")
         out.append("import schema_capnp")
         if runtime_import_names:
             out.append(f"from capnp.lib.capnp import {', '.join(runtime_import_names)}")
+        if runtime_module_class_names:
+            out.append(f"from .types.modules import {', '.join(runtime_module_class_names)}")
 
         out.append("")
         out.append("capnp.remove_import_hook()")
         out.append("")
-        if helper_lines:
-            out.extend([*helper_lines, ""])
-
         self._append_embedded_schema_nodes(out)
         self._append_runtime_loader_setup(out)
         out.extend(["# Build module structure inline", ""])

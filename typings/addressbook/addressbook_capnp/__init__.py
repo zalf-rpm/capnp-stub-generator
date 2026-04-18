@@ -2,39 +2,15 @@
 """This is an automatically generated stub for `addressbook.capnp`."""
 
 import base64
-from typing import cast
 
 import capnp
-from capnp.lib.capnp import _EnumModule, _EnumSchema, _ListSchema, _StructModule, _StructSchema, _StructSchemaField
+from capnp.lib.capnp import _EnumModule
 
 import schema_capnp
 
+from .types.modules import _AddressBookStructModule, _PersonStructModule
+
 capnp.remove_import_hook()
-
-
-def _as_struct_schema(schema: object) -> _StructSchema:
-    return cast("_StructSchema", schema)
-
-
-def _as_enum_schema(schema: object) -> _EnumSchema:
-    return cast("_EnumSchema", schema)
-
-
-def _as_list_schema(schema: object) -> _ListSchema:
-    return cast("_ListSchema", schema)
-
-
-def _struct_field(schema: _StructSchema, name: str) -> _StructSchemaField:
-    return schema.fields[name]
-
-
-def _field_schema(field: _StructSchemaField) -> object:
-    return cast("object", field.schema)
-
-
-def _list_element_type(schema: _ListSchema) -> object:
-    return cast("object", schema.elementType)
-
 
 # Embedded compiled schemas (base64-encoded)
 _SCHEMA_NODES = [
@@ -61,15 +37,13 @@ for _schema_b64 in _SCHEMA_NODES:
 # Build module structure inline
 
 qux = _loader.get(0xA4715ADA13E1E979).as_const_value()
-Person = _StructModule(_loader.get(0xA667DB69AAB2A9A8).as_struct(), "Person")
-Person.PhoneNumber = _StructModule(
-    _as_struct_schema(
-        _list_element_type(_as_list_schema(_field_schema(_struct_field(_as_struct_schema(Person.schema), "phones")))),
-    ),
+Person = _PersonStructModule(_loader.get(0xA667DB69AAB2A9A8).as_struct(), "Person")
+Person.PhoneNumber = _PersonStructModule._PhoneNumberStructModule(
+    Person.schema.fields["phones"].schema.elementType,
     "PhoneNumber",
 )
 Person.PhoneNumber.Type = _EnumModule(
-    _as_enum_schema(_field_schema(_struct_field(_as_struct_schema(Person.PhoneNumber.schema), "type"))),
+    Person.PhoneNumber.schema.fields["type"].schema,
     "Type",
 )
-AddressBook = _StructModule(_loader.get(0xDED4381D608D5D17).as_struct(), "AddressBook")
+AddressBook = _AddressBookStructModule(_loader.get(0xDED4381D608D5D17).as_struct(), "AddressBook")

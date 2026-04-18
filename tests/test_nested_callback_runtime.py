@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 import capnp
+
+from tests.test_helpers import run_command
 
 TESTS_DIR = Path(__file__).parent
 REPO_ROOT = TESTS_DIR.parent
@@ -63,27 +66,52 @@ def test_generated_embedded_schema_accepts_nested_callback_server() -> None:
     asyncio.run(capnp.run(_exercise_generated_embedded_schema()))
 
 
-def test_generated_runtime_uses_typed_schema_helpers() -> None:
-    """Generated runtime files should use typed schema helpers for nested schema access."""
+def test_generated_runtime_uses_typed_schema_paths() -> None:
+    """Generated runtime files should use typed module helpers instead of inline casts."""
     runtime_file = (
         TESTS_DIR / "_generated" / "examples" / "fbp_nested_callback" / "fbp_nested_callback_capnp" / "__init__.py"
     )
     content = runtime_file.read_text()
-    assert "from typing import cast" in content
-    assert "def _as_struct_schema(schema: object) -> _StructSchema:" in content
-    assert "def _struct_field(schema: _StructSchema, name: str) -> _StructSchemaField:" in content
-    assert "def _interface_method(schema: _InterfaceSchema, name: str) -> _InterfaceMethod:" in content
     assert content.splitlines()[0] == "# pyright: reportAttributeAccessIssue=false, reportArgumentType=false"
     assert "_require_" not in content
     assert "import schema_capnp" in content
     assert "capnp.schema_capnp" not in content
     assert "sys.modules.get" not in content
     assert "capnp.add_import_hook()" not in content
-    assert "_field_schema(" in content
-    assert "_method_param_type(" in content
-    assert "_method_result_type(" in content
-    assert 'Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema' not in content
-    assert 'Channel.StatsCallback.schema.methods["status"].param_type.fields["stats"].schema' not in content
-    assert (
-        'Channel.schema.methods["registerStatsCallback"].result_type.fields["unregisterCallback"].schema' not in content
+    assert "cast(" not in content
+    assert "def _as_struct_schema" not in content
+    assert "def _struct_field" not in content
+    assert "def _interface_method" not in content
+    assert "_field_schema(" not in content
+    assert "_method_param_type(" not in content
+    assert "_method_result_type(" not in content
+    assert "from .types.modules import _ChannelInterfaceModule" in content
+    assert re.search(
+        r'Channel\.schema\.methods\["registerStatsCallback"\]\.param_type\.fields\["callback"\]\.schema', content
     )
+    assert re.search(
+        r'Channel\.StatsCallback\.schema\.methods\["status"\]\.param_type\.fields\["stats"\]\.schema', content
+    )
+    assert re.search(
+        r'Channel\.schema\.methods\["registerStatsCallback"\]\.result_type\.fields\["unregisterCallback"\]\.schema',
+        content,
+    )
+
+
+def test_generated_schema_chain_type_checks_without_casts(tmp_path: Path) -> None:
+    """Generated schema helper types should make raw nested schema chains strict-clean."""
+    sample = tmp_path / "typed_schema_chain.py"
+    sample.write_text(
+        """
+from fbp_nested_callback import fbp_nested_callback_capnp
+
+callback_schema = fbp_nested_callback_capnp.Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema
+status_method = callback_schema.methods["status"]
+stats_schema = callback_schema.methods["status"].param_type.fields["stats"].schema
+timestamp_field = stats_schema.fields["timestamp"]
+_ = (status_method, timestamp_field)
+""".strip(),
+    )
+
+    result = run_command(["basedpyright", str(sample)], cwd=REPO_ROOT)
+    assert result.returncode == 0, result.stdout or result.stderr

@@ -8,8 +8,12 @@ from capnp.lib.capnp import (
     _DynamicCapabilityServer,
     _DynamicStructBuilder,
     _DynamicStructReader,
+    _InterfaceMethod,
     _InterfaceModule,
+    _InterfaceSchema,
     _StructModule,
+    _StructSchema,
+    _StructSchemaField,
 )
 
 from . import _all as _all
@@ -20,6 +24,34 @@ class _ChannelInterfaceModule(_InterfaceModule):
             class Reader(_DynamicStructReader): ...
             class Builder(_DynamicStructBuilder): ...
 
+            class _StatsSchema(_StructSchema):
+                class _Fields(dict[str, _StructSchemaField]):
+                    @overload
+                    def __getitem__(self, key: Literal["noOfWaitingWriters"]) -> _StructSchemaField: ...
+                    @overload
+                    def __getitem__(self, key: Literal["noOfWaitingReaders"]) -> _StructSchemaField: ...
+                    @overload
+                    def __getitem__(self, key: Literal["noOfIpsInQueue"]) -> _StructSchemaField: ...
+                    @overload
+                    def __getitem__(self, key: Literal["totalNoOfIpsReceived"]) -> _StructSchemaField: ...
+                    @overload
+                    def __getitem__(self, key: Literal["timestamp"]) -> _StructSchemaField: ...
+                    @overload
+                    def __getitem__(self, key: Literal["updateIntervalInMs"]) -> _StructSchemaField: ...
+                    @overload
+                    def __getitem__(self, key: str) -> _StructSchemaField: ...
+
+                @property
+                @override
+                def fields(
+                    self,
+                ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule._StatsSchema._Fields: ...
+
+            @property
+            @override
+            def schema(
+                self,
+            ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule._StatsSchema: ...
             @override
             def new_message(
                 self,
@@ -83,6 +115,52 @@ class _ChannelInterfaceModule(_InterfaceModule):
 
         Stats: _StatsStructModule
         class _UnregisterInterfaceModule(_InterfaceModule):
+            class _UnregisterSchema(_InterfaceSchema):
+                class _UnregisterInterfaceModuleUnregParamSchema(_StructSchema):
+                    class _Fields(dict[str, _StructSchemaField]): ...
+
+                    @property
+                    @override
+                    def fields(
+                        self,
+                    ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregParamSchema._Fields: ...
+
+                class _UnregisterInterfaceModuleUnregResultSchema(_StructSchema):
+                    class _Fields(dict[str, _StructSchemaField]):
+                        @overload
+                        def __getitem__(self, key: Literal["success"]) -> _StructSchemaField: ...
+                        @overload
+                        def __getitem__(self, key: str) -> _StructSchemaField: ...
+
+                    @property
+                    @override
+                    def fields(
+                        self,
+                    ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregResultSchema._Fields: ...
+
+                class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+                    @overload
+                    def __getitem__(
+                        self,
+                        key: Literal["unreg"],
+                    ) -> _InterfaceMethod[
+                        _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregParamSchema,
+                        _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregResultSchema,
+                    ]: ...
+                    @overload
+                    def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+
+                @property
+                @override
+                def methods(
+                    self,
+                ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._Methods: ...
+
+            @property
+            @override
+            def schema(
+                self,
+            ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema: ...
             @override
             def _new_client(self, server: _DynamicCapabilityServer) -> _all.UnregisterClient: ...
             class Server(_DynamicCapabilityServer):
@@ -95,6 +173,61 @@ class _ChannelInterfaceModule(_InterfaceModule):
 
         Unregister: _UnregisterInterfaceModule
         type UnregisterServer = _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule.Server
+
+        class _StatsCallbackSchema(_InterfaceSchema):
+            class _StatsCallbackInterfaceModuleStatusParamSchema(_StructSchema):
+                class _StatsField(_StructSchemaField):
+                    @property
+                    @override
+                    def schema(
+                        self,
+                    ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule._StatsSchema: ...
+
+                class _Fields(dict[str, _StructSchemaField]):
+                    @overload
+                    def __getitem__(
+                        self,
+                        key: Literal["stats"],
+                    ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusParamSchema._StatsField: ...
+                    @overload
+                    def __getitem__(self, key: str) -> _StructSchemaField: ...
+
+                @property
+                @override
+                def fields(
+                    self,
+                ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusParamSchema._Fields: ...
+
+            class _StatsCallbackInterfaceModuleStatusResultSchema(_StructSchema):
+                class _Fields(dict[str, _StructSchemaField]): ...
+
+                @property
+                @override
+                def fields(
+                    self,
+                ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusResultSchema._Fields: ...
+
+            class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+                @overload
+                def __getitem__(
+                    self,
+                    key: Literal["status"],
+                ) -> _InterfaceMethod[
+                    _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusParamSchema,
+                    _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusResultSchema,
+                ]: ...
+                @overload
+                def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+
+            @property
+            @override
+            def methods(
+                self,
+            ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._Methods: ...
+
+        @property
+        @override
+        def schema(self) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema: ...
         @override
         def _new_client(self, server: _DynamicCapabilityServer) -> _all.StatsCallbackClient: ...
         class Server(_DynamicCapabilityServer):
@@ -108,6 +241,79 @@ class _ChannelInterfaceModule(_InterfaceModule):
 
     StatsCallback: _StatsCallbackInterfaceModule
     type StatsCallbackServer = _ChannelInterfaceModule._StatsCallbackInterfaceModule.Server
+
+    class _ChannelSchema(_InterfaceSchema):
+        class _ChannelInterfaceModuleRegisterStatsCallbackParamSchema(_StructSchema):
+            class _CallbackField(_StructSchemaField):
+                @property
+                @override
+                def schema(self) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema: ...
+
+            class _Fields(dict[str, _StructSchemaField]):
+                @overload
+                def __getitem__(
+                    self,
+                    key: Literal["callback"],
+                ) -> _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackParamSchema._CallbackField: ...
+                @overload
+                def __getitem__(self, key: Literal["updateIntervalInMs"]) -> _StructSchemaField: ...
+                @overload
+                def __getitem__(self, key: str) -> _StructSchemaField: ...
+
+            @property
+            @override
+            def fields(
+                self,
+            ) -> (
+                _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackParamSchema._Fields
+            ): ...
+
+        class _ChannelInterfaceModuleRegisterStatsCallbackResultSchema(_StructSchema):
+            class _UnregisterCallbackField(_StructSchemaField):
+                @property
+                @override
+                def schema(
+                    self,
+                ) -> (
+                    _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema
+                ): ...
+
+            class _Fields(dict[str, _StructSchemaField]):
+                @overload
+                def __getitem__(
+                    self,
+                    key: Literal["unregisterCallback"],
+                ) -> _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackResultSchema._UnregisterCallbackField: ...
+                @overload
+                def __getitem__(self, key: str) -> _StructSchemaField: ...
+
+            @property
+            @override
+            def fields(
+                self,
+            ) -> (
+                _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackResultSchema._Fields
+            ): ...
+
+        class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+            @overload
+            def __getitem__(
+                self,
+                key: Literal["registerStatsCallback"],
+            ) -> _InterfaceMethod[
+                _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackParamSchema,
+                _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackResultSchema,
+            ]: ...
+            @overload
+            def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+
+        @property
+        @override
+        def methods(self) -> _ChannelInterfaceModule._ChannelSchema._Methods: ...
+
+    @property
+    @override
+    def schema(self) -> _ChannelInterfaceModule._ChannelSchema: ...
     @override
     def _new_client(self, server: _DynamicCapabilityServer) -> _all.ChannelClient: ...
     class Server(_DynamicCapabilityServer):

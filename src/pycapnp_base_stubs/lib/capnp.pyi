@@ -8,7 +8,7 @@ from collections.abc import (
 )
 from contextlib import AbstractContextManager, asynccontextmanager
 from ssl import SSLContext
-from typing import IO, Any, Literal, overload
+from typing import IO, Any, Generic, Literal, TypeVar, overload
 
 # Import schema.capnp types for precise node property types
 # These are _DynamicStructReader at runtime but typed more precisely
@@ -38,6 +38,9 @@ type Capability = _DynamicCapabilityClient | _DynamicCapabilityServer | _Dynamic
 type AnyStruct = _DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder
 type AnyList = _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder
 type _CapnpModuleType = _CapnpModule
+
+_MethodParamSchemaT = TypeVar("_MethodParamSchemaT", covariant=True)
+_MethodResultSchemaT = TypeVar("_MethodResultSchemaT", covariant=True)
 
 types: _CapnpTypesModule
 
@@ -174,9 +177,9 @@ class _StructSchemaField:
         This property may raise for primitive/unknown types.
         """
 
-class _InterfaceMethod:
-    param_type: _StructSchema
-    result_type: _StructSchema
+class _InterfaceMethod(Generic[_MethodParamSchemaT, _MethodResultSchemaT]):
+    param_type: _MethodParamSchemaT
+    result_type: _MethodResultSchemaT
 
 class _Schema:
     """Base class for _StructSchema and _ParsedSchema."""
@@ -244,11 +247,11 @@ class _InterfaceSchema:
         """A set of the function names in the interface, including inherited methods."""
 
     @property
-    def methods(self) -> dict[str, _InterfaceMethod]:
+    def methods(self) -> dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]:
         """A mapping of method names to their respective _InterfaceMethod."""
 
     @property
-    def methods_inherited(self) -> dict[str, _InterfaceMethod]:
+    def methods_inherited(self) -> dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]:
         """A mapping of method names to their respective _InterfaceMethod, including inherited methods."""
 
     @property

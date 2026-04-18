@@ -120,6 +120,7 @@ class SchemaWriterContext:
     schema_loader: capnp.SchemaLoader
     file_id_to_path: dict[int, str]
     generated_module_names_by_schema_id: dict[int, str]
+    inherited_interface_schema_ids: set[int]
 
 
 @dataclass(frozen=True)
@@ -874,6 +875,7 @@ def _generate_stubs_from_schema(
         schema_loader=context.schema_loader,
         file_id_to_path=context.file_id_to_path,
         generated_module_names_by_schema_id=context.generated_module_names_by_schema_id,
+        inherited_interface_schema_ids=context.inherited_interface_schema_ids,
     )
     writer.generate_all_nested()
 
@@ -1189,6 +1191,34 @@ def _iter_loaded_schemas(
             yield schema_loader.get(schema_id), path
         except capnp.KjException as error:
             logger.warning("Could not load schema %s from %s: %s", hex(schema_id), path, error)
+
+
+def _collect_inherited_interface_schema_ids(
+    schema_loader: capnp.SchemaLoader,
+    file_id_to_path: dict[int, str],
+) -> set[int]:
+    """Collect interface schema IDs that appear as superclasses anywhere in the loaded file graph."""
+    inherited_interface_schema_ids: set[int] = set()
+    visited_schema_ids: set[int] = set()
+
+    def visit_schema(schema: _Schema) -> None:
+        if schema.node.id in visited_schema_ids:
+            return
+        visited_schema_ids.add(schema.node.id)
+
+        if schema.node.which() == "interface":
+            inherited_interface_schema_ids.update(superclass.id for superclass in schema.node.interface.superclasses)
+
+        for nested_node in schema.node.nestedNodes:
+            try:
+                visit_schema(schema_loader.get(nested_node.id))
+            except capnp.KjException:
+                continue
+
+    for schema, _ in _iter_loaded_schemas(schema_loader, file_id_to_path, None):
+        visit_schema(schema)
+
+    return inherited_interface_schema_ids
 
 
 def _schema_module_name(path_obj: Path) -> str:
@@ -1543,6 +1573,7 @@ def run_from_schemas(
         schema_loader=schema_loader,
         file_id_to_path=file_id_to_path,
         generated_module_names_by_schema_id=_build_generated_module_name_map(schema_loader, file_id_to_path, options),
+        inherited_interface_schema_ids=_collect_inherited_interface_schema_ids(schema_loader, file_id_to_path),
     )
     state = GeneratedSchemaState()
 

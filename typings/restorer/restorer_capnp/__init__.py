@@ -2,31 +2,14 @@
 """This is an automatically generated stub for `restorer.capnp`."""
 
 import base64
-from typing import cast
 
 import capnp
-from capnp.lib.capnp import _InterfaceMethod, _InterfaceModule, _InterfaceSchema, _StructModule, _StructSchema
 
 import schema_capnp
 
+from .types.modules import _AnyTesterInterfaceModule, _BagInterfaceModule, _RestorerInterfaceModule
+
 capnp.remove_import_hook()
-
-
-def _as_struct_schema(schema: object) -> _StructSchema:
-    return cast("_StructSchema", schema)
-
-
-def _as_interface_schema(schema: object) -> _InterfaceSchema:
-    return cast("_InterfaceSchema", schema)
-
-
-def _interface_method(schema: _InterfaceSchema, name: str) -> _InterfaceMethod:
-    return schema.methods[name]
-
-
-def _method_param_type(method: _InterfaceMethod) -> _StructSchema:
-    return method.param_type
-
 
 # Embedded compiled schemas (base64-encoded)
 _SCHEMA_NODES = [
@@ -64,10 +47,10 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-Bag = _InterfaceModule(_loader.get(0x98D17C0C5F55F6ED).as_interface(), "Bag")
-Restorer = _InterfaceModule(_loader.get(0xD5C5FD801DE4B393).as_interface(), "Restorer")
-Restorer.RestoreParams = _StructModule(
-    _as_struct_schema(_method_param_type(_interface_method(_as_interface_schema(Restorer.schema), "restore"))),
+Bag = _BagInterfaceModule(_loader.get(0x98D17C0C5F55F6ED).as_interface(), "Bag")
+Restorer = _RestorerInterfaceModule(_loader.get(0xD5C5FD801DE4B393).as_interface(), "Restorer")
+Restorer.RestoreParams = _RestorerInterfaceModule._RestoreParamsStructModule(
+    Restorer.schema.methods["restore"].param_type,
     "RestoreParams",
 )
-AnyTester = _InterfaceModule(_loader.get(0x8D4A4868ECAEE366).as_interface(), "AnyTester")
+AnyTester = _AnyTesterInterfaceModule(_loader.get(0x8D4A4868ECAEE366).as_interface(), "AnyTester")

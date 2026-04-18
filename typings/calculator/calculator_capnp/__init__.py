@@ -2,56 +2,15 @@
 """This is an automatically generated stub for `calculator.capnp`."""
 
 import base64
-from typing import cast
 
 import capnp
-from capnp.lib.capnp import (
-    _EnumModule,
-    _EnumSchema,
-    _InterfaceMethod,
-    _InterfaceModule,
-    _InterfaceSchema,
-    _StructModule,
-    _StructSchema,
-    _StructSchemaField,
-)
+from capnp.lib.capnp import _EnumModule
 
 import schema_capnp
 
+from .types.modules import _CalculatorInterfaceModule
+
 capnp.remove_import_hook()
-
-
-def _as_struct_schema(schema: object) -> _StructSchema:
-    return cast("_StructSchema", schema)
-
-
-def _as_enum_schema(schema: object) -> _EnumSchema:
-    return cast("_EnumSchema", schema)
-
-
-def _as_interface_schema(schema: object) -> _InterfaceSchema:
-    return cast("_InterfaceSchema", schema)
-
-
-def _struct_field(schema: _StructSchema, name: str) -> _StructSchemaField:
-    return schema.fields[name]
-
-
-def _field_schema(field: _StructSchemaField) -> object:
-    return cast("object", field.schema)
-
-
-def _interface_method(schema: _InterfaceSchema, name: str) -> _InterfaceMethod:
-    return schema.methods[name]
-
-
-def _method_param_type(method: _InterfaceMethod) -> _StructSchema:
-    return method.param_type
-
-
-def _method_result_type(method: _InterfaceMethod) -> _StructSchema:
-    return method.result_type
-
 
 # Embedded compiled schemas (base64-encoded)
 _SCHEMA_NODES = [
@@ -86,65 +45,20 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-Calculator = _InterfaceModule(_loader.get(0x97983392DF35CC36).as_interface(), "Calculator")
-Calculator.Expression = _StructModule(
-    _as_struct_schema(
-        _field_schema(
-            _struct_field(
-                _as_struct_schema(
-                    _method_param_type(_interface_method(_as_interface_schema(Calculator.schema), "evaluate")),
-                ),
-                "expression",
-            ),
-        ),
-    ),
+Calculator = _CalculatorInterfaceModule(_loader.get(0x97983392DF35CC36).as_interface(), "Calculator")
+Calculator.Expression = _CalculatorInterfaceModule._ExpressionStructModule(
+    Calculator.schema.methods["evaluate"].param_type.fields["expression"].schema,
     "Expression",
 )
-Calculator.Value = _InterfaceModule(
-    _as_interface_schema(
-        _field_schema(
-            _struct_field(
-                _as_struct_schema(
-                    _field_schema(
-                        _struct_field(
-                            _as_struct_schema(
-                                _method_param_type(
-                                    _interface_method(_as_interface_schema(Calculator.schema), "evaluate"),
-                                ),
-                            ),
-                            "expression",
-                        ),
-                    ),
-                ),
-                "previousResult",
-            ),
-        ),
-    ),
+Calculator.Value = _CalculatorInterfaceModule._ValueInterfaceModule(
+    Calculator.schema.methods["evaluate"].param_type.fields["expression"].schema.fields["previousResult"].schema,
     "Value",
 )
-Calculator.Function = _InterfaceModule(
-    _as_interface_schema(
-        _field_schema(
-            _struct_field(
-                _as_struct_schema(
-                    _method_result_type(_interface_method(_as_interface_schema(Calculator.schema), "defFunction")),
-                ),
-                "func",
-            ),
-        ),
-    ),
+Calculator.Function = _CalculatorInterfaceModule._FunctionInterfaceModule(
+    Calculator.schema.methods["defFunction"].result_type.fields["func"].schema,
     "Function",
 )
 Calculator.Operator = _EnumModule(
-    _as_enum_schema(
-        _field_schema(
-            _struct_field(
-                _as_struct_schema(
-                    _method_param_type(_interface_method(_as_interface_schema(Calculator.schema), "getOperator")),
-                ),
-                "op",
-            ),
-        ),
-    ),
+    Calculator.schema.methods["getOperator"].param_type.fields["op"].schema,
     "Operator",
 )
