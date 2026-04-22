@@ -85,7 +85,8 @@ def test_generated_runtime_uses_typed_schema_paths() -> None:
     assert "_field_schema(" not in content
     assert "_method_param_type(" not in content
     assert "_method_result_type(" not in content
-    assert "from .types.modules import _ChannelInterfaceModule" in content
+    assert "from capnp.lib.capnp import _InterfaceModule" in content
+    assert "from .types.modules import" not in content
     assert re.search(
         r'Channel\.schema\.methods\["registerStatsCallback"\]\.param_type\.fields\["callback"\]\.schema', content
     )

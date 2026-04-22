@@ -8,6 +8,7 @@ from capnp.lib.capnp import (
     _DynamicCapabilityServer,
     _DynamicStructBuilder,
     _DynamicStructReader,
+    _EnumModule,
     _EnumSchema,
     _InterfaceMethod,
     _InterfaceModule,
@@ -356,11 +357,17 @@ class _CalculatorInterfaceModule(_InterfaceModule):
         ) -> readers.ExpressionReader: ...
 
     Expression: _ExpressionStructModule
-    class _OperatorEnumModule:
+    class _OperatorEnumModule(_EnumModule):
         add: int
         subtract: int
         multiply: int
         divide: int
+
+        class _OperatorSchema(_EnumSchema): ...
+
+        @property
+        @override
+        def schema(self) -> schemas._CalculatorOperatorEnumSchema: ...
 
     Operator: _OperatorEnumModule
 

@@ -21,8 +21,8 @@ class TestDummyEnumsAndTypes:
     def test_enum_definition_and_imports(self, dummy_stub_lines: list[str]) -> None:
         """Test enum definition and imports."""
         lines = dummy_stub_lines
-        # Enums are now simple classes with int attributes
-        assert any(line.strip().startswith("class _TestEnumEnumModule:") for line in lines)
+        # Enums are _EnumModule-typed helper classes with int attributes.
+        assert any(line.strip().startswith("class _TestEnumEnumModule(_EnumModule):") for line in lines)
         # Type alias at top level (not instance annotation)
         assert any(line.strip().startswith("type TestEnumEnum = int | Literal[") for line in lines)
         for name in ["foo", "bar", "baz", "qux"]:
@@ -126,8 +126,8 @@ class TestDummyGroupsAndNested:
     def test_nested_types_enums_and_lists(self, dummy_stub_lines: list[str]) -> None:
         """Test nested types enums and lists."""
         lines = dummy_stub_lines
-        assert any(re.match(r"^\s*class _NestedEnum1EnumModule:", line) for line in lines)
-        assert any(re.match(r"^\s*class _NestedEnum2EnumModule:", line) for line in lines)
+        assert any(re.match(r"^\s*class _NestedEnum1EnumModule\(_EnumModule\):", line) for line in lines)
+        assert any(re.match(r"^\s*class _NestedEnum2EnumModule\(_EnumModule\):", line) for line in lines)
         assert any("NestedEnum1: _NestedEnum1EnumModule" in line for line in lines)
         assert any("NestedEnum2: _NestedEnum2EnumModule" in line for line in lines)
         assert any("class _TestUsingStructModule(_StructModule):" in line for line in lines)
@@ -208,7 +208,7 @@ class TestDummyConstantsAndVersioning:
         """Test name annotations renamed struct enum fields."""
         lines = dummy_stub_lines
         assert any("class _TestNameAnnotationStructModule(_StructModule):" in line for line in lines)
-        assert any("class _BadlyNamedEnumEnumModule:" in line for line in lines)
+        assert any("class _BadlyNamedEnumEnumModule(_EnumModule):" in line for line in lines)
         assert any("BadlyNamedEnum: _BadlyNamedEnumEnumModule" in line for line in lines)
         assert any("badFieldName" in line or "bar" in line for line in lines)
 

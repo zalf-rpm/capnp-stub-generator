@@ -10,6 +10,8 @@ type _CalculatorExpressionSchema = modules._CalculatorInterfaceModule._Expressio
 
 type _CalculatorFunctionSchema = modules._CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema
 
+type _CalculatorOperatorEnumSchema = modules._CalculatorInterfaceModule._OperatorEnumModule._OperatorSchema
+
 type _CalculatorSchema = modules._CalculatorInterfaceModule._CalculatorSchema
 
 type _CalculatorValueSchema = modules._CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema

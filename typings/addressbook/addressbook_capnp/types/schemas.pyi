@@ -10,4 +10,6 @@ type _PersonPersonTestGroupSchema = modules._PersonStructModule._PersonTestGroup
 
 type _PersonPhoneNumberSchema = modules._PersonStructModule._PhoneNumberStructModule._PhoneNumberSchema
 
+type _PersonPhoneNumberTypeEnumSchema = modules._PersonStructModule._PhoneNumberStructModule._TypeEnumModule._TypeSchema
+
 type _PersonSchema = modules._PersonStructModule._PersonSchema

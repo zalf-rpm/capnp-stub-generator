@@ -4,10 +4,9 @@
 import base64
 
 import capnp
+from capnp.lib.capnp import _InterfaceModule, _StructModule
 
 import schema_capnp
-
-from .types.modules import _ChannelInterfaceModule
 
 capnp.remove_import_hook()
 
@@ -38,16 +37,16 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-Channel = _ChannelInterfaceModule(_loader.get(0x9C62C32B2FF2B1E8).as_interface(), "Channel")
-Channel.StatsCallback = _ChannelInterfaceModule._StatsCallbackInterfaceModule(
+Channel = _InterfaceModule(_loader.get(0x9C62C32B2FF2B1E8).as_interface(), "Channel")
+Channel.StatsCallback = _InterfaceModule(
     Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema,
     "StatsCallback",
 )
-Channel.StatsCallback.Stats = _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule(
+Channel.StatsCallback.Stats = _StructModule(
     Channel.StatsCallback.schema.methods["status"].param_type.fields["stats"].schema,
     "Stats",
 )
-Channel.StatsCallback.Unregister = _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule(
+Channel.StatsCallback.Unregister = _InterfaceModule(
     Channel.schema.methods["registerStatsCallback"].result_type.fields["unregisterCallback"].schema,
     "Unregister",
 )

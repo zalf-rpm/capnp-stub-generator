@@ -7,6 +7,7 @@ from typing import IO, Any, Literal, overload, override
 from capnp.lib.capnp import (
     _DynamicStructBuilder,
     _DynamicStructReader,
+    _EnumModule,
     _EnumSchema,
     _ListSchema,
     _StructModule,
@@ -21,10 +22,16 @@ from . import schemas as schemas
 
 class _PersonStructModule(_StructModule):
     class _PhoneNumberStructModule(_StructModule):
-        class _TypeEnumModule:
+        class _TypeEnumModule(_EnumModule):
             mobile: int
             home: int
             work: int
+
+            class _TypeSchema(_EnumSchema): ...
+
+            @property
+            @override
+            def schema(self) -> schemas._PersonPhoneNumberTypeEnumSchema: ...
 
         Type: _TypeEnumModule
         class Reader(_DynamicStructReader): ...

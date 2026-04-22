@@ -4,11 +4,9 @@
 import base64
 
 import capnp
-from capnp.lib.capnp import _EnumModule
+from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule
 
 import schema_capnp
-
-from .types.modules import _CalculatorInterfaceModule
 
 capnp.remove_import_hook()
 
@@ -45,16 +43,16 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-Calculator = _CalculatorInterfaceModule(_loader.get(0x97983392DF35CC36).as_interface(), "Calculator")
-Calculator.Expression = _CalculatorInterfaceModule._ExpressionStructModule(
+Calculator = _InterfaceModule(_loader.get(0x97983392DF35CC36).as_interface(), "Calculator")
+Calculator.Expression = _StructModule(
     Calculator.schema.methods["evaluate"].param_type.fields["expression"].schema,
     "Expression",
 )
-Calculator.Value = _CalculatorInterfaceModule._ValueInterfaceModule(
+Calculator.Value = _InterfaceModule(
     Calculator.schema.methods["evaluate"].param_type.fields["expression"].schema.fields["previousResult"].schema,
     "Value",
 )
-Calculator.Function = _CalculatorInterfaceModule._FunctionInterfaceModule(
+Calculator.Function = _InterfaceModule(
     Calculator.schema.methods["defFunction"].result_type.fields["func"].schema,
     "Function",
 )

@@ -536,8 +536,7 @@ class Writer:
 
     def _add_enum_import(self) -> None:
         """Retain the deprecated `Enum` import helper for compatibility."""
-        # Note: _EnumModule is already imported in __init__, so this method is now a no-op
-        # We keep it for compatibility with existing code structure
+        self._add_import("from capnp.lib.capnp import _EnumModule")
 
     @property
     def full_display_name(self) -> str:
@@ -1303,6 +1302,11 @@ class Writer:
 
         return [f"class {helper_name}(_StructSchema):", *self._indent_relative_lines(body_lines or ["pass"])]
 
+    def _render_enum_schema_helper_lines(self, helper_name: str) -> list[str]:
+        """Render a precise `_EnumSchema` helper for one generated enum module."""
+        self._ensure_schema_helper_support()
+        return [f"class {helper_name}(_EnumSchema):", "    pass"]
+
     def _collect_interface_method_specs(
         self,
         schema: capnp_types.SchemaType,
@@ -1413,15 +1417,18 @@ class Writer:
         """Add precise `.schema` helper types to the currently open module class."""
         helper_lines: list[str]
         helper_name = self._module_schema_helper_name(self.scope.name)
-        schema_export_name = self._schema_export_name(self.scope.scoped_name)
         helper_path = f"{self.scope.scoped_name}.{helper_name}"
         node_kind = schema.node.which()
+        schema_export_name = self._schema_export_name(self.scope.scoped_name)
         if node_kind == capnp_types.CapnpElementType.INTERFACE:
             if not self._should_emit_precise_interface_schema_helper(schema):
                 return
             helper_lines = self._render_interface_schema_helper_lines(schema, helper_name, helper_path)
         elif node_kind == capnp_types.CapnpElementType.STRUCT:
             helper_lines = self._render_struct_schema_helper_lines(schema, helper_name, helper_path)
+        elif node_kind == capnp_types.CapnpElementType.ENUM:
+            schema_export_name = schema_export_name.removesuffix("Schema") + "EnumSchema"
+            helper_lines = self._render_enum_schema_helper_lines(helper_name)
         else:
             return
 
@@ -2163,14 +2170,16 @@ class Writer:
         # Create Enum class name (e.g., _TestEnumEnumModule)
         enum_class_name = f"_{name}EnumModule"
 
-        # No special imports needed - just a plain class
+        # Import the enum runtime base for the generated helper class.
         self._add_enum_import()
 
-        # Generate a plain class declaration (no inheritance)
-        enum_declaration = helper.new_class_declaration(enum_class_name, [])
+        # Generate a runtime-accurate helper class declaration.
+        enum_declaration = helper.new_class_declaration(enum_class_name, ["_EnumModule"])
 
         # Find the parent scope for the enum (where it should be declared)
         enum_parent_scope = self.scopes_by_id.get(schema.node.scopeId, self.scope.root)
+        if enum_parent_scope.is_root:
+            self._root_module_class_names.add(enum_class_name)
 
         # Create new scope for the Enum
         _ = self.new_scope(
@@ -2211,17 +2220,17 @@ class Writer:
             self.scope.add(f"{enumerant.name}: int")
             enum_values.append(enumerant.name)
 
+        self._add_module_schema_helpers(schema)
+
         # Return to parent scope
         self.return_from_scope()
 
         # Ensure Literal is imported for type alias generation
         self._add_typing_import("Literal")
 
-        # For nested enums, add instance annotation so enum.value works at runtime
-        is_nested = enum_parent_scope and not enum_parent_scope.is_root
-        if is_nested:
-            # Instance annotation: allows Calculator.Operator.add to return int at runtime
-            enum_parent_scope.add(f"{context.type_name}: {enum_class_name}")
+        # Add an instance annotation so enum.value works at runtime.
+        # For top-level enums this becomes `Element: types.modules._ElementEnumModule` in `__init__.pyi`.
+        enum_parent_scope.add(f"{context.type_name}: {context.protocol_class_name}")
 
         # Track for top-level annotations
         # For enums, we store the enum values to generate the type alias
@@ -4999,8 +5008,22 @@ class Writer:
         return collapsed
 
     def _build_module_types_scope_lines(self) -> list[str]:
-        """Collect the top-level struct/interface module classes for `types.modules`."""
+        """Collect the top-level struct/interface/enum helper classes for `types.modules`."""
         return self._extract_named_top_level_scope_blocks(self._root_module_class_names)
+
+    @staticmethod
+    def _module_helper_class_name(schema: capnp_types.SchemaType) -> str | None:
+        """Return the generated helper class name for a struct, interface, or enum schema."""
+        node_kind = schema.node.which()
+        display_name = helper.get_display_name(schema)
+
+        if node_kind == capnp_types.CapnpElementType.STRUCT:
+            return f"_{display_name}StructModule"
+        if node_kind == capnp_types.CapnpElementType.INTERFACE:
+            return f"_{display_name}InterfaceModule"
+        if node_kind == capnp_types.CapnpElementType.ENUM:
+            return f"_{display_name}EnumModule"
+        return None
 
     def _extract_named_top_level_scope_blocks(self, class_names: set[str]) -> list[str]:
         """Extract top-level class blocks whose names match the provided set."""
@@ -5576,13 +5599,22 @@ class Writer:
         return "\n".join(out)
 
     def _build_runtime_module_helper_class_lines(self, schema: capnp_types.SchemaType) -> list[str]:
-        """Build a minimal runtime class skeleton for one generated struct/interface module."""
+        """Build a minimal runtime class skeleton for one generated module helper class."""
         node_kind = schema.node.which()
-        if node_kind not in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE}:
+        if node_kind not in {
+            capnp_types.CapnpElementType.STRUCT,
+            capnp_types.CapnpElementType.INTERFACE,
+            capnp_types.CapnpElementType.ENUM,
+        }:
             return []
 
-        base_class = "_StructModule" if node_kind == capnp_types.CapnpElementType.STRUCT else "_InterfaceModule"
-        class_name = self.get_type_by_id(schema.node.id).name
+        base_class = {
+            capnp_types.CapnpElementType.STRUCT: "_StructModule",
+            capnp_types.CapnpElementType.INTERFACE: "_InterfaceModule",
+        }.get(node_kind)
+        class_name = self._module_helper_class_name(schema)
+        if class_name is None:
+            return []
         body_lines: list[str] = []
 
         for nested_node in schema.node.nestedNodes:
@@ -5600,7 +5632,8 @@ class Writer:
         if not body_lines:
             body_lines.append("pass")
 
-        return [f"class {class_name}({base_class}):", *self._indent_relative_lines(body_lines)]
+        class_declaration = f"class {class_name}({base_class}):" if base_class is not None else f"class {class_name}:"
+        return [class_declaration, *self._indent_relative_lines(body_lines)]
 
     def _build_runtime_module_types_py_lines(self) -> list[str]:
         """Build runtime helper classes for `types.modules.py`."""
@@ -5630,64 +5663,12 @@ class Writer:
 
     def dumps_types_py_files(self) -> dict[str, str]:
         """Generate runtime placeholder files for the companion types package."""
-        type_modules = self._public_types_package_modules()
-        result_modules = self._public_result_package_modules()
         result_tuple_module_lines = self._build_runtime_result_tuple_module_lines()
-        types_import_base = self._current_annotated_types_package_import_base()
-        type_package_imports = [
-            "from typing import TYPE_CHECKING",
-            "",
-            "if TYPE_CHECKING:",
-            *self._indent_relative_lines(
-                (
-                    [f"from . import {module_name} as {module_name}" for module_name in type_modules]
-                    if types_import_base is None
-                    else [
-                        *[
-                            f"from {types_import_base} import {module_name} as {module_name}"
-                            for module_name in type_modules
-                        ],
-                    ]
-                ),
-            ),
-            "",
-            self._render_string_list_assignment("__all__", type_modules),
-        ]
-        result_package_imports = [
-            "from typing import TYPE_CHECKING",
-            "",
-            "if TYPE_CHECKING:",
-            *self._indent_relative_lines(
-                [f"from . import {module_name} as {module_name}" for module_name in result_modules]
-                if types_import_base is None
-                else [
-                    f"from {types_import_base}.results import {module_name} as {module_name}"
-                    for module_name in result_modules
-                ]
-            ),
-            "",
-            self._render_string_list_assignment("__all__", result_modules),
-        ]
-        server_module_lines: list[str] = []
-        if self._runtime_server_aliases:
-            root_runtime_names = sorted(
-                {runtime_path.split(".", maxsplit=1)[0] for runtime_path in self._runtime_server_aliases.values()}
-            )
-            server_module_lines.append(f"from .. import {', '.join(root_runtime_names)}")
-            server_module_lines.extend(
-                [
-                    "",
-                    *[
-                        f"{alias_name} = {runtime_path}"
-                        for alias_name, runtime_path in sorted(self._runtime_server_aliases.items())
-                    ],
-                ],
-            )
 
         return {
             "types/__init__.py": self._render_runtime_module(
                 f'"""Runtime placeholder package for typing helpers of `{self._module_path.name}`."""',
-                type_package_imports,
+                [],
             ),
             "types/lists.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for list helpers of `{self._module_path.name}`."""',
@@ -5695,7 +5676,7 @@ class Writer:
             ),
             "types/modules.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for module helper types of `{self._module_path.name}`."""',
-                self._build_runtime_module_types_py_lines(),
+                [],
             ),
             "types/schemas.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for schema helper types of `{self._module_path.name}`."""',
@@ -5727,7 +5708,7 @@ class Writer:
             ),
             "types/servers.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for server helpers of `{self._module_path.name}`."""',
-                server_module_lines,
+                [],
             ),
             "types/enums.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for enum helper aliases of `{self._module_path.name}`."""',
@@ -5735,7 +5716,7 @@ class Writer:
             ),
             "types/results/__init__.py": self._render_runtime_module(
                 f'"""Runtime placeholder package for result helpers of `{self._module_path.name}`."""',
-                result_package_imports,
+                [],
             ),
             "types/results/client.py": self._render_runtime_module(
                 f'"""Runtime placeholder module for client result helpers of `{self._module_path.name}`."""',
@@ -6002,8 +5983,10 @@ class Writer:
         node_kind = schema.node.which()
         if node_kind == capnp_types.CapnpElementType.ENUM:
             return "_EnumModule"
-        if node_kind in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE}:
-            return self.get_type_by_id(schema.node.id).scoped_name
+        if node_kind == capnp_types.CapnpElementType.STRUCT:
+            return "_StructModule"
+        if node_kind == capnp_types.CapnpElementType.INTERFACE:
+            return "_InterfaceModule"
         return None
 
     def _build_runtime_module_construction_lines(
@@ -6139,9 +6122,8 @@ class Writer:
         construction_lines: list[str] = []
         self._extend_runtime_module_construction(construction_lines, self._schema.node, [])
         construction_source = "\n".join(construction_lines)
-        runtime_import_names = [name for name in ("_EnumModule",) if f"{name}(" in construction_source]
-        runtime_module_class_names = [
-            name for name in sorted(self._root_module_class_names) if f"{name}(" in construction_source
+        runtime_import_names = [
+            name for name in ("_EnumModule", "_InterfaceModule", "_StructModule") if f"{name}(" in construction_source
         ]
 
         out: list[str] = []
@@ -6154,13 +6136,6 @@ class Writer:
         out.append("import schema_capnp")
         if runtime_import_names:
             out.append(f"from capnp.lib.capnp import {', '.join(runtime_import_names)}")
-        if runtime_module_class_names:
-            types_import_base = self._current_annotated_types_package_import_base()
-            out.append(
-                f"from {types_import_base}.modules import {', '.join(runtime_module_class_names)}"
-                if types_import_base is not None
-                else f"from .types.modules import {', '.join(runtime_module_class_names)}"
-            )
 
         out.append("")
         out.append("capnp.remove_import_hook()")

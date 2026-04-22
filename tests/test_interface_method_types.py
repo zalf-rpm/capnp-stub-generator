@@ -187,8 +187,8 @@ class TestInterfaceMethodComplexTypes:
         # getOperator takes an int or Literal enum value -> now uses CalculatorOperatorEnum
         assert "op: CalculatorOperatorEnum" in stub_content
 
-        # Verify the Operator enum exists as plain class with instance annotation (nested)
-        assert "class _OperatorEnumModule:" in stub_content
+        # Verify the Operator enum exists as an _EnumModule-typed helper class with instance annotation.
+        assert "class _OperatorEnumModule(_EnumModule):" in stub_content
         # Nested: instance annotation for Calculator.Operator.add access
         assert "    Operator: _OperatorEnumModule" in stub_content  # Note the indentation
         # Top-level: type alias for annotations

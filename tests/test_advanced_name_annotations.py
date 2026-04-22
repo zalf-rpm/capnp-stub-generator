@@ -39,8 +39,8 @@ def test_name_annotations(basic_stubs: Path) -> None:
         elif in_badname and line.startswith("class ") and "_BadNameStructModule" not in line and "Oops" not in line:
             in_badname = False
 
-        if in_badname and "class _OopsEnumModule:" in line:
+        if in_badname and "class _OopsEnumModule(_EnumModule):" in line:
             found_oops_enum = True
             break
 
-    assert found_oops_enum, "BadName should have nested Oops enum (as Enum class)"
+    assert found_oops_enum, "BadName should have nested Oops enum helper"

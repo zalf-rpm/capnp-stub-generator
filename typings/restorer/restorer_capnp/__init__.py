@@ -4,10 +4,9 @@
 import base64
 
 import capnp
+from capnp.lib.capnp import _InterfaceModule, _StructModule
 
 import schema_capnp
-
-from .types.modules import _AnyTesterInterfaceModule, _BagInterfaceModule, _RestorerInterfaceModule
 
 capnp.remove_import_hook()
 
@@ -47,10 +46,10 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-Bag = _BagInterfaceModule(_loader.get(0x98D17C0C5F55F6ED).as_interface(), "Bag")
-Restorer = _RestorerInterfaceModule(_loader.get(0xD5C5FD801DE4B393).as_interface(), "Restorer")
-Restorer.RestoreParams = _RestorerInterfaceModule._RestoreParamsStructModule(
+Bag = _InterfaceModule(_loader.get(0x98D17C0C5F55F6ED).as_interface(), "Bag")
+Restorer = _InterfaceModule(_loader.get(0xD5C5FD801DE4B393).as_interface(), "Restorer")
+Restorer.RestoreParams = _StructModule(
     Restorer.schema.methods["restore"].param_type,
     "RestoreParams",
 )
-AnyTester = _AnyTesterInterfaceModule(_loader.get(0x8D4A4868ECAEE366).as_interface(), "AnyTester")
+AnyTester = _InterfaceModule(_loader.get(0x8D4A4868ECAEE366).as_interface(), "AnyTester")

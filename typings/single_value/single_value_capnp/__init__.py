@@ -4,10 +4,9 @@
 import base64
 
 import capnp
+from capnp.lib.capnp import _InterfaceModule, _StructModule
 
 import schema_capnp
-
-from .types.modules import _MyStructStructModule, _SingleValueInterfaceModule
 
 capnp.remove_import_hook()
 
@@ -50,5 +49,5 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-SingleValue = _SingleValueInterfaceModule(_loader.get(0xB49DCE14635277DE).as_interface(), "SingleValue")
-MyStruct = _MyStructStructModule(_loader.get(0x8A63859E25D05B97).as_struct(), "MyStruct")
+SingleValue = _InterfaceModule(_loader.get(0xB49DCE14635277DE).as_interface(), "SingleValue")
+MyStruct = _StructModule(_loader.get(0x8A63859E25D05B97).as_struct(), "MyStruct")
