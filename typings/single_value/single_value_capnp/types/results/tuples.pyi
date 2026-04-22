@@ -1,12 +1,40 @@
 """Result tuple helper types for `single_value.capnp`."""
 
-from .._all import GetanyResultTuple as GetanyResultTuple
-from .._all import GetboolResultTuple as GetboolResultTuple
-from .._all import GetdataResultTuple as GetdataResultTuple
-from .._all import GetfloatResultTuple as GetfloatResultTuple
-from .._all import GetinterfaceResultTuple as GetinterfaceResultTuple
-from .._all import GetintResultTuple as GetintResultTuple
-from .._all import GetlistResultTuple as GetlistResultTuple
-from .._all import GetliststructResultTuple as GetliststructResultTuple
-from .._all import GetstructResultTuple as GetstructResultTuple
-from .._all import GettextResultTuple as GettextResultTuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple
+
+from .. import builders as builders
+from .. import clients as clients
+from .. import common as common
+from .. import modules as modules
+from .. import readers as readers
+
+class GetboolResultTuple(NamedTuple):
+    val: bool
+
+class GetintResultTuple(NamedTuple):
+    val: int
+
+class GetfloatResultTuple(NamedTuple):
+    val: float
+
+class GettextResultTuple(NamedTuple):
+    val: str
+
+class GetdataResultTuple(NamedTuple):
+    val: bytes
+
+class GetlistResultTuple(NamedTuple):
+    val: builders.Int32ListBuilder | readers.Int32ListReader | Sequence[Any]
+
+class GetstructResultTuple(NamedTuple):
+    val: builders.MyStructBuilder | readers.MyStructReader | dict[str, Any]
+
+class GetinterfaceResultTuple(NamedTuple):
+    val: modules._SingleValueInterfaceModule.Server | clients.SingleValueClient
+
+class GetanyResultTuple(NamedTuple):
+    val: common.AnyPointer
+
+class GetliststructResultTuple(NamedTuple):
+    val: builders.MyStructListBuilder | readers.MyStructListReader | Sequence[Any]

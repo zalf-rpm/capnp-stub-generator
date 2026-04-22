@@ -675,32 +675,32 @@ class _DynamicObjectReader:
     @overload
     def as_list(
         self,
-        schema: type[addressbook_capnp.types._all._PersonList],
+        schema: type[addressbook_capnp.types.lists._PersonList],
     ) -> addressbook_capnp.types.readers.PersonListReader: ...
     @overload
     def as_list(
         self,
-        schema: type[addressbook_capnp.types._all._PhoneNumberList],
+        schema: type[addressbook_capnp.types.lists._PhoneNumberList],
     ) -> addressbook_capnp.types.readers.PhoneNumberListReader: ...
     @overload
     def as_list(
         self,
-        schema: type[calculator_capnp.types._all._ExpressionList],
+        schema: type[calculator_capnp.types.lists._ExpressionList],
     ) -> calculator_capnp.types.readers.ExpressionListReader: ...
     @overload
     def as_list(
         self,
-        schema: type[calculator_capnp.types._all._Float64List],
+        schema: type[calculator_capnp.types.lists._Float64List],
     ) -> calculator_capnp.types.readers.Float64ListReader: ...
     @overload
     def as_list(
         self,
-        schema: type[single_value_capnp.types._all._Int32List],
+        schema: type[single_value_capnp.types.lists._Int32List],
     ) -> single_value_capnp.types.readers.Int32ListReader: ...
     @overload
     def as_list(
         self,
-        schema: type[single_value_capnp.types._all._MyStructList],
+        schema: type[single_value_capnp.types.lists._MyStructList],
     ) -> single_value_capnp.types.readers.MyStructListReader: ...
     def as_list(self, schema: _ListSchema) -> Any:
         """Cast this AnyPointer to a list.

@@ -3,28 +3,28 @@
 import re
 from pathlib import Path
 
+from tests.test_helpers import read_generated_types_combined
+
 
 def test_server_named_tuple_interface_type(zalfmas_stubs: Path) -> None:
     """Test that server NamedTuple result accepts both Server and Client for interfaces."""
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas/schema/registry/registry_capnp")
 
     tuple_match = re.search(r"class RegistryResultTuple\(NamedTuple\):(.*?)(?=\nclass |\Z)", content, re.DOTALL)
     assert tuple_match, "RegistryResultTuple class not found"
     tuple_content = tuple_match.group(1)
 
     # Check registry field
-    # Should be: registry: RegistryClient | _RegistryInterfaceModule.Server
+    # Should be: clients.RegistryClient | modules._RegistryInterfaceModule.Server
     assert (
-        "registry: RegistryClient | _RegistryInterfaceModule.Server" in tuple_content
-        or "registry: _RegistryInterfaceModule.Server | RegistryClient" in tuple_content
-    ), f"Expected RegistryClient | Server in Tuple, got: {tuple_content}"
+        "registry: clients.RegistryClient | modules._RegistryInterfaceModule.Server" in tuple_content
+        or "registry: modules._RegistryInterfaceModule.Server | clients.RegistryClient" in tuple_content
+    ), f"Expected clients.RegistryClient | modules._RegistryInterfaceModule.Server in Tuple, got: {tuple_content}"
 
 
 def test_list_of_structs_not_any(zalfmas_stubs: Path) -> None:
     """Test that List(Struct) is not Any in results."""
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas/schema/registry/registry_capnp")
 
     result_match = re.search(
         r"class SupportedcategoriesResult\(Awaitable\[SupportedcategoriesResult\], Protocol\):(.*?)(?=\nclass |\Z)",
@@ -35,16 +35,17 @@ def test_list_of_structs_not_any(zalfmas_stubs: Path) -> None:
     result_content = result_match.group(1)
 
     # Check cats field
-    # Should be IdInformationListReader (or similar alias)
+    # Should be readers.IdInformationListReader (or similar alias)
     # Currently it is Any
     assert "cats: Any" not in result_content, "cats field should not be Any"
-    assert "cats: IdInformationListReader" in result_content, "cats field should be IdInformationListReader"
+    assert "cats: readers.IdInformationListReader" in result_content, (
+        "cats field should be readers.IdInformationListReader"
+    )
 
 
 def test_list_of_interfaces_types(zalfmas_stubs: Path) -> None:
     """Test that List(Interface) uses correct Client/Server types."""
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas/schema/registry/registry_capnp")
 
     result_match = re.search(
         r"class RemovecategoryResult\(Awaitable\[RemovecategoryResult\], Protocol\):(.*?)(?=\nclass |\Z)",
@@ -58,8 +59,8 @@ def test_list_of_interfaces_types(zalfmas_stubs: Path) -> None:
     result_content = result_match.group(1)
 
     # Check removedObjects field
-    # Should be IdentifiableClientListReader
+    # Should be readers.IdentifiableClientListReader
     # Currently it is Sequence[_IdentifiableModule] (the protocol/module)
-    assert "removedObjects: IdentifiableClientListReader" in result_content, (
-        f"Expected removedObjects: IdentifiableClientListReader, got: {result_content}"
+    assert "removedObjects: readers.IdentifiableClientListReader" in result_content, (
+        f"Expected removedObjects: readers.IdentifiableClientListReader, got: {result_content}"
     )

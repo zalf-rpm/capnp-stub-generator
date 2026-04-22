@@ -1,5 +1,9 @@
 """Server helper types for `restorer.capnp`."""
 
-from ._all import AnyTesterServer as AnyTesterServer
-from ._all import BagServer as BagServer
-from ._all import RestorerServer as RestorerServer
+from . import modules as modules
+
+AnyTesterServer = modules._AnyTesterInterfaceModule.Server
+
+BagServer = modules._BagInterfaceModule.Server
+
+RestorerServer = modules._RestorerInterfaceModule.Server

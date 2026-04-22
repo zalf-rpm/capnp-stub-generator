@@ -1,22 +1,75 @@
 """Context helper types for `single_value.capnp`."""
 
-from ._all import GetanyCallContext as GetanyCallContext
-from ._all import GetanyParams as GetanyParams
-from ._all import GetboolCallContext as GetboolCallContext
-from ._all import GetboolParams as GetboolParams
-from ._all import GetdataCallContext as GetdataCallContext
-from ._all import GetdataParams as GetdataParams
-from ._all import GetfloatCallContext as GetfloatCallContext
-from ._all import GetfloatParams as GetfloatParams
-from ._all import GetintCallContext as GetintCallContext
-from ._all import GetinterfaceCallContext as GetinterfaceCallContext
-from ._all import GetinterfaceParams as GetinterfaceParams
-from ._all import GetintParams as GetintParams
-from ._all import GetlistCallContext as GetlistCallContext
-from ._all import GetlistParams as GetlistParams
-from ._all import GetliststructCallContext as GetliststructCallContext
-from ._all import GetliststructParams as GetliststructParams
-from ._all import GetstructCallContext as GetstructCallContext
-from ._all import GetstructParams as GetstructParams
-from ._all import GettextCallContext as GettextCallContext
-from ._all import GettextParams as GettextParams
+from typing import Protocol
+
+from .results import server as results_server
+
+class GetboolParams(Protocol): ...
+
+class GetboolCallContext(Protocol):
+    params: GetboolParams
+    @property
+    def results(self) -> results_server.GetboolServerResult: ...
+
+class GetintParams(Protocol): ...
+
+class GetintCallContext(Protocol):
+    params: GetintParams
+    @property
+    def results(self) -> results_server.GetintServerResult: ...
+
+class GetfloatParams(Protocol): ...
+
+class GetfloatCallContext(Protocol):
+    params: GetfloatParams
+    @property
+    def results(self) -> results_server.GetfloatServerResult: ...
+
+class GettextParams(Protocol): ...
+
+class GettextCallContext(Protocol):
+    params: GettextParams
+    @property
+    def results(self) -> results_server.GettextServerResult: ...
+
+class GetdataParams(Protocol): ...
+
+class GetdataCallContext(Protocol):
+    params: GetdataParams
+    @property
+    def results(self) -> results_server.GetdataServerResult: ...
+
+class GetlistParams(Protocol): ...
+
+class GetlistCallContext(Protocol):
+    params: GetlistParams
+    @property
+    def results(self) -> results_server.GetlistServerResult: ...
+
+class GetstructParams(Protocol): ...
+
+class GetstructCallContext(Protocol):
+    params: GetstructParams
+    @property
+    def results(self) -> results_server.GetstructServerResult: ...
+
+class GetinterfaceParams(Protocol): ...
+
+class GetinterfaceCallContext(Protocol):
+    params: GetinterfaceParams
+    @property
+    def results(self) -> results_server.GetinterfaceServerResult: ...
+
+class GetanyParams(Protocol): ...
+
+class GetanyCallContext(Protocol):
+    params: GetanyParams
+    @property
+    def results(self) -> results_server.GetanyServerResult: ...
+
+class GetliststructParams(Protocol): ...
+
+class GetliststructCallContext(Protocol):
+    params: GetliststructParams
+    @property
+    def results(self) -> results_server.GetliststructServerResult: ...

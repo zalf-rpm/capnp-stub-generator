@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from capnp_stub_generator.run import run
-from tests.test_helpers import run_command, run_pyright
+from tests.test_helpers import read_generated_types_lines, run_command, run_pyright
 
 # Test directory structure
 TESTS_DIR = Path(__file__).parent
@@ -375,10 +375,8 @@ def generate_calculator_stubs(calculator_stubs: Path) -> Path:
 
 @pytest.fixture
 def calculator_stub_lines(calculator_stubs: Path) -> list[str]:
-    """Read calculator typing helper lines from the internal monolithic types stub."""
-    stub_file = types_stub_path(calculator_stubs, "calculator_capnp", "_all.pyi")
-    with stub_file.open() as f:
-        return f.readlines()
+    """Read calculator typing helper lines from the generated helper modules."""
+    return read_generated_types_lines(calculator_stubs / "calculator_capnp")
 
 
 # Constants for backward compatibility
@@ -469,11 +467,11 @@ def generate_stub_from_schema(schema_name: str, output_dir: Path) -> Path:
 # Specific stub fixtures for individual files
 @pytest.fixture(scope="session")
 def dummy_stub_file(basic_stubs: Path) -> Path:
-    """Provide path to dummy_capnp internal monolithic types stub."""
-    return types_stub_path(basic_stubs, "dummy_capnp", "_all.pyi")
+    """Provide path to the main dummy helper module for direct file reads."""
+    return types_stub_path(basic_stubs, "dummy_capnp", "modules.pyi")
 
 
 @pytest.fixture(scope="session")
 def dummy_stub_lines(dummy_stub_file: Path) -> list[str]:
-    """Read dummy stub file lines."""
-    return read_stub_file(dummy_stub_file)
+    """Read dummy helper lines from the generated helper modules."""
+    return read_generated_types_lines(dummy_stub_file.parent.parent)

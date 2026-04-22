@@ -1,3 +1,5 @@
 """Enum helper aliases for `addressbook.capnp`."""
 
-from ._all import PersonPhoneNumberTypeEnum as PersonPhoneNumberTypeEnum
+from typing import Literal
+
+type PersonPhoneNumberTypeEnum = int | Literal["mobile", "home", "work"]

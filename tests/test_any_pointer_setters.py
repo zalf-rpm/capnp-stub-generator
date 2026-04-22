@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tests.test_helpers import run_pyright
+from tests.test_helpers import read_generated_types_combined, run_pyright
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -12,8 +12,7 @@ if TYPE_CHECKING:
 
 def test_any_pointer_setters(basic_stubs: Path) -> None:
     """Test that AnyPointer fields accept various types in setters."""
-    stub_file = basic_stubs / "any_pointer_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(basic_stubs / "any_pointer_capnp")
 
     # Check for AnyPointer type alias
     assert "type AnyPointer =" in content

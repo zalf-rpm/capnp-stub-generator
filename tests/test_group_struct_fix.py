@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from capnp_stub_generator.run import run
+from tests.test_helpers import read_generated_types_combined
 
 
 def test_group_struct_naming(tmp_path: Path) -> None:
@@ -27,10 +28,10 @@ def test_group_struct_naming(tmp_path: Path) -> None:
 
     run(args, str(cwd))
 
-    stub_file = output_dir / "repro_group_struct_capnp" / "types" / "_all.pyi"
-    assert stub_file.exists()
+    package_dir = output_dir / "repro_group_struct_capnp"
+    assert (package_dir / "types" / "modules.pyi").exists()
 
-    content = stub_file.read_text()
+    content = read_generated_types_combined(package_dir)
 
     # Check that Struct is used with parent scoping
     # Parent is TestGroupStruct, so group name should be TestGroupStructStruct

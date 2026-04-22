@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from tests.test_helpers import run_generator
+from tests.test_helpers import read_generated_types_combined, run_generator
 
 
 def test_module_annotation_creates_directory_structure(tmp_path: Path) -> None:
@@ -14,7 +14,7 @@ def test_module_annotation_creates_directory_structure(tmp_path: Path) -> None:
     run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
     # Check that the directory structure was created according to the annotation
-    expected_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "types" / "_all.pyi"
+    expected_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "types" / "modules.pyi"
     assert expected_path.exists(), f"Expected stub at {expected_path}"
 
     # Check that __init__.py was also created
@@ -37,8 +37,12 @@ def test_module_annotation_uses_absolute_imports(tmp_path: Path) -> None:
 
     run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
-    stub_path = output_dir / "mas" / "schema" / "climate" / "climate_capnp" / "types" / "_all.pyi"
-    content = stub_path.read_text()
+    package_dir = output_dir / "mas" / "schema" / "climate" / "climate_capnp"
+    modules_path = package_dir / "types" / "modules.pyi"
+    schemas_path = package_dir / "types" / "schemas.pyi"
+    content = read_generated_types_combined(package_dir)
+    modules_content = modules_path.read_text()
+    schemas_content = schemas_path.read_text()
 
     # Check for absolute imports (not relative with .)
     assert "from mas.schema.common.date_capnp.types." in content, "Should use absolute import for date_capnp"
@@ -46,11 +50,15 @@ def test_module_annotation_uses_absolute_imports(tmp_path: Path) -> None:
     assert "from mas.schema.persistence.persistence_capnp.types.modules import" in content, (
         "Should use absolute import for persistence_capnp"
     )
+    assert "from mas.schema.climate.climate_capnp.types import schemas as schemas" in modules_content
+    assert "from mas.schema.climate.climate_capnp.types import modules as modules" in schemas_content
 
     # Make sure there are no relative imports to these modules
     assert "from .date_capnp import" not in content, "Should not use relative import for date_capnp"
     assert "from .geo_capnp import" not in content, "Should not use relative import for geo_capnp"
     assert "from .persistence_capnp import" not in content, "Should not use relative import for persistence_capnp"
+    assert "from . import schemas as schemas" not in modules_content
+    assert "from . import modules as modules" not in schemas_content
 
 
 def test_schema_without_annotation_still_works(tmp_path: Path) -> None:
@@ -62,7 +70,7 @@ def test_schema_without_annotation_still_works(tmp_path: Path) -> None:
     run_generator(["-p", str(schema_path), "-o", str(output_dir), "--no-pyright"])
 
     # Without annotation, should create flat structure
-    expected_path = output_dir / "addressbook_capnp" / "types" / "_all.pyi"
+    expected_path = output_dir / "addressbook_capnp" / "types" / "modules.pyi"
     assert expected_path.exists(), f"Expected stub at {expected_path}"
 
 
@@ -78,11 +86,11 @@ def test_mixed_annotated_and_non_annotated_schemas(tmp_path: Path) -> None:
     run_generator(["-p", str(non_annotated_schema), "-o", str(output_dir), "--no-pyright"])
 
     # Annotated schema should have module structure
-    annotated_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "types" / "_all.pyi"
+    annotated_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "types" / "modules.pyi"
     assert annotated_path.exists(), "Annotated schema should use module structure"
 
     # Non-annotated schema should have flat structure
-    non_annotated_path = output_dir / "addressbook_capnp" / "types" / "_all.pyi"
+    non_annotated_path = output_dir / "addressbook_capnp" / "types" / "modules.pyi"
     assert non_annotated_path.exists(), "Non-annotated schema should use flat structure"
 
 
@@ -94,7 +102,7 @@ def test_nested_module_paths(tmp_path: Path) -> None:
 
     run_generator(["-p", str(schema_path), "-I", "tests/schemas/zalfmas", "-o", str(output_dir), "--no-pyright"])
 
-    expected_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "types" / "_all.pyi"
+    expected_path = output_dir / "mas" / "schema" / "common" / "date_capnp" / "types" / "modules.pyi"
     assert expected_path.exists(), f"Expected stub at {expected_path}"
 
     # Verify all parent directories have __init__ files

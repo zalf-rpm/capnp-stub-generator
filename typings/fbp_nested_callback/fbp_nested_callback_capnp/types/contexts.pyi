@@ -1,8 +1,29 @@
 """Context helper types for `fbp_nested_callback.capnp`."""
 
-from ._all import RegisterstatscallbackCallContext as RegisterstatscallbackCallContext
-from ._all import RegisterstatscallbackParams as RegisterstatscallbackParams
-from ._all import StatusCallContext as StatusCallContext
-from ._all import StatusParams as StatusParams
-from ._all import UnregCallContext as UnregCallContext
-from ._all import UnregParams as UnregParams
+from typing import Protocol
+
+from . import clients as clients
+from . import readers as readers
+from .results import server as results_server
+
+class UnregParams(Protocol): ...
+
+class UnregCallContext(Protocol):
+    params: UnregParams
+    @property
+    def results(self) -> results_server.UnregServerResult: ...
+
+class StatusParams(Protocol):
+    stats: readers.StatsReader
+
+class StatusCallContext(Protocol):
+    params: StatusParams
+
+class RegisterstatscallbackParams(Protocol):
+    callback: clients.StatsCallbackClient
+    updateIntervalInMs: int
+
+class RegisterstatscallbackCallContext(Protocol):
+    params: RegisterstatscallbackParams
+    @property
+    def results(self) -> results_server.RegisterstatscallbackServerResult: ...

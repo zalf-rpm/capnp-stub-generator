@@ -14,7 +14,10 @@ from capnp.lib.capnp import (
     _StructSchemaField,
 )
 
-from . import _all as _all
+from . import builders as builders
+from . import enums as enums
+from . import readers as readers
+from . import schemas as schemas
 
 class _PersonStructModule(_StructModule):
     class _PhoneNumberStructModule(_StructModule):
@@ -50,16 +53,16 @@ class _PersonStructModule(_StructModule):
 
         @property
         @override
-        def schema(self) -> _PersonStructModule._PhoneNumberStructModule._PhoneNumberSchema: ...
+        def schema(self) -> schemas._PersonPhoneNumberSchema: ...
         @override
         def new_message(
             self,
             num_first_segment_words: int | None = None,
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             number: str | None = None,
-            type: _all.PersonPhoneNumberTypeEnum | None = None,
+            type: enums.PersonPhoneNumberTypeEnum | None = None,
             **kwargs: object,
-        ) -> _all.PhoneNumberBuilder: ...
+        ) -> builders.PhoneNumberBuilder: ...
         @override
         @overload
         def from_bytes(
@@ -67,7 +70,7 @@ class _PersonStructModule(_StructModule):
             buf: bytes,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> AbstractContextManager[_all.PhoneNumberReader]: ...
+        ) -> AbstractContextManager[readers.PhoneNumberReader]: ...
         @overload
         def from_bytes(
             self,
@@ -76,7 +79,7 @@ class _PersonStructModule(_StructModule):
             nesting_limit: int | None = None,
             *,
             builder: Literal[False],
-        ) -> AbstractContextManager[_all.PhoneNumberReader]: ...
+        ) -> AbstractContextManager[readers.PhoneNumberReader]: ...
         @overload
         def from_bytes(
             self,
@@ -85,7 +88,7 @@ class _PersonStructModule(_StructModule):
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
-        ) -> AbstractContextManager[_all.PhoneNumberBuilder]: ...
+        ) -> AbstractContextManager[builders.PhoneNumberBuilder]: ...
         @override
         def from_bytes_packed(
             self,
@@ -99,14 +102,14 @@ class _PersonStructModule(_StructModule):
             file: IO[str] | IO[bytes],
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _all.PhoneNumberReader: ...
+        ) -> readers.PhoneNumberReader: ...
         @override
         def read_packed(
             self,
             file: IO[str] | IO[bytes],
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _all.PhoneNumberReader: ...
+        ) -> readers.PhoneNumberReader: ...
 
     PhoneNumber: _PhoneNumberStructModule
     class _PersonEmploymentStructModule(_StructModule):
@@ -132,7 +135,7 @@ class _PersonStructModule(_StructModule):
 
         @property
         @override
-        def schema(self) -> _PersonStructModule._PersonEmploymentStructModule._PersonEmploymentSchema: ...
+        def schema(self) -> schemas._PersonPersonEmploymentSchema: ...
         @override
         def new_message(
             self,
@@ -143,7 +146,7 @@ class _PersonStructModule(_StructModule):
             school: str | None = None,
             selfEmployed: None | None = None,
             **kwargs: object,
-        ) -> _all.PersonEmploymentBuilder: ...
+        ) -> builders.PersonEmploymentBuilder: ...
         @override
         @overload
         def from_bytes(
@@ -151,7 +154,7 @@ class _PersonStructModule(_StructModule):
             buf: bytes,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> AbstractContextManager[_all.PersonEmploymentReader]: ...
+        ) -> AbstractContextManager[readers.PersonEmploymentReader]: ...
         @overload
         def from_bytes(
             self,
@@ -160,7 +163,7 @@ class _PersonStructModule(_StructModule):
             nesting_limit: int | None = None,
             *,
             builder: Literal[False],
-        ) -> AbstractContextManager[_all.PersonEmploymentReader]: ...
+        ) -> AbstractContextManager[readers.PersonEmploymentReader]: ...
         @overload
         def from_bytes(
             self,
@@ -169,7 +172,7 @@ class _PersonStructModule(_StructModule):
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
-        ) -> AbstractContextManager[_all.PersonEmploymentBuilder]: ...
+        ) -> AbstractContextManager[builders.PersonEmploymentBuilder]: ...
         @override
         def from_bytes_packed(
             self,
@@ -183,14 +186,14 @@ class _PersonStructModule(_StructModule):
             file: IO[str] | IO[bytes],
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _all.PersonEmploymentReader: ...
+        ) -> readers.PersonEmploymentReader: ...
         @override
         def read_packed(
             self,
             file: IO[str] | IO[bytes],
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _all.PersonEmploymentReader: ...
+        ) -> readers.PersonEmploymentReader: ...
 
     PersonEmployment: _PersonEmploymentStructModule
     class _PersonTestGroupStructModule(_StructModule):
@@ -214,7 +217,7 @@ class _PersonStructModule(_StructModule):
 
         @property
         @override
-        def schema(self) -> _PersonStructModule._PersonTestGroupStructModule._PersonTestGroupSchema: ...
+        def schema(self) -> schemas._PersonPersonTestGroupSchema: ...
         @override
         def new_message(
             self,
@@ -224,7 +227,7 @@ class _PersonStructModule(_StructModule):
             field2: int | None = None,
             field3: int | None = None,
             **kwargs: object,
-        ) -> _all.PersonTestGroupBuilder: ...
+        ) -> builders.PersonTestGroupBuilder: ...
         @override
         @overload
         def from_bytes(
@@ -232,7 +235,7 @@ class _PersonStructModule(_StructModule):
             buf: bytes,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> AbstractContextManager[_all.PersonTestGroupReader]: ...
+        ) -> AbstractContextManager[readers.PersonTestGroupReader]: ...
         @overload
         def from_bytes(
             self,
@@ -241,7 +244,7 @@ class _PersonStructModule(_StructModule):
             nesting_limit: int | None = None,
             *,
             builder: Literal[False],
-        ) -> AbstractContextManager[_all.PersonTestGroupReader]: ...
+        ) -> AbstractContextManager[readers.PersonTestGroupReader]: ...
         @overload
         def from_bytes(
             self,
@@ -250,7 +253,7 @@ class _PersonStructModule(_StructModule):
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
-        ) -> AbstractContextManager[_all.PersonTestGroupBuilder]: ...
+        ) -> AbstractContextManager[builders.PersonTestGroupBuilder]: ...
         @override
         def from_bytes_packed(
             self,
@@ -264,14 +267,14 @@ class _PersonStructModule(_StructModule):
             file: IO[str] | IO[bytes],
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _all.PersonTestGroupReader: ...
+        ) -> readers.PersonTestGroupReader: ...
         @override
         def read_packed(
             self,
             file: IO[str] | IO[bytes],
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _all.PersonTestGroupReader: ...
+        ) -> readers.PersonTestGroupReader: ...
 
     PersonTestGroup: _PersonTestGroupStructModule
     class Reader(_DynamicStructReader): ...
@@ -282,7 +285,7 @@ class _PersonStructModule(_StructModule):
             class _Schema(_ListSchema):
                 @property
                 @override
-                def elementType(self) -> _PersonStructModule._PhoneNumberStructModule._PhoneNumberSchema: ...
+                def elementType(self) -> schemas._PersonPhoneNumberSchema: ...
 
             @property
             @override
@@ -325,7 +328,7 @@ class _PersonStructModule(_StructModule):
 
     @property
     @override
-    def schema(self) -> _PersonStructModule._PersonSchema: ...
+    def schema(self) -> schemas._PersonSchema: ...
     @override
     def new_message(
         self,
@@ -334,12 +337,12 @@ class _PersonStructModule(_StructModule):
         id: int | None = None,
         name: str | None = None,
         email: str | None = None,
-        phones: _all.PhoneNumberListBuilder | dict[str, Any] | None = None,
-        employment: _all.PersonEmploymentBuilder | dict[str, Any] | None = None,
-        testGroup: _all.PersonTestGroupBuilder | dict[str, Any] | None = None,
+        phones: builders.PhoneNumberListBuilder | dict[str, Any] | None = None,
+        employment: builders.PersonEmploymentBuilder | dict[str, Any] | None = None,
+        testGroup: builders.PersonTestGroupBuilder | dict[str, Any] | None = None,
         extraData: bytes | None = None,
         **kwargs: object,
-    ) -> _all.PersonBuilder: ...
+    ) -> builders.PersonBuilder: ...
     @override
     @overload
     def from_bytes(
@@ -347,7 +350,7 @@ class _PersonStructModule(_StructModule):
         buf: bytes,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> AbstractContextManager[_all.PersonReader]: ...
+    ) -> AbstractContextManager[readers.PersonReader]: ...
     @overload
     def from_bytes(
         self,
@@ -356,7 +359,7 @@ class _PersonStructModule(_StructModule):
         nesting_limit: int | None = None,
         *,
         builder: Literal[False],
-    ) -> AbstractContextManager[_all.PersonReader]: ...
+    ) -> AbstractContextManager[readers.PersonReader]: ...
     @overload
     def from_bytes(
         self,
@@ -365,7 +368,7 @@ class _PersonStructModule(_StructModule):
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
-    ) -> AbstractContextManager[_all.PersonBuilder]: ...
+    ) -> AbstractContextManager[builders.PersonBuilder]: ...
     @override
     def from_bytes_packed(
         self,
@@ -379,14 +382,14 @@ class _PersonStructModule(_StructModule):
         file: IO[str] | IO[bytes],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> _all.PersonReader: ...
+    ) -> readers.PersonReader: ...
     @override
     def read_packed(
         self,
         file: IO[str] | IO[bytes],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> _all.PersonReader: ...
+    ) -> readers.PersonReader: ...
 
 class _AddressBookStructModule(_StructModule):
     class Reader(_DynamicStructReader): ...
@@ -397,7 +400,7 @@ class _AddressBookStructModule(_StructModule):
             class _Schema(_ListSchema):
                 @property
                 @override
-                def elementType(self) -> _PersonStructModule._PersonSchema: ...
+                def elementType(self) -> schemas._PersonSchema: ...
 
             @property
             @override
@@ -418,15 +421,15 @@ class _AddressBookStructModule(_StructModule):
 
     @property
     @override
-    def schema(self) -> _AddressBookStructModule._AddressBookSchema: ...
+    def schema(self) -> schemas._AddressBookSchema: ...
     @override
     def new_message(
         self,
         num_first_segment_words: int | None = None,
         allocate_seg_callable: Callable[[int], bytearray] | None = None,
-        people: _all.PersonListBuilder | dict[str, Any] | None = None,
+        people: builders.PersonListBuilder | dict[str, Any] | None = None,
         **kwargs: object,
-    ) -> _all.AddressBookBuilder: ...
+    ) -> builders.AddressBookBuilder: ...
     @override
     @overload
     def from_bytes(
@@ -434,7 +437,7 @@ class _AddressBookStructModule(_StructModule):
         buf: bytes,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> AbstractContextManager[_all.AddressBookReader]: ...
+    ) -> AbstractContextManager[readers.AddressBookReader]: ...
     @overload
     def from_bytes(
         self,
@@ -443,7 +446,7 @@ class _AddressBookStructModule(_StructModule):
         nesting_limit: int | None = None,
         *,
         builder: Literal[False],
-    ) -> AbstractContextManager[_all.AddressBookReader]: ...
+    ) -> AbstractContextManager[readers.AddressBookReader]: ...
     @overload
     def from_bytes(
         self,
@@ -452,7 +455,7 @@ class _AddressBookStructModule(_StructModule):
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
-    ) -> AbstractContextManager[_all.AddressBookBuilder]: ...
+    ) -> AbstractContextManager[builders.AddressBookBuilder]: ...
     @override
     def from_bytes_packed(
         self,
@@ -466,11 +469,11 @@ class _AddressBookStructModule(_StructModule):
         file: IO[str] | IO[bytes],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> _all.AddressBookReader: ...
+    ) -> readers.AddressBookReader: ...
     @override
     def read_packed(
         self,
         file: IO[str] | IO[bytes],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> _all.AddressBookReader: ...
+    ) -> readers.AddressBookReader: ...

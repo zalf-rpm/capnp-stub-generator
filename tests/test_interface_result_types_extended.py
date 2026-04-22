@@ -3,12 +3,13 @@
 import re
 from pathlib import Path
 
+from tests.test_helpers import read_generated_types_combined
+
 
 def test_registry_result_type(zalfmas_stubs: Path) -> None:
     """Test that flattened RegistryResult has proper interface type, not Any."""
     # The Admin interface is in registry.capnp
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas/schema/registry/registry_capnp")
 
     result_match = re.search(
         r"class RegistryResult\(Awaitable\[RegistryResult\], Protocol\):(.*?)(?=\nclass |\Z)",
@@ -22,13 +23,14 @@ def test_registry_result_type(zalfmas_stubs: Path) -> None:
     # Check registry field
     # Should be: registry: RegistryClient
     # Currently failing as: registry: Any
-    assert "registry: RegistryClient" in result_content, f"Expected RegistryClient, got: {result_content}"
+    assert "registry: clients.RegistryClient" in result_content, (
+        f"Expected clients.RegistryClient, got: {result_content}"
+    )
 
 
 def test_server_registry_result_type(zalfmas_stubs: Path) -> None:
     """Test that flattened RegistryServerResult has proper interface type."""
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas/schema/registry/registry_capnp")
 
     result_match = re.search(
         r"class RegistryServerResult\(_DynamicStructBuilder\):(.*?)(?=\nclass |\Z)",

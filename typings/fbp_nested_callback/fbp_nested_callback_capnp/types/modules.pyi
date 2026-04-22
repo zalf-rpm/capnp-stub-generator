@@ -16,7 +16,13 @@ from capnp.lib.capnp import (
     _StructSchemaField,
 )
 
-from . import _all as _all
+from . import builders as builders
+from . import clients as clients
+from . import contexts as contexts
+from . import readers as readers
+from . import schemas as schemas
+from . import servers as servers
+from .results import tuples as results_tuples
 
 class _ChannelInterfaceModule(_InterfaceModule):
     class _StatsCallbackInterfaceModule(_InterfaceModule):
@@ -49,9 +55,7 @@ class _ChannelInterfaceModule(_InterfaceModule):
 
             @property
             @override
-            def schema(
-                self,
-            ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule._StatsSchema: ...
+            def schema(self) -> schemas._ChannelStatsCallbackStatsSchema: ...
             @override
             def new_message(
                 self,
@@ -64,7 +68,7 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 timestamp: str | None = None,
                 updateIntervalInMs: int | None = None,
                 **kwargs: object,
-            ) -> _all.StatsBuilder: ...
+            ) -> builders.StatsBuilder: ...
             @override
             @overload
             def from_bytes(
@@ -72,7 +76,7 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 buf: bytes,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-            ) -> AbstractContextManager[_all.StatsReader]: ...
+            ) -> AbstractContextManager[readers.StatsReader]: ...
             @overload
             def from_bytes(
                 self,
@@ -81,7 +85,7 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[False],
-            ) -> AbstractContextManager[_all.StatsReader]: ...
+            ) -> AbstractContextManager[readers.StatsReader]: ...
             @overload
             def from_bytes(
                 self,
@@ -90,7 +94,7 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
-            ) -> AbstractContextManager[_all.StatsBuilder]: ...
+            ) -> AbstractContextManager[builders.StatsBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
@@ -104,14 +108,14 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 file: IO[str] | IO[bytes],
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-            ) -> _all.StatsReader: ...
+            ) -> readers.StatsReader: ...
             @override
             def read_packed(
                 self,
                 file: IO[str] | IO[bytes],
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-            ) -> _all.StatsReader: ...
+            ) -> readers.StatsReader: ...
 
         Stats: _StatsStructModule
         class _UnregisterInterfaceModule(_InterfaceModule):
@@ -158,18 +162,16 @@ class _ChannelInterfaceModule(_InterfaceModule):
 
             @property
             @override
-            def schema(
-                self,
-            ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema: ...
+            def schema(self) -> schemas._ChannelStatsCallbackUnregisterSchema: ...
             @override
-            def _new_client(self, server: _DynamicCapabilityServer) -> _all.UnregisterClient: ...
+            def _new_client(self, server: _DynamicCapabilityServer) -> clients.UnregisterClient: ...
             class Server(_DynamicCapabilityServer):
                 def unreg(
                     self,
-                    _context: _all.UnregCallContext,
+                    _context: contexts.UnregCallContext,
                     **kwargs: object,
-                ) -> Awaitable[bool | _all.UnregResultTuple | None]: ...
-                def unreg_context(self, context: _all.UnregCallContext) -> Awaitable[None]: ...
+                ) -> Awaitable[bool | results_tuples.UnregResultTuple | None]: ...
+                def unreg_context(self, context: contexts.UnregCallContext) -> Awaitable[None]: ...
 
         Unregister: _UnregisterInterfaceModule
         type UnregisterServer = _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule.Server
@@ -179,9 +181,7 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 class _StatsField(_StructSchemaField):
                     @property
                     @override
-                    def schema(
-                        self,
-                    ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule._StatsSchema: ...
+                    def schema(self) -> schemas._ChannelStatsCallbackStatsSchema: ...
 
                 class _Fields(dict[str, _StructSchemaField]):
                     @overload
@@ -227,17 +227,17 @@ class _ChannelInterfaceModule(_InterfaceModule):
 
         @property
         @override
-        def schema(self) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema: ...
+        def schema(self) -> schemas._ChannelStatsCallbackSchema: ...
         @override
-        def _new_client(self, server: _DynamicCapabilityServer) -> _all.StatsCallbackClient: ...
+        def _new_client(self, server: _DynamicCapabilityServer) -> clients.StatsCallbackClient: ...
         class Server(_DynamicCapabilityServer):
             def status(
                 self,
-                stats: _all.StatsReader,
-                _context: _all.StatusCallContext,
+                stats: readers.StatsReader,
+                _context: contexts.StatusCallContext,
                 **kwargs: object,
             ) -> Awaitable[None]: ...
-            def status_context(self, context: _all.StatusCallContext) -> Awaitable[None]: ...
+            def status_context(self, context: contexts.StatusCallContext) -> Awaitable[None]: ...
 
     StatsCallback: _StatsCallbackInterfaceModule
     type StatsCallbackServer = _ChannelInterfaceModule._StatsCallbackInterfaceModule.Server
@@ -247,7 +247,7 @@ class _ChannelInterfaceModule(_InterfaceModule):
             class _CallbackField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema: ...
+                def schema(self) -> schemas._ChannelStatsCallbackSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -272,11 +272,7 @@ class _ChannelInterfaceModule(_InterfaceModule):
             class _UnregisterCallbackField(_StructSchemaField):
                 @property
                 @override
-                def schema(
-                    self,
-                ) -> (
-                    _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema
-                ): ...
+                def schema(self) -> schemas._ChannelStatsCallbackUnregisterSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -313,20 +309,23 @@ class _ChannelInterfaceModule(_InterfaceModule):
 
     @property
     @override
-    def schema(self) -> _ChannelInterfaceModule._ChannelSchema: ...
+    def schema(self) -> schemas._ChannelSchema: ...
     @override
-    def _new_client(self, server: _DynamicCapabilityServer) -> _all.ChannelClient: ...
+    def _new_client(self, server: _DynamicCapabilityServer) -> clients.ChannelClient: ...
     class Server(_DynamicCapabilityServer):
         def registerStatsCallback(
             self,
-            callback: _all.StatsCallbackClient,
+            callback: clients.StatsCallbackClient,
             updateIntervalInMs: int,
-            _context: _all.RegisterstatscallbackCallContext,
+            _context: contexts.RegisterstatscallbackCallContext,
             **kwargs: object,
         ) -> Awaitable[
             _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule.Server
-            | _all.UnregisterClient
-            | _all.RegisterstatscallbackResultTuple
+            | clients.UnregisterClient
+            | results_tuples.RegisterstatscallbackResultTuple
             | None
         ]: ...
-        def registerStatsCallback_context(self, context: _all.RegisterstatscallbackCallContext) -> Awaitable[None]: ...
+        def registerStatsCallback_context(
+            self,
+            context: contexts.RegisterstatscallbackCallContext,
+        ) -> Awaitable[None]: ...

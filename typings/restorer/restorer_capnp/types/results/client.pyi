@@ -1,10 +1,32 @@
 """Client result helper types for `restorer.capnp`."""
 
-from .._all import GetanylistResult as GetanylistResult
-from .._all import GetanypointerResult as GetanypointerResult
-from .._all import GetanystructResult as GetanystructResult
-from .._all import GetanytesterResult as GetanytesterResult
-from .._all import GetvalueResult as GetvalueResult
-from .._all import RestoreResult as RestoreResult
-from .._all import SetanypointerResult as SetanypointerResult
-from .._all import SetvalueResult as SetvalueResult
+from collections.abc import Awaitable
+from typing import Protocol
+
+from capnp.lib.capnp import (
+    _DynamicObjectReader,
+)
+
+from .. import clients as clients
+
+class GetvalueResult(Awaitable[GetvalueResult], Protocol):
+    value: str
+
+class SetvalueResult(Awaitable[None], Protocol): ...
+
+class GetanystructResult(Awaitable[GetanystructResult], Protocol):
+    s: _DynamicObjectReader
+
+class GetanylistResult(Awaitable[GetanylistResult], Protocol):
+    l: _DynamicObjectReader
+
+class GetanypointerResult(Awaitable[GetanypointerResult], Protocol):
+    p: _DynamicObjectReader
+
+class SetanypointerResult(Awaitable[None], Protocol): ...
+
+class RestoreResult(Awaitable[RestoreResult], Protocol):
+    cap: _DynamicObjectReader
+
+class GetanytesterResult(Awaitable[GetanytesterResult], Protocol):
+    tester: clients.AnyTesterClient

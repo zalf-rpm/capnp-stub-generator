@@ -10,13 +10,12 @@ This test verifies that both variants are generated correctly.
 import re
 from pathlib import Path
 
-from tests.test_helpers import log_summary
+from tests.test_helpers import log_summary, read_generated_types_combined
 
 
 def test_both_method_variants_exist(calculator_stubs: Path) -> None:
     """Both regular and _context variant methods should be generated."""
-    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
     # Regular method with individual parameters (may be multi-line signature)
     assert "def evaluate(" in content
@@ -32,8 +31,7 @@ def test_both_method_variants_exist(calculator_stubs: Path) -> None:
 
 def test_context_variant_signature(calculator_stubs: Path) -> None:
     """_context methods should have correct signature."""
-    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
     context_methods = re.findall(r"def (\w+)_context\(", content)
 
@@ -53,8 +51,7 @@ def test_context_variant_signature(calculator_stubs: Path) -> None:
 
 def test_callcontext_has_params_and_results(calculator_stubs: Path) -> None:
     """CallContext should have both params and results attributes."""
-    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
     # Check a method with parameters and results
     assert "class EvaluateCallContext(Protocol):" in content
@@ -66,8 +63,7 @@ def test_callcontext_has_params_and_results(calculator_stubs: Path) -> None:
 
 def test_callcontext_void_method(basic_stubs: Path) -> None:
     """CallContext for void methods should have params but no results."""
-    stub_file = basic_stubs / "channel_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(basic_stubs / "channel_capnp")
 
     # Check void method CallContext (Reader.close is a void method)
     assert "class ReaderCloseCallContext(Protocol):" in content
@@ -86,8 +82,7 @@ def test_callcontext_void_method(basic_stubs: Path) -> None:
 
 def test_nested_interface_context_methods(calculator_stubs: Path) -> None:
     """Nested interfaces should also have _context methods."""
-    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
     # Calculator.Value is a nested interface (now _ValueInterfaceModule inside _CalculatorInterfaceModule)
     assert "def read_context(" in content
@@ -99,8 +94,7 @@ def test_nested_interface_context_methods(calculator_stubs: Path) -> None:
 
 def test_context_method_documentation(calculator_stubs: Path) -> None:
     """Verify the _context methods work as documented in pycapnp."""
-    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
     # According to documentation:
     # - Method name ends in _context
@@ -122,8 +116,7 @@ def test_context_method_documentation(calculator_stubs: Path) -> None:
 
 def test_context_methods_count(calculator_stubs: Path) -> None:
     """Count that all interface methods have _context variants."""
-    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
     # Find all Server class methods
     server_sections = re.findall(

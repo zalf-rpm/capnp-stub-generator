@@ -1,5 +1,9 @@
 """Server helper types for `calculator.capnp`."""
 
-from ._all import CalculatorServer as CalculatorServer
-from ._all import FunctionServer as FunctionServer
-from ._all import ValueServer as ValueServer
+from . import modules as modules
+
+CalculatorServer = modules._CalculatorInterfaceModule.Server
+
+FunctionServer = modules._CalculatorInterfaceModule._FunctionInterfaceModule.Server
+
+ValueServer = modules._CalculatorInterfaceModule._ValueInterfaceModule.Server

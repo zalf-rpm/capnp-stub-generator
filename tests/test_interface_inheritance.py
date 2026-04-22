@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_helpers import run_generator
+from tests.test_helpers import read_generated_types_combined, run_generator
 
 # Test directories
 TESTS_DIR = Path(__file__).parent
@@ -71,7 +71,7 @@ def test_simple_interface_inheritance(generated_dir: Path) -> None:
 
     content = stub_file.read_text()
     modules_content = _modules_stub_text(stub_file)
-    client_content = (generated_dir / "mas" / "schema" / "model" / "model_capnp" / "types" / "_all.pyi").read_text()
+    client_content = read_generated_types_combined(generated_dir / "mas" / "schema" / "model" / "model_capnp")
 
     # Check that ClimateInstance interface exists as Protocol
     assert "class _ClimateInstanceInterfaceModule(" in modules_content, "ClimateInstance Protocol module should exist"
@@ -122,7 +122,7 @@ def test_multiple_interface_inheritance(generated_dir: Path) -> None:
 
     content = stub_file.read_text()
     modules_content = _modules_stub_text(stub_file)
-    client_content = (generated_dir / "mas" / "schema" / "common" / "common_capnp" / "types" / "_all.pyi").read_text()
+    client_content = read_generated_types_combined(generated_dir / "mas" / "schema" / "common" / "common_capnp")
 
     # Check that IdentifiableHolder exists as Protocol
     assert "class _IdentifiableHolderInterfaceModule(" in modules_content, (
@@ -282,10 +282,8 @@ def test_interface_method_inheritance_visibility(generated_dir: Path) -> None:
     model_stub_path = generated_dir / "mas" / "schema" / "model" / "model_capnp" / "__init__.pyi"
     model_stub = model_stub_path.read_text()
     model_modules_stub = _modules_stub_text(model_stub_path)
-    model_types_stub = (generated_dir / "mas" / "schema" / "model" / "model_capnp" / "types" / "_all.pyi").read_text()
-    common_types_stub = (
-        generated_dir / "mas" / "schema" / "common" / "common_capnp" / "types" / "_all.pyi"
-    ).read_text()
+    model_types_stub = read_generated_types_combined(generated_dir / "mas" / "schema" / "model" / "model_capnp")
+    common_types_stub = read_generated_types_combined(generated_dir / "mas" / "schema" / "common" / "common_capnp")
 
     # Verify Identifiable has info() method
     # This should be in the IdentifiableClient class

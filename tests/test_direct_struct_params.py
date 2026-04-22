@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 import capnp
 
+from tests.test_helpers import read_generated_types_combined
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -34,17 +36,17 @@ async def _capture_direct_union_write_context(fbp_capnp: Any) -> dict[str, objec
 
 def test_direct_union_params_use_reader_in_callcontext(zalfmas_stubs: Path) -> None:
     """Direct-struct union params should expose the union reader on CallContext.params."""
-    content = (zalfmas_stubs / "mas" / "schema" / "fbp" / "fbp_capnp" / "types" / "_all.pyi").read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas" / "schema" / "fbp" / "fbp_capnp")
 
-    assert re.search(r"class WriteCallContext\(Protocol\):\n\s+params: MsgReader", content)
-    assert re.search(r"class WriteifspaceCallContext\(Protocol\):\n\s+params: MsgReader", content)
+    assert re.search(r"class WriteCallContext\(Protocol\):\n\s+params: readers\.MsgReader", content)
+    assert re.search(r"class WriteifspaceCallContext\(Protocol\):\n\s+params: readers\.MsgReader", content)
     assert "class WriteParams(Protocol):" not in content
     assert "class WriteifspaceParams(Protocol):" not in content
 
 
 def test_direct_union_params_only_advertise_context_server_variant(zalfmas_stubs: Path) -> None:
     """Direct union params should only advertise the _context server variant."""
-    content = (zalfmas_stubs / "mas" / "schema" / "fbp" / "fbp_capnp" / "types" / "_all.pyi").read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas" / "schema" / "fbp" / "fbp_capnp")
     writer_server = re.search(
         r"class _WriterInterfaceModule.*?class Server\([^\)]*\):(?P<body>.*?)\n\s*Writer: _WriterInterfaceModule",
         content,
@@ -53,26 +55,26 @@ def test_direct_union_params_only_advertise_context_server_variant(zalfmas_stubs
     assert writer_server, "Writer.Server block not found"
 
     body = writer_server.group("body")
-    assert "def write_context(self, context: WriteCallContext) -> Awaitable[None]: ..." in body
-    assert "def writeIfSpace_context(self, context: WriteifspaceCallContext) -> Awaitable[None]: ..." in body
+    assert "def write_context(self, context: contexts.WriteCallContext) -> Awaitable[None]: ..." in body
+    assert "def writeIfSpace_context(self, context: contexts.WriteifspaceCallContext) -> Awaitable[None]: ..." in body
     assert "def write(" not in body
     assert "def writeIfSpace(" not in body
 
 
 def test_direct_non_union_params_use_reader_but_keep_regular_server_method(zalfmas_stubs: Path) -> None:
     """Direct non-union params should still use the struct reader in CallContext.params."""
-    content = (zalfmas_stubs / "mas" / "schema" / "fbp" / "fbp_capnp" / "types" / "_all.pyi").read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas" / "schema" / "fbp" / "fbp_capnp")
 
-    assert re.search(r"class SetconfigentryCallContext\(Protocol\):\n\s+params: ConfigEntryReader", content)
+    assert re.search(r"class SetconfigentryCallContext\(Protocol\):\n\s+params: readers\.ConfigEntryReader", content)
     assert "class SetconfigentryParams(Protocol):" not in content
-    assert re.search(r"def setConfigEntry\([^)]*_context:\s*SetconfigentryCallContext", content, re.DOTALL)
+    assert re.search(r"def setConfigEntry\([^)]*_context:\s*contexts\.SetconfigentryCallContext", content, re.DOTALL)
 
 
 def test_explicit_wrapper_params_keep_params_protocol(basic_stubs: Path) -> None:
     """Explicit `(msg :Msg)` params should keep the synthetic Params wrapper."""
-    content = (basic_stubs / "fbp_channel_capnp" / "types" / "_all.pyi").read_text()
+    content = read_generated_types_combined(basic_stubs / "fbp_channel_capnp")
 
-    assert re.search(r"class WriteParams\(Protocol\):\n\s+msg: MsgReader", content)
+    assert re.search(r"class WriteParams\(Protocol\):\n\s+msg: readers\.MsgReader", content)
     assert re.search(r"class WriteCallContext\(Protocol\):\n\s+params: WriteParams", content)
 
 

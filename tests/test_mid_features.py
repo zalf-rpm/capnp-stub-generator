@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from tests.test_helpers import read_generated_types_lines
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -13,9 +15,7 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="module")
 def mid_features_stub_lines(basic_stubs: Path) -> list[str]:
     """Test mid features stub lines."""
-    stub_path = basic_stubs / "mid_features_capnp" / "types" / "_all.pyi"
-    with stub_path.open() as f:
-        return f.readlines()
+    return read_generated_types_lines(basic_stubs / "mid_features_capnp")
 
 
 def test_enum_and_nested_enum_definitions(mid_features_stub_lines: list[str]) -> None:

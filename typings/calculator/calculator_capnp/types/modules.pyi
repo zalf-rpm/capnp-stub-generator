@@ -18,7 +18,14 @@ from capnp.lib.capnp import (
     _StructSchemaField,
 )
 
-from . import _all as _all
+from . import builders as builders
+from . import clients as clients
+from . import contexts as contexts
+from . import enums as enums
+from . import readers as readers
+from . import schemas as schemas
+from . import servers as servers
+from .results import tuples as results_tuples
 
 class _CalculatorInterfaceModule(_InterfaceModule):
     class _ValueInterfaceModule(_InterfaceModule):
@@ -63,16 +70,16 @@ class _CalculatorInterfaceModule(_InterfaceModule):
 
         @property
         @override
-        def schema(self) -> _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema: ...
+        def schema(self) -> schemas._CalculatorValueSchema: ...
         @override
-        def _new_client(self, server: _DynamicCapabilityServer) -> _all.ValueClient: ...
+        def _new_client(self, server: _DynamicCapabilityServer) -> clients.ValueClient: ...
         class Server(_DynamicCapabilityServer):
             def read(
                 self,
-                _context: _all.ReadCallContext,
+                _context: contexts.ReadCallContext,
                 **kwargs: object,
-            ) -> Awaitable[float | _all.ReadResultTuple | None]: ...
-            def read_context(self, context: _all.ReadCallContext) -> Awaitable[None]: ...
+            ) -> Awaitable[float | results_tuples.ReadResultTuple | None]: ...
+            def read_context(self, context: contexts.ReadCallContext) -> Awaitable[None]: ...
 
     Value: _ValueInterfaceModule
     type ValueServer = _CalculatorInterfaceModule._ValueInterfaceModule.Server
@@ -130,17 +137,17 @@ class _CalculatorInterfaceModule(_InterfaceModule):
 
         @property
         @override
-        def schema(self) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema: ...
+        def schema(self) -> schemas._CalculatorFunctionSchema: ...
         @override
-        def _new_client(self, server: _DynamicCapabilityServer) -> _all.FunctionClient: ...
+        def _new_client(self, server: _DynamicCapabilityServer) -> clients.FunctionClient: ...
         class Server(_DynamicCapabilityServer):
             def call(
                 self,
-                params: _all.Float64ListReader,
-                _context: _all.CallCallContext,
+                params: readers.Float64ListReader,
+                _context: contexts.CallCallContext,
                 **kwargs: object,
-            ) -> Awaitable[float | _all.CallResultTuple | None]: ...
-            def call_context(self, context: _all.CallCallContext) -> Awaitable[None]: ...
+            ) -> Awaitable[float | results_tuples.CallResultTuple | None]: ...
+            def call_context(self, context: contexts.CallCallContext) -> Awaitable[None]: ...
 
     Function: _FunctionInterfaceModule
     type FunctionServer = _CalculatorInterfaceModule._FunctionInterfaceModule.Server
@@ -153,15 +160,13 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 class _FunctionField(_StructSchemaField):
                     @property
                     @override
-                    def schema(self) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema: ...
+                    def schema(self) -> schemas._CalculatorFunctionSchema: ...
 
                 class _ParamsField(_StructSchemaField):
                     class _Schema(_ListSchema):
                         @property
                         @override
-                        def elementType(
-                            self,
-                        ) -> _CalculatorInterfaceModule._ExpressionStructModule._ExpressionSchema: ...
+                        def elementType(self) -> schemas._CalculatorExpressionSchema: ...
 
                     @property
                     @override
@@ -191,22 +196,18 @@ class _CalculatorInterfaceModule(_InterfaceModule):
 
             @property
             @override
-            def schema(
-                self,
-            ) -> (
-                _CalculatorInterfaceModule._ExpressionStructModule._ExpressionCallStructModule._ExpressionCallSchema
-            ): ...
+            def schema(self) -> schemas._CalculatorExpressionExpressionCallSchema: ...
             @override
             def new_message(
                 self,
                 num_first_segment_words: int | None = None,
                 allocate_seg_callable: Callable[[int], bytearray] | None = None,
-                function: _all.FunctionClient
+                function: clients.FunctionClient
                 | _CalculatorInterfaceModule._FunctionInterfaceModule.Server
                 | None = None,
-                params: _all.ExpressionListBuilder | dict[str, Any] | None = None,
+                params: builders.ExpressionListBuilder | dict[str, Any] | None = None,
                 **kwargs: object,
-            ) -> _all.ExpressionCallBuilder: ...
+            ) -> builders.ExpressionCallBuilder: ...
             @override
             @overload
             def from_bytes(
@@ -214,7 +215,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 buf: bytes,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-            ) -> AbstractContextManager[_all.ExpressionCallReader]: ...
+            ) -> AbstractContextManager[readers.ExpressionCallReader]: ...
             @overload
             def from_bytes(
                 self,
@@ -223,7 +224,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[False],
-            ) -> AbstractContextManager[_all.ExpressionCallReader]: ...
+            ) -> AbstractContextManager[readers.ExpressionCallReader]: ...
             @overload
             def from_bytes(
                 self,
@@ -232,7 +233,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
-            ) -> AbstractContextManager[_all.ExpressionCallBuilder]: ...
+            ) -> AbstractContextManager[builders.ExpressionCallBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
@@ -246,14 +247,14 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 file: IO[str] | IO[bytes],
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-            ) -> _all.ExpressionCallReader: ...
+            ) -> readers.ExpressionCallReader: ...
             @override
             def read_packed(
                 self,
                 file: IO[str] | IO[bytes],
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-            ) -> _all.ExpressionCallReader: ...
+            ) -> readers.ExpressionCallReader: ...
 
         ExpressionCall: _ExpressionCallStructModule
         class Reader(_DynamicStructReader): ...
@@ -263,7 +264,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             class _PreviousResultField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema: ...
+                def schema(self) -> schemas._CalculatorValueSchema: ...
 
             class _CallField(_StructSchemaField):
                 @property
@@ -294,18 +295,18 @@ class _CalculatorInterfaceModule(_InterfaceModule):
 
         @property
         @override
-        def schema(self) -> _CalculatorInterfaceModule._ExpressionStructModule._ExpressionSchema: ...
+        def schema(self) -> schemas._CalculatorExpressionSchema: ...
         @override
         def new_message(
             self,
             num_first_segment_words: int | None = None,
             allocate_seg_callable: Callable[[int], bytearray] | None = None,
             literal: float | None = None,
-            previousResult: _all.ValueClient | _CalculatorInterfaceModule._ValueInterfaceModule.Server | None = None,
+            previousResult: clients.ValueClient | _CalculatorInterfaceModule._ValueInterfaceModule.Server | None = None,
             parameter: int | None = None,
-            call: _all.ExpressionCallBuilder | dict[str, Any] | None = None,
+            call: builders.ExpressionCallBuilder | dict[str, Any] | None = None,
             **kwargs: object,
-        ) -> _all.ExpressionBuilder: ...
+        ) -> builders.ExpressionBuilder: ...
         @override
         @overload
         def from_bytes(
@@ -313,7 +314,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             buf: bytes,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> AbstractContextManager[_all.ExpressionReader]: ...
+        ) -> AbstractContextManager[readers.ExpressionReader]: ...
         @overload
         def from_bytes(
             self,
@@ -322,7 +323,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             nesting_limit: int | None = None,
             *,
             builder: Literal[False],
-        ) -> AbstractContextManager[_all.ExpressionReader]: ...
+        ) -> AbstractContextManager[readers.ExpressionReader]: ...
         @overload
         def from_bytes(
             self,
@@ -331,7 +332,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
-        ) -> AbstractContextManager[_all.ExpressionBuilder]: ...
+        ) -> AbstractContextManager[builders.ExpressionBuilder]: ...
         @override
         def from_bytes_packed(
             self,
@@ -345,14 +346,14 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             file: IO[str] | IO[bytes],
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _all.ExpressionReader: ...
+        ) -> readers.ExpressionReader: ...
         @override
         def read_packed(
             self,
             file: IO[str] | IO[bytes],
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _all.ExpressionReader: ...
+        ) -> readers.ExpressionReader: ...
 
     Expression: _ExpressionStructModule
     class _OperatorEnumModule:
@@ -368,7 +369,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             class _ExpressionField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _CalculatorInterfaceModule._ExpressionStructModule._ExpressionSchema: ...
+                def schema(self) -> schemas._CalculatorExpressionSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -389,7 +390,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             class _ValueField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema: ...
+                def schema(self) -> schemas._CalculatorValueSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -412,7 +413,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             class _BodyField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _CalculatorInterfaceModule._ExpressionStructModule._ExpressionSchema: ...
+                def schema(self) -> schemas._CalculatorExpressionSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -437,7 +438,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             class _FuncField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema: ...
+                def schema(self) -> schemas._CalculatorFunctionSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -483,7 +484,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             class _FuncField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema: ...
+                def schema(self) -> schemas._CalculatorFunctionSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -536,41 +537,44 @@ class _CalculatorInterfaceModule(_InterfaceModule):
 
     @property
     @override
-    def schema(self) -> _CalculatorInterfaceModule._CalculatorSchema: ...
+    def schema(self) -> schemas._CalculatorSchema: ...
     @override
-    def _new_client(self, server: _DynamicCapabilityServer) -> _all.CalculatorClient: ...
+    def _new_client(self, server: _DynamicCapabilityServer) -> clients.CalculatorClient: ...
     class Server(_DynamicCapabilityServer):
         def evaluate(
             self,
-            expression: _all.ExpressionReader,
-            _context: _all.EvaluateCallContext,
+            expression: readers.ExpressionReader,
+            _context: contexts.EvaluateCallContext,
             **kwargs: object,
         ) -> Awaitable[
-            _CalculatorInterfaceModule._ValueInterfaceModule.Server | _all.ValueClient | _all.EvaluateResultTuple | None
+            _CalculatorInterfaceModule._ValueInterfaceModule.Server
+            | clients.ValueClient
+            | results_tuples.EvaluateResultTuple
+            | None
         ]: ...
-        def evaluate_context(self, context: _all.EvaluateCallContext) -> Awaitable[None]: ...
+        def evaluate_context(self, context: contexts.EvaluateCallContext) -> Awaitable[None]: ...
         def defFunction(
             self,
             paramCount: int,
-            body: _all.ExpressionReader,
-            _context: _all.DeffunctionCallContext,
+            body: readers.ExpressionReader,
+            _context: contexts.DeffunctionCallContext,
             **kwargs: object,
         ) -> Awaitable[
             _CalculatorInterfaceModule._FunctionInterfaceModule.Server
-            | _all.FunctionClient
-            | _all.DeffunctionResultTuple
+            | clients.FunctionClient
+            | results_tuples.DeffunctionResultTuple
             | None
         ]: ...
-        def defFunction_context(self, context: _all.DeffunctionCallContext) -> Awaitable[None]: ...
+        def defFunction_context(self, context: contexts.DeffunctionCallContext) -> Awaitable[None]: ...
         def getOperator(
             self,
-            op: _all.CalculatorOperatorEnum,
-            _context: _all.GetoperatorCallContext,
+            op: enums.CalculatorOperatorEnum,
+            _context: contexts.GetoperatorCallContext,
             **kwargs: object,
         ) -> Awaitable[
             _CalculatorInterfaceModule._FunctionInterfaceModule.Server
-            | _all.FunctionClient
-            | _all.GetoperatorResultTuple
+            | clients.FunctionClient
+            | results_tuples.GetoperatorResultTuple
             | None
         ]: ...
-        def getOperator_context(self, context: _all.GetoperatorCallContext) -> Awaitable[None]: ...
+        def getOperator_context(self, context: contexts.GetoperatorCallContext) -> Awaitable[None]: ...

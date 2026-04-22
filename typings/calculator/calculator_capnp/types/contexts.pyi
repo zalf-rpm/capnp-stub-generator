@@ -1,12 +1,47 @@
 """Context helper types for `calculator.capnp`."""
 
-from ._all import CallCallContext as CallCallContext
-from ._all import CallParams as CallParams
-from ._all import DeffunctionCallContext as DeffunctionCallContext
-from ._all import DeffunctionParams as DeffunctionParams
-from ._all import EvaluateCallContext as EvaluateCallContext
-from ._all import EvaluateParams as EvaluateParams
-from ._all import GetoperatorCallContext as GetoperatorCallContext
-from ._all import GetoperatorParams as GetoperatorParams
-from ._all import ReadCallContext as ReadCallContext
-from ._all import ReadParams as ReadParams
+from typing import Protocol
+
+from . import enums as enums
+from . import readers as readers
+from .results import server as results_server
+
+class ReadParams(Protocol): ...
+
+class ReadCallContext(Protocol):
+    params: ReadParams
+    @property
+    def results(self) -> results_server.ReadServerResult: ...
+
+class CallParams(Protocol):
+    params: readers.Float64ListReader
+
+class CallCallContext(Protocol):
+    params: CallParams
+    @property
+    def results(self) -> results_server.CallServerResult: ...
+
+class EvaluateParams(Protocol):
+    expression: readers.ExpressionReader
+
+class EvaluateCallContext(Protocol):
+    params: EvaluateParams
+    @property
+    def results(self) -> results_server.EvaluateServerResult: ...
+
+class DeffunctionParams(Protocol):
+    paramCount: int
+    body: readers.ExpressionReader
+
+class DeffunctionCallContext(Protocol):
+    params: DeffunctionParams
+    @property
+    def results(self) -> results_server.DeffunctionServerResult: ...
+
+class GetoperatorParams(Protocol):
+    op: enums.CalculatorOperatorEnum
+
+class GetoperatorCallContext(Protocol):
+    params: GetoperatorParams
+    @property
+    def results(self) -> results_server.GetoperatorServerResult: ...

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.test_helpers import log_summary
+from tests.test_helpers import log_summary, read_generated_types_combined, read_generated_types_file
 
 
 def _calculator_runtime_stub(calculator_stubs: Path) -> str:
@@ -12,25 +12,25 @@ def _calculator_runtime_stub(calculator_stubs: Path) -> str:
 
 
 def _calculator_types_all(calculator_stubs: Path) -> str:
-    return (calculator_stubs / "calculator_capnp" / "types" / "_all.pyi").read_text()
-
-
-def _calculator_types_modules(calculator_stubs: Path) -> str:
-    return (calculator_stubs / "calculator_capnp" / "types" / "modules.pyi").read_text()
+    return read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
 
 def _calculator_client_results(calculator_stubs: Path) -> str:
-    return (calculator_stubs / "calculator_capnp" / "types" / "results" / "client.pyi").read_text()
+    return read_generated_types_file(calculator_stubs / "calculator_capnp", "results", "client.pyi")
+
+
+def _calculator_clients(calculator_stubs: Path) -> str:
+    return read_generated_types_file(calculator_stubs / "calculator_capnp", "clients.pyi")
 
 
 def test_result_helper_classes_exist(calculator_stubs: Path) -> None:
-    """Client Result helper classes should be defined in the internal types stub and re-exported publicly."""
+    """Client Result helper classes should be defined in the shared helper surface and public result module."""
     all_content = _calculator_types_all(calculator_stubs)
     public_content = _calculator_client_results(calculator_stubs)
 
     for result_name in ("EvaluateResult", "DeffunctionResult", "GetoperatorResult", "ReadResult", "CallResult"):
         assert f"class {result_name}(Awaitable[{result_name}], Protocol):" in all_content
-        assert f"from .._all import {result_name} as {result_name}" in public_content
+        assert f"class {result_name}(Awaitable[{result_name}], Protocol):" in public_content
 
 
 def test_result_helpers_are_used_directly(calculator_stubs: Path) -> None:
@@ -57,7 +57,7 @@ def test_result_helpers_alongside_builder_reader(calculator_stubs: Path) -> None
     assert "Calculator: types.modules._CalculatorInterfaceModule" in runtime_content
     assert "ExpressionBuilder = types.builders.ExpressionBuilder" not in runtime_content
     assert "EvaluateResult = types.results.client.EvaluateResult" not in runtime_content
-    assert "from ._all import ExpressionBuilder as ExpressionBuilder" in builders_content
+    assert "class ExpressionBuilder(_DynamicStructBuilder):" in builders_content
 
 
 def test_result_helpers_do_not_use_type_aliases(calculator_stubs: Path) -> None:
@@ -80,7 +80,7 @@ def test_void_method_result_helper_exists(calculator_stubs: Path) -> None:
 
     content = channel_results.read_text()
     if "ReaderCloseResult" in content:
-        assert "from .._all import ReaderCloseResult as ReaderCloseResult" in content
+        assert "class ReaderCloseResult(" in content
 
 
 def test_nested_interface_result_helpers(calculator_stubs: Path) -> None:
@@ -88,27 +88,28 @@ def test_nested_interface_result_helpers(calculator_stubs: Path) -> None:
     all_content = _calculator_types_all(calculator_stubs)
     public_content = _calculator_client_results(calculator_stubs)
 
-    assert "from .._all import ReadResult as ReadResult" in public_content
-    assert "from .._all import CallResult as CallResult" in public_content
+    assert "class ReadResult(Awaitable[ReadResult], Protocol):" in public_content
+    assert "class CallResult(Awaitable[CallResult], Protocol):" in public_content
     assert "def read(self) -> ReadResult:" in all_content
     assert "def call(" in all_content
     assert "-> CallResult:" in all_content
 
 
 def test_result_helper_usage_in_type_hints(calculator_stubs: Path) -> None:
-    """Module helper stubs should point at the shared internal helper definitions."""
+    """Client helper stubs should point at the shared result and builder modules."""
     runtime_content = _calculator_runtime_stub(calculator_stubs)
-    modules_content = _calculator_types_modules(calculator_stubs)
+    clients_content = _calculator_clients(calculator_stubs)
     all_content = _calculator_types_all(calculator_stubs)
 
     assert "def evaluate(" in all_content
     assert "-> EvaluateResult:" in all_content
-    assert "-> _all.ExpressionBuilder" in modules_content or "_all.ExpressionBuilder" in modules_content
+    assert "builders.ExpressionBuilder" in clients_content
+    assert "results_client.EvaluateResult" in clients_content
     assert "CalculatorClient = types.clients.CalculatorClient" not in runtime_content
 
 
 def test_result_helper_count_matches_method_count(calculator_stubs: Path) -> None:
-    """Every RPC method with a client result should have both an internal class and a public re-export."""
+    """Every RPC method with a client result should have both shared and public definitions."""
     all_content = _calculator_types_all(calculator_stubs)
     public_content = _calculator_client_results(calculator_stubs)
 
@@ -124,8 +125,8 @@ def test_result_helper_count_matches_method_count(calculator_stubs: Path) -> Non
         assert f"class {result_name}(Awaitable[{result_name}], Protocol):" in all_content, (
             f"Should have {result_name} helper class for {method_name}"
         )
-        assert f"from .._all import {result_name} as {result_name}" in public_content, (
-            f"Should publicly re-export {result_name} for {method_name}"
+        assert f"class {result_name}(Awaitable[{result_name}], Protocol):" in public_content, (
+            f"Should publish {result_name} for {method_name}"
         )
 
 
@@ -134,10 +135,10 @@ def test_summary() -> None:
     log_summary(
         "RESULT TYPE ALIAS SUMMARY",
         [
-            "✓ Result helper classes live in types/_all",
-            "✓ Result helpers are re-exported from types.results.client",
+            "✓ Result helper classes live in generated helper submodules",
+            "✓ Result helpers are defined in types.results.client",
             "✓ Runtime stubs no longer expose top-level Result aliases",
-            "✓ Runtime signatures point at private helper modules when needed",
+            "✓ Runtime signatures point at public helper modules when needed",
             "✓ Nested and void Result helpers remain available",
         ],
     )

@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests.test_helpers import log_summary
+from tests.test_helpers import log_summary, read_generated_types_combined
 
 TESTS_DIR = Path(__file__).parent
 CALCULATOR_DIR = TESTS_DIR / "examples" / "calculator"
@@ -20,10 +20,10 @@ class TestServerContextParameter:
 
     def test_context_is_in_stubs(self, generate_calculator_stubs: Path) -> None:
         """Verify that generated stubs explicitly list _context with proper typing."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        assert stub_file.exists(), "Calculator stub file not generated"
+        package_dir = generate_calculator_stubs / "calculator_capnp"
+        assert (package_dir / "types" / "modules.pyi").exists(), "Calculator stub file not generated"
 
-        stub_content = stub_file.read_text()
+        stub_content = read_generated_types_combined(package_dir)
 
         # Check that CallContext helper types are generated
         assert "CallContext(Protocol):" in stub_content
@@ -61,8 +61,7 @@ class TestServerContextParameter:
 
     def test_context_parameter_position(self, generate_calculator_stubs: Path) -> None:
         """Test that _context comes after regular parameters, before **kwargs."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
 
         # Test _CalculatorInterfaceModule._FunctionInterfaceModule.call
         # Function is now an interface module inheriting from _InterfaceModule
@@ -100,8 +99,7 @@ class TestContextTypeHints:
 
     def test_context_has_callcontext_type(self, generate_calculator_stubs: Path) -> None:
         """Test that _context parameter uses CallContext types."""
-        stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
 
         # Look for read method in Value.Server (may span multiple lines)
         match = re.search(r"def read\([^)]*_context: ([^\s,]+)", content, re.DOTALL)
@@ -109,15 +107,14 @@ class TestContextTypeHints:
 
         context_type = match.group(1)
         assert "CallContext" in context_type, f"_context should have CallContext type, got: {context_type}"
-        assert context_type == "ReadCallContext", (
-            f"CallContext should use the flattened helper name, got: {context_type}"
+        assert context_type == "contexts.ReadCallContext", (
+            f"CallContext should use the contexts helper module, got: {context_type}"
         )
 
 
 def test_server_context_parameter_summary(generate_calculator_stubs: Path) -> None:
     """Summary test showing _context parameter is now mandatory and typed."""
-    stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
 
     # Count CallContext types generated
     callcontext_count = len(re.findall(r"class \w+CallContext\(Protocol\):", content))

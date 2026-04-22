@@ -1,17 +1,59 @@
 """Context helper types for `restorer.capnp`."""
 
-from ._all import GetanylistCallContext as GetanylistCallContext
-from ._all import GetanylistParams as GetanylistParams
-from ._all import GetanypointerCallContext as GetanypointerCallContext
-from ._all import GetanypointerParams as GetanypointerParams
-from ._all import GetanystructCallContext as GetanystructCallContext
-from ._all import GetanystructParams as GetanystructParams
-from ._all import GetanytesterCallContext as GetanytesterCallContext
-from ._all import GetanytesterParams as GetanytesterParams
-from ._all import GetvalueCallContext as GetvalueCallContext
-from ._all import GetvalueParams as GetvalueParams
-from ._all import RestoreCallContext as RestoreCallContext
-from ._all import SetanypointerCallContext as SetanypointerCallContext
-from ._all import SetanypointerParams as SetanypointerParams
-from ._all import SetvalueCallContext as SetvalueCallContext
-from ._all import SetvalueParams as SetvalueParams
+from typing import Protocol
+
+from . import common as common
+from . import readers as readers
+from .results import server as results_server
+
+class GetvalueParams(Protocol): ...
+
+class GetvalueCallContext(Protocol):
+    params: GetvalueParams
+    @property
+    def results(self) -> results_server.GetvalueServerResult: ...
+
+class SetvalueParams(Protocol):
+    value: str
+
+class SetvalueCallContext(Protocol):
+    params: SetvalueParams
+
+class GetanystructParams(Protocol): ...
+
+class GetanystructCallContext(Protocol):
+    params: GetanystructParams
+    @property
+    def results(self) -> results_server.GetanystructServerResult: ...
+
+class GetanylistParams(Protocol): ...
+
+class GetanylistCallContext(Protocol):
+    params: GetanylistParams
+    @property
+    def results(self) -> results_server.GetanylistServerResult: ...
+
+class GetanypointerParams(Protocol): ...
+
+class GetanypointerCallContext(Protocol):
+    params: GetanypointerParams
+    @property
+    def results(self) -> results_server.GetanypointerServerResult: ...
+
+class SetanypointerParams(Protocol):
+    p: common.AnyPointer
+
+class SetanypointerCallContext(Protocol):
+    params: SetanypointerParams
+
+class RestoreCallContext(Protocol):
+    params: readers.RestoreParamsReader
+    @property
+    def results(self) -> results_server.RestoreServerResult: ...
+
+class GetanytesterParams(Protocol): ...
+
+class GetanytesterCallContext(Protocol):
+    params: GetanytesterParams
+    @property
+    def results(self) -> results_server.GetanytesterServerResult: ...

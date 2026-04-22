@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from tests.test_helpers import read_generated_types_combined
+
 SCHEMAS_DIR = Path(__file__).parent / "schemas" / "basic"
 
 
@@ -45,10 +47,10 @@ def _class_block_contains_any(lines: list[str], class_name: str, field_tokens: t
 
 def test_generics_anypointer_interface(basic_stubs: Path) -> None:
     """Test that generics with AnyPointer, generic instantiations, and interfaces are handled."""
-    stub = basic_stubs / "advanced_features_capnp" / "types" / "_all.pyi"
-    assert stub.exists(), "Stub should be generated"
+    package_dir = basic_stubs / "advanced_features_capnp"
+    assert (package_dir / "types" / "modules.pyi").exists(), "Stub should be generated"
 
-    content = stub.read_text()
+    content = read_generated_types_combined(package_dir)
 
     # Check for GenericBox struct Protocol
     assert (

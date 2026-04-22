@@ -961,7 +961,7 @@ def _generate_stubs_from_schema(
         for proto, reader in struct_types
     ]
     qualified_list_types: list[tuple[str, str]] = [
-        (f"{full_module_name}.types._all.{list_class}", f"{full_module_name}.types.readers.{reader}")
+        (f"{full_module_name}.types.lists.{list_class}", f"{full_module_name}.types.readers.{reader}")
         for list_class, reader in list_types
     ]
     qualified_interface_types: list[tuple[str, str]] = [

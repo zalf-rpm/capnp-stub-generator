@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from tests.test_helpers import read_generated_types_combined
+
 
 def test_name_annotations(basic_stubs: Path) -> None:
     """Test that Cap'n Proto name annotations ($Cxx.name) are handled.
@@ -11,10 +13,10 @@ def test_name_annotations(basic_stubs: Path) -> None:
     the Python API, which uses the original names. The annotations are
     primarily for C++ code generation.
     """
-    stub = basic_stubs / "advanced_features_capnp" / "types" / "_all.pyi"
-    assert stub.exists(), "Stub should be generated"
+    package_dir = basic_stubs / "advanced_features_capnp"
+    assert (package_dir / "types" / "modules.pyi").exists(), "Stub should be generated"
 
-    content = stub.read_text()
+    content = read_generated_types_combined(package_dir)
 
     # The Python API uses the original names from the schema, not the C++ annotations
     # With _StructModule structure, check for the module and annotation

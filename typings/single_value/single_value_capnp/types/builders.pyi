@@ -1,5 +1,22 @@
 """Builder helper types for `single_value.capnp`."""
 
-from ._all import Int32ListBuilder as Int32ListBuilder
-from ._all import MyStructBuilder as MyStructBuilder
-from ._all import MyStructListBuilder as MyStructListBuilder
+from typing import override
+
+from capnp.lib.capnp import (
+    _DynamicStructBuilder,
+)
+
+from . import lists as lists
+from . import readers as readers
+
+class MyStructBuilder(_DynamicStructBuilder):
+    @property
+    def id(self) -> int: ...
+    @id.setter
+    def id(self, value: int) -> None: ...
+    @override
+    def as_reader(self) -> readers.MyStructReader: ...
+
+type Int32ListBuilder = lists._Int32List.Builder
+
+type MyStructListBuilder = lists._MyStructList.Builder

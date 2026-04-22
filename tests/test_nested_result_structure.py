@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tests.test_helpers import read_generated_types_combined
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -21,8 +23,7 @@ class TestNestedResultStructure:
 
     def test_client_result_nested_in_client(self, calculator_stubs: Path) -> None:
         """Test that Client Result protocols are top-level helpers."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class CalculatorClient(_DynamicCapabilityClient):" in content
         assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in content
@@ -31,32 +32,28 @@ class TestNestedResultStructure:
 
     def test_server_result_nested_in_server(self, calculator_stubs: Path) -> None:
         """Test that Server Result helpers are top-level."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class EvaluateServerResult(_DynamicStructBuilder):" in content
         assert "def results(self) -> EvaluateServerResult: ..." in content
 
     def test_client_method_returns_client_result(self, calculator_stubs: Path) -> None:
         """Test that client methods return top-level Result helpers."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "def evaluate(" in content
         assert "-> EvaluateResult:" in content
 
     def test_request_send_returns_client_result(self, calculator_stubs: Path) -> None:
         """Test that Request.send() returns a top-level Result helper."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class EvaluateRequest(Protocol):" in content
         assert "def send(self) -> EvaluateResult:" in content
 
     def test_callcontext_results_points_to_server_result(self, calculator_stubs: Path) -> None:
         """Test that CallContext.results points to a top-level ServerResult helper."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class EvaluateCallContext(Protocol):" in content
         assert "@property" in content
@@ -64,8 +61,7 @@ class TestNestedResultStructure:
 
     def test_result_tuple_stays_under_server(self, calculator_stubs: Path) -> None:
         """Test that ResultTuple helpers are flattened to module top level."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class EvaluateResultTuple(NamedTuple):" in content
 
@@ -75,31 +71,27 @@ class TestNestedResultsAtDeeperLevels:
 
     def test_nested_interface_client_result(self, calculator_stubs: Path) -> None:
         """Test nested interface (Calculator.Value) has top-level Result helpers."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "def read(self) -> ReadResult:" in content
 
     def test_nested_interface_server_result(self, calculator_stubs: Path) -> None:
         """Test nested interface Server uses top-level ServerResult helpers."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class ReadServerResult(_DynamicStructBuilder):" in content
         assert "def results(self) -> ReadServerResult: ..." in content
 
     def test_nested_interface_request_send(self, calculator_stubs: Path) -> None:
         """Test nested interface Request.send() returns a top-level Result helper."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class ReadRequest(Protocol):" in content
         assert "def send(self) -> ReadResult:" in content
 
     def test_nested_interface_callcontext(self, calculator_stubs: Path) -> None:
         """Test nested interface CallContext.results points to a top-level ServerResult helper."""
-        stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class ReadCallContext(Protocol):" in content
         assert "@property" in content
@@ -111,8 +103,7 @@ class TestAnyPointerTypeDifferences:
 
     def test_client_anypointer_uses_dynamic_object_reader(self, zalfmas_stubs: Path) -> None:
         """Test that Client Result uses _DynamicObjectReader for AnyPointer."""
-        stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(zalfmas_stubs / "mas/schema/common/common_capnp")
 
         # Holder.ValueResult should use _DynamicObjectReader
         lines = content.split("\n")
@@ -130,8 +121,7 @@ class TestAnyPointerTypeDifferences:
 
     def test_server_anypointer_uses_broad_union(self, zalfmas_stubs: Path) -> None:
         """Test that Server Result uses broad type union for AnyPointer."""
-        stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(zalfmas_stubs / "mas/schema/common/common_capnp")
 
         # ServerResult should use broad union (now via AnyPointer type alias)
         assert "type AnyPointer = (" in content
@@ -141,8 +131,7 @@ class TestAnyPointerTypeDifferences:
 
     def test_server_result_tuple_uses_broad_union(self, zalfmas_stubs: Path) -> None:
         """Test that Server ResultTuple also uses broad type union for AnyPointer."""
-        stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "types" / "_all.pyi"
-        content = stub_file.read_text()
+        content = read_generated_types_combined(zalfmas_stubs / "mas/schema/common/common_capnp")
 
         # ValueResultTuple should also use AnyPointer type alias
         assert "class ValueResultTuple(NamedTuple):" in content

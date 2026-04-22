@@ -18,6 +18,22 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 LOGGER = logging.getLogger(__name__)
+GENERATED_TYPES_COMBINED_ORDER = (
+    "modules.pyi",
+    "schemas.pyi",
+    "lists.pyi",
+    "builders.pyi",
+    "readers.pyi",
+    "clients.pyi",
+    "requests.pyi",
+    "contexts.pyi",
+    "common.pyi",
+    "servers.pyi",
+    "enums.pyi",
+    "results/client.pyi",
+    "results/server.pyi",
+    "results/tuples.pyi",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +114,76 @@ def run_python_file(
 ) -> CommandResult:
     """Run a Python file with the current interpreter."""
     return run_command([sys.executable, os.fspath(path)], cwd=cwd, env=env)
+
+
+def read_generated_types_file(package_dir: Path, *relative_parts: str) -> str:
+    """Read one generated helper stub file from a schema package."""
+    return (package_dir / "types" / Path(*relative_parts)).read_text()
+
+
+def read_generated_types_combined(package_dir: Path) -> str:
+    """Read generated helper stubs as one combined view for assertion-heavy tests."""
+    type_dir = package_dir / "types"
+    contents: list[str] = []
+    runtime_stub = package_dir / "__init__.pyi"
+    if runtime_stub.exists():
+        contents.append(runtime_stub.read_text())
+    contents.extend(
+        (type_dir / relative_path).read_text()
+        for relative_path in GENERATED_TYPES_COMBINED_ORDER
+        if (type_dir / relative_path).exists()
+    )
+
+    combined_content = "\n\n".join(contents)
+    flattened_prefixes = (
+        "types.modules.",
+        "types.builders.",
+        "types.readers.",
+        "types.clients.",
+        "types.requests.",
+        "types.contexts.",
+        "types.common.",
+        "types.servers.",
+        "types.enums.",
+        "types.schemas.",
+        "results_client.",
+        "results_server.",
+        "results_tuples.",
+        "builders.",
+        "readers.",
+        "clients.",
+        "requests.",
+        "contexts.",
+        "common.",
+        "servers.",
+        "enums.",
+        "schemas.",
+        "modules.",
+    )
+    flattened_lines = [
+        normalized_line
+        for line in combined_content.splitlines()
+        if not line.lstrip().startswith(("from ", "import "))
+        if (normalized_line := _normalize_generated_types_line(line, flattened_prefixes)) != line
+    ]
+    if not flattened_lines:
+        return combined_content
+
+    synthetic_view = "\n".join(f"# synthetic: {line}" for line in flattened_lines)
+    return f"{combined_content}\n\n{synthetic_view}"
+
+
+def _normalize_generated_types_line(line: str, prefixes: Sequence[str]) -> str:
+    """Normalize one generated helper line into the old flattened view used by legacy assertions."""
+    normalized_line = line
+    for prefix in prefixes:
+        normalized_line = normalized_line.replace(prefix, "")
+    return normalized_line
+
+
+def read_generated_types_lines(package_dir: Path) -> list[str]:
+    """Read generated helper stubs as combined lines."""
+    return read_generated_types_combined(package_dir).splitlines(keepends=True)
 
 
 def log_summary(title: str, lines: Sequence[str]) -> None:

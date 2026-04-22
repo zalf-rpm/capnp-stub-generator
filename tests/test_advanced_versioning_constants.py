@@ -2,13 +2,15 @@
 
 from pathlib import Path
 
+from tests.test_helpers import read_generated_types_combined
+
 
 def test_advanced_constants_and_version_fields(basic_stubs: Path) -> None:
     """Test that constants and versioned struct fields are properly generated."""
-    stub_file = basic_stubs / "advanced_features_capnp" / "types" / "_all.pyi"
-    assert stub_file.exists(), "Expected stub file for advanced features"
+    package_dir = basic_stubs / "advanced_features_capnp"
+    assert (package_dir / "types" / "modules.pyi").exists(), "Expected helper stubs for advanced features"
 
-    content = stub_file.read_text()
+    content = read_generated_types_combined(package_dir)
 
     # Check for constants
     assert "baseInt: int" in content, "baseInt constant should be declared"

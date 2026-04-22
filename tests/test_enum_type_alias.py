@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from tests.test_helpers import CommandResult, run_pyright
+from tests.test_helpers import CommandResult, read_generated_types_combined, run_pyright
 
 
 def _run_pyright_sample(calculator_stubs: Path, filename: str, test_code: str) -> CommandResult:
@@ -16,8 +16,7 @@ def _run_pyright_sample(calculator_stubs: Path, filename: str, test_code: str) -
 
 def test_enum_type_alias_exists(calculator_stubs: Path) -> None:
     """Test that enum type aliases are generated."""
-    stub_file = calculator_stubs / "calculator_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
     # Check that the enum type alias exists (flattened name)
     assert 'type CalculatorOperatorEnum = int | Literal["add", "subtract", "multiply", "divide"]' in content

@@ -4,16 +4,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tests.test_helpers import read_generated_types_combined
+
 if TYPE_CHECKING:
     from pathlib import Path
 
 
 def test_complex_lists(basic_stubs: Path) -> None:
     """Test that multi-dimensional lists are properly typed with nested Sequence types."""
-    stub = basic_stubs / "advanced_features_capnp" / "types" / "_all.pyi"
-    assert stub.exists(), "Stub should be generated"
+    package_dir = basic_stubs / "advanced_features_capnp"
+    assert (package_dir / "types" / "modules.pyi").exists(), "Stub should be generated"
 
-    content = stub.read_text()
+    content = read_generated_types_combined(package_dir)
 
     # Check for 2D int list
     # Now uses specific list class alias Int32ListListReader

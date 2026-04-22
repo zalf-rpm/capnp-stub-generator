@@ -98,6 +98,26 @@ def test_generated_runtime_uses_typed_schema_paths() -> None:
     )
 
 
+def test_schema_helpers_are_separated_into_types_schemas() -> None:
+    """Public schema helper aliases should live in `types.schemas` while modules keep the canonical nested classes."""
+    types_dir = TESTS_DIR / "_generated" / "examples" / "fbp_nested_callback" / "fbp_nested_callback_capnp" / "types"
+    modules_content = (types_dir / "modules.pyi").read_text()
+    schemas_content = (types_dir / "schemas.pyi").read_text()
+
+    assert "from . import schemas as schemas" in modules_content
+    assert "def schema(self) -> schemas._ChannelSchema" in modules_content
+    assert "def schema(self) -> schemas._ChannelStatsCallbackSchema" in modules_content
+    assert "class _ChannelSchema(" in modules_content
+    assert "class _StatsCallbackSchema(" in modules_content
+
+    assert "from . import modules as modules" in schemas_content
+    assert "type _ChannelSchema = modules._ChannelInterfaceModule._ChannelSchema" in schemas_content
+    assert (
+        "type _ChannelStatsCallbackSchema = modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema"
+        in schemas_content
+    )
+
+
 def test_generated_schema_chain_type_checks_without_casts(tmp_path: Path) -> None:
     """Generated schema helper types should make raw nested schema chains strict-clean."""
     sample = tmp_path / "typed_schema_chain.py"

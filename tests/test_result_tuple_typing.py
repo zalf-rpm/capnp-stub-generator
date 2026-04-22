@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import capnp
 
-from tests.test_helpers import run_pyright
+from tests.test_helpers import read_generated_types_combined, run_pyright
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -49,13 +49,12 @@ async def _invoke_none_result_method(
 
 def test_struct_result_tuple_accepts_struct_assignment_shapes(basic_stubs: Path) -> None:
     """Struct-valued ResultTuple fields should accept the same shapes as server result setters."""
-    stub_file = basic_stubs / "runtime_test_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(basic_stubs / "runtime_test_capnp")
 
     assert "class GetstructResultTuple(NamedTuple):" in content
-    assert "info: InfoBuilder | InfoReader | dict[str, Any]" in content
+    assert "info: builders.InfoBuilder | readers.InfoReader | dict[str, Any]" in content
     assert re.search(
-        r"def getStruct\(.*?-> Awaitable\[InfoBuilder \| InfoReader \| dict\[str, Any\] \| GetstructResultTuple \| None\]",
+        r"def getStruct\(.*?Awaitable\[\s*builders\.InfoBuilder\s*\|\s*readers\.InfoReader\s*\|\s*dict\[str, Any\]\s*\|\s*results_tuples\.GetstructResultTuple\s*\|\s*None\s*\]",
         content,
         re.DOTALL,
     )
@@ -63,13 +62,12 @@ def test_struct_result_tuple_accepts_struct_assignment_shapes(basic_stubs: Path)
 
 def test_list_result_tuple_accepts_sequence_assignment_shapes(basic_stubs: Path) -> None:
     """List-valued ResultTuple fields should accept the same shapes as server result setters."""
-    stub_file = basic_stubs / "list_result_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(basic_stubs / "list_result_capnp")
 
     assert "class GetitemsResultTuple(NamedTuple):" in content
-    assert "items: ItemListBuilder | ItemListReader | Sequence[Any]" in content
+    assert "items: builders.ItemListBuilder | readers.ItemListReader | Sequence[Any]" in content
     assert re.search(
-        r"def getItems\(.*?-> Awaitable\[ItemListBuilder \| ItemListReader \| Sequence\[Any\] \| GetitemsResultTuple \| None\]",
+        r"def getItems\(.*?Awaitable\[\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*Sequence\[Any\]\s*\|\s*results_tuples\.GetitemsResultTuple\s*\|\s*None\s*\]",
         content,
         re.DOTALL,
     )
@@ -77,8 +75,7 @@ def test_list_result_tuple_accepts_sequence_assignment_shapes(basic_stubs: Path)
 
 def test_interface_result_tuple_accepts_forwarded_clients(basic_stubs: Path) -> None:
     """Interface-valued ResultTuple fields should accept forwarded clients as well as servers."""
-    stub_file = basic_stubs / "runtime_test_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(basic_stubs / "runtime_test_capnp")
 
     assert "class GetinterfaceResultTuple(NamedTuple):" in content
     assert "service: _TestServiceInterfaceModule._SubServiceInterfaceModule.Server | SubServiceClient" in content

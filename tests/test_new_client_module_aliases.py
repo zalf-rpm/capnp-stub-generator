@@ -1,8 +1,7 @@
 """Test suite for _new_client method parameter types using correct helper imports.
 
-This validates that runtime stubs use private helper-module imports for
-typing-only client return types rather than re-exporting public top-level
-aliases.
+This validates that runtime stubs use the dedicated client helper module for
+typing-only client return types rather than a monolithic `_all` shim.
 """
 
 from __future__ import annotations
@@ -28,9 +27,9 @@ def test_new_client_uses_module_aliases_for_current_interface(generate_calculato
         "_new_client should use _DynamicCapabilityServer"
     )
 
-    # Calculator._new_client should return the private clients helper type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _all.CalculatorClient:" in content, (
-        "_new_client should use the private clients helper return type"
+    # Calculator._new_client should return the dedicated clients helper type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> clients.CalculatorClient:" in content, (
+        "_new_client should use the clients helper return type"
     )
 
 
@@ -40,14 +39,14 @@ def test_new_client_uses_module_aliases_for_inherited_interfaces(zalfmas_stubs: 
     stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "types" / "modules.pyi"
     content = stub_file.read_text()
 
-    # Identifiable._new_client should return the private clients helper type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _all.IdentifiableClient:" in content, (
-        "Identifiable._new_client should use the private clients helper return type"
+    # Identifiable._new_client should return the dedicated clients helper type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> clients.IdentifiableClient:" in content, (
+        "Identifiable._new_client should use the clients helper return type"
     )
 
-    # Holder._new_client should return the private clients helper type
-    assert "def _new_client(self, server: _DynamicCapabilityServer) -> _all.HolderClient:" in content, (
-        "Holder._new_client should use the private clients helper return type"
+    # Holder._new_client should return the dedicated clients helper type
+    assert "def _new_client(self, server: _DynamicCapabilityServer) -> clients.HolderClient:" in content, (
+        "Holder._new_client should use the clients helper return type"
     )
 
     # IdentifiableHolder extends both Identifiable and Holder
@@ -93,20 +92,21 @@ def test_new_client_nested_interface_uses_full_module_path(basic_stubs: Path) ->
     )
 
 
-def test_new_client_return_types_use_private_client_imports(zalfmas_stubs: Path) -> None:
-    """Test that _new_client return types use private client helper imports."""
+def test_new_client_return_types_use_client_module_imports(zalfmas_stubs: Path) -> None:
+    """Test that _new_client return types use the dedicated client helper module."""
     stub_file = zalfmas_stubs / "mas/schema/common/common_capnp" / "types" / "modules.pyi"
     content = stub_file.read_text()
 
-    # _new_client should return private helper-module client types
-    assert "-> _all.IdentifiableClient:" in content
-    assert "-> _all.HolderClient:" in content
-    assert "-> _all.IdentifiableHolderClient:" in content
+    # _new_client should return client helper-module types
+    assert "-> clients.IdentifiableClient:" in content
+    assert "-> clients.HolderClient:" in content
+    assert "-> clients.IdentifiableHolderClient:" in content
 
-    # The runtime stub should not expose those helpers as top-level aliases.
-    assert "IdentifiableClient = _all.IdentifiableClient" not in content
-    assert "HolderClient = _all.HolderClient" not in content
-    assert "IdentifiableHolderClient = _all.IdentifiableHolderClient" not in content
+    # The module should reference the dedicated clients helper module explicitly.
+    assert (
+        "from . import clients as clients" in content
+        or "from mas.schema.common.common_capnp.types import clients as clients" in content
+    )
 
 
 if __name__ == "__main__":

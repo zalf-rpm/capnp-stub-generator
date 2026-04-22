@@ -1,12 +1,86 @@
 """Server result helper types for `single_value.capnp`."""
 
-from .._all import GetanyServerResult as GetanyServerResult
-from .._all import GetboolServerResult as GetboolServerResult
-from .._all import GetdataServerResult as GetdataServerResult
-from .._all import GetfloatServerResult as GetfloatServerResult
-from .._all import GetinterfaceServerResult as GetinterfaceServerResult
-from .._all import GetintServerResult as GetintServerResult
-from .._all import GetlistServerResult as GetlistServerResult
-from .._all import GetliststructServerResult as GetliststructServerResult
-from .._all import GetstructServerResult as GetstructServerResult
-from .._all import GettextServerResult as GettextServerResult
+from collections.abc import Sequence
+from typing import Any, Literal, overload
+
+from capnp.lib.capnp import (
+    _DynamicStructBuilder,
+)
+
+from .. import builders as builders
+from .. import clients as clients
+from .. import common as common
+from .. import modules as modules
+from .. import readers as readers
+
+class GetboolServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> bool: ...
+    @val.setter
+    def val(self, value: bool) -> None: ...
+
+class GetintServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> int: ...
+    @val.setter
+    def val(self, value: int) -> None: ...
+
+class GetfloatServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> float: ...
+    @val.setter
+    def val(self, value: float) -> None: ...
+
+class GettextServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> str: ...
+    @val.setter
+    def val(self, value: str) -> None: ...
+
+class GetdataServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> bytes: ...
+    @val.setter
+    def val(self, value: bytes) -> None: ...
+
+class GetlistServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> builders.Int32ListBuilder: ...
+    @val.setter
+    def val(self, value: builders.Int32ListBuilder | readers.Int32ListReader | Sequence[Any]) -> None: ...
+    @overload
+    def init(self, field: Literal["val"], size: int | None = None) -> builders.Int32ListBuilder: ...
+    @overload
+    def init(self, field: str, size: int | None = None) -> Any: ...
+
+class GetstructServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> builders.MyStructBuilder: ...
+    @val.setter
+    def val(self, value: builders.MyStructBuilder | readers.MyStructReader | dict[str, Any]) -> None: ...
+    @overload
+    def init(self, field: Literal["val"], size: int | None = None) -> builders.MyStructBuilder: ...
+    @overload
+    def init(self, field: str, size: int | None = None) -> Any: ...
+
+class GetinterfaceServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> modules._SingleValueInterfaceModule.Server | clients.SingleValueClient: ...
+    @val.setter
+    def val(self, value: modules._SingleValueInterfaceModule.Server | clients.SingleValueClient) -> None: ...
+
+class GetanyServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> common.AnyPointer: ...
+    @val.setter
+    def val(self, value: common.AnyPointer) -> None: ...
+
+class GetliststructServerResult(_DynamicStructBuilder):
+    @property
+    def val(self) -> builders.MyStructListBuilder: ...
+    @val.setter
+    def val(self, value: builders.MyStructListBuilder | readers.MyStructListReader | Sequence[Any]) -> None: ...
+    @overload
+    def init(self, field: Literal["val"], size: int | None = None) -> builders.MyStructListBuilder: ...
+    @overload
+    def init(self, field: str, size: int | None = None) -> Any: ...

@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from tests.test_helpers import read_generated_types_lines
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -13,9 +15,7 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="module")
 def basic_low_stub_lines(basic_stubs: Path) -> list[str]:
     """Read basic_low.capnp stub lines."""
-    stub_path = basic_stubs / "basic_low_capnp" / "types" / "_all.pyi"
-    with stub_path.open(encoding="utf8") as f:
-        return f.readlines()
+    return read_generated_types_lines(basic_stubs / "basic_low_capnp")
 
 
 def test_enum_color_defined(basic_low_stub_lines: list[str]) -> None:

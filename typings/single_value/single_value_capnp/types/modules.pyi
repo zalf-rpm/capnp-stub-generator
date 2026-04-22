@@ -17,7 +17,13 @@ from capnp.lib.capnp import (
     _StructSchemaField,
 )
 
-from . import _all as _all
+from . import builders as builders
+from . import clients as clients
+from . import common as common
+from . import contexts as contexts
+from . import readers as readers
+from . import schemas as schemas
+from .results import tuples as results_tuples
 
 class _SingleValueInterfaceModule(_InterfaceModule):
     class _SingleValueSchema(_InterfaceSchema):
@@ -200,7 +206,7 @@ class _SingleValueInterfaceModule(_InterfaceModule):
             class _ValField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _MyStructStructModule._MyStructSchema: ...
+                def schema(self) -> schemas._MyStructSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -232,7 +238,7 @@ class _SingleValueInterfaceModule(_InterfaceModule):
             class _ValField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _SingleValueInterfaceModule._SingleValueSchema: ...
+                def schema(self) -> schemas._SingleValueSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -289,7 +295,7 @@ class _SingleValueInterfaceModule(_InterfaceModule):
                 class _Schema(_ListSchema):
                     @property
                     @override
-                    def elementType(self) -> _MyStructStructModule._MyStructSchema: ...
+                    def elementType(self) -> schemas._MyStructSchema: ...
 
                 @property
                 @override
@@ -402,78 +408,93 @@ class _SingleValueInterfaceModule(_InterfaceModule):
 
     @property
     @override
-    def schema(self) -> _SingleValueInterfaceModule._SingleValueSchema: ...
+    def schema(self) -> schemas._SingleValueSchema: ...
     @override
-    def _new_client(self, server: _DynamicCapabilityServer) -> _all.SingleValueClient: ...
+    def _new_client(self, server: _DynamicCapabilityServer) -> clients.SingleValueClient: ...
     class Server(_DynamicCapabilityServer):
         def getBool(
             self,
-            _context: _all.GetboolCallContext,
+            _context: contexts.GetboolCallContext,
             **kwargs: object,
-        ) -> Awaitable[bool | _all.GetboolResultTuple | None]: ...
-        def getBool_context(self, context: _all.GetboolCallContext) -> Awaitable[None]: ...
+        ) -> Awaitable[bool | results_tuples.GetboolResultTuple | None]: ...
+        def getBool_context(self, context: contexts.GetboolCallContext) -> Awaitable[None]: ...
         def getInt(
             self,
-            _context: _all.GetintCallContext,
+            _context: contexts.GetintCallContext,
             **kwargs: object,
-        ) -> Awaitable[int | _all.GetintResultTuple | None]: ...
-        def getInt_context(self, context: _all.GetintCallContext) -> Awaitable[None]: ...
+        ) -> Awaitable[int | results_tuples.GetintResultTuple | None]: ...
+        def getInt_context(self, context: contexts.GetintCallContext) -> Awaitable[None]: ...
         def getFloat(
             self,
-            _context: _all.GetfloatCallContext,
+            _context: contexts.GetfloatCallContext,
             **kwargs: object,
-        ) -> Awaitable[float | _all.GetfloatResultTuple | None]: ...
-        def getFloat_context(self, context: _all.GetfloatCallContext) -> Awaitable[None]: ...
+        ) -> Awaitable[float | results_tuples.GetfloatResultTuple | None]: ...
+        def getFloat_context(self, context: contexts.GetfloatCallContext) -> Awaitable[None]: ...
         def getText(
             self,
-            _context: _all.GettextCallContext,
+            _context: contexts.GettextCallContext,
             **kwargs: object,
-        ) -> Awaitable[str | _all.GettextResultTuple | None]: ...
-        def getText_context(self, context: _all.GettextCallContext) -> Awaitable[None]: ...
+        ) -> Awaitable[str | results_tuples.GettextResultTuple | None]: ...
+        def getText_context(self, context: contexts.GettextCallContext) -> Awaitable[None]: ...
         def getData(
             self,
-            _context: _all.GetdataCallContext,
+            _context: contexts.GetdataCallContext,
             **kwargs: object,
-        ) -> Awaitable[bytes | _all.GetdataResultTuple | None]: ...
-        def getData_context(self, context: _all.GetdataCallContext) -> Awaitable[None]: ...
+        ) -> Awaitable[bytes | results_tuples.GetdataResultTuple | None]: ...
+        def getData_context(self, context: contexts.GetdataCallContext) -> Awaitable[None]: ...
         def getList(
             self,
-            _context: _all.GetlistCallContext,
+            _context: contexts.GetlistCallContext,
             **kwargs: object,
         ) -> Awaitable[
-            _all.Int32ListBuilder | _all.Int32ListReader | Sequence[Any] | _all.GetlistResultTuple | None
+            builders.Int32ListBuilder
+            | readers.Int32ListReader
+            | Sequence[Any]
+            | results_tuples.GetlistResultTuple
+            | None
         ]: ...
-        def getList_context(self, context: _all.GetlistCallContext) -> Awaitable[None]: ...
+        def getList_context(self, context: contexts.GetlistCallContext) -> Awaitable[None]: ...
         def getStruct(
             self,
-            _context: _all.GetstructCallContext,
+            _context: contexts.GetstructCallContext,
             **kwargs: object,
         ) -> Awaitable[
-            _all.MyStructBuilder | _all.MyStructReader | dict[str, Any] | _all.GetstructResultTuple | None
+            builders.MyStructBuilder
+            | readers.MyStructReader
+            | dict[str, Any]
+            | results_tuples.GetstructResultTuple
+            | None
         ]: ...
-        def getStruct_context(self, context: _all.GetstructCallContext) -> Awaitable[None]: ...
+        def getStruct_context(self, context: contexts.GetstructCallContext) -> Awaitable[None]: ...
         def getInterface(
             self,
-            _context: _all.GetinterfaceCallContext,
+            _context: contexts.GetinterfaceCallContext,
             **kwargs: object,
         ) -> Awaitable[
-            _SingleValueInterfaceModule.Server | _all.SingleValueClient | _all.GetinterfaceResultTuple | None
+            _SingleValueInterfaceModule.Server
+            | clients.SingleValueClient
+            | results_tuples.GetinterfaceResultTuple
+            | None
         ]: ...
-        def getInterface_context(self, context: _all.GetinterfaceCallContext) -> Awaitable[None]: ...
+        def getInterface_context(self, context: contexts.GetinterfaceCallContext) -> Awaitable[None]: ...
         def getAny(
             self,
-            _context: _all.GetanyCallContext,
+            _context: contexts.GetanyCallContext,
             **kwargs: object,
-        ) -> Awaitable[_all.AnyPointer | _all.GetanyResultTuple | None]: ...
-        def getAny_context(self, context: _all.GetanyCallContext) -> Awaitable[None]: ...
+        ) -> Awaitable[common.AnyPointer | results_tuples.GetanyResultTuple | None]: ...
+        def getAny_context(self, context: contexts.GetanyCallContext) -> Awaitable[None]: ...
         def getListStruct(
             self,
-            _context: _all.GetliststructCallContext,
+            _context: contexts.GetliststructCallContext,
             **kwargs: object,
         ) -> Awaitable[
-            _all.MyStructListBuilder | _all.MyStructListReader | Sequence[Any] | _all.GetliststructResultTuple | None
+            builders.MyStructListBuilder
+            | readers.MyStructListReader
+            | Sequence[Any]
+            | results_tuples.GetliststructResultTuple
+            | None
         ]: ...
-        def getListStruct_context(self, context: _all.GetliststructCallContext) -> Awaitable[None]: ...
+        def getListStruct_context(self, context: contexts.GetliststructCallContext) -> Awaitable[None]: ...
 
 class _MyStructStructModule(_StructModule):
     class Reader(_DynamicStructReader): ...
@@ -492,7 +513,7 @@ class _MyStructStructModule(_StructModule):
 
     @property
     @override
-    def schema(self) -> _MyStructStructModule._MyStructSchema: ...
+    def schema(self) -> schemas._MyStructSchema: ...
     @override
     def new_message(
         self,
@@ -500,7 +521,7 @@ class _MyStructStructModule(_StructModule):
         allocate_seg_callable: Callable[[int], bytearray] | None = None,
         id: int | None = None,
         **kwargs: object,
-    ) -> _all.MyStructBuilder: ...
+    ) -> builders.MyStructBuilder: ...
     @override
     @overload
     def from_bytes(
@@ -508,7 +529,7 @@ class _MyStructStructModule(_StructModule):
         buf: bytes,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> AbstractContextManager[_all.MyStructReader]: ...
+    ) -> AbstractContextManager[readers.MyStructReader]: ...
     @overload
     def from_bytes(
         self,
@@ -517,7 +538,7 @@ class _MyStructStructModule(_StructModule):
         nesting_limit: int | None = None,
         *,
         builder: Literal[False],
-    ) -> AbstractContextManager[_all.MyStructReader]: ...
+    ) -> AbstractContextManager[readers.MyStructReader]: ...
     @overload
     def from_bytes(
         self,
@@ -526,7 +547,7 @@ class _MyStructStructModule(_StructModule):
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
-    ) -> AbstractContextManager[_all.MyStructBuilder]: ...
+    ) -> AbstractContextManager[builders.MyStructBuilder]: ...
     @override
     def from_bytes_packed(
         self,
@@ -540,11 +561,11 @@ class _MyStructStructModule(_StructModule):
         file: IO[str] | IO[bytes],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> _all.MyStructReader: ...
+    ) -> readers.MyStructReader: ...
     @override
     def read_packed(
         self,
         file: IO[str] | IO[bytes],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> _all.MyStructReader: ...
+    ) -> readers.MyStructReader: ...

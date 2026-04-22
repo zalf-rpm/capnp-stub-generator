@@ -3,6 +3,8 @@
 import re
 from pathlib import Path
 
+from tests.test_helpers import read_generated_types_combined
+
 
 def test_imported_type_aliases_used(zalfmas_stubs: Path) -> None:
     """Test that imported type aliases are used in method signatures."""
@@ -10,8 +12,7 @@ def test_imported_type_aliases_used(zalfmas_stubs: Path) -> None:
     # It imports IdInformation from common_capnp
     # Admin.addCategory takes IdInformation
 
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas/schema/registry/registry_capnp")
 
     # Check that AdminClient exists
     assert "class AdminClient(IdentifiableClient):" in content
@@ -36,8 +37,7 @@ def test_imported_return_type_aliases(zalfmas_stubs: Path) -> None:
     # Admin.removeCategory returns List(Identifiable)
     # Identifiable is imported from common_capnp
 
-    stub_file = zalfmas_stubs / "mas/schema/registry/registry_capnp" / "types" / "_all.pyi"
-    content = stub_file.read_text()
+    content = read_generated_types_combined(zalfmas_stubs / "mas/schema/registry/registry_capnp")
 
     result_match = re.search(
         r"class RemovecategoryResult\(Awaitable\[RemovecategoryResult\], Protocol\):(.*?)(?=\nclass |\Z)",
@@ -53,6 +53,6 @@ def test_imported_return_type_aliases(zalfmas_stubs: Path) -> None:
 
     # We expect: removedObjects: IdentifiableClientListReader
 
-    assert "removedObjects: IdentifiableClientListReader" in result_content, (
-        f"Expected removedObjects: IdentifiableClientListReader, got: {result_content}"
+    assert "removedObjects: readers.IdentifiableClientListReader" in result_content, (
+        f"Expected removedObjects: readers.IdentifiableClientListReader, got: {result_content}"
     )

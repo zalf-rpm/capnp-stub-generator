@@ -1,5 +1,9 @@
 """Server helper types for `fbp_nested_callback.capnp`."""
 
-from ._all import ChannelServer as ChannelServer
-from ._all import StatsCallbackServer as StatsCallbackServer
-from ._all import UnregisterServer as UnregisterServer
+from . import modules as modules
+
+ChannelServer = modules._ChannelInterfaceModule.Server
+
+StatsCallbackServer = modules._ChannelInterfaceModule._StatsCallbackInterfaceModule.Server
+
+UnregisterServer = modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule.Server
