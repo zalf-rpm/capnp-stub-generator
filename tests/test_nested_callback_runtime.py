@@ -67,18 +67,23 @@ def test_generated_embedded_schema_accepts_nested_callback_server() -> None:
 
 
 def test_generated_runtime_uses_typed_schema_paths() -> None:
-    """Generated runtime files should use typed module helpers instead of inline casts."""
+    """Generated runtime files should keep global suppressions narrow and use targeted ignores only when needed."""
     runtime_file = (
         TESTS_DIR / "_generated" / "examples" / "fbp_nested_callback" / "fbp_nested_callback_capnp" / "__init__.py"
     )
     content = runtime_file.read_text()
-    assert content.splitlines()[0] == "# pyright: reportAttributeAccessIssue=false, reportArgumentType=false"
+    assert (
+        content.splitlines()[0]
+        == "# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportUnknownMemberType=false"
+    )
     assert "_require_" not in content
     assert "import schema_capnp" in content
     assert "capnp.schema_capnp" not in content
     assert "sys.modules.get" not in content
     assert "capnp.add_import_hook()" not in content
+    assert "from typing import TYPE_CHECKING" not in content
     assert "cast(" not in content
+    assert "# pyright: ignore[reportUnknownArgumentType]" in content
     assert "def _as_struct_schema" not in content
     assert "def _struct_field" not in content
     assert "def _interface_method" not in content

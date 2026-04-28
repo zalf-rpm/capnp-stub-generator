@@ -53,6 +53,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
                 _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetBoolResultSchema._Fields
             ): ...
 
+        class _SingleValueInterfaceModuleGetBoolMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetBoolParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetBoolResultSchema: ...
+
         class _SingleValueInterfaceModuleGetIntParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
 
@@ -78,6 +90,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
             ) -> (
                 _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetIntResultSchema._Fields
             ): ...
+
+        class _SingleValueInterfaceModuleGetIntMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetIntParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetIntResultSchema: ...
 
         class _SingleValueInterfaceModuleGetFloatParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
@@ -105,6 +129,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
                 _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetFloatResultSchema._Fields
             ): ...
 
+        class _SingleValueInterfaceModuleGetFloatMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetFloatParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetFloatResultSchema: ...
+
         class _SingleValueInterfaceModuleGetTextParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
 
@@ -131,6 +167,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
                 _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetTextResultSchema._Fields
             ): ...
 
+        class _SingleValueInterfaceModuleGetTextMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetTextParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetTextResultSchema: ...
+
         class _SingleValueInterfaceModuleGetDataParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
 
@@ -156,6 +204,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
             ) -> (
                 _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetDataResultSchema._Fields
             ): ...
+
+        class _SingleValueInterfaceModuleGetDataMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetDataParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetDataResultSchema: ...
 
         class _SingleValueInterfaceModuleGetListParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
@@ -191,6 +251,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
                 _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListResultSchema._Fields
             ): ...
 
+        class _SingleValueInterfaceModuleGetListMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListResultSchema: ...
+
         class _SingleValueInterfaceModuleGetStructParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
 
@@ -225,6 +297,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
                 _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetStructResultSchema._Fields
             ): ...
 
+        class _SingleValueInterfaceModuleGetStructMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetStructParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetStructResultSchema: ...
+
         class _SingleValueInterfaceModuleGetInterfaceParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
 
@@ -255,6 +339,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
                 self,
             ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetInterfaceResultSchema._Fields: ...
 
+        class _SingleValueInterfaceModuleGetInterfaceMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetInterfaceParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetInterfaceResultSchema: ...
+
         class _SingleValueInterfaceModuleGetAnyParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
 
@@ -280,6 +376,18 @@ class _SingleValueInterfaceModule(_InterfaceModule):
             ) -> (
                 _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetAnyResultSchema._Fields
             ): ...
+
+        class _SingleValueInterfaceModuleGetAnyMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetAnyParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetAnyResultSchema: ...
 
         class _SingleValueInterfaceModuleGetListStructParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
@@ -318,89 +426,73 @@ class _SingleValueInterfaceModule(_InterfaceModule):
                 self,
             ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListStructResultSchema._Fields: ...
 
-        class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+        class _SingleValueInterfaceModuleGetListStructMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListStructParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> (
+                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListStructResultSchema
+            ): ...
+
+        class _Methods(dict[str, _InterfaceMethod]):
             @overload
             def __getitem__(
                 self,
                 key: Literal["getBool"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetBoolParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetBoolResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetBoolMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getInt"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetIntParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetIntResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetIntMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getFloat"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetFloatParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetFloatResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetFloatMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getText"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetTextParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetTextResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetTextMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getData"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetDataParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetDataResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetDataMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getList"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getStruct"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetStructParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetStructResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetStructMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getInterface"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetInterfaceParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetInterfaceResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetInterfaceMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getAny"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetAnyParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetAnyResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetAnyMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getListStruct"],
-            ) -> _InterfaceMethod[
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListStructParamSchema,
-                _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListStructResultSchema,
-            ]: ...
+            ) -> _SingleValueInterfaceModule._SingleValueSchema._SingleValueInterfaceModuleGetListStructMethod: ...
             @overload
-            def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+            def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
         @property
         @override

@@ -2,8 +2,7 @@
 
 This module contains internal type definitions including:
 - Protocol classes for schema nodes that exist in the pycapnp runtime
-- TypeVars used in generic types
-- Helper types for type annotations
+- Helper types shared by the bundled type annotations
 
 These are imported by lib/capnp.pyi for type annotations but NOT re-exported.
 """

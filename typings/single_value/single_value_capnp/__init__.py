@@ -1,5 +1,7 @@
-# pyright: reportAttributeAccessIssue=false, reportArgumentType=false
+# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportUnknownMemberType=false
 """This is an automatically generated stub for `single_value.capnp`."""
+
+from __future__ import annotations
 
 import base64
 
@@ -49,5 +51,11 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-SingleValue = _InterfaceModule(_loader.get(0xB49DCE14635277DE).as_interface(), "SingleValue")
-MyStruct = _StructModule(_loader.get(0x8A63859E25D05B97).as_struct(), "MyStruct")
+SingleValue = _InterfaceModule(
+    _loader.get(0xB49DCE14635277DE).as_interface(),
+    "SingleValue",
+)
+MyStruct = _StructModule(
+    _loader.get(0x8A63859E25D05B97).as_struct(),
+    "MyStruct",
+)

@@ -183,3 +183,21 @@ def test_bundled_base_stubs_match_typings_module() -> None:
         )
 
         assert bundled_content == typings_content, _diff_message(relative_path, bundled_content, typings_content)
+
+
+def test_bundled_interface_method_stub_is_nongeneric() -> None:
+    """Bundled interface method helpers should stay precise without generic base schemas."""
+    contents = (
+        (BUNDLED_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8"),
+        (TYPINGS_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8"),
+    )
+
+    for content in contents:
+        assert "TypeVar(" not in content
+        assert "Generic[" not in content
+        assert "_InterfaceMethod[" not in content
+        assert "class _InterfaceMethod:" in content
+        assert "@property\n    def param_type(self) -> _StructSchema: ..." in content
+        assert "@property\n    def result_type(self) -> _StructSchema: ..." in content
+        assert "def methods(self) -> dict[str, _InterfaceMethod]:" in content
+        assert "def methods_inherited(self) -> dict[str, _InterfaceMethod]:" in content

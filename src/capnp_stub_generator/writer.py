@@ -169,6 +169,7 @@ class Writer:
         self._runtime_server_aliases: dict[str, str] = {}
         self._root_module_class_names: set[str] = set()
         self._schema_helper_export_targets: dict[str, str] = {}
+        self._external_schema_module_aliases: dict[str, str] = {}
 
         # Track if we need _DynamicObjectReader augmentation (for AnyPointer in interface returns)
         # Always enable this to generate as_struct/as_interface overloads for all types
@@ -1153,24 +1154,73 @@ class Writer:
 
         return None
 
+    def _schema_export_name_for_schema(self, schema: capnp_types.SchemaType) -> str | None:
+        """Return the public schema-helper alias name for one schema when a precise helper can exist."""
+        node_kind = schema.node.which()
+        if node_kind not in {
+            capnp_types.CapnpElementType.STRUCT,
+            capnp_types.CapnpElementType.INTERFACE,
+            capnp_types.CapnpElementType.ENUM,
+        }:
+            return None
+
+        if (
+            node_kind == capnp_types.CapnpElementType.INTERFACE
+            and not self._should_emit_precise_interface_schema_helper(schema)
+        ):
+            return None
+
+        is_local_schema = self._is_schema_in_current_module(schema)
+        protocol_path = (
+            self.get_type_by_id(schema.node.id).scoped_name
+            if is_local_schema
+            else schema.node.displayName.split(":", maxsplit=1)[1]
+        )
+        if is_local_schema and node_kind == capnp_types.CapnpElementType.ENUM and protocol_path.endswith("Enum"):
+            protocol_path = protocol_path.removesuffix("Enum")
+        export_name = self._schema_export_name(protocol_path)
+        if node_kind == capnp_types.CapnpElementType.ENUM:
+            export_name = export_name.removesuffix("Schema") + "EnumSchema"
+        return export_name
+
+    def _ensure_external_schema_module_alias(self, schema: capnp_types.SchemaType) -> str | None:
+        """Ensure an imported `types.schemas` module alias exists for one external schema."""
+        matching_path = self._find_import_matching_path(schema)
+        if matching_path is None:
+            return None
+
+        python_import_path = self._build_python_import_path(matching_path)
+        alias_name = self._external_schema_module_aliases.get(python_import_path)
+        if alias_name is not None:
+            return alias_name
+
+        alias_name = self._build_external_runtime_helper_alias(python_import_path, "schemas")
+        self._external_schema_module_aliases[python_import_path] = alias_name
+        self._add_import(f"from {python_import_path}.types import schemas as {alias_name}")
+        return alias_name
+
     def _schema_type_annotation_for_schema(self, schema: capnp_types.SchemaType) -> str:
         """Return the precise annotation used for a known schema object."""
         node_kind = schema.node.which()
-        annotation = "_ListSchema"
+        default_annotation = "_ListSchema"
         if node_kind == capnp_types.CapnpElementType.ENUM:
-            annotation = "_EnumSchema"
+            default_annotation = "_EnumSchema"
         elif node_kind == capnp_types.CapnpElementType.INTERFACE:
-            annotation = "_InterfaceSchema"
-            if self._is_schema_in_current_module(schema) and self._should_emit_precise_interface_schema_helper(schema):
-                resolved_type = self.get_type_by_id(schema.node.id)
-                annotation = self._schema_export_name(resolved_type.scoped_name)
+            default_annotation = "_InterfaceSchema"
         elif node_kind == capnp_types.CapnpElementType.STRUCT:
-            annotation = "_StructSchema"
-            if self._is_schema_in_current_module(schema):
-                resolved_type = self.get_type_by_id(schema.node.id)
-                annotation = self._schema_export_name(resolved_type.scoped_name)
+            default_annotation = "_StructSchema"
 
-        return annotation
+        export_name = self._schema_export_name_for_schema(schema)
+        if export_name is None:
+            return default_annotation
+
+        if self._is_schema_in_current_module(schema):
+            return export_name
+
+        alias_name = self._ensure_external_schema_module_alias(schema)
+        if alias_name is None:
+            return default_annotation
+        return f"{alias_name}.{export_name}"
 
     def _render_list_schema_helper_lines(
         self,
@@ -1348,6 +1398,7 @@ class Writer:
         ):
             method_token = self._schema_helper_token(method_name)
             helper_token_prefix = f"{owner_token}{method_token}"
+            method_helper_name = f"_{helper_token_prefix}Method"
             param_helper_name = f"_{helper_token_prefix}ParamSchema"
             result_helper_name = f"_{helper_token_prefix}ResultSchema"
 
@@ -1377,7 +1428,24 @@ class Writer:
             result_annotation = (
                 f'"{helper_path}.{result_helper_name}"' if result_schema is not None else "_StructSchema"
             )
-            method_type = f"_InterfaceMethod[{param_annotation}, {result_annotation}]"
+            method_helper_lines: list[str] = []
+            if param_schema is not None:
+                method_helper_lines.extend(helper.new_property("param_type", param_annotation, add_override=True))
+            if result_schema is not None:
+                if method_helper_lines:
+                    method_helper_lines.append("")
+                method_helper_lines.extend(helper.new_property("result_type", result_annotation, add_override=True))
+
+            method_type = "_InterfaceMethod"
+            if method_helper_lines:
+                body_lines.extend(
+                    [
+                        helper.new_class_declaration(method_helper_name, ["_InterfaceMethod"]),
+                        *self._indent_relative_lines(method_helper_lines),
+                        "",
+                    ],
+                )
+                method_type = f'"{helper_path}.{method_helper_name}"'
 
             method_overloads.extend(
                 [
@@ -1390,7 +1458,7 @@ class Writer:
             method_overloads.extend(
                 [
                     "@overload",
-                    "def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...",
+                    "def __getitem__(self, key: str) -> _InterfaceMethod: ...",
                 ],
             )
         else:
@@ -1400,7 +1468,7 @@ class Writer:
             [
                 helper.new_class_declaration(
                     "_Methods",
-                    ["dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]"],
+                    ["dict[str, _InterfaceMethod]"],
                 ),
                 *self._indent_relative_lines(method_overloads),
                 "",
@@ -5951,6 +6019,11 @@ class Writer:
 
         return None
 
+    @staticmethod
+    def _runtime_schema_expr_needs_unknown_argument_ignore(schema_expr: str) -> bool:
+        """Return whether a runtime schema expression still needs a narrow pyright ignore."""
+        return ".schema.methods[" in schema_expr
+
     def _advance_runtime_nested_schema_expr(
         self,
         expr: str,
@@ -6015,11 +6088,12 @@ class Writer:
         schema_expr = self._build_runtime_nested_schema_expr(ancestor_schemas, nested_schema)
         if schema_expr is None:
             schema_expr = f"_loader.get({hex(nested_id)}).{cast_method}()"
-            return [f"{full_path} = {module_constructor}({schema_expr}, {nested_name!r})"]
-
+        schema_expr_line = f"    {schema_expr},"
+        if self._runtime_schema_expr_needs_unknown_argument_ignore(schema_expr):
+            schema_expr_line += "  # pyright: ignore[reportUnknownArgumentType]"
         return [
             f"{full_path} = {module_constructor}(",
-            f"    {schema_expr},",
+            schema_expr_line,
             f"    {nested_name!r},",
             ")",
         ]
@@ -6127,8 +6201,12 @@ class Writer:
         ]
 
         out: list[str] = []
-        out.append("# pyright: reportAttributeAccessIssue=false, reportArgumentType=false")
+        out.append(
+            "# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportUnknownMemberType=false"
+        )
         out.append(self.docstring)
+        out.append("")
+        out.append("from __future__ import annotations")
         out.append("")
         out.append("import base64")
         out.append("")

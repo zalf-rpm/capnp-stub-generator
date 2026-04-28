@@ -44,6 +44,14 @@ class _BagInterfaceModule(_InterfaceModule):
             @override
             def fields(self) -> _BagInterfaceModule._BagSchema._BagInterfaceModuleGetValueResultSchema._Fields: ...
 
+        class _BagInterfaceModuleGetValueMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(self) -> _BagInterfaceModule._BagSchema._BagInterfaceModuleGetValueParamSchema: ...
+            @property
+            @override
+            def result_type(self) -> _BagInterfaceModule._BagSchema._BagInterfaceModuleGetValueResultSchema: ...
+
         class _BagInterfaceModuleSetValueParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -62,25 +70,27 @@ class _BagInterfaceModule(_InterfaceModule):
             @override
             def fields(self) -> _BagInterfaceModule._BagSchema._BagInterfaceModuleSetValueResultSchema._Fields: ...
 
-        class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+        class _BagInterfaceModuleSetValueMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(self) -> _BagInterfaceModule._BagSchema._BagInterfaceModuleSetValueParamSchema: ...
+            @property
+            @override
+            def result_type(self) -> _BagInterfaceModule._BagSchema._BagInterfaceModuleSetValueResultSchema: ...
+
+        class _Methods(dict[str, _InterfaceMethod]):
             @overload
             def __getitem__(
                 self,
                 key: Literal["getValue"],
-            ) -> _InterfaceMethod[
-                _BagInterfaceModule._BagSchema._BagInterfaceModuleGetValueParamSchema,
-                _BagInterfaceModule._BagSchema._BagInterfaceModuleGetValueResultSchema,
-            ]: ...
+            ) -> _BagInterfaceModule._BagSchema._BagInterfaceModuleGetValueMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["setValue"],
-            ) -> _InterfaceMethod[
-                _BagInterfaceModule._BagSchema._BagInterfaceModuleSetValueParamSchema,
-                _BagInterfaceModule._BagSchema._BagInterfaceModuleSetValueResultSchema,
-            ]: ...
+            ) -> _BagInterfaceModule._BagSchema._BagInterfaceModuleSetValueMethod: ...
             @overload
-            def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+            def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
         @property
         @override
@@ -205,6 +215,18 @@ class _RestorerInterfaceModule(_InterfaceModule):
                 self,
             ) -> _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleRestoreResultSchema._Fields: ...
 
+        class _RestorerInterfaceModuleRestoreMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleRestoreParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleRestoreResultSchema: ...
+
         class _RestorerInterfaceModuleGetAnyTesterParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
 
@@ -235,25 +257,31 @@ class _RestorerInterfaceModule(_InterfaceModule):
                 self,
             ) -> _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleGetAnyTesterResultSchema._Fields: ...
 
-        class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+        class _RestorerInterfaceModuleGetAnyTesterMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleGetAnyTesterParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleGetAnyTesterResultSchema: ...
+
+        class _Methods(dict[str, _InterfaceMethod]):
             @overload
             def __getitem__(
                 self,
                 key: Literal["restore"],
-            ) -> _InterfaceMethod[
-                _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleRestoreParamSchema,
-                _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleRestoreResultSchema,
-            ]: ...
+            ) -> _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleRestoreMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getAnyTester"],
-            ) -> _InterfaceMethod[
-                _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleGetAnyTesterParamSchema,
-                _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleGetAnyTesterResultSchema,
-            ]: ...
+            ) -> _RestorerInterfaceModule._RestorerSchema._RestorerInterfaceModuleGetAnyTesterMethod: ...
             @overload
-            def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+            def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
         @property
         @override
@@ -309,6 +337,18 @@ class _AnyTesterInterfaceModule(_InterfaceModule):
                 _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyStructResultSchema._Fields
             ): ...
 
+        class _AnyTesterInterfaceModuleGetAnyStructMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyStructParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyStructResultSchema: ...
+
         class _AnyTesterInterfaceModuleGetAnyListParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
 
@@ -330,6 +370,18 @@ class _AnyTesterInterfaceModule(_InterfaceModule):
             def fields(
                 self,
             ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyListResultSchema._Fields: ...
+
+        class _AnyTesterInterfaceModuleGetAnyListMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyListParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyListResultSchema: ...
 
         class _AnyTesterInterfaceModuleGetAnyPointerParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]): ...
@@ -357,6 +409,18 @@ class _AnyTesterInterfaceModule(_InterfaceModule):
                 _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyPointerResultSchema._Fields
             ): ...
 
+        class _AnyTesterInterfaceModuleGetAnyPointerMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyPointerParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyPointerResultSchema: ...
+
         class _AnyTesterInterfaceModuleSetAnyPointerParamSchema(_StructSchema):
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -383,41 +447,41 @@ class _AnyTesterInterfaceModule(_InterfaceModule):
                 _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleSetAnyPointerResultSchema._Fields
             ): ...
 
-        class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+        class _AnyTesterInterfaceModuleSetAnyPointerMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleSetAnyPointerParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleSetAnyPointerResultSchema: ...
+
+        class _Methods(dict[str, _InterfaceMethod]):
             @overload
             def __getitem__(
                 self,
                 key: Literal["getAnyStruct"],
-            ) -> _InterfaceMethod[
-                _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyStructParamSchema,
-                _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyStructResultSchema,
-            ]: ...
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyStructMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getAnyList"],
-            ) -> _InterfaceMethod[
-                _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyListParamSchema,
-                _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyListResultSchema,
-            ]: ...
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyListMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getAnyPointer"],
-            ) -> _InterfaceMethod[
-                _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyPointerParamSchema,
-                _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyPointerResultSchema,
-            ]: ...
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleGetAnyPointerMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["setAnyPointer"],
-            ) -> _InterfaceMethod[
-                _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleSetAnyPointerParamSchema,
-                _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleSetAnyPointerResultSchema,
-            ]: ...
+            ) -> _AnyTesterInterfaceModule._AnyTesterSchema._AnyTesterInterfaceModuleSetAnyPointerMethod: ...
             @overload
-            def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+            def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
         @property
         @override

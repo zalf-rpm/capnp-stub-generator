@@ -1,5 +1,7 @@
-# pyright: reportAttributeAccessIssue=false, reportArgumentType=false
+# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportUnknownMemberType=false
 """This is an automatically generated stub for `restorer.capnp`."""
+
+from __future__ import annotations
 
 import base64
 
@@ -46,10 +48,19 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-Bag = _InterfaceModule(_loader.get(0x98D17C0C5F55F6ED).as_interface(), "Bag")
-Restorer = _InterfaceModule(_loader.get(0xD5C5FD801DE4B393).as_interface(), "Restorer")
+Bag = _InterfaceModule(
+    _loader.get(0x98D17C0C5F55F6ED).as_interface(),
+    "Bag",
+)
+Restorer = _InterfaceModule(
+    _loader.get(0xD5C5FD801DE4B393).as_interface(),
+    "Restorer",
+)
 Restorer.RestoreParams = _StructModule(
-    Restorer.schema.methods["restore"].param_type,
+    Restorer.schema.methods["restore"].param_type,  # pyright: ignore[reportUnknownArgumentType]
     "RestoreParams",
 )
-AnyTester = _InterfaceModule(_loader.get(0x8D4A4868ECAEE366).as_interface(), "AnyTester")
+AnyTester = _InterfaceModule(
+    _loader.get(0x8D4A4868ECAEE366).as_interface(),
+    "AnyTester",
+)

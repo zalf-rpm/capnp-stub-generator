@@ -1,5 +1,7 @@
-# pyright: reportAttributeAccessIssue=false, reportArgumentType=false
+# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportUnknownMemberType=false
 """This is an automatically generated stub for `fbp_nested_callback.capnp`."""
+
+from __future__ import annotations
 
 import base64
 
@@ -37,16 +39,19 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-Channel = _InterfaceModule(_loader.get(0x9C62C32B2FF2B1E8).as_interface(), "Channel")
+Channel = _InterfaceModule(
+    _loader.get(0x9C62C32B2FF2B1E8).as_interface(),
+    "Channel",
+)
 Channel.StatsCallback = _InterfaceModule(
-    Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema,
+    Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema,  # pyright: ignore[reportUnknownArgumentType]
     "StatsCallback",
 )
 Channel.StatsCallback.Stats = _StructModule(
-    Channel.StatsCallback.schema.methods["status"].param_type.fields["stats"].schema,
+    Channel.StatsCallback.schema.methods["status"].param_type.fields["stats"].schema,  # pyright: ignore[reportUnknownArgumentType]
     "Stats",
 )
 Channel.StatsCallback.Unregister = _InterfaceModule(
-    Channel.schema.methods["registerStatsCallback"].result_type.fields["unregisterCallback"].schema,
+    Channel.schema.methods["registerStatsCallback"].result_type.fields["unregisterCallback"].schema,  # pyright: ignore[reportUnknownArgumentType]
     "Unregister",
 )

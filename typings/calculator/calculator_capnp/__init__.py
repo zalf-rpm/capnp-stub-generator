@@ -1,5 +1,7 @@
-# pyright: reportAttributeAccessIssue=false, reportArgumentType=false
+# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportUnknownMemberType=false
 """This is an automatically generated stub for `calculator.capnp`."""
+
+from __future__ import annotations
 
 import base64
 
@@ -43,20 +45,23 @@ for _schema_b64 in _SCHEMA_NODES:
 
 # Build module structure inline
 
-Calculator = _InterfaceModule(_loader.get(0x97983392DF35CC36).as_interface(), "Calculator")
+Calculator = _InterfaceModule(
+    _loader.get(0x97983392DF35CC36).as_interface(),
+    "Calculator",
+)
 Calculator.Expression = _StructModule(
-    Calculator.schema.methods["evaluate"].param_type.fields["expression"].schema,
+    Calculator.schema.methods["evaluate"].param_type.fields["expression"].schema,  # pyright: ignore[reportUnknownArgumentType]
     "Expression",
 )
 Calculator.Value = _InterfaceModule(
-    Calculator.schema.methods["evaluate"].param_type.fields["expression"].schema.fields["previousResult"].schema,
+    Calculator.schema.methods["evaluate"].param_type.fields["expression"].schema.fields["previousResult"].schema,  # pyright: ignore[reportUnknownArgumentType]
     "Value",
 )
 Calculator.Function = _InterfaceModule(
-    Calculator.schema.methods["defFunction"].result_type.fields["func"].schema,
+    Calculator.schema.methods["defFunction"].result_type.fields["func"].schema,  # pyright: ignore[reportUnknownArgumentType]
     "Function",
 )
 Calculator.Operator = _EnumModule(
-    Calculator.schema.methods["getOperator"].param_type.fields["op"].schema,
+    Calculator.schema.methods["getOperator"].param_type.fields["op"].schema,  # pyright: ignore[reportUnknownArgumentType]
     "Operator",
 )

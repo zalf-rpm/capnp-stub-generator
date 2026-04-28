@@ -8,7 +8,7 @@ from collections.abc import (
 )
 from contextlib import AbstractContextManager, asynccontextmanager
 from ssl import SSLContext
-from typing import IO, Any, Generic, Literal, TypeVar, overload
+from typing import IO, Any, Literal, overload
 
 # Generated imports for project-specific types
 from addressbook import addressbook_capnp
@@ -45,9 +45,6 @@ type Capability = _DynamicCapabilityClient | _DynamicCapabilityServer | _Dynamic
 type AnyStruct = _DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder
 type AnyList = _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder
 type _CapnpModuleType = _CapnpModule
-
-_MethodParamSchemaT = TypeVar("_MethodParamSchemaT", covariant=True)
-_MethodResultSchemaT = TypeVar("_MethodResultSchemaT", covariant=True)
 
 types: _CapnpTypesModule
 
@@ -184,9 +181,11 @@ class _StructSchemaField:
         This property may raise for primitive/unknown types.
         """
 
-class _InterfaceMethod(Generic[_MethodParamSchemaT, _MethodResultSchemaT]):
-    param_type: _MethodParamSchemaT
-    result_type: _MethodResultSchemaT
+class _InterfaceMethod:
+    @property
+    def param_type(self) -> _StructSchema: ...
+    @property
+    def result_type(self) -> _StructSchema: ...
 
 class _Schema:
     """Base class for _StructSchema and _ParsedSchema."""
@@ -239,7 +238,7 @@ class _EnumSchema:
         """The raw schema node."""
 
 class _InterfaceSchema:
-    """Schema for interface types, parameterized by the interface type.
+    """Schema for interface types.
 
     Provides access to interface schema information.
     Only accessible from capnp.lib.capnp, not from capnp directly.
@@ -254,11 +253,11 @@ class _InterfaceSchema:
         """A set of the function names in the interface, including inherited methods."""
 
     @property
-    def methods(self) -> dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]:
+    def methods(self) -> dict[str, _InterfaceMethod]:
         """A mapping of method names to their respective _InterfaceMethod."""
 
     @property
-    def methods_inherited(self) -> dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]:
+    def methods_inherited(self) -> dict[str, _InterfaceMethod]:
         """A mapping of method names to their respective _InterfaceMethod, including inherited methods."""
 
     @property
@@ -660,7 +659,7 @@ class _DynamicObjectReader:
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
         """Cast this AnyPointer to an interface capability.
 
-        The return type matches the interface type parameterized in the schema.
+        The return type reflects the provided interface schema when overloads are available.
 
         Args:
             schema: The interface schema to cast to (e.g., MyInterface.schema).
@@ -767,7 +766,7 @@ class _DynamicObjectReader:
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
         """Cast this AnyPointer to a struct reader.
 
-        The return type matches the Reader type parameterized in the schema.
+        The return type reflects the provided struct schema when overloads are available.
         Can accept either the .schema attribute or the struct class itself.
 
         Args:
@@ -800,7 +799,7 @@ class _DynamicObjectBuilder:
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> Any:
         """Cast this AnyPointer to an interface capability.
 
-        The return type matches the interface type parameterized in the schema.
+        The return type reflects the provided interface schema when overloads are available.
 
         Args:
             schema: The interface schema to cast to (e.g., MyInterface.schema).
@@ -835,7 +834,7 @@ class _DynamicObjectBuilder:
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder:
         """Cast this AnyPointer to a struct builder.
 
-        The return type matches the Builder type parameterized in the schema.
+        The return type reflects the provided struct schema when overloads are available.
         Can accept either the .schema attribute or the struct class itself.
 
         Args:

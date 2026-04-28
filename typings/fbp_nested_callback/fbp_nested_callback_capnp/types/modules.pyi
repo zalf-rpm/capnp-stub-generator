@@ -142,17 +142,26 @@ class _ChannelInterfaceModule(_InterfaceModule):
                         self,
                     ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregResultSchema._Fields: ...
 
-                class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+                class _UnregisterInterfaceModuleUnregMethod(_InterfaceMethod):
+                    @property
+                    @override
+                    def param_type(
+                        self,
+                    ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregParamSchema: ...
+                    @property
+                    @override
+                    def result_type(
+                        self,
+                    ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregResultSchema: ...
+
+                class _Methods(dict[str, _InterfaceMethod]):
                     @overload
                     def __getitem__(
                         self,
                         key: Literal["unreg"],
-                    ) -> _InterfaceMethod[
-                        _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregParamSchema,
-                        _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregResultSchema,
-                    ]: ...
+                    ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._UnregisterInterfaceModuleUnregMethod: ...
                     @overload
-                    def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+                    def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
                 @property
                 @override
@@ -207,17 +216,26 @@ class _ChannelInterfaceModule(_InterfaceModule):
                     self,
                 ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusResultSchema._Fields: ...
 
-            class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+            class _StatsCallbackInterfaceModuleStatusMethod(_InterfaceMethod):
+                @property
+                @override
+                def param_type(
+                    self,
+                ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusParamSchema: ...
+                @property
+                @override
+                def result_type(
+                    self,
+                ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusResultSchema: ...
+
+            class _Methods(dict[str, _InterfaceMethod]):
                 @overload
                 def __getitem__(
                     self,
                     key: Literal["status"],
-                ) -> _InterfaceMethod[
-                    _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusParamSchema,
-                    _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusResultSchema,
-                ]: ...
+                ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._StatsCallbackInterfaceModuleStatusMethod: ...
                 @overload
-                def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+                def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
             @property
             @override
@@ -291,17 +309,26 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackResultSchema._Fields
             ): ...
 
-        class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+        class _ChannelInterfaceModuleRegisterStatsCallbackMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackResultSchema: ...
+
+        class _Methods(dict[str, _InterfaceMethod]):
             @overload
             def __getitem__(
                 self,
                 key: Literal["registerStatsCallback"],
-            ) -> _InterfaceMethod[
-                _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackParamSchema,
-                _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackResultSchema,
-            ]: ...
+            ) -> _ChannelInterfaceModule._ChannelSchema._ChannelInterfaceModuleRegisterStatsCallbackMethod: ...
             @overload
-            def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+            def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
         @property
         @override

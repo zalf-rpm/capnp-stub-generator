@@ -41,7 +41,7 @@ class _PersonStructModule(_StructModule):
             class _TypeField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _EnumSchema: ...
+                def schema(self) -> schemas._PersonPhoneNumberTypeEnumSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload

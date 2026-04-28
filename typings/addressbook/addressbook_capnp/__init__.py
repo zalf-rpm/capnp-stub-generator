@@ -1,5 +1,7 @@
-# pyright: reportAttributeAccessIssue=false, reportArgumentType=false
+# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportUnknownMemberType=false
 """This is an automatically generated stub for `addressbook.capnp`."""
+
+from __future__ import annotations
 
 import base64
 
@@ -35,7 +37,10 @@ for _schema_b64 in _SCHEMA_NODES:
 # Build module structure inline
 
 qux = _loader.get(0xA4715ADA13E1E979).as_const_value()
-Person = _StructModule(_loader.get(0xA667DB69AAB2A9A8).as_struct(), "Person")
+Person = _StructModule(
+    _loader.get(0xA667DB69AAB2A9A8).as_struct(),
+    "Person",
+)
 Person.PhoneNumber = _StructModule(
     Person.schema.fields["phones"].schema.elementType,
     "PhoneNumber",
@@ -44,4 +49,7 @@ Person.PhoneNumber.Type = _EnumModule(
     Person.PhoneNumber.schema.fields["type"].schema,
     "Type",
 )
-AddressBook = _StructModule(_loader.get(0xDED4381D608D5D17).as_struct(), "AddressBook")
+AddressBook = _StructModule(
+    _loader.get(0xDED4381D608D5D17).as_struct(),
+    "AddressBook",
+)

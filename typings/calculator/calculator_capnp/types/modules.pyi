@@ -53,17 +53,30 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                     self,
                 ) -> _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema._ValueInterfaceModuleReadResultSchema._Fields: ...
 
-            class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+            class _ValueInterfaceModuleReadMethod(_InterfaceMethod):
+                @property
+                @override
+                def param_type(
+                    self,
+                ) -> (
+                    _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema._ValueInterfaceModuleReadParamSchema
+                ): ...
+                @property
+                @override
+                def result_type(
+                    self,
+                ) -> (
+                    _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema._ValueInterfaceModuleReadResultSchema
+                ): ...
+
+            class _Methods(dict[str, _InterfaceMethod]):
                 @overload
                 def __getitem__(
                     self,
                     key: Literal["read"],
-                ) -> _InterfaceMethod[
-                    _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema._ValueInterfaceModuleReadParamSchema,
-                    _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema._ValueInterfaceModuleReadResultSchema,
-                ]: ...
+                ) -> _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema._ValueInterfaceModuleReadMethod: ...
                 @overload
-                def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+                def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
             @property
             @override
@@ -120,17 +133,26 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                     self,
                 ) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema._FunctionInterfaceModuleCallResultSchema._Fields: ...
 
-            class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+            class _FunctionInterfaceModuleCallMethod(_InterfaceMethod):
+                @property
+                @override
+                def param_type(
+                    self,
+                ) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema._FunctionInterfaceModuleCallParamSchema: ...
+                @property
+                @override
+                def result_type(
+                    self,
+                ) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema._FunctionInterfaceModuleCallResultSchema: ...
+
+            class _Methods(dict[str, _InterfaceMethod]):
                 @overload
                 def __getitem__(
                     self,
                     key: Literal["call"],
-                ) -> _InterfaceMethod[
-                    _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema._FunctionInterfaceModuleCallParamSchema,
-                    _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema._FunctionInterfaceModuleCallResultSchema,
-                ]: ...
+                ) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema._FunctionInterfaceModuleCallMethod: ...
                 @overload
-                def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+                def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
             @property
             @override
@@ -416,6 +438,18 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleEvaluateResultSchema._Fields
             ): ...
 
+        class _CalculatorInterfaceModuleEvaluateMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleEvaluateParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleEvaluateResultSchema: ...
+
         class _CalculatorInterfaceModuleDefFunctionParamSchema(_StructSchema):
             class _BodyField(_StructSchemaField):
                 @property
@@ -464,11 +498,23 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleDefFunctionResultSchema._Fields
             ): ...
 
+        class _CalculatorInterfaceModuleDefFunctionMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleDefFunctionParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleDefFunctionResultSchema: ...
+
         class _CalculatorInterfaceModuleGetOperatorParamSchema(_StructSchema):
             class _OpField(_StructSchemaField):
                 @property
                 @override
-                def schema(self) -> _EnumSchema: ...
+                def schema(self) -> schemas._CalculatorOperatorEnumSchema: ...
 
             class _Fields(dict[str, _StructSchemaField]):
                 @overload
@@ -510,33 +556,36 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleGetOperatorResultSchema._Fields
             ): ...
 
-        class _Methods(dict[str, _InterfaceMethod[_StructSchema, _StructSchema]]):
+        class _CalculatorInterfaceModuleGetOperatorMethod(_InterfaceMethod):
+            @property
+            @override
+            def param_type(
+                self,
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleGetOperatorParamSchema: ...
+            @property
+            @override
+            def result_type(
+                self,
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleGetOperatorResultSchema: ...
+
+        class _Methods(dict[str, _InterfaceMethod]):
             @overload
             def __getitem__(
                 self,
                 key: Literal["evaluate"],
-            ) -> _InterfaceMethod[
-                _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleEvaluateParamSchema,
-                _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleEvaluateResultSchema,
-            ]: ...
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleEvaluateMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["defFunction"],
-            ) -> _InterfaceMethod[
-                _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleDefFunctionParamSchema,
-                _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleDefFunctionResultSchema,
-            ]: ...
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleDefFunctionMethod: ...
             @overload
             def __getitem__(
                 self,
                 key: Literal["getOperator"],
-            ) -> _InterfaceMethod[
-                _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleGetOperatorParamSchema,
-                _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleGetOperatorResultSchema,
-            ]: ...
+            ) -> _CalculatorInterfaceModule._CalculatorSchema._CalculatorInterfaceModuleGetOperatorMethod: ...
             @overload
-            def __getitem__(self, key: str) -> _InterfaceMethod[_StructSchema, _StructSchema]: ...
+            def __getitem__(self, key: str) -> _InterfaceMethod: ...
 
         @property
         @override
