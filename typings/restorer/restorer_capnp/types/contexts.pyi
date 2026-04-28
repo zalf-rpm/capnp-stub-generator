@@ -2,7 +2,10 @@
 
 from typing import Protocol
 
-from . import common as common
+from capnp.lib.capnp import (
+    _DynamicObjectReader,
+)
+
 from . import readers as readers
 from .results import server as results_server
 
@@ -41,7 +44,7 @@ class GetanypointerCallContext(Protocol):
     def results(self) -> results_server.GetanypointerServerResult: ...
 
 class SetanypointerParams(Protocol):
-    p: common.AnyPointer
+    p: _DynamicObjectReader
 
 class SetanypointerCallContext(Protocol):
     params: SetanypointerParams

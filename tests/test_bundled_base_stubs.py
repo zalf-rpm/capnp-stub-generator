@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BUNDLED_STUBS_DIR = REPO_ROOT / "src" / "pycapnp_base_stubs"
 TYPINGS_STUBS_DIR = REPO_ROOT / "typings" / "capnp-stubs"
 _AUGMENTED_OVERLOAD_METHODS = {
+    "_DynamicObjectBuilder": {"as_interface", "as_list", "as_struct"},
     "_DynamicObjectReader": {"as_interface", "as_list", "as_struct"},
     "_CapabilityClient": {"cast_as"},
 }
@@ -201,3 +202,21 @@ def test_bundled_interface_method_stub_is_nongeneric() -> None:
         assert "@property\n    def result_type(self) -> _StructSchema: ..." in content
         assert "def methods(self) -> dict[str, _InterfaceMethod]:" in content
         assert "def methods_inherited(self) -> dict[str, _InterfaceMethod]:" in content
+
+
+def test_typings_snapshot_includes_dynamic_object_builder_overloads() -> None:
+    """The augmented capnp-stubs snapshot should add builder-side schema overloads too."""
+    content = (TYPINGS_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8")
+
+    assert (
+        "schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ExpressionStructModule,\n"
+        "    ) -> calculator_capnp.types.builders.ExpressionBuilder: ..."
+    ) in content
+    assert (
+        "schema: restorer_capnp.types.modules._AnyTesterInterfaceModule,\n"
+        "    ) -> restorer_capnp.types.clients.AnyTesterClient: ..."
+    ) in content
+    assert (
+        "schema: type[single_value_capnp.types.lists._MyStructList],\n"
+        "    ) -> single_value_capnp.types.builders.MyStructListBuilder: ..."
+    ) in content

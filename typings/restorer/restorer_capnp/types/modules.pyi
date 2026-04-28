@@ -6,6 +6,7 @@ from typing import IO, Literal, overload, override
 
 from capnp.lib.capnp import (
     _DynamicCapabilityServer,
+    _DynamicObjectReader,
     _DynamicStructBuilder,
     _DynamicStructReader,
     _InterfaceMethod,
@@ -513,7 +514,7 @@ class _AnyTesterInterfaceModule(_InterfaceModule):
         def getAnyPointer_context(self, context: contexts.GetanypointerCallContext) -> Awaitable[None]: ...
         def setAnyPointer(
             self,
-            p: common.AnyPointer,
+            p: _DynamicObjectReader,
             _context: contexts.SetanypointerCallContext,
             **kwargs: object,
         ) -> Awaitable[None]: ...

@@ -796,6 +796,58 @@ class _DynamicObjectBuilder:
     AnyPointer can be initialized or cast to different pointer types.
     """
 
+    @overload
+    def as_interface(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule,
+    ) -> calculator_capnp.types.clients.CalculatorClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._FunctionInterfaceModule,
+    ) -> calculator_capnp.types.clients.FunctionClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ValueInterfaceModule,
+    ) -> calculator_capnp.types.clients.ValueClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.ChannelClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.StatsCallbackClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.UnregisterClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._AnyTesterInterfaceModule,
+    ) -> restorer_capnp.types.clients.AnyTesterClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._BagInterfaceModule,
+    ) -> restorer_capnp.types.clients.BagClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._RestorerInterfaceModule,
+    ) -> restorer_capnp.types.clients.RestorerClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: single_value_capnp.types.modules._SingleValueInterfaceModule,
+    ) -> single_value_capnp.types.clients.SingleValueClient: ...
+    @overload
+    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> Any:
         """Cast this AnyPointer to an interface capability.
 
@@ -811,7 +863,38 @@ class _DynamicObjectBuilder:
             iface = anyptr.as_interface(MyInterface.schema)  # Returns MyInterface
 
         """
-
+    @overload
+    def as_list(
+        self,
+        schema: type[addressbook_capnp.types.lists._PersonList],
+    ) -> addressbook_capnp.types.builders.PersonListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[addressbook_capnp.types.lists._PhoneNumberList],
+    ) -> addressbook_capnp.types.builders.PhoneNumberListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[calculator_capnp.types.lists._ExpressionList],
+    ) -> calculator_capnp.types.builders.ExpressionListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[calculator_capnp.types.lists._Float64List],
+    ) -> calculator_capnp.types.builders.Float64ListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[single_value_capnp.types.lists._Int32List],
+    ) -> single_value_capnp.types.builders.Int32ListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[single_value_capnp.types.lists._MyStructList],
+    ) -> single_value_capnp.types.builders.MyStructListBuilder: ...
+    @overload
+    def as_list(self, schema: _ListSchema) -> _DynamicListBuilder: ...
     def as_list(self, schema: _ListSchema) -> Any:
         """Cast this AnyPointer to a list.
 
@@ -830,7 +913,58 @@ class _DynamicObjectBuilder:
             A reader for this AnyPointer.
 
         """
-
+    @overload
+    def as_struct(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ExpressionStructModule._ExpressionCallStructModule,
+    ) -> calculator_capnp.types.builders.ExpressionCallBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule,
+    ) -> fbp_nested_callback_capnp.types.builders.StatsBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: addressbook_capnp.types.modules._PersonStructModule._PersonEmploymentStructModule,
+    ) -> addressbook_capnp.types.builders.PersonEmploymentBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: addressbook_capnp.types.modules._PersonStructModule._PersonTestGroupStructModule,
+    ) -> addressbook_capnp.types.builders.PersonTestGroupBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: addressbook_capnp.types.modules._PersonStructModule._PhoneNumberStructModule,
+    ) -> addressbook_capnp.types.builders.PhoneNumberBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ExpressionStructModule,
+    ) -> calculator_capnp.types.builders.ExpressionBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: restorer_capnp.types.modules._RestorerInterfaceModule._RestoreParamsStructModule,
+    ) -> restorer_capnp.types.builders.RestoreParamsBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: addressbook_capnp.types.modules._AddressBookStructModule,
+    ) -> addressbook_capnp.types.builders.AddressBookBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: addressbook_capnp.types.modules._PersonStructModule,
+    ) -> addressbook_capnp.types.builders.PersonBuilder: ...
+    @overload
+    def as_struct(
+        self,
+        schema: single_value_capnp.types.modules._MyStructStructModule,
+    ) -> single_value_capnp.types.builders.MyStructBuilder: ...
+    @overload
+    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder: ...
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder:
         """Cast this AnyPointer to a struct builder.
 

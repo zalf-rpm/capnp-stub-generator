@@ -2,6 +2,10 @@
 
 from typing import Protocol
 
+from capnp.lib.capnp import (
+    _DynamicObjectBuilder,
+)
+
 from . import common as common
 from .results import client as results_client
 
@@ -22,7 +26,10 @@ class GetanypointerRequest(Protocol):
     def send(self) -> results_client.GetanypointerResult: ...
 
 class SetanypointerRequest(Protocol):
-    p: common.AnyPointer
+    @property
+    def p(self) -> _DynamicObjectBuilder: ...
+    @p.setter
+    def p(self, value: common.AnyPointer) -> None: ...
     def send(self) -> results_client.SetanypointerResult: ...
 
 class RestoreRequest(Protocol):

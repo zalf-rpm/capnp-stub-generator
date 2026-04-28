@@ -514,7 +514,7 @@ def _build_dynamic_reader_overloads(
     wrap_schema_in_type: bool = False,
     catchall_signature: str | None = None,
 ) -> list[str]:
-    """Build overload blocks for `_DynamicObjectReader` methods."""
+    """Build overload blocks for dynamic object schema-casting methods."""
     overload_lines: list[str] = []
 
     for schema_name, return_name in types:
@@ -532,6 +532,35 @@ def _build_dynamic_reader_overloads(
         overload_lines.extend(["    @overload", catchall_signature])
 
     return overload_lines
+
+
+def _reader_to_builder_return_name(qualified_return_name: str) -> str | None:
+    """Translate one qualified reader return alias into its builder counterpart."""
+    if ".types.readers." not in qualified_return_name or not qualified_return_name.endswith("Reader"):
+        return None
+
+    return qualified_return_name.replace(".types.readers.", ".types.builders.").removesuffix("Reader") + "Builder"
+
+
+def _build_dynamic_object_builder_types(
+    dynamic_object_types: dict[str, list[tuple[str, str]]],
+) -> dict[str, list[tuple[str, str]]]:
+    """Return builder-side overload metadata derived from reader-side type tuples."""
+    builder_types = {
+        "structs": [],
+        "lists": [],
+        "interfaces": list(dynamic_object_types.get("interfaces", [])),
+    }
+
+    for type_kind in ("structs", "lists"):
+        for schema_name, return_name in dynamic_object_types.get(type_kind, []):
+            builder_return = _reader_to_builder_return_name(return_name)
+            if builder_return is None:
+                logger.warning("Could not derive builder return type from %s", return_name)
+                continue
+            builder_types[type_kind].append((schema_name, builder_return))
+
+    return builder_types
 
 
 def _sort_interface_reader_types(
@@ -567,11 +596,11 @@ def augment_capnp_stubs_with_overloads(
     interfaces: dict[str, tuple[str, list[str]]],
     dynamic_object_types: dict[str, list[tuple[str, str]]],
 ) -> tuple[str, str | None] | None:
-    """Copy capnp-stubs package and augment with cast_as and _DynamicObjectReader overloads.
+    """Copy capnp-stubs package and augment with schema-aware runtime overloads.
 
     This copies the entire capnp-stubs package to a separate directory
     and augments lib/capnp.pyi with overloaded cast_as methods for generated interfaces
-    and overloaded as_struct/as_interface methods for _DynamicObjectReader.
+    plus overloaded schema-casting methods for dynamic object readers/builders.
 
     Args:
         source_stubs_path: Path to the source capnp-stubs package.
@@ -587,7 +616,7 @@ def augment_capnp_stubs_with_overloads(
     dest_stubs_path, dest_schema_path = _copy_augmented_stub_packages(source_stubs_path, augmented_stubs_dir)
 
     if not interfaces and not _has_dynamic_object_overloads(dynamic_object_types):
-        logger.info("No interfaces or _DynamicObjectReader types found, skipping capnp-stubs augmentation.")
+        logger.info("No interfaces or dynamic object types found, skipping capnp-stubs augmentation.")
         return str(dest_stubs_path), str(dest_schema_path) if dest_schema_path else None
 
     capnp_pyi_path = dest_stubs_path / "lib" / "capnp.pyi"
@@ -610,6 +639,7 @@ def augment_capnp_stubs_with_overloads(
 
     if _has_dynamic_object_overloads(dynamic_object_types):
         _augment_dynamic_object_reader(capnp_pyi_path, dynamic_object_types, interfaces)
+        _augment_dynamic_object_builder(capnp_pyi_path, dynamic_object_types, interfaces)
 
     return str(dest_stubs_path), str(dest_schema_path) if dest_schema_path else None
 
@@ -741,6 +771,74 @@ def _augment_dynamic_object_reader(
 
     total_overloads = sum(len(overload_lines) // 2 for _, overload_lines in overload_blocks)
     logger.info("Augmented _DynamicObjectReader in %s with %s overload(s).", capnp_pyi_path, total_overloads)
+
+
+def _augment_dynamic_object_builder(
+    capnp_pyi_path: str | Path,
+    dynamic_object_types: dict[str, list[tuple[str, str]]],
+    interfaces: dict[str, tuple[str, list[str]]],
+) -> None:
+    """Augment _DynamicObjectBuilder with schema-aware as_struct/as_list/as_interface overloads."""
+    capnp_pyi_path = Path(capnp_pyi_path)
+    builder_types = _build_dynamic_object_builder_types(dynamic_object_types)
+    struct_types = builder_types["structs"]
+    list_types = builder_types["lists"]
+    interface_types = builder_types["interfaces"]
+
+    logger.info(
+        "Augmenting _DynamicObjectBuilder with %s structs, %s lists, %s interfaces",
+        len(struct_types),
+        len(list_types),
+        len(interface_types),
+    )
+
+    if not struct_types and not list_types and not interface_types:
+        logger.info("No _DynamicObjectBuilder types to augment.")
+        return
+
+    lines = _read_stub_lines(capnp_pyi_path)
+    dynamic_builder_idx, as_struct_insert_idx = _find_method_insert_idx(lines, "_DynamicObjectBuilder", "as_struct")
+    _, as_list_insert_idx = _find_method_insert_idx(lines, "_DynamicObjectBuilder", "as_list")
+    _, as_interface_insert_idx = _find_method_insert_idx(lines, "_DynamicObjectBuilder", "as_interface")
+
+    if dynamic_builder_idx is None:
+        logger.warning("Could not find _DynamicObjectBuilder class in lib/capnp.pyi, skipping augmentation.")
+        return
+
+    if as_struct_insert_idx is None or as_interface_insert_idx is None:
+        logger.warning(
+            "Could not find as_struct/as_interface methods in _DynamicObjectBuilder (as_struct=%s, as_interface=%s), skipping augmentation.",
+            as_struct_insert_idx,
+            as_interface_insert_idx,
+        )
+        return
+
+    struct_overloads = _build_dynamic_reader_overloads(
+        "as_struct",
+        _sort_types_by_specificity(struct_types),
+        catchall_signature="    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder: ...",
+    )
+    list_overloads = _build_dynamic_reader_overloads(
+        "as_list",
+        _sort_types_by_specificity(list_types),
+        wrap_schema_in_type=True,
+        catchall_signature="    def as_list(self, schema: _ListSchema) -> _DynamicListBuilder: ...",
+    )
+    interface_overloads = _build_dynamic_reader_overloads(
+        "as_interface",
+        _sort_interface_reader_types(interface_types, interfaces),
+        catchall_signature="    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...",
+    )
+
+    overload_blocks: list[tuple[int, list[str]]] = [(as_struct_insert_idx, struct_overloads)]
+    if as_list_insert_idx is not None and list_overloads:
+        overload_blocks.append((as_list_insert_idx, list_overloads))
+    overload_blocks.append((as_interface_insert_idx, interface_overloads))
+    _insert_overload_blocks(lines, overload_blocks)
+    _write_stub_lines(capnp_pyi_path, lines)
+
+    total_overloads = sum(len(overload_lines) // 2 for _, overload_lines in overload_blocks)
+    logger.info("Augmented _DynamicObjectBuilder in %s with %s overload(s).", capnp_pyi_path, total_overloads)
 
 
 def format_all_outputs(output_directories: set[str], *, ruff_config_path: str | None = None) -> None:
@@ -944,7 +1042,7 @@ def _generate_stubs_from_schema(
 
         interfaces_with_module[qualified_interface] = (qualified_client, qualified_base_clients)
 
-    # Get _DynamicObjectReader types for augmentation tracking
+    # Get dynamic object schema/return types for later capnp-stubs augmentation.
     struct_types, list_types, interface_types = writer.get_dynamic_object_reader_types()
 
     logger.debug(
