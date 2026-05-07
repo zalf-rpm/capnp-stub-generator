@@ -12,7 +12,7 @@ class ReadRequest(Protocol):
     def send(self) -> results_client.ReadResult: ...
 
 class CallRequest(Protocol):
-    params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[Any]
+    params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[float]
     @overload
     def init(self, name: Literal["params"], size: int = ...) -> builders.Float64ListBuilder: ...
     @overload

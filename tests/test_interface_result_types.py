@@ -91,7 +91,7 @@ class TestRPCResultTypes:
         # call should return the flattened top-level CallResult
         # Note: method signature may span multiple lines
         assert "def call(" in stub_content
-        assert "params: Float64ListBuilder | Float64ListReader | Sequence[Any]" in stub_content
+        assert "params: Float64ListBuilder | Float64ListReader | Sequence[float]" in stub_content
         assert "-> CallResult:" in stub_content
 
 

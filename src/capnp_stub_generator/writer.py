@@ -797,10 +797,8 @@ class Writer:
         getter_type = self._to_mutable_sequence_type(field.get_type_with_affixes([helper.BUILDER_NAME]))
         setter_types = field.get_type_with_affixes([helper.BUILDER_NAME, helper.READER_NAME])
 
-        if field.nesting_depth == 1:
-            self._add_typing_import("Sequence")
-            self._add_typing_import("Any")
-            return getter_type, f"{setter_types} | Sequence[dict[str, Any]]"
+        if field.raw_list_input_type is not None:
+            return getter_type, f"{setter_types} | {field.raw_list_input_type}"
 
         self._add_typing_import("Any")
         return getter_type, f"{setter_types} | dict[str, Any]"
@@ -1040,24 +1038,32 @@ class Writer:
                 self._needs_capability_alias = True
                 type_hints = [helper.TypeHint(field_type, primary=True), helper.TypeHint("None")]
             else:
-                # Get the type suitable for initialization (Builder types for struct fields)
+                if slot_field.raw_list_input_type is not None:
+                    field_type = slot_field.get_type_with_affixes(["Builder", "Reader"])
+                    type_hints = [
+                        helper.TypeHint(field_type, primary=True),
+                        helper.TypeHint(slot_field.raw_list_input_type),
+                        helper.TypeHint("None"),
+                    ]
+                    field_param = helper.TypeHintedVariable(
+                        slot_field.name,
+                        type_hints,
+                        default="None",
+                    )
+                    new_message_params.append(field_param)
+                    continue
+
+                # Struct-typed kwargs accept Builder, Reader, or dict at runtime.
                 field_type = (
-                    slot_field.get_type_with_affixes(["Builder"])
+                    slot_field.get_type_with_affixes(["Builder", "Reader"])
                     if slot_field.has_type_hint_with_builder_affix
                     else slot_field.full_type_nested
                 )
                 # For struct fields, also accept dict for initialization
                 type_hints = [helper.TypeHint(field_type, primary=True)]
                 if slot_field.has_type_hint_with_builder_affix:
-                    if slot_field.nesting_depth == 0:
-                        # Non-list struct fields accept dict directly
-                        type_hints.append(helper.TypeHint("dict[str, Any]"))
-                        self._add_typing_import("Any")
-                    elif slot_field.nesting_depth == 1:
-                        # List of struct fields accept Sequence[dict]
-                        type_hints.append(helper.TypeHint("Sequence[dict[str, Any]]"))
-                        self._add_typing_import("Sequence")
-                        self._add_typing_import("Any")
+                    type_hints.append(helper.TypeHint("dict[str, Any]"))
+                    self._add_typing_import("Any")
                 type_hints.append(helper.TypeHint("None"))
 
             # Make field optional since not all fields need to be set
@@ -1718,6 +1724,44 @@ class Writer:
         """Return the standard Builder.init signature for list items."""
         return ["self", "index: int", "size: int | None = None"]
 
+    def _build_raw_list_sequence_type(self, list_type: TypeReader) -> str:
+        """Return the raw Python sequence type accepted for a list-typed input."""
+        assert list_type.which() == capnp_types.CapnpElementType.LIST
+        self._add_typing_import("Sequence")
+        return f"Sequence[{self._build_list_element_input_type(list_type.list.elementType)}]"
+
+    def _build_list_element_input_type(self, element_type: TypeReader) -> str:
+        """Return the input type accepted for one element inside a raw Python list."""
+        element_which = element_type.which()
+
+        if element_which == capnp_types.CapnpElementType.STRUCT:
+            struct_name = self.get_type_name(element_type)
+            builder_alias = self._get_flat_builder_alias(struct_name)
+            reader_alias = self._get_flat_reader_alias(struct_name)
+            reader_type = reader_alias or self._build_nested_reader_type(struct_name)
+            builder_type = builder_alias or self._build_scoped_builder_type(struct_name)
+            self._add_typing_import("Any")
+            return f"{reader_type} | {builder_type} | dict[str, Any]"
+
+        if element_which == capnp_types.CapnpElementType.LIST:
+            _, inner_reader_alias, inner_builder_alias = self._generate_list_class(element_type)
+            return f"{inner_reader_alias} | {inner_builder_alias} | {self._build_raw_list_sequence_type(element_type)}"
+
+        if element_which == capnp_types.CapnpElementType.ENUM:
+            return self.get_type_name(element_type)
+
+        if element_which == capnp_types.CapnpElementType.INTERFACE:
+            interface_name = self.get_type_name(element_type)
+            client_alias = self._get_flat_client_alias(interface_name)
+            if not client_alias:
+                client_alias = self._get_client_type_name_from_interface_path(interface_name)
+            return f"{client_alias} | {interface_name}.Server"
+
+        if element_which == capnp_types.CapnpElementType.ANY_POINTER:
+            return self._anypointer_alias_type(self._get_anypointer_kind(element_type))
+
+        return capnp_types.CAPNP_TYPE_TO_PYTHON[element_which]
+
     def _build_struct_list_class_info(self, element_type: TypeReader) -> tuple[str, str, str, str, bool, list[str]]:
         """Build list-class typing info for struct elements."""
         struct_name = self.get_type_name(element_type)
@@ -1725,24 +1769,21 @@ class Writer:
         reader_alias = self._get_flat_reader_alias(struct_name)
         reader_type = reader_alias or self._build_nested_reader_type(struct_name)
         builder_type = builder_alias or self._build_scoped_builder_type(struct_name)
-        self._add_typing_import("Any")
 
         last_component = struct_name.split(".")[-1]
         base_name = (
             self._extract_name_from_protocol(last_component) if last_component.startswith("_") else last_component
         )
-        setter_type = f"{reader_type} | {builder_type} | dict[str, Any]"
+        setter_type = self._build_list_element_input_type(element_type)
         return reader_type, builder_type, setter_type, base_name, True, self._list_builder_init_args()
 
     def _build_nested_list_class_info(self, element_type: TypeReader) -> tuple[str, str, str, str, bool, list[str]]:
         """Build list-class typing info for nested list elements."""
         inner_list_class, inner_reader_alias, inner_builder_alias = self._generate_list_class(element_type)
-        self._add_typing_import("Sequence")
-        self._add_typing_import("Any")
         return (
             inner_reader_alias,
             inner_builder_alias,
-            f"{inner_reader_alias} | {inner_builder_alias} | Sequence[Any]",
+            f"{inner_reader_alias} | {inner_builder_alias} | {self._build_raw_list_sequence_type(element_type)}",
             inner_list_class.removeprefix("_"),
             True,
             self._list_builder_init_args(),
@@ -2020,6 +2061,7 @@ class Writer:
             [helper.TypeHint(reader_alias, primary=True, flat_alias=True)],
             nesting_depth=0,  # We handle nesting in the class itself
         )
+        hinted_variable.raw_list_input_type = self._build_raw_list_sequence_type(field.slot.type)
 
         # Add Builder variant
         hinted_variable.add_type_hint(helper.TypeHint(builder_alias, affix="Builder", flat_alias=True))
@@ -2887,9 +2929,9 @@ class Writer:
                 result = (f"{base_type} | dict[str, Any]", reader_type, builder_type)
         elif field_type == capnp_types.CapnpElementType.LIST:
             _, reader_alias, builder_alias = self._generate_list_class(field_obj.slot.type)
-            self._add_typing_import("Sequence")
-            self._add_typing_import("Any")
-            sequence_type = f"{builder_alias} | {reader_alias} | Sequence[Any]"
+            sequence_type = (
+                f"{builder_alias} | {reader_alias} | {self._build_raw_list_sequence_type(field_obj.slot.type)}"
+            )
             result = (sequence_type, reader_alias, sequence_type)
         elif field_type == capnp_types.CapnpElementType.INTERFACE:
             last_part = base_type.rsplit(".", maxsplit=1)[-1]
@@ -3347,23 +3389,27 @@ class Writer:
             field.name for field in result_schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
         ]
 
-    def _build_server_result_property_lines(
+    def _build_server_result_property_lines(  # noqa: PLR0913
         self,
         field_name: str,
         field_type_enum: str,
         field_type: str,
         builder_hint: str | None,
         reader_hint: str | None,
+        raw_list_input_type: str | None = None,
     ) -> list[str]:
         """Build property getter/setter lines for server-side result wrappers."""
         getter_type = field_type
         setter_type = field_type
 
-        if field_type_enum == capnp_types.CapnpElementType.LIST and builder_hint and reader_hint:
-            self._add_typing_import("Sequence")
-            self._add_typing_import("Any")
+        if (
+            field_type_enum == capnp_types.CapnpElementType.LIST
+            and builder_hint
+            and reader_hint
+            and raw_list_input_type
+        ):
             getter_type = builder_hint
-            setter_type = f"{builder_hint} | {reader_hint} | Sequence[Any]"
+            setter_type = f"{builder_hint} | {reader_hint} | {raw_list_input_type}"
         elif field_type_enum == capnp_types.CapnpElementType.STRUCT and builder_hint:
             self._add_typing_import("Any")
             getter_type = builder_hint
@@ -3401,9 +3447,7 @@ class Writer:
         field_type, builder_hint, reader_hint = self._resolve_named_result_field_type(field_obj, for_server=True)
 
         if field_type_enum == capnp_types.CapnpElementType.LIST and builder_hint and reader_hint:
-            self._add_typing_import("Sequence")
-            self._add_typing_import("Any")
-            return f"{builder_hint} | {reader_hint} | Sequence[Any]"
+            return f"{builder_hint} | {reader_hint} | {self._build_raw_list_sequence_type(field_obj.slot.type)}"
 
         if field_type_enum == capnp_types.CapnpElementType.STRUCT and builder_hint:
             self._add_typing_import("Any")
@@ -3465,6 +3509,11 @@ class Writer:
             field_type, builder_hint, reader_hint = self._resolve_named_result_field_type(
                 field_obj, for_server=for_server
             )
+            raw_list_input_type = (
+                self._build_raw_list_sequence_type(field_obj.slot.type)
+                if field_type_enum == capnp_types.CapnpElementType.LIST
+                else None
+            )
             if for_server:
                 if (
                     field_type_enum in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.LIST}
@@ -3478,6 +3527,7 @@ class Writer:
                         field_type,
                         builder_hint,
                         reader_hint,
+                        raw_list_input_type,
                     ),
                 )
             else:

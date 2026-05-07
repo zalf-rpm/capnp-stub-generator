@@ -161,6 +161,7 @@ class TypeHintedVariable:
     type_hints: list[TypeHint]
     default: str = ""
     nesting_depth: int = 0
+    raw_list_input_type: str | None = None
     is_generic_param: bool = field(default=False, init=False)
     is_any_pointer: bool = field(default=False, init=False)
     is_any_list: bool = field(default=False, init=False)

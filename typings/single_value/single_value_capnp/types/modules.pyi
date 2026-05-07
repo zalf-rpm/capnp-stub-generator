@@ -541,7 +541,7 @@ class _SingleValueInterfaceModule(_InterfaceModule):
         ) -> Awaitable[
             builders.Int32ListBuilder
             | readers.Int32ListReader
-            | Sequence[Any]
+            | Sequence[int]
             | results_tuples.GetlistResultTuple
             | None
         ]: ...
@@ -582,7 +582,7 @@ class _SingleValueInterfaceModule(_InterfaceModule):
         ) -> Awaitable[
             builders.MyStructListBuilder
             | readers.MyStructListReader
-            | Sequence[Any]
+            | Sequence[readers.MyStructReader | builders.MyStructBuilder | dict[str, Any]]
             | results_tuples.GetliststructResultTuple
             | None
         ]: ...

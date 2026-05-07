@@ -20,11 +20,11 @@ class ValueClient(_DynamicCapabilityClient):
 class FunctionClient(_DynamicCapabilityClient):
     def call(
         self,
-        params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[Any] | None = None,
+        params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[float] | None = None,
     ) -> results_client.CallResult: ...
     def call_request(
         self,
-        params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[Any] | None = None,
+        params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[float] | None = None,
     ) -> requests.CallRequest: ...
 
 class CalculatorClient(_DynamicCapabilityClient):

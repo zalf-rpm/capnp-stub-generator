@@ -1,5 +1,6 @@
 """Builder helper types for `addressbook.capnp`."""
 
+from collections.abc import Sequence
 from typing import Any, Literal, overload, override
 
 from capnp.lib.capnp import (
@@ -76,7 +77,12 @@ class PersonBuilder(_DynamicStructBuilder):
     @property
     def phones(self) -> PhoneNumberListBuilder: ...
     @phones.setter
-    def phones(self, value: PhoneNumberListBuilder | readers.PhoneNumberListReader | dict[str, Any]) -> None: ...
+    def phones(
+        self,
+        value: PhoneNumberListBuilder
+        | readers.PhoneNumberListReader
+        | Sequence[readers.PhoneNumberReader | PhoneNumberBuilder | dict[str, Any]],
+    ) -> None: ...
     @property
     def employment(self) -> PersonEmploymentBuilder: ...
     @employment.setter
@@ -105,7 +111,12 @@ class AddressBookBuilder(_DynamicStructBuilder):
     @property
     def people(self) -> PersonListBuilder: ...
     @people.setter
-    def people(self, value: PersonListBuilder | readers.PersonListReader | dict[str, Any]) -> None: ...
+    def people(
+        self,
+        value: PersonListBuilder
+        | readers.PersonListReader
+        | Sequence[readers.PersonReader | PersonBuilder | dict[str, Any]],
+    ) -> None: ...
     @override
     def init(self, field: Literal["people"], size: int | None = None) -> PersonListBuilder: ...
     @override

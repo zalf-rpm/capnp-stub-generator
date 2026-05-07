@@ -25,7 +25,7 @@ class GetdataResultTuple(NamedTuple):
     val: bytes
 
 class GetlistResultTuple(NamedTuple):
-    val: builders.Int32ListBuilder | readers.Int32ListReader | Sequence[Any]
+    val: builders.Int32ListBuilder | readers.Int32ListReader | Sequence[int]
 
 class GetstructResultTuple(NamedTuple):
     val: builders.MyStructBuilder | readers.MyStructReader | dict[str, Any]
@@ -37,4 +37,8 @@ class GetanyResultTuple(NamedTuple):
     val: common.AnyPointer
 
 class GetliststructResultTuple(NamedTuple):
-    val: builders.MyStructListBuilder | readers.MyStructListReader | Sequence[Any]
+    val: (
+        builders.MyStructListBuilder
+        | readers.MyStructListReader
+        | Sequence[readers.MyStructReader | builders.MyStructBuilder | dict[str, Any]]
+    )

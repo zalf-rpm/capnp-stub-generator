@@ -1,5 +1,6 @@
 """Builder helper types for `calculator.capnp`."""
 
+from collections.abc import Sequence
 from typing import Any, Literal, override
 
 from capnp.lib.capnp import (
@@ -22,7 +23,12 @@ class ExpressionCallBuilder(_DynamicStructBuilder):
     @property
     def params(self) -> ExpressionListBuilder: ...
     @params.setter
-    def params(self, value: ExpressionListBuilder | readers.ExpressionListReader | dict[str, Any]) -> None: ...
+    def params(
+        self,
+        value: ExpressionListBuilder
+        | readers.ExpressionListReader
+        | Sequence[readers.ExpressionReader | ExpressionBuilder | dict[str, Any]],
+    ) -> None: ...
     @override
     def init(self, field: Literal["params"], size: int | None = None) -> ExpressionListBuilder: ...
     @override

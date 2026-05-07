@@ -1,6 +1,6 @@
 """Module helper types for `calculator.capnp`."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import AbstractContextManager
 from typing import IO, Any, Literal, overload, override
 
@@ -228,7 +228,10 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 function: clients.FunctionClient
                 | _CalculatorInterfaceModule._FunctionInterfaceModule.Server
                 | None = None,
-                params: builders.ExpressionListBuilder | dict[str, Any] | None = None,
+                params: builders.ExpressionListBuilder
+                | readers.ExpressionListReader
+                | Sequence[readers.ExpressionReader | builders.ExpressionBuilder | dict[str, Any]]
+                | None = None,
                 **kwargs: object,
             ) -> builders.ExpressionCallBuilder: ...
             @override
@@ -327,7 +330,7 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             literal: float | None = None,
             previousResult: clients.ValueClient | _CalculatorInterfaceModule._ValueInterfaceModule.Server | None = None,
             parameter: int | None = None,
-            call: builders.ExpressionCallBuilder | dict[str, Any] | None = None,
+            call: builders.ExpressionCallBuilder | readers.ExpressionCallReader | dict[str, Any] | None = None,
             **kwargs: object,
         ) -> builders.ExpressionBuilder: ...
         @override

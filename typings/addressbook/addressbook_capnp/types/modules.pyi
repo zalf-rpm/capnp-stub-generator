@@ -1,6 +1,6 @@
 """Module helper types for `addressbook.capnp`."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from typing import IO, Any, Literal, overload, override
 
@@ -344,9 +344,12 @@ class _PersonStructModule(_StructModule):
         id: int | None = None,
         name: str | None = None,
         email: str | None = None,
-        phones: builders.PhoneNumberListBuilder | dict[str, Any] | None = None,
-        employment: builders.PersonEmploymentBuilder | dict[str, Any] | None = None,
-        testGroup: builders.PersonTestGroupBuilder | dict[str, Any] | None = None,
+        phones: builders.PhoneNumberListBuilder
+        | readers.PhoneNumberListReader
+        | Sequence[readers.PhoneNumberReader | builders.PhoneNumberBuilder | dict[str, Any]]
+        | None = None,
+        employment: builders.PersonEmploymentBuilder | readers.PersonEmploymentReader | dict[str, Any] | None = None,
+        testGroup: builders.PersonTestGroupBuilder | readers.PersonTestGroupReader | dict[str, Any] | None = None,
         extraData: bytes | None = None,
         **kwargs: object,
     ) -> builders.PersonBuilder: ...
@@ -434,7 +437,10 @@ class _AddressBookStructModule(_StructModule):
         self,
         num_first_segment_words: int | None = None,
         allocate_seg_callable: Callable[[int], bytearray] | None = None,
-        people: builders.PersonListBuilder | dict[str, Any] | None = None,
+        people: builders.PersonListBuilder
+        | readers.PersonListReader
+        | Sequence[readers.PersonReader | builders.PersonBuilder | dict[str, Any]]
+        | None = None,
         **kwargs: object,
     ) -> builders.AddressBookBuilder: ...
     @override

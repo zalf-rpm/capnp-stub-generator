@@ -65,9 +65,16 @@ def test_list_result_tuple_accepts_sequence_assignment_shapes(basic_stubs: Path)
     content = read_generated_types_combined(basic_stubs / "list_result_capnp")
 
     assert "class GetitemsResultTuple(NamedTuple):" in content
-    assert "items: builders.ItemListBuilder | readers.ItemListReader | Sequence[Any]" in content
     assert re.search(
-        r"def getItems\(.*?Awaitable\[\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*Sequence\[Any\]\s*\|\s*results_tuples\.GetitemsResultTuple\s*\|\s*None\s*\]",
+        r"items:\s*\(?\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*"
+        r"Sequence\[readers\.ItemReader\s*\|\s*builders\.ItemBuilder\s*\|\s*dict\[str, Any\]\]\s*\)?",
+        content,
+        re.DOTALL,
+    )
+    assert re.search(
+        r"def getItems\(.*?Awaitable\[\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*"
+        r"Sequence\[readers\.ItemReader\s*\|\s*builders\.ItemBuilder\s*\|\s*dict\[str, Any\]\]\s*\|\s*"
+        r"results_tuples\.GetitemsResultTuple\s*\|\s*None\s*\]",
         content,
         re.DOTALL,
     )
