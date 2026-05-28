@@ -5,7 +5,6 @@ Note: This generator requires pycapnp >= 2.0.0.
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import logging
 import os.path
@@ -101,6 +100,7 @@ class Writer:
         file_id_to_path: dict[int, str],
         generated_module_names_by_schema_id: dict[int, str] | None = None,
         inherited_interface_schema_ids: set[int] | None = None,
+        schema_bundle_module_name: str | None = None,
     ) -> None:
         """Initialize the stub writer with schema information.
 
@@ -111,6 +111,7 @@ class Writer:
             file_id_to_path: Mapping of schema IDs to file paths for resolving imports.
             generated_module_names_by_schema_id: Generated module names keyed by file schema ID.
             inherited_interface_schema_ids: Interface schema IDs that appear as superclasses anywhere in the loaded graph.
+            schema_bundle_module_name: Importable module name for the generated schema bundle.
 
         """
         self.scope: Scope = Scope(name="", id=schema.node.id, parent=None, return_scope=None)
@@ -120,6 +121,7 @@ class Writer:
         self._schema_loader: capnp.SchemaLoader = schema_loader
         self._file_id_to_path: dict[int, str] = file_id_to_path
         self._generated_module_names_by_schema_id: dict[int, str] = generated_module_names_by_schema_id or {}
+        self._schema_bundle_module_name: str = schema_bundle_module_name or "_capnp_schema_bundle"
 
         self._module_path: pathlib.Path = pathlib.Path(file_path)
 
@@ -5878,6 +5880,8 @@ class Writer:
         out: list[str] = []
         out.append(self.docstring)
         out.extend(runtime_imports)
+        out.append("from collections.abc import Sequence")
+        out.append("from capnp.lib.capnp import _Schema")
 
         if self._needs_dynamic_object_reader_augmentation:
             out.append("from capnp.lib.capnp import _DynamicObjectReader")
@@ -5886,8 +5890,17 @@ class Writer:
             out.extend(f'{name} = TypeVar("{name}")' for name in sorted(self.type_vars))
             out.append("")
 
+        out.extend(
+            [
+                "",
+                "def get_schema_by_id(schema_id: int) -> _Schema: ...",
+                "def load_capnp_file(path: str, imports: Sequence[str] = ...) -> object: ...",
+                "",
+            ],
+        )
         out.extend(runtime_scope_lines)
         public_exports = self._build_public_runtime_exports(runtime_scope_lines)
+        public_exports.extend(["get_schema_by_id", "load_capnp_file"])
         if public_exports:
             out.extend(["", self._render_string_list_assignment("__all__", public_exports)])
         return "\n".join(out)
@@ -6163,41 +6176,43 @@ class Writer:
             ")",
         ]
 
-    def _append_embedded_schema_nodes(self, out: list[str]) -> None:
-        """Append base64-encoded embedded schema nodes."""
-        out.extend(["# Embedded compiled schemas (base64-encoded)", "_SCHEMA_NODES = ["])
-
-        root_bytes = self._schema.node.as_builder().to_bytes_packed()
-        root_b64 = base64.b64encode(root_bytes).decode("ascii")
-        out.append(f"    {root_b64!r},  # {self._schema.node.displayName}")
-
-        seen_ids = {self._schema.node.id}
-        for schema_id, schema in self._schemas_by_id.items():
-            if schema_id in seen_ids:
-                continue
-            try:
-                schema_bytes = schema.node.as_builder().to_bytes_packed()
-                schema_b64 = base64.b64encode(schema_bytes).decode("ascii")
-                out.append(f"    {schema_b64!r},  # {schema.node.displayName}")
-                seen_ids.add(schema_id)
-            except SCHEMA_SERIALIZATION_EXCEPTIONS as error:
-                logger.debug("Could not serialize schema %s: %s", hex(schema_id), error)
-
-        out.extend(["]", ""])
-
     def _append_runtime_loader_setup(self, out: list[str]) -> None:
         """Append runtime schema-loader initialization lines."""
         out.extend(
             [
                 "# Load schemas and build module structure",
-                "# Use a shared loader stored on capnp module so capabilities work across schema modules",
-                "if not hasattr(capnp, '_embedded_schema_loader'):",
-                "    capnp._embedded_schema_loader = capnp.SchemaLoader()",
-                "_loader = capnp._embedded_schema_loader",
-                "for _schema_b64 in _SCHEMA_NODES:",
-                "    _schema_data = base64.b64decode(_schema_b64)",
-                "    _node_reader = schema_capnp.Node.from_bytes_packed(_schema_data)",
-                "    _loader.load_dynamic(_node_reader)",
+                "from importlib import import_module",
+                "from typing import cast",
+                "",
+                "",
+                "def _import_schema_bundle() -> object:",
+                f"    bundle_module_name = {self._schema_bundle_module_name!r}",
+                "    try:",
+                "        return import_module(bundle_module_name)",
+                "    except ModuleNotFoundError as error:",
+                "        original_error = error",
+                "        package_name = __package__",
+                "",
+                "    while package_name:",
+                "        try:",
+                '            return import_module(f"{package_name}.{bundle_module_name}")',
+                "        except ModuleNotFoundError:",
+                '            package_name = package_name.rpartition(".")[0]',
+                "",
+                "    raise original_error",
+                "",
+                "",
+                "_schema_bundle = _import_schema_bundle()",
+                "",
+                "",
+                "def get_schema_by_id(schema_id: int) -> object:",
+                "    return cast(object, _schema_bundle.get_schema_by_id(schema_id))",
+                "",
+                "",
+                "def load_capnp_file(path: str, imports: list[str] | tuple[str, ...] = ()) -> object:",
+                "    return cast(object, _schema_bundle.load_capnp_file(path, imports))",
+                "",
+                "_loader: SchemaLoader = cast(SchemaLoader, _schema_bundle.get_schema_loader())",
                 "",
             ],
         )
@@ -6250,8 +6265,8 @@ class Writer:
     def dumps_py(self) -> str:
         """Generate the .py loader module for this schema.
 
-        The generated .py file embeds the .capnp source file, making it completely
-        self-contained and independent of external .capnp files.
+        The generated .py file imports a generated schema bundle module that owns
+        the compiled schema payloads for this output bundle.
 
         Returns:
             str: The output string.
@@ -6264,6 +6279,7 @@ class Writer:
         runtime_import_names = [
             name for name in ("_EnumModule", "_InterfaceModule", "_StructModule") if f"{name}(" in construction_source
         ]
+        runtime_import_names.append("SchemaLoader")
 
         out: list[str] = []
         out.append(
@@ -6273,17 +6289,10 @@ class Writer:
         out.append("")
         out.append("from __future__ import annotations")
         out.append("")
-        out.append("import base64")
-        out.append("")
-        out.append("import capnp")
-        out.append("import schema_capnp")
         if runtime_import_names:
             out.append(f"from capnp.lib.capnp import {', '.join(runtime_import_names)}")
+            out.append("")
 
-        out.append("")
-        out.append("capnp.remove_import_hook()")
-        out.append("")
-        self._append_embedded_schema_nodes(out)
         self._append_runtime_loader_setup(out)
         out.extend(["# Build module structure inline", ""])
         out.extend(construction_lines)

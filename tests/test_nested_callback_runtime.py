@@ -77,12 +77,15 @@ def test_generated_runtime_uses_typed_schema_paths() -> None:
         == "# pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportUnknownMemberType=false"
     )
     assert "_require_" not in content
-    assert "import schema_capnp" in content
+    assert "import schema_capnp" not in content
+    assert "from importlib import import_module" in content
+    assert "def _import_schema_bundle() -> object:" in content
+    assert "_schema_bundle = _import_schema_bundle()" in content
     assert "capnp.schema_capnp" not in content
     assert "sys.modules.get" not in content
     assert "capnp.add_import_hook()" not in content
     assert "from typing import TYPE_CHECKING" not in content
-    assert "cast(" not in content
+    assert 'cast("SchemaLoader", _schema_bundle.get_schema_loader())' in content
     assert "# pyright: ignore[reportUnknownArgumentType]" in content
     assert "def _as_struct_schema" not in content
     assert "def _struct_field" not in content
@@ -90,7 +93,7 @@ def test_generated_runtime_uses_typed_schema_paths() -> None:
     assert "_field_schema(" not in content
     assert "_method_param_type(" not in content
     assert "_method_result_type(" not in content
-    assert "from capnp.lib.capnp import _InterfaceModule" in content
+    assert "from capnp.lib.capnp import SchemaLoader, _InterfaceModule" in content
     assert "from .types.modules import" not in content
     assert re.search(
         r'Channel\.schema\.methods\["registerStatsCallback"\]\.param_type\.fields\["callback"\]\.schema', content

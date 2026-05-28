@@ -1,23 +1,13 @@
-"""Tests for the shared schema loader approach.
-
-This module tests that loading the same schema multiple times via the shared
-schema loader (capnp._embedded_schema_loader) doesn't cause problems.
-
-The shared loader is used to ensure capabilities work correctly across
-different schema modules that may reference each other.
-"""
+"""Tests for generated schema bundle helpers."""
 
 from __future__ import annotations
 
-import base64
 import importlib
 import re
 import sys
 from typing import TYPE_CHECKING
 
 import capnp
-
-import schema_capnp
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -26,130 +16,85 @@ INITIAL_INT32_VALUE = 42
 REIMPORTED_INT32_VALUE = 123
 
 
-class TestSharedSchemaLoader:
-    """Tests for the shared schema loader singleton pattern."""
+def _remove_generated_modules(*module_names: str) -> None:
+    for module_name in module_names:
+        sys.modules.pop(module_name, None)
+    for module_name in list(sys.modules):
+        if module_name.startswith("_capnp_schema_bundle_"):
+            sys.modules.pop(module_name, None)
 
-    def test_shared_loader_exists_after_import(self, basic_stubs: Path) -> None:
-        """Verify that the shared loader is created after importing a generated module."""
-        # Add the generated stubs directory to the path
+
+def _first_loader_schema_id(module_file: Path) -> int:
+    match = re.search(r"_loader\.get\((0x[0-9A-Fa-f]+)\)", module_file.read_text(encoding="utf8"))
+    assert match is not None
+    return int(match.group(1), 16)
+
+
+class TestSchemaBundleHelpers:
+    """Tests for the generated schema bundle singleton pattern."""
+
+    def test_generated_module_exposes_schema_helpers_without_polluting_capnp(self, basic_stubs: Path) -> None:
+        """Generated modules should expose helpers without adding attributes to capnp."""
+        if hasattr(capnp, "_embedded_schema_loader"):
+            delattr(capnp, "_embedded_schema_loader")
         sys.path.insert(0, str(basic_stubs))
 
         try:
-            # Import a generated module - this should create the shared loader
-            importlib.import_module("dummy_capnp")
-
-            # Verify the shared loader was created on the capnp module
-            assert hasattr(capnp, "_embedded_schema_loader")
-            assert isinstance(capnp._embedded_schema_loader, capnp.SchemaLoader)
-        finally:
-            # Clean up sys.path
-            if str(basic_stubs) in sys.path:
-                sys.path.remove(str(basic_stubs))
-
-    def test_reimporting_module_uses_same_loader(self, basic_stubs: Path) -> None:
-        """Verify that reimporting a module uses the same shared loader."""
-        sys.path.insert(0, str(basic_stubs))
-
-        try:
-            # First import
-            importlib.import_module("dummy_capnp")
-
-            loader_after_first_import = capnp._embedded_schema_loader
-            loader_id_first = id(loader_after_first_import)
-
-            # Force reimport by removing from sys.modules and reimporting
-            if "dummy_capnp" in sys.modules:
-                del sys.modules["dummy_capnp"]
-
-            importlib.import_module("dummy_capnp")
-
-            loader_after_reimport = capnp._embedded_schema_loader
-            loader_id_second = id(loader_after_reimport)
-
-            # The loader should be the same instance
-            assert loader_id_first == loader_id_second
-            assert loader_after_first_import is loader_after_reimport
-        finally:
-            if str(basic_stubs) in sys.path:
-                sys.path.remove(str(basic_stubs))
-
-    def test_multiple_modules_share_same_loader(self, basic_stubs: Path) -> None:
-        """Verify that multiple schema modules share the same loader instance."""
-        sys.path.insert(0, str(basic_stubs))
-
-        try:
-            # Import first module
-            importlib.import_module("dummy_capnp")
-
-            loader_after_first = capnp._embedded_schema_loader
-            loader_id_first = id(loader_after_first)
-
-            # Import a different module
-            importlib.import_module("channel_capnp")
-
-            loader_after_second = capnp._embedded_schema_loader
-            loader_id_second = id(loader_after_second)
-
-            # Both should use the same loader
-            assert loader_id_first == loader_id_second
-            assert loader_after_first is loader_after_second
-        finally:
-            if str(basic_stubs) in sys.path:
-                sys.path.remove(str(basic_stubs))
-
-    def test_loading_same_schema_nodes_multiple_times(self, basic_stubs: Path) -> None:
-        """Test that load_dynamic can be called multiple times with the same schema nodes.
-
-        The SchemaLoader.load_dynamic method should handle duplicate loads gracefully.
-        This tests the scenario where the same module is imported multiple times
-        or where schemas with shared dependencies are loaded.
-        """
-        sys.path.insert(0, str(basic_stubs))
-
-        try:
-            # Import a module to populate the loader
-            importlib.import_module("dummy_capnp")
-
-            loader = capnp._embedded_schema_loader
-
-            # Verify the loader has schemas loaded
-            assert loader is not None
-
-            # Read the module file to get the embedded schema data
-            module_file = basic_stubs / "dummy_capnp" / "__init__.py"
-            content = module_file.read_text()
-
-            # Extract one of the base64-encoded schema nodes
-            # Look for lines like:    "EBZQBgb/...",  # schema name
-            b64_pattern = re.compile(r'"([A-Za-z0-9+/=]+)",\s*#')
-            matches = b64_pattern.findall(content)
-
-            if matches:
-                # Try loading the same schema node again - this should not raise
-                for schema_b64 in matches[:3]:  # Test with first 3 schemas
-                    schema_data = base64.b64decode(schema_b64)
-                    node_reader = schema_capnp.Node.from_bytes_packed(schema_data)
-
-                    # This should not raise - load_dynamic should handle duplicates
-                    loader.load_dynamic(node_reader)
-        finally:
-            if str(basic_stubs) in sys.path:
-                sys.path.remove(str(basic_stubs))
-
-    def test_schemas_accessible_after_multiple_loads(self, basic_stubs: Path) -> None:
-        """Verify that schemas remain accessible after being loaded multiple times."""
-        sys.path.insert(0, str(basic_stubs))
-
-        try:
-            # Import module
             dummy_capnp = importlib.import_module("dummy_capnp")
 
-            # Verify we can create messages using the schema
-            # This confirms the schema was loaded correctly
-            msg = dummy_capnp.TestAllTypes.new_message()
-            assert msg is not None
+            assert hasattr(dummy_capnp, "get_schema_by_id")
+            assert hasattr(dummy_capnp, "load_capnp_file")
+            assert not hasattr(capnp, "_embedded_schema_loader")
+        finally:
+            _remove_generated_modules("dummy_capnp")
+            sys.path.remove(str(basic_stubs))
 
-            # Set some fields to verify the schema works
+    def test_reimporting_module_uses_same_bundle_schema_lookup(self, basic_stubs: Path) -> None:
+        """Reimporting a generated module should keep schema lookup stable."""
+        sys.path.insert(0, str(basic_stubs))
+
+        try:
+            dummy_capnp = importlib.import_module("dummy_capnp")
+            schema_id = _first_loader_schema_id(basic_stubs / "dummy_capnp" / "__init__.py")
+
+            schema_after_first_import = dummy_capnp.get_schema_by_id(schema_id)
+
+            sys.modules.pop("dummy_capnp", None)
+            dummy_reimported = importlib.import_module("dummy_capnp")
+            schema_after_reimport = dummy_reimported.get_schema_by_id(schema_id)
+
+            assert schema_after_first_import.node.id == schema_after_reimport.node.id
+            assert schema_after_first_import.node.displayName == schema_after_reimport.node.displayName
+        finally:
+            _remove_generated_modules("dummy_capnp")
+            sys.path.remove(str(basic_stubs))
+
+    def test_get_schema_by_id_can_access_unimported_bundle_schema(self, basic_stubs: Path) -> None:
+        """One generated module should resolve schemas from another module before it is imported."""
+        sys.path.insert(0, str(basic_stubs))
+
+        try:
+            dummy_capnp = importlib.import_module("dummy_capnp")
+            channel_schema_id = _first_loader_schema_id(basic_stubs / "channel_capnp" / "__init__.py")
+
+            assert "channel_capnp" not in sys.modules
+            channel_schema = dummy_capnp.get_schema_by_id(channel_schema_id)
+
+            assert channel_schema.node.id == channel_schema_id
+            assert "channel.capnp" in channel_schema.node.displayName
+            assert "channel_capnp" not in sys.modules
+        finally:
+            _remove_generated_modules("dummy_capnp", "channel_capnp")
+            sys.path.remove(str(basic_stubs))
+
+    def test_schemas_accessible_after_multiple_imports(self, basic_stubs: Path) -> None:
+        """Generated modules should remain usable after repeated imports."""
+        sys.path.insert(0, str(basic_stubs))
+
+        try:
+            dummy_capnp = importlib.import_module("dummy_capnp")
+
+            msg = dummy_capnp.TestAllTypes.new_message()
             msg.boolField = True
             msg.int32Field = INITIAL_INT32_VALUE
             msg.textField = "test"
@@ -158,13 +103,9 @@ class TestSharedSchemaLoader:
             assert msg.int32Field == INITIAL_INT32_VALUE
             assert msg.textField == "test"
 
-            # Force reimport
-            if "dummy_capnp" in sys.modules:
-                del sys.modules["dummy_capnp"]
-
+            sys.modules.pop("dummy_capnp", None)
             dummy_reimported = importlib.import_module("dummy_capnp")
 
-            # Verify we can still create and use messages
             msg2 = dummy_reimported.TestAllTypes.new_message()
             msg2.boolField = False
             msg2.int32Field = REIMPORTED_INT32_VALUE
@@ -172,59 +113,51 @@ class TestSharedSchemaLoader:
             assert msg2.boolField is False
             assert msg2.int32Field == REIMPORTED_INT32_VALUE
         finally:
-            if str(basic_stubs) in sys.path:
-                sys.path.remove(str(basic_stubs))
+            _remove_generated_modules("dummy_capnp")
+            sys.path.remove(str(basic_stubs))
 
-    def test_loader_get_returns_consistent_schemas(self, basic_stubs: Path) -> None:
-        """Verify that loader.get() returns consistent schema objects."""
+    def test_load_capnp_file_appends_external_schema(self, basic_stubs: Path, tmp_path: Path) -> None:
+        """Generated helper should append a runtime-loaded .capnp file to the same loader."""
+        schema_file = tmp_path / "external.capnp"
+        schema_file.write_text(
+            """
+@0xd901a1f719acbf44;
+
+struct External {
+  value @0 :Int32;
+}
+""".lstrip(),
+            encoding="utf8",
+        )
         sys.path.insert(0, str(basic_stubs))
 
         try:
-            importlib.import_module("dummy_capnp")
+            dummy_capnp = importlib.import_module("dummy_capnp")
+            external_module = dummy_capnp.load_capnp_file(str(schema_file))
+            external_schema = dummy_capnp.get_schema_by_id(external_module.schema.node.id)
 
-            loader = capnp._embedded_schema_loader
-
-            # Read the module to find schema IDs
-            module_file = basic_stubs / "dummy_capnp" / "__init__.py"
-            content = module_file.read_text()
-
-            id_pattern = re.compile(r"_loader\.get\((0x[0-9A-Fa-f]+)\)")
-            hex_ids = id_pattern.findall(content)
-
-            if hex_ids:
-                # Get the same schema multiple times
-                schema_id = int(hex_ids[0], 16)
-
-                schema1 = loader.get(schema_id)
-                schema2 = loader.get(schema_id)
-
-                # Should return the same schema object
-                assert schema1.node.id == schema2.node.id
-                assert schema1.node.displayName == schema2.node.displayName
+            assert external_schema.node.id == external_module.schema.node.id
+            assert external_schema.node.displayName.endswith("external.capnp")
         finally:
-            if str(basic_stubs) in sys.path:
-                sys.path.remove(str(basic_stubs))
+            _remove_generated_modules("dummy_capnp")
+            sys.path.remove(str(basic_stubs))
 
 
 class TestCrossModuleCapabilities:
-    """Tests for capability handling across modules using shared loader."""
+    """Tests for capability handling across generated modules."""
 
-    def test_interface_schemas_share_loader(self, basic_stubs: Path) -> None:
-        """Verify that interface schemas from different modules share the loader."""
+    def test_interface_schemas_are_importable_with_shared_bundle(self, basic_stubs: Path) -> None:
+        """Interface modules should remain usable when loaded through the bundle."""
         sys.path.insert(0, str(basic_stubs))
 
         try:
-            # Import modules with interfaces
             channel_capnp = importlib.import_module("channel_capnp")
             importlib.import_module("interfaces_capnp")
 
-            # Both should use the same loader
-            loader = capnp._embedded_schema_loader
-            assert loader is not None
+            channel_schema = channel_capnp.get_schema_by_id(channel_capnp.Channel.schema.node.id)
 
-            # Verify the Channel interface is accessible via the loader
-            # The Channel interface should be in the loader from channel_capnp
+            assert channel_schema.node.id == channel_capnp.Channel.schema.node.id
             assert channel_capnp.Channel is not None
         finally:
-            if str(basic_stubs) in sys.path:
-                sys.path.remove(str(basic_stubs))
+            _remove_generated_modules("channel_capnp", "interfaces_capnp")
+            sys.path.remove(str(basic_stubs))

@@ -204,6 +204,24 @@ def test_bundled_interface_method_stub_is_nongeneric() -> None:
         assert "def methods_inherited(self) -> dict[str, _InterfaceMethod]:" in content
 
 
+def test_bundled_promise_stubs_do_not_advertise_wait() -> None:
+    """Bundled promise stubs should not claim support for wait()."""
+    contents = (
+        (BUNDLED_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8"),
+        (TYPINGS_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8"),
+    )
+
+    for content in contents:
+        promise_block = re.search(r"class _Promise:.*?(?=\nclass |\Z)", content, re.DOTALL)
+        remote_promise_block = re.search(r"class _RemotePromise.*?(?=\nclass |\Z)", content, re.DOTALL)
+
+        assert promise_block is not None
+        assert remote_promise_block is not None
+        assert "def cancel(" in promise_block.group(0)
+        assert "def wait(" not in promise_block.group(0)
+        assert "def wait(" not in remote_promise_block.group(0)
+
+
 def test_typings_snapshot_includes_dynamic_object_builder_overloads() -> None:
     """The augmented capnp-stubs snapshot should add builder-side schema overloads too."""
     content = (TYPINGS_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8")

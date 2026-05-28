@@ -50,10 +50,6 @@ from capnp.lib.capnp import (
 # Version string
 from capnp.version import version as __version__
 
-# Shared schema loader for embedded schema modules
-# This is set dynamically when embedded schema modules are imported
-_embedded_schema_loader: SchemaLoader
-
 __all__ = [
     # Public classes
     "AsyncIoStream",

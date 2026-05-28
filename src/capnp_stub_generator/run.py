@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import logging
 import os.path
 import shutil
@@ -19,7 +21,7 @@ from capnp_stub_generator.writer import Writer
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from capnp.lib.capnp import _Schema
 
@@ -121,6 +123,7 @@ class SchemaWriterContext:
     file_id_to_path: dict[int, str]
     generated_module_names_by_schema_id: dict[int, str]
     inherited_interface_schema_ids: set[int]
+    schema_bundle_module_name: str
 
 
 @dataclass(frozen=True)
@@ -974,6 +977,7 @@ def _generate_stubs_from_schema(
         file_id_to_path=context.file_id_to_path,
         generated_module_names_by_schema_id=context.generated_module_names_by_schema_id,
         inherited_interface_schema_ids=context.inherited_interface_schema_ids,
+        schema_bundle_module_name=context.schema_bundle_module_name,
     )
     writer.generate_all_nested()
 
@@ -1289,6 +1293,225 @@ def _iter_loaded_schemas(
             yield schema_loader.get(schema_id), path
         except capnp.KjException as error:
             logger.warning("Could not load schema %s from %s: %s", hex(schema_id), path, error)
+
+
+def _collect_referenced_type_ids(type_obj: object) -> list[int]:
+    """Extract schema IDs referenced by a schema.capnp Type reader."""
+    type_which = type_obj.which()
+    if type_which == "list":
+        return _collect_referenced_type_ids(type_obj.list.elementType)
+    if type_which in {"struct", "interface", "enum"}:
+        return [int(getattr(type_obj, type_which).typeId)]
+    return []
+
+
+def _add_struct_schema_references(schema: _Schema, add_schema_id: Callable[[int], None]) -> None:
+    """Add schema IDs referenced by struct fields."""
+    for schema_field in schema.node.struct.fields:
+        field_kind = schema_field.which()
+        if field_kind == "group":
+            add_schema_id(int(schema_field.group.typeId))
+        elif field_kind == "slot":
+            for referenced_id in _collect_referenced_type_ids(schema_field.slot.type):
+                add_schema_id(referenced_id)
+
+
+def _add_interface_schema_references(schema: _Schema, add_schema_id: Callable[[int], None]) -> None:
+    """Add schema IDs referenced by interface methods and superclasses."""
+    for superclass in schema.node.interface.superclasses:
+        add_schema_id(int(superclass.id))
+    for method in schema.node.interface.methods:
+        add_schema_id(int(method.paramStructType))
+        add_schema_id(int(method.resultStructType))
+
+
+def _add_schema_references(schema: _Schema, add_schema_id: Callable[[int], None]) -> None:
+    """Add all schema IDs directly referenced by one schema."""
+    for nested_node in schema.node.nestedNodes:
+        add_schema_id(int(nested_node.id))
+
+    node_kind = schema.node.which()
+    if node_kind == "struct":
+        _add_struct_schema_references(schema, add_schema_id)
+    elif node_kind == "interface":
+        _add_interface_schema_references(schema, add_schema_id)
+
+
+def _collect_schema_bundle_schemas(
+    schema_loader: capnp.SchemaLoader,
+    file_id_to_path: dict[int, str],
+) -> dict[int, _Schema]:
+    """Collect every schema node reachable from the loaded file graph."""
+    schemas_by_id: dict[int, _Schema] = {}
+
+    def add_schema_id(schema_id: int) -> None:
+        if schema_id in schemas_by_id:
+            return
+        try:
+            add_schema(schema_loader.get(schema_id))
+        except capnp.KjException as error:
+            logger.debug("Could not add schema %s to bundle: %s", hex(schema_id), error)
+
+    def add_schema(schema: _Schema) -> None:
+        schema_id = int(schema.node.id)
+        if schema_id in schemas_by_id:
+            return
+
+        schemas_by_id[schema_id] = schema
+        _add_schema_references(schema, add_schema_id)
+
+    for schema, _ in _iter_loaded_schemas(schema_loader, file_id_to_path, None):
+        add_schema(schema)
+
+    return schemas_by_id
+
+
+def _build_schema_bundle_nodes(
+    schema_loader: capnp.SchemaLoader,
+    file_id_to_path: dict[int, str],
+) -> list[tuple[int, str, str]]:
+    """Return serialized schema nodes as (schema_id, display_name, base64_data)."""
+    bundle_nodes: list[tuple[int, str, str]] = []
+    for schema_id, schema in _collect_schema_bundle_schemas(schema_loader, file_id_to_path).items():
+        try:
+            schema_bytes = schema.node.as_builder().to_bytes_packed()
+        except (capnp.KjException, AttributeError) as error:
+            logger.debug("Could not serialize schema %s into bundle: %s", hex(schema_id), error)
+            continue
+        schema_b64 = base64.b64encode(schema_bytes).decode("ascii")
+        bundle_nodes.append((schema_id, str(schema.node.displayName), schema_b64))
+    return bundle_nodes
+
+
+def _schema_bundle_module_name(bundle_nodes: list[tuple[int, str, str]]) -> str:
+    """Build a stable private module name for one generated schema bundle."""
+    digest = hashlib.sha256()
+    for schema_id, _, schema_b64 in sorted(bundle_nodes):
+        digest.update(schema_id.to_bytes(8, "big", signed=False))
+        digest.update(schema_b64.encode("ascii"))
+    return f"_capnp_schema_bundle_{digest.hexdigest()[:12]}"
+
+
+def _render_schema_bundle_py(bundle_nodes: list[tuple[int, str, str]]) -> str:
+    """Render the runtime schema bundle module."""
+    lines = [
+        '"""Private compiled schema bundle for generated capnp modules."""',
+        "",
+        "from __future__ import annotations",
+        "",
+        "import base64",
+        "",
+        "import capnp",
+        "import schema_capnp",
+        "",
+        "capnp.remove_import_hook()",
+        "",
+        "_SCHEMA_NODES = [",
+    ]
+    for schema_id, display_name, schema_b64 in bundle_nodes:
+        lines.append(f"    ({hex(schema_id)}, {schema_b64!r}),  # {display_name}")
+
+    lines.extend(
+        [
+            "]",
+            "",
+            "_loader = capnp.SchemaLoader()",
+            "_loaded_bundle = False",
+            "_loaded_schema_ids: set[int] = set()",
+            "",
+            "",
+            "def _load_schema_node(schema_id: int, node_reader: object) -> object:",
+            "    if schema_id in _loaded_schema_ids:",
+            "        return _loader.get(schema_id)",
+            "    loaded_schema = _loader.load_dynamic(node_reader)",
+            "    _loaded_schema_ids.add(schema_id)",
+            "    return loaded_schema",
+            "",
+            "",
+            "def _load_schema(schema: object) -> object:",
+            "    schema_id = int(schema.node.id)",
+            "    if schema_id in _loaded_schema_ids:",
+            "        return _loader.get(schema_id)",
+            "    loaded_schema = _loader.load(schema.get_proto())",
+            "    _loaded_schema_ids.add(schema_id)",
+            "    return loaded_schema",
+            "",
+            "",
+            "def _ensure_loaded() -> capnp.SchemaLoader:",
+            "    global _loaded_bundle",
+            "    if _loaded_bundle:",
+            "        return _loader",
+            "",
+            "    for schema_id, schema_b64 in _SCHEMA_NODES:",
+            "        schema_data = base64.b64decode(schema_b64)",
+            "        node_reader = schema_capnp.Node.from_bytes_packed(schema_data)",
+            "        _load_schema_node(schema_id, node_reader)",
+            "",
+            "    _loaded_bundle = True",
+            "    return _loader",
+            "",
+            "",
+            "def get_schema_loader() -> capnp.SchemaLoader:",
+            "    return _ensure_loaded()",
+            "",
+            "",
+            "def get_schema_by_id(schema_id: int) -> object:",
+            "    return _ensure_loaded().get(schema_id)",
+            "",
+            "",
+            "def load_capnp_file(path: str, imports: list[str] | tuple[str, ...] = ()) -> object:",
+            "    parser = capnp.SchemaParser()",
+            "    module = parser.load(path, imports=list(imports))",
+            "    for parsed_module in parser.modules_by_id.values():",
+            "        schema = getattr(parsed_module, 'schema', None)",
+            "        if schema is not None:",
+            "            _load_schema(schema)",
+            "    return module",
+            "",
+            "",
+            '__all__ = ["get_schema_by_id", "load_capnp_file"]',
+            "",
+        ],
+    )
+    return "\n".join(lines)
+
+
+def _render_schema_bundle_pyi() -> str:
+    """Render the schema bundle stub module."""
+    return '''"""Private compiled schema bundle for generated capnp modules."""
+
+from collections.abc import Sequence
+from capnp.lib.capnp import _Schema
+
+def get_schema_by_id(schema_id: int) -> _Schema: ...
+def load_capnp_file(path: str, imports: Sequence[str] = ...) -> object: ...
+'''
+
+
+def _resolve_schema_bundle_output_dir(output_dir_path: Path | None, output_directories_used: set[str]) -> Path | None:
+    """Return the directory where the generated schema bundle should live."""
+    if output_dir_path is not None:
+        return output_dir_path
+    if not output_directories_used:
+        return None
+    return Path(os.path.commonpath([str(Path(directory).resolve()) for directory in output_directories_used]))
+
+
+def _write_schema_bundle_module(
+    bundle_nodes: list[tuple[int, str, str]],
+    bundle_module_name: str,
+    output_dir_path: Path | None,
+    output_directories_used: set[str],
+) -> set[str]:
+    """Write the private schema bundle module and return directories to format/validate."""
+    output_directory = _resolve_schema_bundle_output_dir(output_dir_path, output_directories_used)
+    if output_directory is None:
+        return set()
+
+    output_directory.mkdir(parents=True, exist_ok=True)
+    (output_directory / f"{bundle_module_name}.py").write_text(_render_schema_bundle_py(bundle_nodes), encoding="utf8")
+    (output_directory / f"{bundle_module_name}.pyi").write_text(_render_schema_bundle_pyi(), encoding="utf8")
+    return {str(output_directory)}
 
 
 def _collect_inherited_interface_schema_ids(
@@ -1667,11 +1890,14 @@ def run_from_schemas(
 
     """
     output_dir_path = Path(options.output_dir) if options.output_dir else None
+    bundle_nodes = _build_schema_bundle_nodes(schema_loader, file_id_to_path)
+    schema_bundle_module_name = _schema_bundle_module_name(bundle_nodes)
     writer_context = SchemaWriterContext(
         schema_loader=schema_loader,
         file_id_to_path=file_id_to_path,
         generated_module_names_by_schema_id=_build_generated_module_name_map(schema_loader, file_id_to_path, options),
         inherited_interface_schema_ids=_collect_inherited_interface_schema_ids(schema_loader, file_id_to_path),
+        schema_bundle_module_name=schema_bundle_module_name,
     )
     state = GeneratedSchemaState()
 
@@ -1679,13 +1905,19 @@ def run_from_schemas(
         _process_loaded_schema(schema, path, options, writer_context, state)
 
     _ensure_output_packages(state.output_directories_used, output_dir_path)
+    bundle_output_dirs = _write_schema_bundle_module(
+        bundle_nodes,
+        schema_bundle_module_name,
+        output_dir_path,
+        state.output_directories_used,
+    )
     bundled_stub_dirs = _augment_bundled_stubs(
         state,
         options.output_dir,
         output_dir_path,
         augment_capnp_stubs=options.augment_capnp_stubs,
     )
-    all_output_dirs = state.output_directories_used | bundled_stub_dirs
+    all_output_dirs = state.output_directories_used | bundle_output_dirs | bundled_stub_dirs
     format_all_outputs(all_output_dirs, ruff_config_path=options.ruff_config_path)
 
     if not options.skip_pyright:

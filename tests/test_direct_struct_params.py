@@ -80,21 +80,17 @@ def test_explicit_wrapper_params_keep_params_protocol(basic_stubs: Path) -> None
 
 def test_direct_union_context_params_which_works_at_runtime(zalfmas_stubs: Path) -> None:
     """Runtime CallContext.params should support which() for direct union params."""
-    had_loader = hasattr(capnp, "_embedded_schema_loader")
-    previous_loader = getattr(capnp, "_embedded_schema_loader", None)
     sys.path.insert(0, str(zalfmas_stubs))
 
     try:
-        capnp._embedded_schema_loader = capnp.SchemaLoader()
         fbp_capnp = importlib.import_module("mas.schema.fbp.fbp_capnp")
         result = asyncio.run(capnp.run(_capture_direct_union_write_context(fbp_capnp)))
     finally:
         for module_name in ("mas.schema.fbp.fbp_capnp", "mas.schema.fbp", "mas.schema", "mas"):
             sys.modules.pop(module_name, None)
-        if had_loader:
-            capnp._embedded_schema_loader = previous_loader
-        elif hasattr(capnp, "_embedded_schema_loader"):
-            delattr(capnp, "_embedded_schema_loader")
+        for module_name in list(sys.modules):
+            if module_name.startswith("_capnp_schema_bundle_"):
+                sys.modules.pop(module_name, None)
         sys.path.remove(str(zalfmas_stubs))
 
     assert result["params_type"] == "_DynamicStructReader"

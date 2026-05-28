@@ -37,6 +37,7 @@ CAPNP_GENERATED_DIR = GENERATED_DIR / "capnp"
 LOGGER = logging.getLogger(__name__)
 DOGFOOD_DEPENDENCY_DIRS = ("capnp-stubs", "schema_capnp")
 DOGFOOD_IGNORED_DIRS = {"__pycache__", ".ruff_cache"}
+DOGFOOD_IGNORED_PATTERNS = (*DOGFOOD_IGNORED_DIRS, "test_*.py")
 
 
 @dataclass(frozen=True)
@@ -86,7 +87,7 @@ def _replace_tree(source_dir: Path, destination_dir: Path) -> None:
     shutil.copytree(
         source_dir,
         destination_dir,
-        ignore=shutil.ignore_patterns(*DOGFOOD_IGNORED_DIRS),
+        ignore=shutil.ignore_patterns(*DOGFOOD_IGNORED_PATTERNS),
     )
 
 
@@ -112,11 +113,15 @@ def _sync_dogfood_typings_from_examples() -> None:
         destination_dir = TYPINGS_DIR / directory_name
         if destination_dir.exists():
             shutil.rmtree(destination_dir)
+    for stale_bundle in TYPINGS_DIR.glob("_capnp_schema_bundle_*"):
+        stale_bundle.unlink()
 
     for directory_name, source_dir in source_dirs.items():
         if directory_name in DOGFOOD_IGNORED_DIRS:
             continue
         _replace_tree(source_dir, TYPINGS_DIR / directory_name)
+    for bundle_file in EXAMPLES_GENERATED_DIR.glob("_capnp_schema_bundle_*"):
+        shutil.copy2(bundle_file, TYPINGS_DIR / bundle_file.name)
 
     LOGGER.info("✓ Refreshed dogfood typings in %s", TYPINGS_DIR)
 
