@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import ast
+import builtins
 import keyword
+import typing
 from copy import copy
 from dataclasses import dataclass, field
+from functools import cache
+from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
@@ -14,6 +19,9 @@ if TYPE_CHECKING:
 
 BUILDER_NAME = "Builder"
 READER_NAME = "Reader"
+
+_BASE_CAPNP_STUB = Path(__file__).resolve().parent.parent / "pycapnp_base_stubs" / "lib" / "capnp.pyi"
+_STRUCT_READER_CLASS = "_DynamicStructReader"
 
 
 def sanitize_name(name: str) -> str:
@@ -371,6 +379,113 @@ def join_parameters(parameters: Sequence[TypeHintedVariable | str] | None) -> st
         return ", ".join(str(p) for p in parameters if p)
 
     return ""
+
+
+@dataclass(frozen=True)
+class StructReaderMember:
+    """One non-dunder member of pycapnp's `_DynamicStructReader`, rendered as stub lines.
+
+    Attributes:
+        name: Member name, e.g. `_has`.
+        lines: Unindented stub lines declaring the member (decorators included, docstrings stripped).
+        referenced_names: Names used in the member's annotations that need to be importable.
+
+    """
+
+    name: str
+    lines: tuple[str, ...]
+    referenced_names: frozenset[str]
+
+
+def _strip_docstring_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    """Return a copy of a function whose body is just `...`."""
+    stripped = copy(node)
+    stripped.body = [ast.Expr(value=ast.Constant(value=...))]
+    return stripped
+
+
+def _annotation_names(node: ast.AST) -> frozenset[str]:
+    """Collect every name referenced from the annotations inside `node`."""
+    annotations: list[ast.expr] = []
+    if isinstance(node, ast.AnnAssign):
+        annotations.append(node.annotation)
+    elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        arguments = node.args
+        all_args = [*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs, arguments.vararg, arguments.kwarg]
+        annotations.extend(arg.annotation for arg in all_args if arg is not None and arg.annotation is not None)
+        if node.returns is not None:
+            annotations.append(node.returns)
+
+    return frozenset(
+        name.id for annotation in annotations for name in ast.walk(annotation) if isinstance(name, ast.Name)
+    )
+
+
+def _render_stub_member(node: ast.stmt) -> tuple[str, ...]:
+    """Render a class-body statement as stub lines, folding a lone `...` body onto the signature line."""
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        node = _strip_docstring_body(node)
+
+    lines = ast.unparse(node).splitlines()
+    if len(lines) >= 2 and lines[-1].strip() == "..." and lines[-2].endswith(":"):  # noqa: PLR2004
+        lines[-2:] = [f"{lines[-2]} ..."]
+    return tuple(lines)
+
+
+@cache
+def struct_reader_members() -> tuple[StructReaderMember, ...]:
+    """Return the runtime surface of pycapnp's `_DynamicStructReader` as stub declarations.
+
+    The bundled base stubs mirror the pycapnp runtime, so deriving the members from them keeps every generated
+    type that stands in for a `_DynamicStructReader` in sync with the runtime without a hand-maintained list.
+    `__getattr__` and the other dunders are left out on purpose: the generated types declare the schema's fields
+    explicitly, and a catch-all `__getattr__` would hide misspelled field names from the type checker.
+
+    Returns:
+        The attribute and method declarations in their original order.
+
+    Raises:
+        LookupError: If the bundled stubs do not declare `_DynamicStructReader`.
+
+    """
+    tree = ast.parse(_BASE_CAPNP_STUB.read_text(encoding="utf8"))
+    reader_class = next(
+        (node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == _STRUCT_READER_CLASS),
+        None,
+    )
+    if reader_class is None:
+        msg = f"{_STRUCT_READER_CLASS} not found in {_BASE_CAPNP_STUB}"
+        raise LookupError(msg)
+
+    members: list[StructReaderMember] = []
+    for node in reader_class.body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            name = node.target.id
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            name = node.name
+        else:
+            continue
+
+        if name.startswith("__") and name.endswith("__"):
+            continue
+
+        members.append(StructReaderMember(name, _render_stub_member(node), _annotation_names(node)))
+
+    return tuple(members)
+
+
+def classify_stub_import(name: str) -> str | None:
+    """Return where a name used in a copied stub annotation has to be imported from.
+
+    Returns:
+        `"typing"` for names from the typing module, `"capnp"` for pycapnp types, `None` for builtins.
+
+    """
+    if hasattr(builtins, name):
+        return None
+    if name in typing.__all__:
+        return "typing"
+    return "capnp"
 
 
 def new_group(name: str, members: list[str]) -> str:

@@ -6,8 +6,11 @@ parameter that pycapnp always passes to server implementations.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
+
+import capnp
 
 from tests.test_helpers import log_summary, read_generated_types_combined
 
@@ -143,3 +146,72 @@ def test_server_context_parameter_summary(calculator_stubs: Path) -> None:
             "CallContext.results now points to top-level ServerResult helpers.",
         ],
     )
+
+
+def _declarations(class_def: ast.ClassDef) -> list[tuple[str, ast.stmt]]:
+    declarations: list[tuple[str, ast.stmt]] = []
+    for statement in class_def.body:
+        if isinstance(statement, ast.FunctionDef):
+            declarations.append((statement.name, statement))
+        elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            declarations.append((statement.target.id, statement))
+    return declarations
+
+
+def _declared_names(class_def: ast.ClassDef) -> list[str]:
+    return [name for name, _ in _declarations(class_def)]
+
+
+def _params_protocols(contexts_stub: Path) -> list[ast.ClassDef]:
+    tree = ast.parse(contexts_stub.read_text(encoding="utf8"))
+    return [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef)
+        and node.name.endswith("Params")
+        and node.bases
+        and "Protocol" in ast.unparse(node.bases[0])
+    ]
+
+
+def test_params_protocols_cover_runtime_struct_reader(
+    basic_stubs: Path,
+    calculator_stubs: Path,
+    zalfmas_stubs: Path,
+) -> None:
+    """Flattened *Params protocols must expose everything the runtime `CallContext.params` object has.
+
+    `CallContext.params` is a `_DynamicStructReader`. The expected members come from the installed pycapnp runtime,
+    so a pycapnp release that adds a member fails here until the bundled base stubs follow.
+    """
+    runtime_members = {
+        name
+        for name in dir(capnp.lib.capnp._DynamicStructReader)
+        if not (name.startswith("__") and name.endswith("__"))
+    }
+    assert {"_has", "_get", "schema", "to_dict", "which", "as_builder"} <= runtime_members
+
+    checked = 0
+    for root in (basic_stubs, calculator_stubs, zalfmas_stubs):
+        for contexts_stub in root.rglob("contexts.pyi"):
+            for protocol in _params_protocols(contexts_stub):
+                declared = _declared_names(protocol)
+                missing = runtime_members - set(declared)
+                assert not missing, f"{contexts_stub}:{protocol.name} lacks runtime members {sorted(missing)}"
+                assert len(declared) == len(set(declared)), f"{protocol.name} declares a name twice: {declared}"
+                # A catch-all would hide misspelled parameter names from the type checker.
+                assert "__getattr__" not in declared
+                checked += 1
+
+    assert checked > 0, "No flattened Params protocols found"
+
+
+def test_params_protocol_member_shadows_same_named_parameter(basic_stubs: Path) -> None:
+    """A parameter named like a reader member is shadowed at runtime, so the member must win in the stub."""
+    contexts_stub = basic_stubs / "params_member_collision_capnp" / "types" / "contexts.pyi"
+    protocol = next(p for p in _params_protocols(contexts_stub) if p.name == "LookupParams")
+
+    schema_declarations = [statement for name, statement in _declarations(protocol) if name == "schema"]
+    assert len(schema_declarations) == 1
+    assert isinstance(schema_declarations[0], ast.FunctionDef), "`schema` must be the reader property, not the field"
+    assert "key" in _declared_names(protocol), "Non-colliding parameters must still be declared"

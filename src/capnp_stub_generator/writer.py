@@ -11,7 +11,7 @@ import os.path
 import pathlib
 import re
 from copy import copy
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import capnp
 from capnp.lib.capnp import (
@@ -3982,14 +3982,38 @@ class Writer:
         """
         lines = [helper.new_class_declaration(params_class_name, ["Protocol"])]
 
+        # `CallContext.params` is a `_DynamicStructReader` at runtime, so the Protocol carries its full surface.
+        # Members win over same-named fields, as they do at runtime where the class attribute shadows `__getattr__`.
+        reader_members = helper.struct_reader_members()
+        member_names = {member.name for member in reader_members}
+
         for param in parameters:
             sanitized_name = helper.sanitize_name(param.name)
+            if sanitized_name in member_names:
+                logger.warning(
+                    "Parameter `%s` of `%s` is shadowed by the struct reader member of the same name; "
+                    "read it with `params._get(%r)` instead.",
+                    sanitized_name,
+                    params_class_name,
+                    param.name,
+                )
+                continue
             lines.append(f"    {sanitized_name}: {param.server_type}")
 
-        if not parameters:
-            lines.append("    ...")
+        for member in reader_members:
+            self._import_struct_reader_member_names(member)
+            lines.extend(f"    {line}" for line in member.lines)
 
         return lines
+
+    def _import_struct_reader_member_names(self, member: helper.StructReaderMember) -> None:
+        """Register the imports needed by a member copied from `_DynamicStructReader`."""
+        for name in sorted(member.referenced_names):
+            source = helper.classify_stub_import(name)
+            if source == "typing":
+                self._add_typing_import(cast("Writer.VALID_TYPING_IMPORTS", name))
+            elif source == "capnp":
+                self._add_import(f"from capnp.lib.capnp import {name}")
 
     def _generate_callcontext_protocol(
         self,

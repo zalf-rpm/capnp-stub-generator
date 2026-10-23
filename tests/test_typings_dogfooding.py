@@ -51,7 +51,9 @@ def check(
     any_pointer: capnp.lib.capnp._DynamicObjectReader,
     any_builder: capnp.lib.capnp._DynamicObjectBuilder,
     request: restorer_capnp.types.requests.SetanypointerRequest,
+    context: calculator_capnp.types.contexts.DeffunctionCallContext,
 ) -> None:
+    has_body: bool = context.params._has("body")
     calculator_client = capability.cast_as(calculator_capnp.Calculator)
     typed_dynamic_client: calculator_capnp.types.clients.CalculatorClient = dynamic_capability.cast_as(
         calculator_capnp.Calculator
@@ -70,6 +72,7 @@ def check(
     _ = (
         calculator_client,
         typed_dynamic_client,
+        has_body,
         tester_client,
         expression_reader,
         expression_builder,
