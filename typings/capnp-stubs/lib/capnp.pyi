@@ -1,87 +1,35 @@
-from collections.abc import (
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Iterator,
-    MutableMapping,
-    Sequence,
-)
-from contextlib import AbstractContextManager, asynccontextmanager
-from ssl import SSLContext
+import asyncio
+import contextlib
+import enum
+from collections.abc import Awaitable, Callable, Iterator, Sequence
+from types import ModuleType
 from typing import IO, Any, Literal, overload
 
 # Generated imports for project-specific types
 from addressbook import addressbook_capnp
 from calculator import calculator_capnp
-
-# Type alias for anypointer to reflect what is really allowed for anypointer inputs
-from capnp._internal import CapnpModule as _CapnpModule
-from capnp._internal import CapnpTypesModule as _CapnpTypesModule
-from capnp._internal import (
-    Server as _Server,
-)
 from fbp_nested_callback import fbp_nested_callback_capnp
 from restorer import restorer_capnp
 from single_value import single_value_capnp
 
-# Import schema.capnp types for precise node property types
-# These are _DynamicStructReader at runtime but typed more precisely
-from schema_capnp import FieldReader as _SchemaFieldReader
-from schema_capnp import NodeReader as _SchemaNodeReader
-
-type AnyPointer = (
-    str
-    | bytes
-    | _DynamicStructBuilder
-    | _DynamicStructReader
-    | _DynamicCapabilityClient
-    | _DynamicCapabilityServer
-    | _DynamicListBuilder
-    | _DynamicListReader
-    | _DynamicObjectReader
-    | _DynamicObjectBuilder
-)
-type Capability = _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicObjectReader | _DynamicObjectBuilder
-type AnyStruct = _DynamicStructBuilder | _DynamicStructReader | _DynamicObjectReader | _DynamicObjectBuilder
-type AnyList = _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder
-type _CapnpModuleType = _CapnpModule
-
-types: _CapnpTypesModule
-
 class KjException(Exception):
-    """Exception raised by Cap'n Proto operations.
+    """KjException is a wrapper of the internal C++ exception type.
 
-    KjException is a wrapper of the internal C++ exception type.
-    It contains an enum named `Type` and several properties providing
-    information about the exception.
+    There is an enum named `Type` listed below, and a bunch of fields.
     """
 
     class Type:
-        """Exception type enumeration."""
-
         FAILED: str
         OVERLOADED: str
         DISCONNECTED: str
         UNIMPLEMENTED: str
         OTHER: str
-        reverse_mapping: dict[int, str]
+        reverse_mapping: dict[str, str]
 
     message: str | None
     nature: str | None
     durability: str | None
     wrapper: Any
-
-    def file(self) -> str:
-        """Source file where the exception occurred."""
-
-    def line(self) -> int:
-        """Line number where the exception occurred."""
-
-    def type(self) -> str | None:
-        """Exception type (one of the Type enum values)."""
-
-    def description(self) -> str:
-        """Human-readable description of the exception."""
 
     def __init__(
         self,
@@ -91,111 +39,53 @@ class KjException(Exception):
         wrapper: Any = None,
         type: str | None = None,
     ) -> None: ...
-    def _to_python(self) -> Exception:
-        """Convert to a more specific Python exception if appropriate."""
+    @property
+    def file(self) -> str: ...
+    @property
+    def line(self) -> int: ...
+    @property
+    def type(self) -> str | None: ...
+    @property
+    def description(self) -> str: ...
+    def _to_python(self) -> Exception: ...
 
 class _NestedNodeReader:
-    """pycapnp's internal representation of a nested node in a schema.
-
-    This is distinct from schema_capnp.NestedNodeReader which is a _DynamicStructReader.
-    This type is returned by _NodeReader.nestedNodes.
-    """
-
     @property
-    def id(self) -> int:
-        """The ID of the nested node."""
-
+    def name(self) -> str: ...
     @property
-    def name(self) -> str:
-        """The name of the nested node."""
+    def id(self) -> int: ...
 
 class _List_NestedNode_Reader:
-    """pycapnp's internal list of nested nodes.
-
-    This is distinct from schema_capnp list types which are _DynamicListReader.
-    """
-
     def __len__(self) -> int: ...
     def __getitem__(self, index: int) -> _NestedNodeReader: ...
-    def __iter__(self) -> Iterator[_NestedNodeReader]: ...
 
 class _NodeReader:
-    """pycapnp's internal representation of a schema node.
-
-    This is distinct from schema_capnp.NodeReader which is a _DynamicStructReader.
-    This type is returned by _Schema.get_proto() and can be passed to SchemaLoader.load().
-    """
-
     @property
-    def displayName(self) -> str:
-        """The display name of the node."""
-
+    def displayName(self) -> str: ...
     @property
-    def id(self) -> int:
-        """The unique ID of the node."""
-
+    def scopeId(self) -> int: ...
     @property
-    def isConst(self) -> bool:
-        """Whether this node is a constant."""
-
+    def id(self) -> int: ...
     @property
-    def isEnum(self) -> bool:
-        """Whether this node is an enum."""
-
+    def nestedNodes(self) -> _List_NestedNode_Reader: ...
     @property
-    def isInterface(self) -> bool:
-        """Whether this node is an interface."""
-
+    def isStruct(self) -> bool: ...
     @property
-    def isStruct(self) -> bool:
-        """Whether this node is a struct."""
-
+    def isConst(self) -> bool: ...
     @property
-    def nestedNodes(self) -> _List_NestedNode_Reader:
-        """List of nested nodes."""
-
+    def isInterface(self) -> bool: ...
     @property
-    def node(self) -> _SchemaNodeReader:
-        """Access the underlying schema.capnp Node reader."""
-
+    def isEnum(self) -> bool: ...
     @property
-    def scopeId(self) -> int:
-        """The scope ID of this node."""
-
-class _StructSchemaField:
-    """pycapnp's internal representation of a field in a struct schema.
-
-    This is distinct from schema_capnp.FieldReader which is a _DynamicStructReader.
-    This type is returned by _StructSchema.fields and _StructSchema.fields_list.
-    """
-
-    @property
-    def proto(self) -> _SchemaFieldReader:
-        """The field's schema as a schema.capnp Field reader."""
-
-    @property
-    def schema(self) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
-        """The schema of the field's type.
-
-        For list fields, this returns a _ListSchema whose elementType describes the list items.
-        This property may raise for primitive/unknown types.
-        """
-
-class _InterfaceMethod:
-    @property
-    def param_type(self) -> _StructSchema: ...
-    @property
-    def result_type(self) -> _StructSchema: ...
+    def node(self) -> _DynamicStructReader: ...
 
 class _Schema:
-    """Base class for _StructSchema and _ParsedSchema."""
-
-    def as_const_value(self) -> Any: ...
     @property
-    def node(self) -> _SchemaNodeReader: ...
-    def as_enum(self) -> _EnumSchema: ...
-    def as_interface(self) -> _InterfaceSchema: ...
+    def node(self) -> _DynamicStructReader: ...
+    def as_const_value(self) -> Any: ...
     def as_struct(self) -> _StructSchema: ...
+    def as_interface(self) -> _InterfaceSchema: ...
+    def as_enum(self) -> _EnumSchema: ...
     def get_proto(self) -> _NodeReader: ...
 
 class _ParsedSchema(_Schema):
@@ -203,514 +93,413 @@ class _ParsedSchema(_Schema):
 
 class _StructSchema(_Schema):
     @property
-    def fieldnames(self) -> tuple[str, ...]:
-        """A tuple of the field names in the struct."""
-
+    def fieldnames(self) -> tuple[str, ...]: ...
     @property
-    def union_fields(self) -> tuple[str, ...]:
-        """A tuple of the field names in the struct."""
-
+    def union_fields(self) -> tuple[str, ...]: ...
     @property
-    def non_union_fields(self) -> tuple[str, ...]:
-        """A tuple of the field names in the struct."""
-
+    def non_union_fields(self) -> tuple[str, ...]: ...
     @property
-    def fields(self) -> dict[str, _StructSchemaField]:
-        """All of the _StructSchemaField in this schema as a dict."""
-
+    def fields(self) -> dict[str, _StructSchemaField]: ...
     @property
-    def fields_list(self) -> list[_StructSchemaField]:
-        """All of the _StructSchemaField in this schema as a list."""
+    def fields_list(self) -> list[_StructSchemaField]: ...
+    @property
+    def node(self) -> _DynamicStructReader: ...
+
+class _StructSchemaField:
+    @property
+    def proto(self) -> _DynamicStructReader: ...
+    @property
+    def schema(self) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema: ...
+
+class _InterfaceMethod:
+    @property
+    def param_type(self) -> _StructSchema: ...
+    @property
+    def result_type(self) -> _StructSchema: ...
 
 class _EnumSchema:
-    """Schema for enum types.
-
-    Provides access to enum schema information.
-    Only accessible from capnp.lib.capnp, not from capnp directly.
-    """
-
     @property
-    def enumerants(self) -> dict[str, int]:
-        """The list of enumerants as a dictionary."""
-
+    def enumerants(self) -> dict[str, int]: ...
     @property
-    def node(self) -> _SchemaNodeReader:
-        """The raw schema node."""
+    def node(self) -> _DynamicStructReader: ...
 
 class _InterfaceSchema:
-    """Schema for interface types.
-
-    Provides access to interface schema information.
-    Only accessible from capnp.lib.capnp, not from capnp directly.
-    """
-
     @property
-    def method_names(self) -> tuple[str, ...]:
-        """A tuple of the function names in the interface."""
+    def method_names(self) -> tuple[str, ...]: ...
+    @property
+    def method_names_inherited(self) -> set[str]: ...
+    @property
+    def methods(self) -> dict[str, _InterfaceMethod]: ...
+    @property
+    def methods_inherited(self) -> dict[str, _InterfaceMethod]: ...
+    @property
+    def superclasses(self) -> list[_InterfaceSchema]: ...
+    @property
+    def node(self) -> _DynamicStructReader: ...
 
-    @property
-    def method_names_inherited(self) -> set[str]:
-        """A set of the function names in the interface, including inherited methods."""
+class _SchemaType: ...
 
-    @property
-    def methods(self) -> dict[str, _InterfaceMethod]:
-        """A mapping of method names to their respective _InterfaceMethod."""
-
-    @property
-    def methods_inherited(self) -> dict[str, _InterfaceMethod]:
-        """A mapping of method names to their respective _InterfaceMethod, including inherited methods."""
-
-    @property
-    def superclasses(self) -> list[Any]:
-        """A list of superclasses for this interface."""
-    @property
-    def node(self) -> _SchemaNodeReader:
-        """The raw schema node."""
+class _StructModuleWhich(enum.Enum):
+    def __eq__(self, other: object) -> bool: ...
+    __hash__: None  # pyright: ignore[reportIncompatibleMethodOverride]
 
 class _ListSchema:
-    """Schema for list types.
-
-    Can be instantiated to create list schemas for different element types.
-    """
-
     def __init__(
         self,
-        schema: (_StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema | _SchemaType | None) = None,
-    ) -> None:
-        """Create a list schema for the given element type.
-
-        Args:
-            schema: Element type schema. Can be:
-                - A struct schema (_StructSchema or StructSchema)
-                - An enum schema (_EnumSchema)
-                - An interface schema (_InterfaceSchema)
-                - Another list schema (_ListSchema) for nested lists
-                - A primitive type (_SchemaType, e.g., capnp.types.Int8)
-                - Any object with a .schema attribute
-                - None (creates uninitialized schema)
-
-        """
+        schema: _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema | _SchemaType | None = None,
+    ) -> None: ...
     @property
-    def elementType(
-        self,
-    ) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
-        """The schema of the element type of this list.
-
-        Returns:
-            Schema of the list element type:
-            - _StructSchema for struct elements
-            - _EnumSchema for enum elements
-            - _InterfaceSchema for interface elements
-            - _ListSchema for nested list elements
-
-        Raises:
-            KjException: When the element type is a primitive type (Int32, Text, Bool, etc.)
-                with message "Schema type is unknown"
-
-        """
+    def elementType(self) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema: ...
 
 class _StructModule:
-    """Module/class for a generated struct type.
-
-    Instances of this class are what you get when you access a struct class from
-    a loaded schema (e.g. `addressbook.Person`). The module exposes factory and
-    I/O helpers for that struct type.
-
-    Nested types (structs, enums, interfaces) are accessed as attributes, not methods.
-    """
+    schema: _StructSchema
 
     def __init__(self, schema: _StructSchema, name: str) -> None: ...
-    def __getattr__(self, name: str) -> Any: ...
-    def __setattr__(self, name: str, value: Any) -> None: ...
-    @property
-    def schema(self) -> _StructSchema: ...
+    def __call__(self, num_first_segment_words: int | None = None, **kwargs: Any) -> _DynamicStructBuilder: ...
     def new_message(
         self,
         num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[[int], bytearray] | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
         **kwargs: Any,
     ) -> _DynamicStructBuilder:
-        """Create a new in-memory message builder for this struct type.
+        """Returns a newly allocated builder message.
 
-        Args:
-            num_first_segment_words: Initial size of the first segment in 8-byte words
-            allocate_seg_callable: Custom allocator function that takes the minimum
-                number of 8-byte words to allocate and returns a bytearray
-            **kwargs: Additional keyword arguments
+        :type num_first_segment_words: int
+        :param num_first_segment_words: Size of the first segment to allocate (in words ie. 8 byte increments)
 
-        Returns:
-            A builder instance for this struct type
+        :type allocate_seg_callable: Callable[[int], bytearray]
+        :param allocate_seg_callable: A python callable object that takes the minimum number of 8-byte
+        words to allocate (as an `int`) and returns a `bytearray`. This is used to customize the memory
+        allocation strategy.
 
+        :type kwargs: dict
+        :param kwargs: A list of fields and their values to initialize in the struct.
+
+        Note, kwargs is not an actual argument, but refers to Python's ability to pass keyword arguments.
+        ie. new_message(my_field=100)
+
+        :rtype: :class:`_DynamicStructBuilder`
         """
-
     def read(
         self,
-        file: IO[str] | IO[bytes],
+        file: IO[Any],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader:
-        """Read a struct of this type from a file-like object and return a reader.
+        """Returns a Reader for the unpacked object read from file.
 
-        Args:
-            file: File-like object with a fileno() method (opened file, socket, etc.)
-                  Does NOT accept BytesIO or other pure-Python file-like objects
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
+        :type file: file
+        :param file: A python file-like object. It must be a "real" file, with a `fileno()` method.
 
-        Returns:
-            A reader for this struct type
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
 
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :rtype: :class:`_DynamicStructReader`
         """
+    async def read_async(
+        self,
+        stream: _AsyncIoStream,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> _DynamicStructReader | None:
+        """Async version of read(). Returns either a message, or None in case of EOF.
 
+        :type file: AsyncIoStream
+        :param file: A AsyncIoStream
+
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
+
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :rtype: :class:`_DynamicStructReader`
+        """
+    def read_multiple(
+        self,
+        file: IO[Any],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+        skip_copy: bool = False,
+    ) -> Iterator[_DynamicStructReader]:
+        """Returns an iterable, that when traversed will return Readers for messages.
+
+        :type file: file
+        :param file: A python file-like object. It must be a "real" file, with a `fileno()` method.
+
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
+
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :type skip_copy: bool
+        :param skip_copy: By default, each message is copied because the file needs to advance, even if the message is
+                          never read completely. Skip this only if you know what you're doing.
+
+        :rtype: Iterable with elements of :class:`_DynamicStructReader`
+        """
     def read_packed(
         self,
-        file: IO[str] | IO[bytes],
+        file: IO[Any],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader:
-        """Read a packed-format struct from a file-like object and return a reader.
+        """Returns a Reader for the packed object read from file.
 
-        Args:
-            file: File-like object with a fileno() method (opened file, socket, etc.)
-                  Does NOT accept BytesIO or other pure-Python file-like objects
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
+        :type file: file
+        :param file: A python file-like object. It must be a "real" file, with a `fileno()` method.
 
-        Returns:
-            A reader for this struct type
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
 
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :rtype: :class:`_DynamicStructReader`
         """
-
-    @overload
-    def from_bytes(
+    def read_multiple_packed(
         self,
-        buf: bytes,
+        file: IO[Any],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> AbstractContextManager[_DynamicStructReader]:
-        """Create a reader for this struct type from a bytes buffer (unpacked).
+        skip_copy: bool = False,
+    ) -> Iterator[_DynamicStructReader]:
+        """Returns an iterable, that when traversed will return Readers for messages.
 
-        Returns a context manager that yields a reader. The context manager must be
-        used to ensure proper memory management.
+        :type file: file
+        :param file: A python file-like object. It must be a "real" file, with a `fileno()` method.
 
-        Args:
-            buf: Bytes buffer containing the serialized message
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
 
-        Returns:
-            Context manager yielding a reader for this struct type
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
 
-        Example:
-            with Person.from_bytes(data) as reader:
-                print(reader.name)
+        :type skip_copy: bool
+        :param skip_copy: By default, each message is copied because the file needs to advance, even if the message is
+                          never read completely. Skip this only if you know what you're doing.
 
+        :rtype: Iterable with elements of :class:`_DynamicStructReader`
         """
-
-    @overload
-    def from_bytes(
+    def read_multiple_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
-    ) -> AbstractContextManager[_DynamicStructReader]:
-        """Create a reader for this struct type from a bytes buffer (unpacked).
+    ) -> Iterator[_DynamicStructReader]:
+        """Returns an iterable, that when traversed will return Readers for messages.
 
-        Returns a context manager that yields a reader. The context manager must be
-        used to ensure proper memory management.
+        :type buf: buffer
+        :param buf: Any Python object that supports the buffer interface.
 
-        Args:
-            buf: Bytes buffer containing the serialized message
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
-            builder: If False, returns a reader
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
 
-        Returns:
-            Context manager yielding a reader for this struct type
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
 
-        Example:
-            with Person.from_bytes(data, builder=False) as reader:
-                print(reader.name)
-
+        :rtype: Iterable with elements of :class:`_DynamicStructReader`
         """
+    def read_multiple_bytes_packed(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> Iterator[_DynamicStructReader]:
+        """Returns an iterable, that when traversed will return Readers for messages.
 
+        :type buf: buffer
+        :param buf: Any Python object that supports the buffer interface.
+
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
+
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :rtype: Iterable with elements of :class:`_DynamicStructReader`
+        """
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> contextlib.AbstractContextManager[_DynamicStructReader]:
+        """Returns a Reader for the unpacked object in buf.
+
+        :type buf: buffer
+        :param buf: Any Python object that supports the buffer interface.
+
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
+
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :type builder: bool
+        :param builder: If true, return a builder object.
+
+        Enabling `builder` will allow you to change the contents of `buf`, so do this with care.
+
+        :rtype: :class:`_DynamicStructReader` or :class:`_DynamicStructBuilder`
+        """
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+        builder: Literal[False] = False,
+    ) -> contextlib.AbstractContextManager[_DynamicStructReader]:
+        """Returns a Reader for the unpacked object in buf.
+
+        :type buf: buffer
+        :param buf: Any Python object that supports the buffer interface.
+
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
+
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :type builder: bool
+        :param builder: If true, return a builder object.
+
+        Enabling `builder` will allow you to change the contents of `buf`, so do this with care.
+
+        :rtype: :class:`_DynamicStructReader` or :class:`_DynamicStructBuilder`
+        """
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
-    ) -> AbstractContextManager[_DynamicStructBuilder]:
-        """Create a builder for this struct type from a bytes buffer (unpacked).
+    ) -> contextlib.AbstractContextManager[_DynamicStructBuilder]:
+        """Returns a Reader for the unpacked object in buf.
 
-        Returns a context manager that yields a builder. The context manager must be
-        used to ensure proper memory management.
+        :type buf: buffer
+        :param buf: Any Python object that supports the buffer interface.
 
-        Args:
-            buf: Bytes buffer containing the serialized message
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
-            builder: If True, returns a builder (mutable)
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
 
-        Returns:
-            Context manager yielding a builder for this struct type
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
 
-        Example:
-            with Person.from_bytes(data, builder=True) as builder:
-                builder.name = "New Name"
+        :type builder: bool
+        :param builder: If true, return a builder object.
 
+        Enabling `builder` will allow you to change the contents of `buf`, so do this with care.
+
+        :rtype: :class:`_DynamicStructReader` or :class:`_DynamicStructBuilder`
         """
-
-    def from_bytes_packed(
+    @overload
+    def from_bytes(
         self,
-        buf: bytes,
-        traversal_limit_in_words: int | None = None,
-        nesting_limit: int | None = None,
-    ) -> _DynamicStructReader:
-        """Create a reader for this struct type from a packed bytes buffer.
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> contextlib.AbstractContextManager[_DynamicStructBuilder]:
+        """Returns a Reader for the unpacked object in buf.
 
-        Args:
-            buf: Packed bytes buffer containing the serialized message
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
+        :type buf: buffer
+        :param buf: Any Python object that supports the buffer interface.
 
-        Returns:
-            A reader for this struct type
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
 
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :type builder: bool
+        :param builder: If true, return a builder object.
+
+        Enabling `builder` will allow you to change the contents of `buf`, so do this with care.
+
+        :rtype: :class:`_DynamicStructReader` or :class:`_DynamicStructBuilder`
         """
-
     def from_segments(
         self,
-        segments: Sequence[bytes],
+        segments: Sequence[Any],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader:
-        """Create a reader for this struct type from a list of segment bytes.
+        """Returns a Reader for a list of segment bytes.
 
-        Args:
-            segments: List of byte arrays, one for each segment
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
+        This avoids making copies.
 
-        Returns:
-            A reader for this struct type
+        NB: This is not currently supported on PyPy.
 
+        :rtype: list
         """
-
-    async def read_async(
+    def from_bytes_packed(
         self,
-        stream: AsyncIoStream,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader:
-        """Asynchronously read a struct of this type from an AsyncIoStream.
+        """Returns a Reader for the packed object in buf.
 
-        Args:
-            stream: AsyncIoStream to read from
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
+        :type buf: buffer
+        :param buf: Any Python object that supports the readable buffer interface.
 
-        Returns:
-            A reader for this struct type
+        :type traversal_limit_in_words: int
+        :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                         Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
 
+        :type nesting_limit: int
+        :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
+
+        :rtype: :class:`_DynamicStructReader`
         """
 
-    def read_multiple(
-        self,
-        file: IO[str] | IO[bytes],
-        traversal_limit_in_words: int | None = None,
-        nesting_limit: int | None = None,
-        skip_copy: bool = False,
-    ) -> Iterator[_DynamicStructReader]:
-        """Read multiple structs of this type from a file-like object.
+class _EnumModule:
+    schema: _EnumSchema
 
-        Args:
-            file: File-like object with a fileno() method (opened file, socket, etc.)
-                  Does NOT accept BytesIO or other pure-Python file-like objects
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
-            skip_copy: If True, skip copying data (use with caution)
+    def __init__(self, schema: _EnumSchema, name: str) -> None: ...
 
-        Returns:
-            Iterator yielding readers for each message in the file
+class _InterfaceModule:
+    schema: _InterfaceSchema
 
-        """
+    def __init__(self, schema: _InterfaceSchema, name: str) -> None: ...
+    def _new_client(self, server: _DynamicCapabilityServer) -> _DynamicCapabilityClient: ...
 
-    def read_multiple_bytes(
-        self,
-        buf: bytes,
-        traversal_limit_in_words: int | None = None,
-        nesting_limit: int | None = None,
-    ) -> Iterator[_DynamicStructReader]:
-        """Read multiple structs of this type from a bytes buffer.
+class _DynamicEnum:
+    _parent: Any
 
-        Args:
-            buf: Bytes buffer containing multiple serialized messages
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
+    @property
+    def raw(self) -> int: ...
+    def _as_str(self) -> str: ...
+    def __str__(self) -> str: ...  # noqa: PYI029
 
-        Returns:
-            Iterator yielding readers for each message in the buffer
-
-        """
-
-    def read_multiple_bytes_packed(
-        self,
-        buf: bytes,
-        traversal_limit_in_words: int | None = None,
-        nesting_limit: int | None = None,
-    ) -> Iterator[_DynamicStructReader]:
-        """Read multiple packed structs of this type from a bytes buffer.
-
-        Args:
-            buf: Packed bytes buffer containing multiple serialized messages
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
-
-        Returns:
-            Iterator yielding readers for each message in the buffer
-
-        """
-
-    def read_multiple_packed(
-        self,
-        file: IO[str] | IO[bytes],
-        traversal_limit_in_words: int | None = None,
-        nesting_limit: int | None = None,
-        skip_copy: bool = False,
-    ) -> Iterator[_DynamicStructReader]:
-        """Read multiple packed structs of this type from a file-like object.
-
-        Args:
-            file: File-like object with a fileno() method (opened file, socket, etc.)
-                  Does NOT accept BytesIO or other pure-Python file-like objects
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
-            skip_copy: If True, skip copying data (use with caution)
-
-        Returns:
-            Iterator yielding readers for each message in the file
-
-        """
+class _DynamicEnumField:
+    @property
+    def raw(self) -> int: ...
+    def _str(self) -> str: ...
+    def __call__(self) -> str: ...
 
 class _DynamicObjectReader:
-    """Reader for Cap'n Proto AnyPointer type.
-
-    This class wraps the Cap'n Proto C++ DynamicObject::Reader.
-    AnyPointer can be cast to different pointer types (struct, list, text, interface).
-    """
-
-    @overload
-    def as_interface(
-        self,
-        schema: calculator_capnp.types.modules._CalculatorInterfaceModule,
-    ) -> calculator_capnp.types.clients.CalculatorClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._FunctionInterfaceModule,
-    ) -> calculator_capnp.types.clients.FunctionClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ValueInterfaceModule,
-    ) -> calculator_capnp.types.clients.ValueClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule,
-    ) -> fbp_nested_callback_capnp.types.clients.ChannelClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule,
-    ) -> fbp_nested_callback_capnp.types.clients.StatsCallbackClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule,
-    ) -> fbp_nested_callback_capnp.types.clients.UnregisterClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: restorer_capnp.types.modules._AnyTesterInterfaceModule,
-    ) -> restorer_capnp.types.clients.AnyTesterClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: restorer_capnp.types.modules._BagInterfaceModule,
-    ) -> restorer_capnp.types.clients.BagClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: restorer_capnp.types.modules._RestorerInterfaceModule,
-    ) -> restorer_capnp.types.clients.RestorerClient: ...
-    @overload
-    def as_interface(
-        self,
-        schema: single_value_capnp.types.modules._SingleValueInterfaceModule,
-    ) -> single_value_capnp.types.clients.SingleValueClient: ...
-    @overload
-    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
-    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
-        """Cast this AnyPointer to an interface capability.
-
-        The return type reflects the provided interface schema when overloads are available.
-
-        Args:
-            schema: The interface schema to cast to (e.g., MyInterface.schema).
-
-        Returns:
-            A capability client of the interface type.
-
-        Example:
-            iface = anyptr.as_interface(MyInterface.schema)  # Returns MyInterface
-
-        """
-    @overload
-    def as_list(
-        self,
-        schema: type[addressbook_capnp.types.lists._PersonList],
-    ) -> addressbook_capnp.types.readers.PersonListReader: ...
-    @overload
-    def as_list(
-        self,
-        schema: type[addressbook_capnp.types.lists._PhoneNumberList],
-    ) -> addressbook_capnp.types.readers.PhoneNumberListReader: ...
-    @overload
-    def as_list(
-        self,
-        schema: type[calculator_capnp.types.lists._ExpressionList],
-    ) -> calculator_capnp.types.readers.ExpressionListReader: ...
-    @overload
-    def as_list(
-        self,
-        schema: type[calculator_capnp.types.lists._Float64List],
-    ) -> calculator_capnp.types.readers.Float64ListReader: ...
-    @overload
-    def as_list(
-        self,
-        schema: type[single_value_capnp.types.lists._Int32List],
-    ) -> single_value_capnp.types.readers.Int32ListReader: ...
-    @overload
-    def as_list(
-        self,
-        schema: type[single_value_capnp.types.lists._MyStructList],
-    ) -> single_value_capnp.types.readers.MyStructListReader: ...
-    def as_list(self, schema: _ListSchema) -> Any:
-        """Cast this AnyPointer to a list.
-
-        Args:
-            schema: The list schema to cast to.
-
-        Returns:
-            A list reader.
-
-        """
+    _parent: Any
     @overload
     def as_struct(
         self,
@@ -763,39 +552,7 @@ class _DynamicObjectReader:
     ) -> single_value_capnp.types.readers.MyStructReader: ...
     @overload
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...
-    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
-        """Cast this AnyPointer to a struct reader.
-
-        The return type reflects the provided struct schema when overloads are available.
-        Can accept either the .schema attribute or the struct class itself.
-
-        Args:
-            schema: The struct schema or class to cast to (e.g., MyStruct.schema or MyStruct).
-
-        Returns:
-            A struct reader of the appropriate type.
-
-        Examples:
-            reader = anyptr.as_struct(MyStruct.schema)  # Returns MyStructReader
-            reader = anyptr.as_struct(MyStruct)         # Also returns MyStructReader
-
-        """
-
-    def as_text(self) -> str:
-        """Cast this AnyPointer to Text (str).
-
-        Returns:
-            The text value as a Python string.
-
-        """
-
-class _DynamicObjectBuilder:
-    """Builder for Cap'n Proto AnyPointer type.
-
-    This class wraps the Cap'n Proto C++ DynamicObject::Builder.
-    AnyPointer can be initialized or cast to different pointer types.
-    """
-
+    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader: ...
     @overload
     def as_interface(
         self,
@@ -848,71 +605,42 @@ class _DynamicObjectBuilder:
     ) -> single_value_capnp.types.clients.SingleValueClient: ...
     @overload
     def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
-    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> Any:
-        """Cast this AnyPointer to an interface capability.
-
-        The return type reflects the provided interface schema when overloads are available.
-
-        Args:
-            schema: The interface schema to cast to (e.g., MyInterface.schema).
-
-        Returns:
-            A capability client of the interface type.
-
-        Example:
-            iface = anyptr.as_interface(MyInterface.schema)  # Returns MyInterface
-
-        """
+    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     @overload
     def as_list(
         self,
         schema: type[addressbook_capnp.types.lists._PersonList],
-    ) -> addressbook_capnp.types.builders.PersonListBuilder: ...
+    ) -> addressbook_capnp.types.readers.PersonListReader: ...
     @overload
     def as_list(
         self,
         schema: type[addressbook_capnp.types.lists._PhoneNumberList],
-    ) -> addressbook_capnp.types.builders.PhoneNumberListBuilder: ...
+    ) -> addressbook_capnp.types.readers.PhoneNumberListReader: ...
     @overload
     def as_list(
         self,
         schema: type[calculator_capnp.types.lists._ExpressionList],
-    ) -> calculator_capnp.types.builders.ExpressionListBuilder: ...
+    ) -> calculator_capnp.types.readers.ExpressionListReader: ...
     @overload
     def as_list(
         self,
         schema: type[calculator_capnp.types.lists._Float64List],
-    ) -> calculator_capnp.types.builders.Float64ListBuilder: ...
+    ) -> calculator_capnp.types.readers.Float64ListReader: ...
     @overload
     def as_list(
         self,
         schema: type[single_value_capnp.types.lists._Int32List],
-    ) -> single_value_capnp.types.builders.Int32ListBuilder: ...
+    ) -> single_value_capnp.types.readers.Int32ListReader: ...
     @overload
     def as_list(
         self,
         schema: type[single_value_capnp.types.lists._MyStructList],
-    ) -> single_value_capnp.types.builders.MyStructListBuilder: ...
-    @overload
-    def as_list(self, schema: _ListSchema) -> _DynamicListBuilder: ...
-    def as_list(self, schema: _ListSchema) -> Any:
-        """Cast this AnyPointer to a list.
+    ) -> single_value_capnp.types.readers.MyStructListReader: ...
+    def as_list(self, schema: _ListSchema) -> _DynamicListReader: ...
+    def as_text(self) -> str: ...
 
-        Args:
-            schema: The list schema to cast to.
-
-        Returns:
-            A list builder.
-
-        """
-
-    def as_reader(self) -> _DynamicObjectReader:
-        """Get a reader view of this builder.
-
-        Returns:
-            A reader for this AnyPointer.
-
-        """
+class _DynamicObjectBuilder:
+    _parent: Any
     @overload
     def as_struct(
         self,
@@ -965,454 +693,462 @@ class _DynamicObjectBuilder:
     ) -> single_value_capnp.types.builders.MyStructBuilder: ...
     @overload
     def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder: ...
-    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder:
-        """Cast this AnyPointer to a struct builder.
-
-        The return type reflects the provided struct schema when overloads are available.
-        Can accept either the .schema attribute or the struct class itself.
-
-        Args:
-            schema: The struct schema or class to cast to (e.g., MyStruct.schema or MyStruct).
-
-        Returns:
-            A struct builder of the appropriate type.
-
-        Examples:
-            builder = anyptr.as_struct(MyStruct.schema)  # Returns MyStructBuilder
-            builder = anyptr.as_struct(MyStruct)         # Also returns MyStructBuilder
-
-        """
-
-    def as_text(self) -> str:
-        """Cast this AnyPointer to Text (str).
-
-        Returns:
-            The text value as a Python string.
-
-        """
-
-    def init_as_list(self, schema: _ListSchema, size: int) -> _DynamicListBuilder:
-        """Initialize this AnyPointer as a list of the given size.
-
-        Args:
-            schema: The list schema.
-            size: The number of elements in the list.
-
-        Returns:
-            A list builder for the newly initialized list.
-
-        """
-
-    def set(self, other: _DynamicObjectReader) -> None:
-        """Set this AnyPointer to a copy of another AnyPointer.
-
-        Note: Don't use this for structs.
-
-        Args:
-            other: The AnyPointer reader to copy from.
-
-        """
-
-    def set_as_text(self, text: str) -> None:
-        """Set this AnyPointer to a Text value.
-
-        Args:
-            text: The text value to set.
-
-        """
+    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder: ...
+    @overload
+    def as_interface(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule,
+    ) -> calculator_capnp.types.clients.CalculatorClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._FunctionInterfaceModule,
+    ) -> calculator_capnp.types.clients.FunctionClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ValueInterfaceModule,
+    ) -> calculator_capnp.types.clients.ValueClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.ChannelClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.StatsCallbackClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.UnregisterClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._AnyTesterInterfaceModule,
+    ) -> restorer_capnp.types.clients.AnyTesterClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._BagInterfaceModule,
+    ) -> restorer_capnp.types.clients.BagClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: restorer_capnp.types.modules._RestorerInterfaceModule,
+    ) -> restorer_capnp.types.clients.RestorerClient: ...
+    @overload
+    def as_interface(
+        self,
+        schema: single_value_capnp.types.modules._SingleValueInterfaceModule,
+    ) -> single_value_capnp.types.clients.SingleValueClient: ...
+    @overload
+    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
+    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[addressbook_capnp.types.lists._PersonList],
+    ) -> addressbook_capnp.types.builders.PersonListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[addressbook_capnp.types.lists._PhoneNumberList],
+    ) -> addressbook_capnp.types.builders.PhoneNumberListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[calculator_capnp.types.lists._ExpressionList],
+    ) -> calculator_capnp.types.builders.ExpressionListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[calculator_capnp.types.lists._Float64List],
+    ) -> calculator_capnp.types.builders.Float64ListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[single_value_capnp.types.lists._Int32List],
+    ) -> single_value_capnp.types.builders.Int32ListBuilder: ...
+    @overload
+    def as_list(
+        self,
+        schema: type[single_value_capnp.types.lists._MyStructList],
+    ) -> single_value_capnp.types.builders.MyStructListBuilder: ...
+    @overload
+    def as_list(self, schema: _ListSchema) -> _DynamicListBuilder: ...
+    def as_list(self, schema: _ListSchema) -> _DynamicListBuilder: ...
+    def set(self, other: Any) -> None:
+        """Set value of this object with the value of another AnyPointer::Reader. Don't use this for structs"""
+    def set_as_text(self, text: str) -> None: ...
+    def init_as_list(self, schema: _ListSchema, size: int) -> _DynamicListBuilder: ...
+    def as_text(self) -> str: ...
+    def as_reader(self) -> _DynamicObjectReader: ...
 
 class _MessageSize:
-    @property
-    def cap_count(self) -> int: ...
-    @property
-    def word_count(self) -> int: ...
+    word_count: int
+    cap_count: int
+
+    def __init__(self, word_count: int, cap_count: int) -> None: ...
 
 class _DynamicStructReader:
-    """Reader for Cap'n Proto structs.
+    """Reads Cap'n Proto structs
 
-    This class is almost a 1:1 wrapping of the Cap'n Proto C++ DynamicStruct::Reader.
+    This class is almost a 1 for 1 wrapping of the Cap'n Proto C++ DynamicStruct::Reader.
     The only difference is that instead of a `get` method, __getattr__ is overloaded and the field name
     is passed onto the C++ equivalent `get`. This means you just use . syntax to access any field.
     For field names that don't follow valid python naming convention for fields, use the global function
-    getattr()::
+    :py:func:`getattr`::
 
-        person = addressbook.Person.read(file)  # This returns a _DynamicStructReader
-        print(person.name)  # using . syntax
-        print(getattr(person, 'field-with-hyphens'))  # for names that are invalid for python
+        person = addressbook.Person.read(file) # This returns a _DynamicStructReader
+        print person.name # using . syntax
+        print getattr(person, 'field-with-hyphens') # for names that are invalid for python, use getattr
     """
 
+    _parent: Any
+    is_root: bool
+
+    def __getattr__(self, field: str) -> Any: ...
+    @property
+    def which(self) -> _DynamicEnumField:
+        """Returns the enum corresponding to the union in this struct
+
+        :rtype: :class:`_DynamicEnumField`
+        :return: A string/enum corresponding to what field is set in the union
+
+        :Raises: :exc:`KjException` if this struct doesn't contain a union
+        """
     @property
     def schema(self) -> _StructSchema: ...
     @property
-    def is_root(self) -> bool: ...
-    @property
     def total_size(self) -> _MessageSize: ...
-    def which(self) -> str:
-        """Return the name of the currently set union field.
+    def _get(self, field: str) -> Any: ...
+    def _get_by_field(self, field: _StructSchemaField) -> Any: ...
+    def _has(self, field: str) -> bool: ...
+    def _has_by_field(self, field: _StructSchemaField) -> bool: ...
+    def get_data_as_view(self, field: str) -> memoryview:
+        """Efficiently get a read-only memoryview for a DATA field without copying."""
+    def _which_str(self) -> str: ...
+    def _which(self) -> _DynamicEnumField:
+        """Returns the enum corresponding to the union in this struct
 
-        Raises:
-            KjException: if this struct doesn't contain a union
+        :rtype: :class:`_DynamicEnumField`
+        :return: A string/enum corresponding to what field is set in the union
 
+        :Raises: :exc:`KjException` if this struct doesn't contain a union
         """
-
-    def _get(self, field: str) -> Any:
-        """Low-level get method for accessing struct fields by name."""
-
-    def __getattr__(self, field: str) -> Any:
-        """Access struct fields by name."""
-
-    def _has(self, field: str) -> bool:
-        """Check if a field is set (mainly for unions and pointer fields)."""
-
-    def _which(self) -> Any:
-        """Return the enum corresponding to the union in this struct.
-
-        Returns:
-            A string/enum corresponding to what field is set in the union
-
-        Raises:
-            KjException: if this struct doesn't contain a union
-
-        """
-
-    def _which_str(self) -> str:
-        """Return the union field name as a string."""
-
     def as_builder(
         self,
         num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[..., Any] | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
     ) -> _DynamicStructBuilder:
-        """Convert this reader to a builder (creates a copy).
+        """A method for casting this Reader to a Builder
 
-        Args:
-            num_first_segment_words: Size of first segment
-            allocate_seg_callable: Custom allocator function
+        This is a copying operation with respect to the message's buffer.
+        Changes in the new builder will not reflect in the original reader.
 
-        Returns:
-            A builder containing a copy of this struct
+        :type num_first_segment_words: int
+        :param num_first_segment_words: Size of the first segment to allocate (in words ie. 8 byte increments)
 
+        :type allocate_seg_callable: Callable[[int], Buffer]
+        :param allocate_seg_callable: A python callable object that takes the minimum number of 8-byte
+        words to allocate (as an `int`) and returns any object supporting the writable buffer protocol
+        (e.g., `bytearray`, `memoryview`, `numpy.ndarray`). This enables custom memory allocation
+        strategies including shared memory.
+
+        :rtype: :class:`_DynamicStructBuilder`
         """
-
     def to_dict(
         self,
         verbose: bool = False,
         ordered: bool = False,
         encode_bytes_as_base64: bool = False,
-    ) -> dict[str, Any]:
-        """Convert the struct to a Python dictionary.
-
-        Args:
-            verbose: Include more details
-            ordered: Use OrderedDict for output
-            encode_bytes_as_base64: Encode bytes fields as base64 strings
-
-        Returns:
-            Dictionary representation of the struct
-
-        """
+    ) -> dict[str, Any]: ...
 
 class _DynamicStructBuilder:
-    """Builder for Cap'n Proto structs.
+    """Builds Cap'n Proto structs
 
-    This class is almost a 1:1 wrapping of the Cap'n Proto C++ DynamicStruct::Builder.
-    The only difference is that instead of `get`/`set` methods, __getattr__/__setattr__ is overloaded
+    This class is almost a 1 for 1 wrapping of the Cap'n Proto C++ DynamicStruct::Builder.
+    The only difference is that instead of a `get`/`set` method, __getattr__/__setattr__ is overloaded
     and the field name is passed onto the C++ equivalent function.
 
     This means you just use . syntax to access or set any field. For field names that don't follow valid
-    python naming convention for fields, use the global functions getattr()/setattr()::
+    python naming convention for fields, use the global functions :py:func:`getattr`/:py:func:`setattr`::
 
-        person = addressbook.Person.new_message()  # This returns a _DynamicStructBuilder
+        person = addressbook.Person.new_message() # This returns a _DynamicStructBuilder
 
-        person.name = 'foo'  # using . syntax
-        print(person.name)  # using . syntax
+        person.name = 'foo' # using . syntax
+        print person.name # using . syntax
 
-        setattr(person, 'field-with-hyphens', 'foo')  # for invalid python names
-        print(getattr(person, 'field-with-hyphens'))
+        setattr(person, 'field-with-hyphens', 'foo') # for names that are invalid for python, use setattr
+        print getattr(person, 'field-with-hyphens') # for names that are invalid for python, use getattr
     """
 
+    _parent: Any
+    is_root: bool
+    _is_written: bool
+
+    def __getattr__(self, field: str) -> Any: ...
+    def __setattr__(self, field: str, value: Any) -> None: ...
+    @property
+    def which(self) -> _DynamicEnumField:
+        """Returns the enum corresponding to the union in this struct
+
+        :rtype: :class:`_DynamicEnumField`
+        :return: A string/enum corresponding to what field is set in the union
+
+        :Raises: :exc:`KjException` if this struct doesn't contain a union
+        """
     @property
     def schema(self) -> _StructSchema: ...
     @property
-    def is_root(self) -> bool: ...
-    @property
     def total_size(self) -> _MessageSize: ...
-    def which(self) -> str:
-        """Return the name of the currently set union field.
+    def _get(self, field: str) -> Any: ...
+    def _get_by_field(self, field: _StructSchemaField) -> Any: ...
+    def _set(self, field: str, value: Any) -> None: ...
+    def _set_by_field(self, field: _StructSchemaField, value: Any) -> None: ...
+    def _has(self, field: str) -> bool: ...
+    def _has_by_field(self, field: _StructSchemaField) -> bool: ...
+    def init(self, field: str, size: int | None = None) -> Any:
+        """Method for initializing fields that are of type union/struct/list
 
-        Raises:
-            KjException: if this struct doesn't contain a union
+        Typically, you don't have to worry about initializing structs/unions, so this method is mainly for lists.
 
+        :type field: str
+        :param field: The field name to initialize
+
+        :type size: int
+        :param size: The size of the list to initiialize. This should be None for struct/union initialization.
+
+        :rtype: :class:`_DynamicStructBuilder` or :class:`_DynamicListBuilder`
+
+        :Raises: :exc:`KjException` if the field isn't in this struct
         """
+    def _init_by_field(self, field: _StructSchemaField, size: int | None = None) -> Any:
+        """Method for initializing fields that are of type union/struct/list
 
-    def _get(self, field: str) -> Any:
-        """Low-level get method for accessing struct fields by name."""
+        Typically, you don't have to worry about initializing structs/unions, so this method is mainly for lists.
 
-    def _set(self, field: str, value: Any) -> None:
-        """Low-level set method for setting struct fields by name."""
+        :type field: str
+        :param field: The field name to initialize
 
-    def _has(self, field: str) -> bool:
-        """Check if a field is set (mainly for unions and pointer fields)."""
+        :type size: int
+        :param size: The size of the list to initiialize. This should be None for struct/union initialization.
 
-    def _which(self) -> Any:
-        """Return the enum corresponding to the union in this struct.
+        :rtype: :class:`_DynamicStructBuilder` or :class:`_DynamicListBuilder`
 
-        Returns:
-            A string/enum corresponding to what field is set in the union
-
-        Raises:
-            KjException: if this struct doesn't contain a union
-
+        :Raises: :exc:`KjException` if the field isn't in this struct
         """
+    def init_resizable_list(self, field: str) -> _DynamicResizableListBuilder:
+        """Method for initializing fields that are of type list (of structs)
 
-    def _which_str(self) -> str:
-        """Return the union field name as a string."""
-
-    def as_reader(self) -> _DynamicStructReader:
-        """Convert this builder to a reader (read-only view).
-
-        Returns:
-            A reader view of this struct
-
-        """
-
-    def adopt(self, field: str, orphan: Any) -> None:
-        """Adopt an orphaned message into a field.
-
-        Args:
-            field: Field name
-            orphan: Orphaned message to adopt
-
-        """
-
-    def disown(self, field: str) -> Any:
-        """Disown a field, returning an orphan.
-
-        Args:
-            field: Field name
-
-        Returns:
-            Orphaned message
-
-        """
-
-    def init(self, field: Any, size: int | None = None) -> Any:
-        """Initialize a struct or list field.
-
-        Args:
-            field: Field name
-            size: Size for list fields
-
-        Returns:
-            The initialized field (builder for structs, list builder for lists)
-
-        """
-
-    def init_resizable_list(self, field: Any) -> _DynamicListBuilder:
-        """Initialize a resizable list field (for lists of structs).
-
-        This version of init returns a _DynamicResizableListBuilder that allows
-        you to add members one at a time (if you don't know the size for sure).
+        This version of init returns a :class:`_DynamicResizableListBuilder` that allows
+        you to add members one at a time (ie. if you don't know the size for sure).
         This is only meant for lists of Cap'n Proto objects, since for primitive types
         you can just define a normal python list and fill it yourself.
 
-        Warning:
-            You need to call finish() on the list object before serializing the
-            Cap'n Proto message. Failure to do so will cause your objects not to be
-            written out as well as leaking orphan structs into your message.
+        .. warning::
+            You need to call :meth:`_DynamicResizableListBuilder.finish` on the
+            list object before serializing the Cap'n Proto message. Failure to do
+            so will cause your objects not to be written out as well as leaking
+            orphan structs into your message.
 
-        Args:
-            field: Field name
+        :type field: str
+        :param field: The field name to initialize
 
-        Returns:
-            Resizable list builder
+        :rtype: :class:`_DynamicResizableListBuilder`
 
-        Raises:
-            KjException: if the field isn't in this struct
-
+        :Raises: :exc:`KjException` if the field isn't in this struct
         """
+    def _which_str(self) -> str: ...
+    def _which(self) -> _DynamicEnumField:
+        """Returns the enum corresponding to the union in this struct
 
-    def from_dict(self, d: dict[str, Any]) -> None:
-        """Populate the struct from a dictionary.
+        :rtype: :class:`_DynamicEnumField`
+        :return: A string/enum corresponding to what field is set in the union
 
-        Args:
-            d: Dictionary with field values
-
+        :Raises: :exc:`KjException` if this struct doesn't contain a union
         """
+    def adopt(self, field: str, orphan: _DynamicOrphan) -> None:
+        """A method for adopting Cap'n Proto orphans
 
+        Don't use this method unless you know what you're doing.
+        Orphans are useful for dynamically allocating objects for an unknown sized list.
+
+        :type field: str
+        :param field: The field name in the struct
+
+        :type orphan: :class:`_DynamicOrphan`
+        :param orphan: A Cap'n proto orphan to adopt. It will be unusable after this operation.
+
+        :rtype: void
+        """
+    def disown(self, field: str) -> _DynamicOrphan:
+        """A method for disowning Cap'n Proto orphans
+
+        Don't use this method unless you know what you're doing.
+
+        :type field: str
+        :param field: The field name in the struct
+
+        :rtype: :class:`_DynamicOrphan`
+        """
+    def get_data_as_view(self, field: str) -> memoryview:
+        """Efficiently get a writable memoryview for a DATA field without copying.
+
+        This allows in-place modification of the underlying buffer:
+        msg.get_data_as_view('myField')[0] = 0xFF
+        """
+    def as_reader(self) -> _DynamicStructReader:
+        """A method for casting this Builder to a Reader
+
+        This is a non-copying operation with respect to the message's buffer.
+        This means changes to the fields in the original struct will carry over to the new reader.
+
+        :rtype: :class:`_DynamicStructReader`
+        """
+    def copy(
+        self,
+        num_first_segment_words: int | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
+    ) -> _DynamicStructBuilder:
+        """A method for copying this Builder
+
+        This is a copying operation with respect to the message's buffer.
+        Changes in the new builder will not reflect in the original reader.
+
+        :type num_first_segment_words: int
+        :param num_first_segment_words: Size of the first segment to allocate (in words ie. 8 byte increments)
+
+        :type allocate_seg_callable: Callable[[int], Buffer]
+        :param allocate_seg_callable: A python callable object that takes the minimum number of 8-byte
+        words to allocate (as an `int`) and returns any object supporting the writable buffer protocol
+        (e.g., `bytearray`, `memoryview`, `numpy.ndarray`). This enables custom memory allocation
+        strategies including shared memory.
+
+        :rtype: :class:`_DynamicStructBuilder`
+        """
     def to_dict(
         self,
         verbose: bool = False,
         ordered: bool = False,
         encode_bytes_as_base64: bool = False,
-    ) -> dict[str, Any]:
-        """Convert the struct to a Python dictionary.
-
-        Args:
-            verbose: Include more details
-            ordered: Use OrderedDict for output
-            encode_bytes_as_base64: Encode bytes fields as base64 strings
-
-        Returns:
-            Dictionary representation of the struct
-
-        """
-
-    def copy(
-        self,
-        num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[..., Any] | None = None,
-    ) -> _DynamicStructBuilder:
-        """Create a deep copy of this struct.
-
-        Args:
-            num_first_segment_words: Size of first segment
-            allocate_seg_callable: Custom allocator function
-
-        Returns:
-            A new builder containing a copy
-
-        """
-
+    ) -> dict[str, Any]: ...
+    def from_dict(self, d: dict[str, Any]) -> None: ...
     def clear_write_flag(self) -> None:
-        """Clear the write flag for this struct."""
+        """A method used to clear the _is_written flag.
 
+        This allows you to write the struct more than once without seeing any warnings.
+        """
     def to_bytes(self) -> bytes:
-        """Serialize the struct to bytes.
+        """Returns the struct's containing message as a Python bytes object in the unpacked binary format.
 
-        Returns:
-            Serialized message bytes
+        This is inefficient; it makes several copies.
 
+        :rtype: bytes
+
+        :Raises: :exc:`KjException` if this isn't the message's root struct.
         """
-
-    def to_bytes_packed(self) -> bytes:
-        """Serialize the struct to packed bytes.
-
-        Returns:
-            Serialized message bytes (packed format)
-
-        """
-
     def to_segments(self) -> list[bytes]:
-        """Serialize the struct to a list of segment bytes.
+        """Returns the struct's containing message as a Python list of Python bytes objects.
 
-        Returns:
-            List of segment byte arrays
+        This avoids making copies.
 
+        NB: This is not currently supported on PyPy.
+
+        :rtype: list
+        """
+    def _to_bytes_packed_helper(self, word_count: int) -> bytes: ...
+    def to_bytes_packed(self) -> bytes: ...
+    def write(self, file: IO[Any]) -> None:
+        """Writes the struct's containing message to the given file object in unpacked binary format.
+
+        This is a shortcut for calling capnp._write_message_to_fd().  This can only be called on the
+        message's root struct.
+
+        :type file: file
+        :param file: A file or socket object (or anything with a fileno() method), open for write.
+
+        :rtype: void
+
+        :Raises: :exc:`KjException` if this isn't the message's root struct.
+        """
+    async def write_async(self, stream: _AsyncIoStream) -> None:
+        """Async version of of write().
+
+        This is a shortcut for calling capnp._write_message_to_fd().  This can only be called on the
+        message's root struct.
+
+        :type file: AsyncIoStream
+        :param file: The AsyncIoStream to write the message to
+
+        :rtype: void
+
+        :Raises: :exc:`KjException` if this isn't the message's root struct.
+        """
+    def write_packed(self, file: IO[Any]) -> None:
+        """Writes the struct's containing message to the given file object in packed binary format.
+
+        This is a shortcut for calling capnp._write_packed_message_to_fd().  This can only be called on
+        the message's root struct.
+
+        :type file: file
+        :param file: A file or socket object (or anything with a fileno() method), open for write.
+
+        :rtype: void
+
+        :Raises: :exc:`KjException` if this isn't the message's root struct.
         """
 
-    def write(self, file: IO[str] | IO[bytes]) -> None:
-        """Write the struct to a file.
-
-        Args:
-            file: File-like object with a fileno() method (opened file, socket, etc.)
-                  Does NOT accept BytesIO or other pure-Python file-like objects
-
-        """
-
-    def write_packed(self, file: IO[str] | IO[bytes]) -> None:
-        """Write the struct to a file in packed format.
-
-        Args:
-            file: File-like object with a fileno() method (opened file, socket, etc.)
-                  Does NOT accept BytesIO or other pure-Python file-like objects
-
-        """
-
-    async def write_async(self, stream: AsyncIoStream) -> None:
-        """Asynchronously write the struct to a stream.
-
-        Args:
-            stream: AsyncIoStream to write to
-
-        """
-
-# RPC Request/Response Types
 class _Request(_DynamicStructBuilder):
-    """RPC request builder.
+    is_consumed: bool
 
-    Extends DynamicStructBuilder with RPC-specific send() method.
-    """
+    def send(self) -> _RemotePromise: ...
 
-    def send(self) -> _Response:
-        """Send the RPC request and return a promise for the response.
-
-        Returns:
-            Response promise
-
-        """
-
-    def is_consumed(self) -> bool:
-        """Check if the request has been consumed (sent).
-
-        Returns:
-            True if the request has been sent
-
-        """
-
-class _Response(_DynamicStructReader):
-    """RPC response reader.
-
-    Extends DynamicStructReader for reading RPC responses.
-    Response objects are also awaitable promises.
-    """
+class _Response(_DynamicStructReader): ...
 
 class _CallContext:
-    """Context for an RPC call on the server side.
-
-    Provides methods for handling server-side RPC calls.
-
-    """
-
+    @property
     def params(self) -> _DynamicStructReader: ...
-    def release_params(self) -> None:
-        """Release the parameter struct.
+    @property
+    def results(self) -> _DynamicStructBuilder: ...
+    def _get_results(self, word_count: int = 0) -> _DynamicStructBuilder: ...
+    def release_params(self) -> None: ...
+    def tail_call(self, tailRequest: _Request) -> _Promise: ...
 
-        Call this when you're done reading the parameters to allow
-        the message memory to be freed.
-        """
+class _DynamicCapabilityClient:
+    _parent: Any
+    _cached_schema: _InterfaceSchema | None
 
-    def tail_call(self, tailRequest: _Request) -> None:
-        """Perform a tail call to another capability.
-
-        Args:
-            tailRequest: Request to tail call
-
-        """
-
-# Capability Types
-class _DynamicCapabilityClient(_CapabilityClient):
-    """Dynamic capability client.
-
-    Represents a reference to a remote capability.
-    This is the base class for all generated capability client classes.
-    """
-
+    def __getattr__(self, name: str) -> Any: ...
     @property
     def schema(self) -> _InterfaceSchema: ...
-    def upcast(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
-        """Upcast this capability to a parent interface type.
+    def _find_method_args(self, method_name: str) -> Any: ...
+    def _send_helper(
+        self,
+        name: str,
+        word_count: int | None,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> _RemotePromise: ...
+    def _request_helper(
+        self,
+        name: str,
+        firstSegmentWordSize: int | None,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> _Request: ...
+    def _request(self, name: str, *args: Any, word_count: int | None = None, **kwargs: Any) -> _Request: ...
+    def _send(self, name: str, *args: Any, word_count: int | None = None, **kwargs: Any) -> _RemotePromise: ...
+    def upcast(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
+    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
 
-        Args:
-            schema: Parent interface type
-
-        Returns:
-            Capability upcast to the parent interface
-
-        """
-
-class _DynamicCapabilityServer:
-    """Dynamic capability server base class.
-
-    Implement this to create server-side capability implementations.
-    """
+class _DynamicCapabilityServer: ...
 
 class _CapabilityClient:
-    """Base class for capability clients.
-
-    Wraps Cap'n Proto capability references.
-    """
-
+    _parent: Any
     @overload
     def cast_as(
         self,
@@ -1465,156 +1201,127 @@ class _CapabilityClient:
     ) -> single_value_capnp.types.clients.SingleValueClient: ...
     @overload
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
-    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient:
-        """Cast this capability to a specific interface type.
-
-        Args:
-            schema: Interface schema or module to cast to
-
-        Returns:
-            Capability cast to the specified interface
-
-        """
+    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
 
 class _Promise:
-    """Promise for asynchronous RPC results.
+    def cancel(self) -> None: ...
 
-    Represents a promise for a future value in Cap'n Proto RPC.
-    Can be awaited in async contexts.
-    """
-
-    def cancel(self) -> None:
-        """Cancel the promise."""
-
-class _RemotePromise(_Promise):
-    """Remote promise for asynchronous RPC results.
-
-    Extended promise type that provides additional methods for
-    accessing pipelined capabilities.
-    """
-
+class _RemotePromise:
+    def __getattr__(self, field: str) -> _DynamicStructPipeline: ...
+    def __await__(self) -> Iterator[Any]: ...
+    @property
+    def schema(self) -> _StructSchema: ...
+    def _get(self, field: str) -> _DynamicStructPipeline: ...
     def to_dict(
         self,
         verbose: bool = False,
         ordered: bool = False,
         encode_bytes_as_base64: bool = False,
-    ) -> dict[str, Any]:
-        """Convert the promise result to a dictionary.
-
-        Args:
-            verbose: Include more details
-            ordered: Use OrderedDict for output
-            encode_bytes_as_base64: Encode bytes fields as base64 strings
-
-        Returns:
-            Dictionary representation
-
-        """
+    ) -> dict[str, Any]: ...
+    def cancel(self) -> None: ...
 
 class _DynamicStructPipeline:
-    """Pipeline for pipelined RPC calls on struct results.
+    """Reads Cap'n Proto structs
 
-    This class is almost a 1:1 wrapping of the Cap'n Proto C++ DynamicStruct::Pipeline.
+    This class is almost a 1 for 1 wrapping of the Cap'n Proto C++ DynamicStruct::Pipeline.
     The only difference is that instead of a `get` method, __getattr__ is overloaded and the
     field name is passed onto the C++ equivalent `get`. This means you just use . syntax to
     access any field. For field names that don't follow valid python naming convention for fields,
-    use the global function getattr()::
-
-        # Pipeline calls allow you to call methods on results before they arrive
-        result = remote_object.method()
-        result.field.another_method()  # Pipelined call
+    use the global function :py:func:`getattr`::
     """
 
+    _parent: Any
+
+    def __getattr__(self, field: str) -> Any: ...
+    @property
+    def schema(self) -> _StructSchema: ...
+    def _get(self, field: str) -> Any: ...
     def to_dict(
         self,
         verbose: bool = False,
         ordered: bool = False,
         encode_bytes_as_base64: bool = False,
-    ) -> dict[str, Any]:
-        """Convert to dictionary when the pipeline resolves.
+    ) -> dict[str, Any]: ...
 
-        Args:
-            verbose: Include more details
-            ordered: Use OrderedDict for output
-            encode_bytes_as_base64: Encode bytes fields as base64 strings
-
-        Returns:
-            Dictionary representation
-
-        """
-
-# Message Builder/Reader Types
 class _MessageBuilder:
-    """Abstract base class for building Cap'n Proto messages.
+    """An abstract base class for building Cap'n Proto messages
 
-    Warning:
-        Don't ever instantiate this class directly. It is only used for inheritance.
-
+    .. warning:: Don't ever instantiate this class directly. It is only used for inheritance.
     """
 
-    def init_root(self, schema: _StructSchema) -> Any:
-        """Initialize the message root as a struct of the given type.
+    def __init__(self) -> None: ...
+    def init_root(self, schema: _StructModule) -> _DynamicStructBuilder:
+        """A method for instantiating Cap'n Proto structs
 
-        Args:
-            schema: The struct schema to use for the root
+        You will need to pass in a schema to specify which struct to
+        instantiate. Schemas are available in a loaded Cap'n Proto module::
 
-        Returns:
-            A builder for the root struct
+            addressbook = capnp.load('addressbook.capnp')
+            ...
+            person = message.init_root(addressbook.Person)
 
+        :type schema: Schema
+        :param schema: A Cap'n proto schema specifying which struct to instantiate
+
+        :rtype: :class:`_DynamicStructBuilder`
+        :return: An object where you will set all the members
         """
+    def get_root(self, schema: _StructModule) -> _DynamicStructBuilder:
+        """A method for instantiating Cap'n Proto structs, from an already pre-written buffer
 
-    def get_root(self, schema: _StructSchema) -> Any:
-        """Get the message root as a struct of the given type.
+        Don't use this method unless you know what you're doing. You probably
+        want to use init_root instead::
 
-        Args:
-            schema: The struct schema to use for the root
+            addressbook = capnp.load('addressbook.capnp')
+            ...
+            person = message.init_root(addressbook.Person)
+            ...
+            person = message.get_root(addressbook.Person)
 
-        Returns:
-            A reader for the root struct
+        :type schema: Schema
+        :param schema: A Cap'n proto schema specifying which struct to instantiate
 
+        :rtype: :class:`_DynamicStructBuilder`
+        :return: An object where you will set all the members
         """
-
     def get_root_as_any(self) -> _DynamicObjectBuilder:
-        """Get the message root as an AnyPointer.
-
-        Returns:
-            An AnyPointer builder for the root
-
-        """
-
-    def set_root(self, value: _DynamicStructReader) -> None:
-        """Set the message root by copying from a struct reader.
-
-        Args:
-            value: The struct reader to copy from
-
-        """
-
-    def new_orphan(self, schema: _StructSchema) -> Any:
-        """Create a new orphaned struct.
+        """A method for getting a Cap'n Proto AnyPointer, from an already pre-written buffer
 
         Don't use this method unless you know what you're doing.
 
-        Args:
-            schema: The struct schema for the orphan
-
-        Returns:
-            An orphaned struct
-
+        :rtype: :class:`_DynamicObjectBuilder`
+        :return: An AnyPointer that you can set fields in
         """
+    def set_root(self, value: Any) -> None:
+        """A method for instantiating Cap'n Proto structs by copying from an existing struct
 
-    def get_segments_for_output(self) -> list[bytes]:
-        """Get the message segments as a list of bytes.
+        :type value: :class:`_DynamicStructReader`
+        :param value: A Cap'n Proto struct value to copy
 
-        Returns:
-            List of segment byte arrays
+        :rtype: void
+        """
+    def get_segments_for_output(self) -> list[bytes]: ...
+    def new_orphan(self, schema: _StructModule) -> _DynamicOrphan:
+        """A method for instantiating Cap'n Proto orphans
 
+        Don't use this method unless you know what you're doing.
+        Orphans are useful for dynamically allocating objects for an unknown sized list, ie::
+
+            addressbook = capnp.load('addressbook.capnp')
+            m = capnp._MallocMessageBuilder()
+            alice = m.new_orphan(addressbook.Person)
+
+        :type schema: Schema
+        :param schema: A Cap'n proto schema specifying which struct to instantiate
+
+        :rtype: :class:`_DynamicOrphan`
+        :return: An orphan representing a :class:`_DynamicStructBuilder`
         """
 
 class _MallocMessageBuilder(_MessageBuilder):
-    """The main class for building Cap'n Proto messages.
+    """The main class for building Cap'n Proto messages
 
-    You will use this class to handle arena allocation of Cap'n Proto
+    You will use this class to handle arena allocation of the Cap'n Proto
     messages. You also use this object when you're done assigning to Cap'n
     Proto objects, and wish to serialize them::
 
@@ -1624,658 +1331,618 @@ class _MallocMessageBuilder(_MessageBuilder):
         person.name = 'alice'
         ...
         f = open('out.txt', 'w')
-        capnp._write_message_to_fd(f.fileno(), message)
+        _write_message_to_fd(f.fileno(), message)
     """
 
-    def __init__(self, size: int | None = None) -> None:
-        """Create a new message builder.
+    def __init__(self, size: int | None = None) -> None: ...
 
-        Args:
-            size: Optional initial size for the first segment (in words)
+class _PyCustomMessageBuilder(_MessageBuilder):
+    """The class for building Cap'n Proto messages,
+    with customised memory allocation strategy
+
+    You will use this class if you want to customise the allocateSegment method,
+    and define your own memory allocation strategy.
+    """
+
+    def __init__(self, allocate_seg_callable: Callable[[int], Any], size: int | None = None) -> None:
+        """The constructor requires you to provide a Python callable object as a parameter.
+        This callable object will be invoked in the allocateSegment method of the MessageBuilder
+        to allocate memory. The allocated memory will be managed within the MessageBuilder.
+
+        :type allocate_seg_callable: Callable[[int], Buffer]
+        :param allocate_seg_callable: A python callable object that takes the minimum number of 8-byte
+        words to allocate (as an `int`) and returns any object supporting the writable buffer protocol
+        (e.g., `bytearray`, `memoryview`, `numpy.ndarray`). This enables custom memory allocation
+        strategies including shared memory.
+
+        Required function signature is like this:
+        def __call__(self, minimum_size: int) -> Buffer:
+
+        Where `Buffer` is any object that:
+          - Supports the Python buffer protocol (PyObject_GetBuffer)
+          - Is writable
+        Note that the unit of minimum_size is words, ie. 8 byte increments.
+
+        The underlying memory must remain valid for the lifetime of the MessageBuilder.
+        If returning a view (e.g., `memoryview`, `numpy.ndarray`) that wraps external memory,
+        the allocator is responsible for properly managing the memory lifecycle。
+
+        Examples:
+            # Example 1: Simple bytearray allocator
+            class Allocator:
+                def __init__(self):
+                    self.cur_size = 0
+                def __call__(self, minimum_size: int) -> bytearray:
+                    size = max(minimum_size, self.cur_size)
+                    self.cur_size += size
+                    WORD_SIZE = 8
+                    byte_count = size * WORD_SIZE
+                    return bytearray(byte_count)
+
+            addressbook = capnp.load('addressbook.capnp')
+            allocator = Allocator()
+            message = capnp._PyCustomMessageBuilder(allocator)
+            person = message.init_root(addressbook.Person)
+
+            # Example 2: Shared memory allocator (zero-copy)
+            import ctypes
+
+            class ShmAllocator:
+                def __init__(self, shm_pool):
+                    self.shm = shm_pool
+                    self.buffers = []
+
+                def __call__(self, minimum_size: int) -> memoryview:
+                    size = minimum_size * 8
+                    ptr = self.shm.allocate(size)
+                    buffer = (ctypes.c_uint8 * size).from_address(ptr)
+                    self.buffers.append(buffer)
+                    return memoryview(buffer)
+
+                def release(self):
+                    for buffer in self.buffers:
+                        ptr = ctypes.addressof(buffer)
+                        size = ctypes.sizeof(buffer)
+                        self.shm.deallocate(ptr, size)
+                    self.buffers.clear()
+
+        :type size: int
+        :param size: Size of the first segment to allocate (in words ie. 8 byte increments)
 
         """
 
 class _MessageReader:
-    """Abstract base class for reading Cap'n Proto messages.
+    """An abstract base class for reading Cap'n Proto messages
 
-    Warning:
-        Don't ever instantiate this class. It is only used for inheritance.
-
+    .. warning:: Don't ever instantiate this class. It is only used for inheritance.
     """
 
-    def get_root(self, schema: _StructSchema) -> Any:
-        """Get the message root as a struct of the given type.
+    _parent: Any
 
-        Args:
-            schema: The struct schema to use for the root
+    def __init__(self) -> None: ...
+    def get_root(self, schema: _StructModule) -> _DynamicStructReader:
+        """A method for instantiating Cap'n Proto structs
 
-        Returns:
-            A reader for the root struct
+        You will need to pass in a schema to specify which struct to
+        instantiate. Schemas are available in a loaded Cap'n Proto module::
 
+            addressbook = capnp.load('addressbook.capnp')
+            ...
+            person = message.get_root(addressbook.Person)
+
+        :type schema: Schema
+        :param schema: A Cap'n proto schema specifying which struct to instantiate
+
+        :rtype: :class:`_DynamicStructReader`
+        :return: An object with all the data of the read Cap'n Proto message.
+            Access members with . syntax.
         """
-
     def get_root_as_any(self) -> _DynamicObjectReader:
-        """Get the message root as an AnyPointer.
+        """A method for getting a Cap'n Proto AnyPointer, from an already pre-written buffer
 
-        Returns:
-            An AnyPointer reader for the root
+        Don't use this method unless you know what you're doing.
 
+        :rtype: :class:`_DynamicObjectReader`
+        :return: An AnyPointer that you can read from
         """
 
 class _PackedFdMessageReader(_MessageReader):
-    """Read a Cap'n Proto message from a file descriptor in packed format.
+    """Read a Cap'n Proto message from a file descriptor in a packed manner
 
-    This class reads messages that were written with _write_packed_message_to_fd.
+    You use this class to for reading message(s) from a file. It's analagous to the inverse of
+    :func:`_write_packed_message_to_fd` and :class:`_MessageBuilder`, but in one class.::
+
+        f = open('out.txt')
+        message = _PackedFdMessageReader(f)
+        person = message.get_root(addressbook.Person)
+        print person.name
+
+    :Parameters: - fd (`int`) - A file descriptor
     """
 
     def __init__(
         self,
-        file: IO[str] | IO[bytes],
+        file: IO[Any],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> None:
-        """Create a reader from a file object.
-
-        Args:
-            file: File object with a fileno() method (opened file, socket, etc.)
-                  Does NOT accept BytesIO or other pure-Python file-like objects
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
-
-        """
+    ) -> None: ...
 
 class _StreamFdMessageReader(_MessageReader):
-    """Read a Cap'n Proto message from a file descriptor in stream format.
+    """Read a Cap'n Proto message from a file descriptor
 
-    This class reads messages that were written with _write_message_to_fd.
+    You use this class to for reading message(s) from a file. It's analagous to the inverse of
+    :func:`_write_message_to_fd` and :class:`_MessageBuilder`, but in one class::
+
+        f = open('out.txt')
+        message = _StreamFdMessageReader(f)
+        person = message.get_root(addressbook.Person)
+        print person.name
+
+    :Parameters: - fd (`int`) - A file descriptor
     """
 
     def __init__(
         self,
-        file: IO[str] | IO[bytes],
+        file: IO[Any],
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> None:
-        """Create a reader from a file object.
+    ) -> None: ...
 
-        Args:
-            file: File object with a fileno() method (opened file, socket, etc.)
-                  Does NOT accept BytesIO or other pure-Python file-like objects
-            traversal_limit_in_words: Optional limit on pointer dereferences
-            nesting_limit: Optional limit on nesting depth
+class SchemaLoader:
+    """Class which can be used to construct Schema objects from schema::Nodes as defined in
+    schema.capnp.
 
-        """
-
-class _PyCustomMessageBuilder(_MessageBuilder):
-    """Custom message builder with user-provided segments.
-
-    This allows building messages with custom memory management.
+    This class wraps capnproto/c++/src/capnp/schema-loader.h directly.
     """
 
-    def __init__(self, allocate_seg_callable: Callable[[int], bytearray]) -> None:
-        """Create a message builder with custom memory allocation.
-
-        Args:
-            allocate_seg_callable: A callable that takes the minimum number of 8-byte
-                words to allocate (as an int) and returns a bytearray. This is used to
-                customize the memory allocation strategy.
-
+    def load(self, reader: _NodeReader) -> _Schema:
+        """Loads the given schema node.  Validates the node and throws an exception if invalid.  This
+        makes a copy of the schema, so the object passed in can be destroyed after this returns.
         """
+    def load_dynamic(self, reader: _DynamicStructReader) -> _Schema:
+        """Loads the given schema node with self.load, but converts from a _DynamicStructReader
+        first.
+        """
+    def get(self, id_: int) -> _Schema:
+        """Gets the schema for the given ID, throwing an exception if it isn't present."""
 
 class SchemaParser:
-    """Parser for loading Cap'n Proto schema files.
+    """A class for loading Cap'n Proto schema files.
 
     Do not use this class unless you're sure you know what you're doing.
     Use the convenience method :func:`load` instead.
     """
 
-    modules_by_id: MutableMapping[int, Any]  # Maps ID to loaded module
+    modules_by_id: dict[int, ModuleType]
+
     def load(
         self,
         file_name: str,
         display_name: str | None = None,
         imports: Sequence[str] = [],
-    ) -> _CapnpModule:
-        """Load a Cap'n Proto schema file.
+    ) -> ModuleType:
+        """Load a Cap'n Proto schema from a file
 
-        Args:
-            file_name: Path to the .capnp file
-            display_name: Optional display name for the module
-            imports: List of import paths for resolving imports
+        You will have to load a schema before you can begin doing anything
+        meaningful with this library. Loading a schema is much like loading
+        a Python module (and load even returns a `ModuleType`). Once it's been
+        loaded, you use it much like any other Module::
 
-        Returns:
-            Loaded module (types.ModuleType with extra attributes like .schema)
+            parser = capnp.SchemaParser()
+            addressbook = parser.load('addressbook.capnp')
+            print addressbook.qux # qux is a top level constant
+            # 123
+            person = addressbook.Person.new_message()
 
+        :type file_name: str
+        :param file_name: A relative or absolute path to a Cap'n Proto schema
+
+        :type display_name: str
+        :param display_name: The name internally used by the Cap'n Proto library
+            for the loaded schema. By default, it's just os.path.basename(file_name)
+
+        :type imports: list
+        :param imports: A list of str directories to add to the import path.
+
+        :rtype: ModuleType
+        :return: A module corresponding to the loaded schema. You can access
+            parsed schemas and constants with . syntax
+
+        :Raises:
+            - :exc:`exceptions.IOError` if `file_name` doesn't exist
+            - :exc:`KjException` if the Cap'n Proto C++ library has any problems loading the schema
         """
     def _parse_disk_file(
         self,
-        display_name: str,
-        file_name: str,
+        displayName: str,
+        diskPath: str,
         imports: Sequence[str],
     ) -> _ParsedSchema: ...
 
-class SchemaLoader:
-    """Class for constructing Schema objects from schema::Nodes.
+class _DynamicListBuilder:
+    """Class for building Cap'n Proto Lists
 
-    Wraps capnproto/c++/src/capnp/schema-loader.h directly.
+    This class thinly wraps the C++ Cap'n Proto DynamicList::Bulder class. __getitem__, __setitem__, and __len__
+    have been defined properly, so you can treat this class mostly like any other iterable class::
+
+        ...
+        person = addressbook.Person.new_message()
+
+        phones = person.init('phones', 2) # This returns a _DynamicListBuilder
+
+        phone = phones[0]
+        phone.number = 'foo'
+        phone = phones[1]
+        phone.number = 'bar'
+
+        for phone in phones:
+            print phone.number
     """
 
-    def get(self, id_: int) -> _Schema:
-        """Get a schema by its ID.
+    _parent: Any
 
-        Args:
-            id_: Schema node ID
+    def __len__(self) -> int: ...
+    def __getitem__(self, index: int) -> Any: ...
+    def __setitem__(self, index: int, value: Any) -> None: ...
+    def _get(self, index: int) -> Any: ...
+    def _set(self, index: int, value: Any) -> None: ...
+    def adopt(self, index: int, orphan: _DynamicOrphan) -> None:
+        """A method for adopting Cap'n Proto orphans
 
-        Returns:
-            The schema with the given ID
+        Don't use this method unless you know what you're doing.
+        Orphans are useful for dynamically allocating objects for an unknown sized list.
 
+        :type index: int
+        :param index: The index of the element in the list to replace with the newly adopted object
+
+        :type orphan: :class:`_DynamicOrphan`
+        :param orphan: A Cap'n proto orphan to adopt. It will be unusable after this operation.
+
+        :rtype: void
         """
-    def load(self, reader: _NodeReader) -> _Schema:
-        """Load a schema from a reader.
+    def disown(self, index: int) -> _DynamicOrphan:
+        """A method for disowning Cap'n Proto orphans
 
-        Args:
-            reader: DynamicStructReader containing schema data
+        Don't use this method unless you know what you're doing.
 
-        Returns:
-            Loaded schema
+        :type index: int
+        :param index: The index of the element in the list to disown
 
+        :rtype: :class:`_DynamicOrphan`
         """
-    def load_dynamic(self, reader: _DynamicStructReader) -> _Schema:
-        """Load a schema dynamically from a reader.
+    def init(self, index: int, size: int) -> Any:
+        """A method for initializing an element in a list
 
-        Args:
-            reader: DynamicStructReader containing schema data
+        :type index: int
+        :param index: The index of the element in the list
 
-        Returns:
-            Loaded schema
-
+        :type size: int
+        :param size: Size of the element to be initialized.
         """
 
-# Module loading and import hooks
+class _DynamicListReader:
+    """Class for reading Cap'n Proto Lists
+
+    This class thinly wraps the C++ Cap'n Proto DynamicList::Reader class. __getitem__ and __len__
+    have been defined properly, so you can treat this class mostly like any other iterable class::
+
+        ...
+        person = addressbook.Person.read(file)
+
+        phones = person.phones # This returns a _DynamicListReader
+
+        phone = phones[0]
+        print phone.number
+
+        for phone in phones:
+            print phone.number
+    """
+
+    _parent: Any
+
+    def __len__(self) -> int: ...
+    def __getitem__(self, index: int) -> Any: ...
+    def _get(self, index: int) -> Any: ...
+
+class _DynamicOrphan:
+    _parent: Any
+
+    def get(self) -> Any:
+        """Returns a python object corresponding to the DynamicValue owned by this orphan
+
+        Use this DynamicValue to set fields inside the orphan
+        """
+
+class _DynamicResizableListBuilder:
+    """Class for building growable Cap'n Proto Lists
+
+    .. warning::
+        You need to call :meth:`finish` on this object before serializing the
+        Cap'n Proto message. Failure to do so will cause your objects not to be
+        written out as well as leaking orphan structs into your message.
+
+    This class works much like :class:`_DynamicListBuilder`, but it allows growing the list dynamically.
+    It is meant for lists of structs, since for primitive types like int or float, you're much better off
+    using a normal python list and then serializing straight to a Cap'n Proto list.
+    It has __getitem__ and __len__ defined, but not __setitem__::
+
+        ...
+        person = addressbook.Person.new_message()
+
+        phones = person.init_resizable_list('phones') # This returns a _DynamicResizableListBuilder
+
+        phone = phones.add()
+        phone.number = 'foo'
+        phone = phones.add()
+        phone.number = 'bar'
+
+        phones.finish()
+
+        f = open('example', 'w')
+        person.write(f)
+    """
+
+    _parent: Any
+
+    def __init__(self, parent: _DynamicStructBuilder, field: Any, schema: Any) -> None: ...
+    def __len__(self) -> int: ...
+    def __getitem__(self, index: int) -> Any: ...
+    def _get(self, index: int) -> Any: ...
+    def add(self) -> Any:
+        """A method for adding a new struct to the list
+
+        This will return a struct, in which you can set fields that will be reflected in the serialized
+        Cap'n Proto message.
+
+        :rtype: :class:`_DynamicStructBuilder`
+        """
+    def finish(self) -> None:
+        """A method for closing this list and serializing all its members to the message
+
+        If you don't call this method, the items you previously added from this object will leak into the message,
+        ie. inaccessible but still taking up space.
+        """
+
+class _EventLoop: ...
+
+class TwoPartyClient:
+    """TwoPartyClient for RPC Communication
+
+    :param socket: AsyncIoStream
+    :param traversal_limit_in_words: Pointer derefence limit (see https://capnproto.org/cxx.html).
+    :param nesting_limit: Recursive limit when reading types (see https://capnproto.org/cxx.html).
+    """
+
+    def __init__(
+        self,
+        socket: _AsyncIoStream | None = None,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> None: ...
+    def close(self) -> None: ...
+    def bootstrap(self) -> _CapabilityClient: ...
+    def on_disconnect(self) -> Awaitable[None]: ...
+
+class TwoPartyServer:
+    """TwoPartyServer for RPC Communication
+
+    :param socket: AsyncIoStream
+    :param bootstrap: Class object defining the implementation of the Cap'n'proto interface.
+    :param traversal_limit_in_words: Pointer derefence limit (see https://capnproto.org/cxx.html).
+    :param nesting_limit: Recursive limit when reading types (see https://capnproto.org/cxx.html).
+    """
+
+    def __init__(
+        self,
+        socket: _AsyncIoStream | None = None,
+        bootstrap: Any = None,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> None: ...
+    def close(self) -> None: ...
+    def bootstrap(self) -> _CapabilityClient: ...
+    def on_disconnect(self) -> Awaitable[None]: ...
+
+class _AsyncIoStream:
+    def __init__(self) -> None: ...
+    @staticmethod
+    async def create_connection(host: str | None = None, port: int | None = None, **kwargs: Any) -> _AsyncIoStream:
+        """Create a TCP connection.
+
+        All parameters given to this function are passed to `asyncio.get_running_loop().create_connection()`.
+        See that function for documentation on the possible arguments.
+        """
+    @staticmethod
+    async def create_unix_connection(path: str | None = None, **kwargs: Any) -> _AsyncIoStream:
+        """Create a Unix socket connection.
+
+        All parameters given to this function are passed to `asyncio.get_running_loop().create_unix_connection()`.
+        See that function for documentation on the possible arguments.
+        """
+    @staticmethod
+    async def create_server(
+        callback: Callable[[_AsyncIoStream], Awaitable[None]],
+        host: str | None = None,
+        port: int | None = None,
+        **kwargs: Any,
+    ) -> asyncio.Server:
+        """Create a TCP connection server.
+
+        The `callback` parameter will be called whenever a new connection is made. It receives a `AsyncIoStream`
+        instance as its only argument. If the result of `callback` is a coroutine, it will be scheduled as a task.
+
+        This function behaves similarly to `asyncio.get_running_loop().create_server()`. All arguments except
+        for `callback` will be passed directly to that function, and the server returned is similar as well.
+        See that function for documentation on the possible arguments.
+        """
+    @staticmethod
+    async def create_unix_server(
+        callback: Callable[[_AsyncIoStream], Awaitable[None]],
+        path: str | None = None,
+        **kwargs: Any,
+    ) -> asyncio.Server:
+        """Create a unix connection server.
+
+        The `callback` parameter will be called whenever a new connection is made. It receives a `AsyncIoStream`
+        instance as its only argument. If the result of `callback` is a coroutine, it will be scheduled as a task.
+
+        This function behaves similarly to `asyncio.get_running_loop().create_server()`. All arguments except
+        for `callback` will be passed directly to that function, and the server returned is similar as well.
+        See that function for documentation on the possible arguments.
+        """
+    def close(self) -> None: ...
+    async def wait_closed(self) -> None: ...
+
+types: ModuleType
+_global_schema_parser: SchemaParser | None
+
+def register_type(id: int, klass: type[Any]) -> None: ...
+def deregister_all_types() -> None: ...
+def void_task_done_callback(method_name: str, fulfiller: Any, task: Any) -> None: ...
+def fill_context(method_name: str, context: _CallContext, returned_data: Any) -> None: ...
 def add_import_hook() -> None:
-    """Add a hook to the Python import system.
+    """Add a hook to the python import system, so that Cap'n Proto modules are directly importable
 
-    After calling this, Cap'n Proto modules can be directly imported
-    like regular Python modules.
+    After calling this function, you can use the python import syntax to directly import capnproto schemas.
+    This function is automatically called upon first import of `capnp`,
+    so you will typically never need to use this function.::
+
+        import capnp
+        capnp.add_import_hook()
+
+        import addressbook_capnp
+        # equivalent to capnp.load('addressbook.capnp', 'addressbook', sys.path),
+        # except it will search for 'addressbook.capnp' in all directories of sys.path
     """
 
 def remove_import_hook() -> None:
-    """Remove the import hook and return Python's import to normal."""
+    """Remove the import hook, and return python's import to normal"""
 
 def load(
     file_name: str,
     display_name: str | None = None,
     imports: Sequence[str] = [],
-) -> _CapnpModule:
-    """Load a Cap'n Proto schema from a file.
+) -> ModuleType:
+    """Load a Cap'n Proto schema from a file
 
-    Args:
-        file_name: Path to the .capnp file
-        display_name: Optional display name for the module
-        imports: List of import paths for resolving imports
+    You will have to load a schema before you can begin doing anything
+    meaningful with this library. Loading a schema is much like loading
+    a Python module (and load even returns a `ModuleType`). Once it's been
+    loaded, you use it much like any other Module::
 
-    Returns:
-        Loaded GeneratedModule with generated types
+        addressbook = capnp.load('addressbook.capnp')
+        print addressbook.qux # qux is a top level constant in the addressbook.capnp schema
+        # 123
+        person = addressbook.Person.new_message()
 
-    """
+    :type file_name: str
+    :param file_name: A relative or absolute path to a Cap'n Proto schema
 
-def register_type(id: int, klass: type) -> None:
-    """Register a type with the given schema ID.
+    :type display_name: str
+    :param display_name: The name internally used by the Cap'n Proto library
+        for the loaded schema. By default, it's just os.path.basename(file_name)
 
-    Args:
-        id: Schema node ID
-        klass: Python class to register
+    :type imports: list
+    :param imports: A list of str directories to add to the import path.
 
+    :rtype: ModuleType
+    :return: A module corresponding to the loaded schema. You can access
+        parsed schemas and constants with . syntax
+
+    :Raises: :exc:`KjException` if `file_name` doesn't exist
     """
 
 def cleanup_global_schema_parser() -> None:
-    """Unload all schemas from the current context."""
-
-def deregister_all_types() -> None:
-    """Deregister all registered types."""
+    """Unloads all of the schema from the current context"""
 
 def read_multiple_bytes_packed(
-    buf: bytes,
+    buf: Any,
     traversal_limit_in_words: int | None = None,
     nesting_limit: int | None = None,
 ) -> Iterator[_DynamicStructReader]:
-    """Read multiple packed Cap'n Proto messages from a buffer.
+    """Returns an iterable, that when traversed will return Readers for AnyPointer messages.
 
-    Returns an iterable that yields Readers for AnyPointer messages.
+    :type buf: buffer
+    :param buf: Any Python object that supports the buffer interface.
 
-    Args:
-        buf: Buffer containing packed messages
-        traversal_limit_in_words: Optional limit on pointer dereferences
-        nesting_limit: Optional limit on nesting depth
+    :type traversal_limit_in_words: int
+    :param traversal_limit_in_words: Limits how many total words of data are allowed to be traversed.
+                                        Is actually a uint64_t, and values can be up to 2^64-1. Default is 8*1024*1024.
 
-    Yields:
-        DynamicStructReader for each message
+    :type nesting_limit: int
+    :param nesting_limit: Limits how many total words of data are allowed to be traversed. Default is 64.
 
+    :rtype: Iterable with elements of :class:`_DynamicStructReader`
     """
 
 def _write_message_to_fd(fd: int, message: _MessageBuilder) -> None:
-    """Write a Cap'n Proto message to a file descriptor.
+    """Serialize a Cap'n Proto message to a file descriptor
 
-    Writes the message in unpacked format with a segment table header.
+    You use this method to serialize your message to a file. Please note that
+    you must pass a file descriptor (ie. an int), not a file object. Make sure
+    you use the proper reader to match this (ie. don't use _PackedFdMessageReader)::
 
-    Args:
-        fd: File descriptor to write to
-        message: Message to write
+        message = capnp._MallocMessageBuilder()
+        ...
+        f = open('out.txt', 'w')
+        _write_message_to_fd(f.fileno(), message)
+        ...
+        f = open('out.txt')
+        _StreamFdMessageReader(f)
 
+    :type fd: int
+    :param fd: A file descriptor
+
+    :type message: :class:`_MessageBuilder`
+    :param message: The Cap'n Proto message to serialize
+
+    :rtype: void
     """
 
 def _write_packed_message_to_fd(fd: int, message: _MessageBuilder) -> None:
-    """Write a Cap'n Proto message to a file descriptor in packed format.
+    """Serialize a Cap'n Proto message to a file descriptor in a packed manner
 
-    Writes the message using Cap'n Proto's packing algorithm which compresses
-    runs of zero bytes.
+    You use this method to serialize your message to a file. Please note that
+    you must pass a file descriptor (ie. an int), not a file object. Also, note
+    the difference in names with _write_message_to_fd. This method uses a different
+    serialization specification, and your reader will need to match.::
 
-    Args:
-        fd: File descriptor to write to
-        message: Message to write
+        message = capnp._MallocMessageBuilder()
+        ...
+        f = open('out.txt', 'w')
+        _write_packed_message_to_fd(f.fileno(), message)
+        ...
+        f = open('out.txt')
+        _PackedFdMessageReader(f)
 
+    :type fd: int
+    :param fd: A file descriptor
+
+    :type message: :class:`_MessageBuilder`
+    :param message: The Cap'n Proto message to serialize
+
+    :rtype: void
     """
 
-def fill_context(method_name: str, context: _CallContext, returned_data: Any) -> None:
-    """Internal helper for filling RPC call context with returned data.
+async def run(coro: Awaitable[Any]) -> Any:
+    """Ensure that the coroutine runs while the KJ event loop is running
 
-    Args:
-        method_name: Name of the RPC method
-        context: Call context to fill
-        returned_data: Data to return to the caller
+    This is a shortcut for wrapping the coroutine in a :py:meth:`capnp.kj_loop` context manager.
 
+    :param coro: Coroutine to run
     """
 
-def void_task_done_callback(method_name: str, fulfiller: Any, task: Any) -> None:
-    """Internal callback for void RPC methods when async task completes.
+def kj_loop() -> contextlib.AbstractAsyncContextManager[None]:
+    """Context manager for running the KJ event loop
 
-    Args:
-        method_name: Name of the RPC method
-        fulfiller: Promise fulfiller to complete
-        task: Async task that completed
+    As long as the context manager is active it is guaranteed that the KJ event
+    loop is running. When the context manager is exited, the KJ event loop is
+    shut down properly and pending tasks are cancelled.
 
+    :raises [RuntimeError]: If the KJ event loop is already running (on this thread).
+
+    .. warning:: Every capnp rpc call required a running KJ event loop.
     """
-
-# Internal/private module attributes
-_global_schema_parser: SchemaParser | None
-"""Global schema parser instance used by import hooks and pickling (may be None).
-
-Note: This is actually defined in capnp.lib.capnp but referenced at module level
-in some internal code like pickle_helper.py.
-"""
-
-class _SchemaType:
-    """Internal schema type representation.
-
-    This class represents Cap'n Proto primitive types.
-    Instances are used for type comparisons and type checking.
-    """
-
-class _DynamicListBuilder:
-    """List builder type returned by init() for list fields.
-
-    This class wraps the Cap'n Proto C++ DynamicList::Builder.
-    __getitem__, __setitem__, __len__ and __iter__ have been defined properly,
-    so you can treat this class mostly like any other iterable class::
-
-        person = addressbook.Person.new_message()
-
-        phones = person.init('phones', 2)  # This returns a _DynamicListBuilder
-
-        phones[0].number = '555-1234'
-        phones[1].number = '555-5678'
-
-        for phone in phones:
-            print(phone.number)
-
-    For struct element types, both element instances and dict[str, Any] are accepted
-    for convenient initialization, e.g.:
-        list_builder[0] = {"field": value}
-    """
-
-    def __len__(self) -> int: ...
-    def __getitem__(self, index: int) -> Any: ...
-    def __setitem__(self, index: int, value: Any) -> None: ...
-    def __iter__(self) -> Iterator[Any]: ...
-    def adopt(self, index: int, orphan: Any) -> None:
-        """Adopt an orphaned message at the given index.
-
-        Don't use this method unless you know what you're doing.
-        """
-    def disown(self, index: int) -> Any:
-        """Disown the element at the given index, returning an orphan.
-
-        Don't use this method unless you know what you're doing.
-        """
-    def init(self, index: int, size: int) -> Any:
-        """Initialize a struct or list element at the given index with the given size.
-
-        Args:
-            index: Index of the element to initialize
-            size: Size parameter (for nested lists)
-
-        Returns:
-            The initialized element (builder for structs, list builder for lists)
-
-        """
-
-class _DynamicListReader:
-    """List reader type for reading Cap'n Proto list fields.
-
-    This class thinly wraps the C++ Cap'n Proto DynamicList::Reader class.
-    __getitem__ and __len__ have been defined properly, so you can treat this
-    class mostly like any other iterable class::
-
-        person = addressbook.Person.read(file)
-
-        phones = person.phones  # This returns a _DynamicListReader
-
-        phone = phones[0]
-        print(phone.number)
-
-        for phone in phones:
-            print(phone.number)
-
-    Provides read-only list-like interface.
-    """
-
-    def __len__(self) -> int: ...
-    def __getitem__(self, index: int) -> Any: ...
-    def __iter__(self) -> Iterator[Any]: ...
-
-class _DynamicOrphan:
-    """Orphaned Cap'n Proto message.
-
-    An orphan is a message that has been disowned from its parent.
-    Don't use this class unless you know what you're doing.
-    """
-
-class _DynamicResizableListBuilder:
-    """Resizable list builder for Cap'n Proto lists.
-
-    Returned by init_resizable_list(). Allows adding elements one at a time
-    without knowing the final size upfront.
-    """
-
-    def add(self) -> Any:
-        """Add a new element to the list and return a builder for it."""
-    def finish(self) -> None:
-        """Finish building the list. Must be called before serialization."""
-
-class _EventLoop:
-    """Cap'n Proto event loop integration.
-
-    Internal class for managing the KJ event loop.
-    """
-
-class _EnumModule:
-    """Module/class for a generated enum type.
-
-    Instances of this class are what you get when you access an enum from
-    a loaded schema.
-    """
-
-    def __init__(self, schema: _EnumSchema, name: str) -> None: ...
-    def __getattr__(self, name: str) -> Any: ...
-    def __setattr__(self, name: str, value: Any) -> None: ...
-    @property
-    def schema(self) -> _EnumSchema: ...
-
-class _InterfaceModule:
-    """Module/class for a generated interface.
-
-    This is what you get when you access an interface class from a loaded schema.
-    Instances of this class are what you get when you access an interface from
-    a loaded schema (e.g. `calculator.Calculator`). The module exposes factory and
-    RPC helpers for that interface type.
-
-    Nested types (structs, enums) are accessed as attributes.
-    The Server base class is accessed via the `Server` attribute.
-    """
-
-    def __init__(self, schema: _InterfaceSchema, name: str) -> None: ...
-    def __getattr__(self, name: str) -> Any: ...
-    def __setattr__(self, name: str, value: Any) -> None: ...
-    @property
-    def schema(self) -> _InterfaceSchema: ...
-    def _new_client(self, server: _DynamicCapabilityServer) -> _DynamicCapabilityClient:
-        """Create a new client from a server implementation.
-
-        Note: Requires an active event loop (use within capnp.kj_loop() or async context).
-
-        Args:
-            server: Server implementation instance (subclass of this interface's Server class)
-
-        Returns:
-            Client capability for this interface
-
-        Raises:
-            RuntimeError: If there is no running event loop
-
-        Example:
-            class MyCalculator(Calculator.Server):
-                def evaluate(self, expression, **kwargs):
-                    return 42.0
-
-            with capnp.kj_loop():
-                server = MyCalculator()
-                client = Calculator._new_client(server)
-
-        """
 
 def _init_capnp_api() -> None:
-    """Initialize the Cap'n Proto API.
-
-    Internal function called during module initialization.
-    """
-
-# RPC Classes
-
-class TwoPartyClient:
-    """Two-party RPC client for Cap'n Proto.
-
-    Args:
-        socket: AsyncIoStream connection
-        traversal_limit_in_words: Optional limit on pointer dereferences
-        nesting_limit: Optional limit on nesting depth
-
-    """
-
-    def __init__(
-        self,
-        socket: AsyncIoStream | None = None,
-        traversal_limit_in_words: int | None = None,
-        nesting_limit: int | None = None,
-    ) -> None: ...
-    def bootstrap(self) -> _CapabilityClient:
-        """Get the bootstrap interface for this client."""
-    def close(self) -> None:
-        """Close the client connection."""
-    async def on_disconnect(self) -> None:
-        """Wait until the connection is disconnected."""
-
-class TwoPartyServer:
-    """Two-party RPC server for Cap'n Proto.
-
-    Args:
-        socket: AsyncIoStream connection
-        bootstrap: Bootstrap interface implementation
-        traversal_limit_in_words: Optional limit on pointer dereferences
-        nesting_limit: Optional limit on nesting depth
-
-    """
-
-    def __init__(
-        self,
-        socket: AsyncIoStream | None = None,
-        bootstrap: Any = None,
-        traversal_limit_in_words: int | None = None,
-        nesting_limit: int | None = None,
-    ) -> None: ...
-    def close(self) -> None:
-        """Close the server connection."""
-    async def on_disconnect(self) -> None:
-        """Wait until the connection is disconnected."""
-
-class AsyncIoStream:
-    """Async I/O stream wrapper for Cap'n Proto RPC.
-
-    Provides async I/O operations for Cap'n Proto RPC over TCP and Unix domain sockets.
-    """
-
-    @staticmethod
-    async def create_connection(
-        host: str | None = None,
-        port: int | None = None,
-        ssl: SSLContext | None = None,
-        ssl_handshake_timeout: int | None = None,
-        **kwargs: Any,
-    ) -> AsyncIoStream:
-        """Create an async TCP connection.
-
-        Args:
-            host: Hostname to connect to
-            port: Port number to connect to
-            **kwargs: Additional connection options
-
-        Returns:
-            AsyncIoStream connected to the server
-
-        """
-
-    @staticmethod
-    async def create_unix_connection(path: str | None = None, **kwargs: Any) -> AsyncIoStream:
-        """Create an async Unix domain socket connection.
-
-        Args:
-            path: Path to Unix domain socket
-            **kwargs: Additional connection options
-
-        Returns:
-            AsyncIoStream connected to the server
-
-        """
-
-    @staticmethod
-    async def create_server(
-        callback: Callable[[AsyncIoStream], Awaitable[None]],
-        host: str | None = None,
-        port: int | None = None,
-        **kwargs: Any,
-    ) -> _Server:
-        """Create an async TCP server.
-
-        Args:
-            callback: Async callback function for each new connection
-            host: Hostname to bind to
-            port: Port number to bind to
-            **kwargs: Additional server options
-
-        Returns:
-            Server instance
-
-        """
-
-    @staticmethod
-    async def create_unix_server(
-        callback: Callable[[AsyncIoStream], Awaitable[None]],
-        path: str | None = None,
-        **kwargs: Any,
-    ) -> _Server:
-        """Create an async Unix domain socket server.
-
-        Args:
-            callback: Async callback function for each new connection
-            path: Path for Unix domain socket
-            **kwargs: Additional server options
-
-        Returns:
-            Server instance
-
-        """
-
-    def close(self) -> None:
-        """Close the stream."""
-
-    async def wait_closed(self) -> None:
-        """Wait until the stream is closed."""
-
-# Async utilities
-async def run[T](coro: Awaitable[T]) -> T:
-    """Run an async coroutine with Cap'n Proto event loop.
-
-    Ensures that the coroutine runs while the KJ event loop is running.
-
-    Args:
-        coro: Coroutine to run
-
-    Returns:
-        The result of the coroutine
-
-    """
-
-@asynccontextmanager
-def kj_loop() -> AsyncIterator[None]:
-    """Context manager for running the KJ event loop.
-
-    Usage:
-        with capnp.kj_loop():
-            # Run async code
-            pass
-    """
-
-__all__ = [
-    # Public classes
-    "AsyncIoStream",
-    # Exception class
-    "KjException",
-    "SchemaLoader",
-    "SchemaParser",
-    "TwoPartyClient",
-    "TwoPartyServer",
-    # Internal classes that are exposed but prefixed with underscore
-    "_CapabilityClient",
-    "_DynamicCapabilityClient",
-    "_DynamicListBuilder",
-    "_DynamicListReader",
-    "_DynamicOrphan",
-    "_DynamicResizableListBuilder",
-    "_DynamicStructBuilder",
-    "_DynamicStructReader",
-    "_EnumModule",
-    "_EnumSchema",
-    "_EventLoop",
-    "_InterfaceMethod",
-    "_InterfaceModule",
-    "_InterfaceSchema",
-    "_ListSchema",
-    "_List_NestedNode_Reader",
-    "_MallocMessageBuilder",
-    "_NestedNodeReader",
-    "_NodeReader",
-    "_PackedFdMessageReader",
-    "_ParsedSchema",
-    "_PyCustomMessageBuilder",
-    "_Schema",
-    "_StreamFdMessageReader",
-    "_StructModule",
-    "_StructSchema",
-    "_StructSchemaField",
-    "_init_capnp_api",
-    "_write_message_to_fd",
-    "_write_packed_message_to_fd",
-    # Public functions
-    "add_import_hook",
-    "cleanup_global_schema_parser",
-    "deregister_all_types",
-    "fill_context",
-    "kj_loop",
-    "load",
-    "read_multiple_bytes_packed",
-    "register_type",
-    "remove_import_hook",
-    "run",
-    # Modules
-    "types",
-    "void_task_done_callback",
-]
+    """Initialize static function pointers for cdef api functions."""

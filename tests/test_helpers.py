@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import shutil
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -101,9 +103,47 @@ def run_pyright(
     cwd: str | Path | None = None,
     env: Mapping[str, str] | None = None,
 ) -> CommandResult:
-    """Run pyright against one or more paths."""
+    """Run basedpyright against explicit paths without project exclusions."""
     resolved_paths = [os.fspath(path) for path in paths]
-    return run_command(["pyright", *resolved_paths], cwd=cwd, env=env)
+    project_root = Path(__file__).parent.parent.resolve()
+    execution_root = Path(cwd).resolve() if cwd is not None else Path.cwd().resolve()
+    requested_paths = [Path(raw_path).resolve() for raw_path in paths if Path(raw_path).exists()]
+    requested_roots = {str(path if path.is_dir() else path.parent) for path in requested_paths}
+    if requested_paths:
+        common_root = Path(os.path.commonpath([str(path) for path in requested_paths]))
+        requested_roots.add(str(common_root if common_root.is_dir() else common_root.parent))
+    python_path_roots = {
+        str(Path(path).resolve()) for path in (env or os.environ).get("PYTHONPATH", "").split(os.pathsep) if path
+    }
+    extra_paths = {
+        str(project_root / "src"),
+        str(project_root / "tests" / "_generated" / "basic"),
+        str(project_root / "tests" / "_generated" / "examples"),
+        str(project_root / "tests" / "_generated" / "zalfmas"),
+        str(project_root / "typings"),
+        str(execution_root),
+        *requested_roots,
+        *python_path_roots,
+    }
+    with tempfile.TemporaryDirectory() as temp_dir:
+        config_path = Path(temp_dir) / "pyrightconfig.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "extraPaths": sorted(extra_paths),
+                    "reportMissingTypeStubs": "warning",
+                    "reportPrivateUsage": "none",
+                    "stubPath": str(project_root / "typings"),
+                    "typeCheckingMode": "strict",
+                },
+            ),
+            encoding="utf8",
+        )
+        return run_command(
+            ["basedpyright", "--project", config_path, *resolved_paths],
+            cwd=cwd,
+            env=env,
+        )
 
 
 def run_python_file(
@@ -134,51 +174,7 @@ def read_generated_types_combined(package_dir: Path) -> str:
         if (type_dir / relative_path).exists()
     )
 
-    combined_content = "\n\n".join(contents)
-    flattened_prefixes = (
-        "types.modules.",
-        "types.builders.",
-        "types.readers.",
-        "types.clients.",
-        "types.requests.",
-        "types.contexts.",
-        "types.common.",
-        "types.servers.",
-        "types.enums.",
-        "types.schemas.",
-        "results_client.",
-        "results_server.",
-        "results_tuples.",
-        "builders.",
-        "readers.",
-        "clients.",
-        "requests.",
-        "contexts.",
-        "common.",
-        "servers.",
-        "enums.",
-        "schemas.",
-        "modules.",
-    )
-    flattened_lines = [
-        normalized_line
-        for line in combined_content.splitlines()
-        if not line.lstrip().startswith(("from ", "import "))
-        if (normalized_line := _normalize_generated_types_line(line, flattened_prefixes)) != line
-    ]
-    if not flattened_lines:
-        return combined_content
-
-    synthetic_view = "\n".join(f"# synthetic: {line}" for line in flattened_lines)
-    return f"{combined_content}\n\n{synthetic_view}"
-
-
-def _normalize_generated_types_line(line: str, prefixes: Sequence[str]) -> str:
-    """Normalize one generated helper line into the old flattened view used by legacy assertions."""
-    normalized_line = line
-    for prefix in prefixes:
-        normalized_line = normalized_line.replace(prefix, "")
-    return normalized_line
+    return "\n\n".join(contents)
 
 
 def read_generated_types_lines(package_dir: Path) -> list[str]:

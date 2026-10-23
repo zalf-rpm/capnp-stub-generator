@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import ast
 import difflib
+import inspect
 import re
 from pathlib import Path
+
+import capnp
+
+import schema_capnp
+from tests.test_helpers import run_pyright
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUNDLED_STUBS_DIR = REPO_ROOT / "src" / "pycapnp_base_stubs"
@@ -24,12 +31,11 @@ def _normalize_stub(relative_path: str, content: str) -> str:
     if relative_path != "lib/capnp.pyi":
         return content
 
-    content = content.replace("from capnp._internal import", "from .._internal import")
     lines = _strip_project_specific_imports(content.splitlines())
     lines = _normalize_capnp_preamble(lines)
     lines = _strip_augmented_overload_blocks(lines)
     lines = _restore_method_spacing(lines)
-    return "\n".join(lines)
+    return "\n".join(line for line in lines if line)
 
 
 def _strip_project_specific_imports(lines: list[str]) -> list[str]:
@@ -166,6 +172,45 @@ def _diff_message(relative_path: str, bundled: str, typings: str) -> str:
     return f"{relative_path} drifted from typings/capnp-stubs:\n{diff}"
 
 
+def _runtime_source_doc(runtime_object: object, *, is_class: bool) -> str | None:
+    """Recover the authored docstring while dropping Cython's embedded signature."""
+    raw_doc = getattr(runtime_object, "__doc__", None)
+    if not raw_doc:
+        return None
+
+    doc = inspect.cleandoc(raw_doc)
+    first_paragraph, separator, remainder = doc.partition("\n\n")
+    callable_name, opening_parenthesis, _ = first_paragraph.partition("(")
+    starts_with_signature = bool(
+        opening_parenthesis
+        and callable_name
+        and all(name_part.isidentifier() for name_part in callable_name.split("."))
+    )
+
+    if starts_with_signature:
+        if not separator:
+            return None
+        doc = inspect.cleandoc(remainder)
+    if not is_class and not separator:
+        return None
+    return "\n".join(line.rstrip() for line in doc.splitlines()) or None
+
+
+def _stub_declarations(
+    body: list[ast.stmt],
+    prefix: tuple[str, ...] = (),
+) -> list[tuple[tuple[str, ...], ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef]]:
+    declarations: list[tuple[tuple[str, ...], ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef]] = []
+    for declaration in body:
+        if isinstance(declaration, ast.ClassDef):
+            qualified_name = (*prefix, declaration.name)
+            declarations.append((qualified_name, declaration))
+            declarations.extend(_stub_declarations(declaration.body, qualified_name))
+        elif isinstance(declaration, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            declarations.append(((*prefix, declaration.name), declaration))
+    return declarations
+
+
 def test_bundled_base_stubs_match_typings_module() -> None:
     """Keep the bundled stubs aligned with the checked-in typings module."""
     bundled_files = _stub_files(BUNDLED_STUBS_DIR)
@@ -184,6 +229,146 @@ def test_bundled_base_stubs_match_typings_module() -> None:
         )
 
         assert bundled_content == typings_content, _diff_message(relative_path, bundled_content, typings_content)
+
+
+def test_bundled_base_stub_docstrings_match_runtime_source_docs() -> None:
+    """Editor help should retain authored pyx docs without adding synthetic documentation."""
+    content = (BUNDLED_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8")
+    tree = ast.parse(content)
+    runtime_module = capnp.lib.capnp
+
+    for qualified_name, declaration in _stub_declarations(tree.body):
+        runtime_object: object = runtime_module
+        try:
+            for name_part in qualified_name:
+                runtime_object = getattr(runtime_object, name_part)
+        except AttributeError:
+            continue
+
+        expected = _runtime_source_doc(runtime_object, is_class=isinstance(declaration, ast.ClassDef))
+        actual = ast.get_docstring(declaration, clean=True)
+        assert actual == expected, f"docstring mismatch for {'.'.join(qualified_name)}"
+
+
+def test_bundled_base_stubs_do_not_invent_capnp_modules_or_types() -> None:
+    """The bundled surface must describe runtime objects instead of typing-only capnp helpers."""
+    files = _stub_files(BUNDLED_STUBS_DIR)
+    content = (BUNDLED_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8")
+
+    assert "_internal.pyi" not in files
+    assert "capnp._internal" not in content
+    assert "schema_capnp" not in content
+    assert "type AnyPointer" not in content
+    assert "type Capability" not in content
+    assert "CapnpModule" not in content
+    assert "CapnpTypesModule" not in content
+    assert "__all__" not in content
+
+
+def test_bundled_base_stub_classes_match_runtime_names_and_inheritance() -> None:
+    """Every declared pycapnp class and base class must exist in the 2.2.4 runtime."""
+    content = (BUNDLED_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8")
+    tree = ast.parse(content)
+    runtime_module = capnp.lib.capnp
+
+    for declaration in tree.body:
+        if not isinstance(declaration, ast.ClassDef):
+            continue
+
+        assert hasattr(runtime_module, declaration.name), f"stub-only class: {declaration.name}"
+        runtime_class = getattr(runtime_module, declaration.name)
+        stub_bases = [ast.unparse(base).split(".")[-1] for base in declaration.bases]
+        runtime_bases = [base.__name__ for base in runtime_class.__bases__ if base is not object]
+        assert stub_bases == runtime_bases, f"incorrect bases for {declaration.name}"
+
+
+def test_bundled_base_stub_targets_pycapnp_224_surface() -> None:
+    """Keep the bundled surface on the selected 2.2.4 release boundary."""
+    content = (BUNDLED_STUBS_DIR / "lib" / "capnp.pyi").read_text(encoding="utf8")
+
+    assert "class _AsyncIoStream:" in content
+    assert "class AsyncIoStream:" not in content
+    assert "def get_data_as_view(self, field: str) -> memoryview:" in content
+    assert "def to_segment_views(" not in content
+    assert "class _RemotePromise:" in content
+    assert "class _RemotePromise(_Promise):" not in content
+    assert "class _DynamicCapabilityClient:" in content
+    assert "class _DynamicCapabilityClient(_CapabilityClient):" not in content
+
+    root_content = (BUNDLED_STUBS_DIR / "__init__.pyi").read_text(encoding="utf8")
+    assert "from capnp.lib.capnp import _AsyncIoStream\n" in root_content
+    assert "AsyncIoStream = _AsyncIoStream" in root_content
+    assert "_AsyncIoStream as _AsyncIoStream" not in root_content
+    assert "from capnp.lib import capnp as _capnp" not in root_content
+    assert "__version__: str" in root_content
+    assert "version as _version" not in root_content
+
+    assert "reverse_mapping: dict[str, str]" in content
+    assert "class _StructModuleWhich(enum.Enum):" in content
+    assert "__hash__: None" in content
+    assert re.search(
+        r"async def read_async\(.*?\) -> _DynamicStructReader \| None:",
+        content,
+        re.DOTALL,
+    )
+
+
+def test_bundled_types_stub_matches_runtime_schema_singletons() -> None:
+    """Type the real ``capnp.types`` module without introducing a wrapper class."""
+    content = (BUNDLED_STUBS_DIR / "types.pyi").read_text(encoding="utf8")
+    tree = ast.parse(content)
+    declared = {
+        statement.target.id
+        for statement in tree.body
+        if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name)
+    }
+    runtime_names = {name for name in vars(capnp.types) if not name.startswith("_")}
+
+    assert declared == runtime_names
+    assert all(type(getattr(capnp.types, name)) is capnp.lib.capnp._SchemaType for name in declared)
+
+
+def test_bundled_root_exports_precise_types_module(tmp_path: Path) -> None:
+    """The root re-export should preserve the concrete built-in schema descriptor types."""
+    sample = tmp_path / "test_capnp_types.py"
+    sample.write_text(
+        """from typing import assert_type
+
+import capnp
+import capnp.types
+from capnp.lib.capnp import _AsyncIoStream, _SchemaType
+
+assert_type(capnp.__version__, str)
+assert_type(capnp.AsyncIoStream, type[_AsyncIoStream])
+assert_type(capnp.types.Int32, _SchemaType)
+assert_type(capnp.types.AnyPointer, _SchemaType)
+""",
+        encoding="utf8",
+    )
+
+    result = run_pyright(sample)
+    assert result.returncode == 0, result.stdout
+
+
+def test_schema_capnp_element_size_matches_runtime_enum_module() -> None:
+    """The bundled system-schema stub should expose every runtime ElementSize member."""
+    content = (REPO_ROOT / "src" / "schema_capnp" / "__init__.pyi").read_text(encoding="utf8")
+    runtime_members = {name for name in vars(schema_capnp.ElementSize) if not name.startswith("_") and name != "schema"}
+
+    assert "class _ElementSizeEnumModule(_EnumModule):" in content
+    assert "ElementSize: _ElementSizeEnumModule" in content
+    assert runtime_members == {
+        "empty",
+        "bit",
+        "byte",
+        "twoBytes",
+        "fourBytes",
+        "eightBytes",
+        "pointer",
+        "inlineComposite",
+    }
+    for member in runtime_members:
+        assert f"    {member}: int" in content
 
 
 def test_bundled_interface_method_stub_is_nongeneric() -> None:

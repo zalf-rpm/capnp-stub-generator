@@ -1,5 +1,6 @@
 """Automatically generated type stubs for `schema_new.capnp`."""
 
+import builtins
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
 from typing import IO, Any, Literal, overload, override
@@ -13,6 +14,7 @@ from capnp.lib.capnp import (
     _DynamicObjectReader,
     _DynamicStructBuilder,
     _DynamicStructReader,
+    _EnumModule,
     _StructModule,
 )
 
@@ -35,18 +37,16 @@ class _MemberList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> MemberReader: ...
-        @override
+        def __getitem__(self, index: int) -> MemberReader: ...
         def __iter__(self) -> Iterator[MemberReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> MemberBuilder: ...
+        def __getitem__(self, index: int) -> MemberBuilder: ...
         @override
-        def __setitem__(self, key: int, value: MemberReader | MemberBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: MemberReader | MemberBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[MemberBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> MemberBuilder: ...
@@ -56,18 +56,16 @@ class _NestedNodeList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> NestedNodeReader: ...
-        @override
+        def __getitem__(self, index: int) -> NestedNodeReader: ...
         def __iter__(self) -> Iterator[NestedNodeReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> NestedNodeBuilder: ...
+        def __getitem__(self, index: int) -> NestedNodeBuilder: ...
         @override
-        def __setitem__(self, key: int, value: NestedNodeReader | NestedNodeBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: NestedNodeReader | NestedNodeBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[NestedNodeBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> NestedNodeBuilder: ...
@@ -77,7 +75,7 @@ class _ValueStructModule(_StructModule):
         @property
         def void(self) -> None: ...
         @property
-        def bool(self) -> bool: ...
+        def bool(self) -> builtins.bool: ...
         @property
         def int8(self) -> int: ...
         @property
@@ -113,30 +111,6 @@ class _ValueStructModule(_StructModule):
         @property
         def anyPointer(self) -> _DynamicObjectReader: ...
         @override
-        def which(
-            self,
-        ) -> Literal[
-            "void",
-            "bool",
-            "int8",
-            "int16",
-            "int32",
-            "int64",
-            "uint8",
-            "uint16",
-            "uint32",
-            "uint64",
-            "float32",
-            "float64",
-            "text",
-            "data",
-            "list",
-            "enum",
-            "struct",
-            "interface",
-            "anyPointer",
-        ]: ...
-        @override
         def as_builder(
             self,
             num_first_segment_words: int | None = None,
@@ -149,9 +123,9 @@ class _ValueStructModule(_StructModule):
         @void.setter
         def void(self, value: None) -> None: ...
         @property
-        def bool(self) -> bool: ...
+        def bool(self) -> builtins.bool: ...
         @bool.setter
-        def bool(self, value: bool) -> None: ...
+        def bool(self, value: builtins.bool) -> None: ...
         @property
         def int8(self) -> int: ...
         @int8.setter
@@ -221,30 +195,6 @@ class _ValueStructModule(_StructModule):
         @anyPointer.setter
         def anyPointer(self, value: AnyPointer) -> None: ...
         @override
-        def which(
-            self,
-        ) -> Literal[
-            "void",
-            "bool",
-            "int8",
-            "int16",
-            "int32",
-            "int64",
-            "uint8",
-            "uint16",
-            "uint32",
-            "uint64",
-            "float32",
-            "float64",
-            "text",
-            "data",
-            "list",
-            "enum",
-            "struct",
-            "interface",
-            "anyPointer",
-        ]: ...
-        @override
         def as_reader(self) -> ValueReader: ...
 
     @override
@@ -277,32 +227,39 @@ class _ValueStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[ValueReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[ValueReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[ValueBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[ValueBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -341,7 +298,10 @@ class _TypeStructModule(_StructModule):
             @elementType.setter
             def elementType(self, value: TypeBuilder | TypeReader | dict[str, Any]) -> None: ...
             @override
+            @overload
             def init(self, field: Literal["elementType"], size: int | None = None) -> TypeBuilder: ...
+            @overload
+            def init(self, field: str, size: int | None = None) -> Any: ...
             @override
             def as_reader(self) -> TypeListReader: ...
 
@@ -357,32 +317,39 @@ class _TypeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[TypeListReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[TypeListReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[TypeListBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[TypeListBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -427,7 +394,10 @@ class _TypeStructModule(_StructModule):
             @brand.setter
             def brand(self, value: BrandBuilder | BrandReader | dict[str, Any]) -> None: ...
             @override
+            @overload
             def init(self, field: Literal["brand"], size: int | None = None) -> BrandBuilder: ...
+            @overload
+            def init(self, field: str, size: int | None = None) -> Any: ...
             @override
             def as_reader(self) -> TypeEnumReader: ...
 
@@ -444,32 +414,39 @@ class _TypeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[TypeEnumReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[TypeEnumReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[TypeEnumBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[TypeEnumBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -514,7 +491,10 @@ class _TypeStructModule(_StructModule):
             @brand.setter
             def brand(self, value: BrandBuilder | BrandReader | dict[str, Any]) -> None: ...
             @override
+            @overload
             def init(self, field: Literal["brand"], size: int | None = None) -> BrandBuilder: ...
+            @overload
+            def init(self, field: str, size: int | None = None) -> Any: ...
             @override
             def as_reader(self) -> TypeStructReader: ...
 
@@ -531,32 +511,39 @@ class _TypeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[TypeStructReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[TypeStructReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[TypeStructBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[TypeStructBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -601,7 +588,10 @@ class _TypeStructModule(_StructModule):
             @brand.setter
             def brand(self, value: BrandBuilder | BrandReader | dict[str, Any]) -> None: ...
             @override
+            @overload
             def init(self, field: Literal["brand"], size: int | None = None) -> BrandBuilder: ...
+            @overload
+            def init(self, field: str, size: int | None = None) -> Any: ...
             @override
             def as_reader(self) -> TypeInterfaceReader: ...
 
@@ -618,32 +608,39 @@ class _TypeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[TypeInterfaceReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[TypeInterfaceReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[TypeInterfaceBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[TypeInterfaceBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -676,14 +673,6 @@ class _TypeStructModule(_StructModule):
                 def list(self) -> None: ...
                 @property
                 def capability(self) -> None: ...
-                @override
-                def which(self) -> Literal["anyKind", "struct", "list", "capability"]: ...
-                @override
-                def as_builder(
-                    self,
-                    num_first_segment_words: int | None = None,
-                    allocate_seg_callable: Callable[[int], bytearray] | None = None,
-                ) -> TypeAnyPointerUnconstrainedBuilder: ...
 
             class Builder(_DynamicStructBuilder):
                 @property
@@ -702,10 +691,6 @@ class _TypeStructModule(_StructModule):
                 def capability(self) -> None: ...
                 @capability.setter
                 def capability(self, value: None) -> None: ...
-                @override
-                def which(self) -> Literal["anyKind", "struct", "list", "capability"]: ...
-                @override
-                def as_reader(self) -> TypeAnyPointerUnconstrainedReader: ...
 
             @override
             def new_message(
@@ -722,32 +707,39 @@ class _TypeStructModule(_StructModule):
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> AbstractContextManager[TypeAnyPointerUnconstrainedReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-                *,
-                builder: Literal[False],
+                builder: Literal[False] = False,
             ) -> AbstractContextManager[TypeAnyPointerUnconstrainedReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
             ) -> AbstractContextManager[TypeAnyPointerUnconstrainedBuilder]: ...
+            @overload
+            def from_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None,
+                nesting_limit: int | None,
+                builder: Literal[True],
+            ) -> AbstractContextManager[TypeAnyPointerUnconstrainedBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> _DynamicStructReader: ...
@@ -807,32 +799,39 @@ class _TypeStructModule(_StructModule):
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> AbstractContextManager[TypeAnyPointerParameterReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-                *,
-                builder: Literal[False],
+                builder: Literal[False] = False,
             ) -> AbstractContextManager[TypeAnyPointerParameterReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
             ) -> AbstractContextManager[TypeAnyPointerParameterBuilder]: ...
+            @overload
+            def from_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None,
+                nesting_limit: int | None,
+                builder: Literal[True],
+            ) -> AbstractContextManager[TypeAnyPointerParameterBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> _DynamicStructReader: ...
@@ -885,32 +884,39 @@ class _TypeStructModule(_StructModule):
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> AbstractContextManager[TypeAnyPointerImplicitMethodParameterReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-                *,
-                builder: Literal[False],
+                builder: Literal[False] = False,
             ) -> AbstractContextManager[TypeAnyPointerImplicitMethodParameterReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
             ) -> AbstractContextManager[TypeAnyPointerImplicitMethodParameterBuilder]: ...
+            @overload
+            def from_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None,
+                nesting_limit: int | None,
+                builder: Literal[True],
+            ) -> AbstractContextManager[TypeAnyPointerImplicitMethodParameterBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> _DynamicStructReader: ...
@@ -939,14 +945,6 @@ class _TypeStructModule(_StructModule):
             def parameter(self) -> TypeAnyPointerParameterReader: ...
             @property
             def implicitMethodParameter(self) -> TypeAnyPointerImplicitMethodParameterReader: ...
-            @override
-            def which(self) -> Literal["unconstrained", "parameter", "implicitMethodParameter"]: ...
-            @override
-            def as_builder(
-                self,
-                num_first_segment_words: int | None = None,
-                allocate_seg_callable: Callable[[int], bytearray] | None = None,
-            ) -> TypeAnyPointerBuilder: ...
 
         class Builder(_DynamicStructBuilder):
             @property
@@ -972,15 +970,6 @@ class _TypeStructModule(_StructModule):
                 | TypeAnyPointerImplicitMethodParameterReader
                 | dict[str, Any],
             ) -> None: ...
-            @override
-            def which(self) -> Literal["unconstrained", "parameter", "implicitMethodParameter"]: ...
-            @override
-            @overload
-            def init(
-                self,
-                field: Literal["unconstrained"],
-                size: int | None = None,
-            ) -> TypeAnyPointerUnconstrainedBuilder: ...
             @overload
             def init(self, field: Literal["parameter"], size: int | None = None) -> TypeAnyPointerParameterBuilder: ...
             @overload
@@ -1008,32 +997,39 @@ class _TypeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[TypeAnyPointerReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[TypeAnyPointerReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[TypeAnyPointerBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[TypeAnyPointerBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -1094,30 +1090,6 @@ class _TypeStructModule(_StructModule):
         def interface(self) -> TypeInterfaceReader: ...
         @property
         def anyPointer(self) -> TypeAnyPointerReader: ...
-        @override
-        def which(
-            self,
-        ) -> Literal[
-            "void",
-            "bool",
-            "int8",
-            "int16",
-            "int32",
-            "int64",
-            "uint8",
-            "uint16",
-            "uint32",
-            "uint64",
-            "float32",
-            "float64",
-            "text",
-            "data",
-            "list",
-            "enum",
-            "struct",
-            "interface",
-            "anyPointer",
-        ]: ...
         @override
         def as_builder(
             self,
@@ -1203,30 +1175,6 @@ class _TypeStructModule(_StructModule):
         @anyPointer.setter
         def anyPointer(self, value: TypeAnyPointerBuilder | TypeAnyPointerReader | dict[str, Any]) -> None: ...
         @override
-        def which(
-            self,
-        ) -> Literal[
-            "void",
-            "bool",
-            "int8",
-            "int16",
-            "int32",
-            "int64",
-            "uint8",
-            "uint16",
-            "uint32",
-            "uint64",
-            "float32",
-            "float64",
-            "text",
-            "data",
-            "list",
-            "enum",
-            "struct",
-            "interface",
-            "anyPointer",
-        ]: ...
-        @override
         @overload
         def init(self, field: Literal["list"], size: int | None = None) -> TypeListBuilder: ...
         @overload
@@ -1272,32 +1220,39 @@ class _TypeStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[TypeReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[TypeReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[TypeBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[TypeBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -1323,18 +1278,16 @@ class _BindingList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> BindingReader: ...
-        @override
+        def __getitem__(self, index: int) -> BindingReader: ...
         def __iter__(self) -> Iterator[BindingReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> BindingBuilder: ...
+        def __getitem__(self, index: int) -> BindingBuilder: ...
         @override
-        def __setitem__(self, key: int, value: BindingReader | BindingBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: BindingReader | BindingBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[BindingBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> BindingBuilder: ...
@@ -1344,18 +1297,16 @@ class _ScopeList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> ScopeReader: ...
-        @override
+        def __getitem__(self, index: int) -> ScopeReader: ...
         def __iter__(self) -> Iterator[ScopeReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> ScopeBuilder: ...
+        def __getitem__(self, index: int) -> ScopeBuilder: ...
         @override
-        def __setitem__(self, key: int, value: ScopeReader | ScopeBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: ScopeReader | ScopeBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[ScopeBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> ScopeBuilder: ...
@@ -1367,14 +1318,6 @@ class _BrandStructModule(_StructModule):
             def unbound(self) -> None: ...
             @property
             def type(self) -> TypeReader: ...
-            @override
-            def which(self) -> Literal["unbound", "type"]: ...
-            @override
-            def as_builder(
-                self,
-                num_first_segment_words: int | None = None,
-                allocate_seg_callable: Callable[[int], bytearray] | None = None,
-            ) -> BindingBuilder: ...
 
         class Builder(_DynamicStructBuilder):
             @property
@@ -1385,10 +1328,6 @@ class _BrandStructModule(_StructModule):
             def type(self) -> TypeBuilder: ...
             @type.setter
             def type(self, value: TypeBuilder | TypeReader | dict[str, Any]) -> None: ...
-            @override
-            def which(self) -> Literal["unbound", "type"]: ...
-            @override
-            def init(self, field: Literal["type"], size: int | None = None) -> TypeBuilder: ...
             @override
             def as_reader(self) -> BindingReader: ...
 
@@ -1405,32 +1344,39 @@ class _BrandStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[BindingReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[BindingReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[BindingBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[BindingBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -1460,14 +1406,6 @@ class _BrandStructModule(_StructModule):
             def bind(self) -> BindingListReader: ...
             @property
             def inherit(self) -> None: ...
-            @override
-            def which(self) -> Literal["bind", "inherit"]: ...
-            @override
-            def as_builder(
-                self,
-                num_first_segment_words: int | None = None,
-                allocate_seg_callable: Callable[[int], bytearray] | None = None,
-            ) -> ScopeBuilder: ...
 
         class Builder(_DynamicStructBuilder):
             @property
@@ -1482,10 +1420,6 @@ class _BrandStructModule(_StructModule):
             def inherit(self) -> None: ...
             @inherit.setter
             def inherit(self, value: None) -> None: ...
-            @override
-            def which(self) -> Literal["bind", "inherit"]: ...
-            @override
-            def init(self, field: Literal["bind"], size: int | None = None) -> BindingListBuilder: ...
             @override
             def as_reader(self) -> ScopeReader: ...
 
@@ -1503,32 +1437,39 @@ class _BrandStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[ScopeReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[ScopeReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[ScopeBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[ScopeBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -1566,7 +1507,10 @@ class _BrandStructModule(_StructModule):
         @scopes.setter
         def scopes(self, value: ScopeListBuilder | ScopeListReader | dict[str, Any]) -> None: ...
         @override
+        @overload
         def init(self, field: Literal["scopes"], size: int | None = None) -> ScopeListBuilder: ...
+        @overload
+        def init(self, field: str, size: int | None = None) -> Any: ...
         @override
         def as_reader(self) -> BrandReader: ...
 
@@ -1582,32 +1526,39 @@ class _BrandStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[BrandReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[BrandReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[BrandBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[BrandBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -1680,32 +1631,39 @@ class _AnnotationStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[AnnotationReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[AnnotationReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[AnnotationBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[AnnotationBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -1731,29 +1689,33 @@ class _AnnotationList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> AnnotationReader: ...
-        @override
+        def __getitem__(self, index: int) -> AnnotationReader: ...
         def __iter__(self) -> Iterator[AnnotationReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> AnnotationBuilder: ...
+        def __getitem__(self, index: int) -> AnnotationBuilder: ...
         @override
-        def __setitem__(self, key: int, value: AnnotationReader | AnnotationBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: AnnotationReader | AnnotationBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[AnnotationBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> AnnotationBuilder: ...
 
-class _ElementSizeEnumModule:
+class _ElementSizeEnumModule(_EnumModule):
     empty: int
     bit: int
     byte: int
+    twoBytes: int  # noqa: N815
+    fourBytes: int  # noqa: N815
+    eightBytes: int  # noqa: N815
     pointer: int
+    inlineComposite: int  # noqa: N815
 
     def __getattr__(self, name: str) -> int: ...
+
+ElementSize: _ElementSizeEnumModule
 
 class _FieldStructModule(_StructModule):
     def __getattr__(self, name: str) -> int: ...
@@ -1817,32 +1779,39 @@ class _FieldStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[FieldSlotReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[FieldSlotReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[FieldSlotBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[FieldSlotBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -1895,32 +1864,39 @@ class _FieldStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[FieldGroupReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[FieldGroupReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[FieldGroupBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[FieldGroupBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -1948,14 +1924,6 @@ class _FieldStructModule(_StructModule):
             def implicit(self) -> None: ...
             @property
             def explicit(self) -> int: ...
-            @override
-            def which(self) -> Literal["implicit", "explicit"]: ...
-            @override
-            def as_builder(
-                self,
-                num_first_segment_words: int | None = None,
-                allocate_seg_callable: Callable[[int], bytearray] | None = None,
-            ) -> FieldOrdinalBuilder: ...
 
         class Builder(_DynamicStructBuilder):
             @property
@@ -1966,10 +1934,6 @@ class _FieldStructModule(_StructModule):
             def explicit(self) -> int: ...
             @explicit.setter
             def explicit(self, value: int) -> None: ...
-            @override
-            def which(self) -> Literal["implicit", "explicit"]: ...
-            @override
-            def as_reader(self) -> FieldOrdinalReader: ...
 
         @override
         def new_message(
@@ -1984,32 +1948,39 @@ class _FieldStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[FieldOrdinalReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[FieldOrdinalReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[FieldOrdinalBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[FieldOrdinalBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -2046,14 +2017,6 @@ class _FieldStructModule(_StructModule):
         def group(self) -> FieldGroupReader: ...
         @property
         def ordinal(self) -> FieldOrdinalReader: ...
-        @override
-        def which(self) -> Literal["slot", "group"]: ...
-        @override
-        def as_builder(
-            self,
-            num_first_segment_words: int | None = None,
-            allocate_seg_callable: Callable[[int], bytearray] | None = None,
-        ) -> FieldBuilder: ...
 
     class Builder(_DynamicStructBuilder):
         @property
@@ -2084,11 +2047,6 @@ class _FieldStructModule(_StructModule):
         def ordinal(self) -> FieldOrdinalBuilder: ...
         @ordinal.setter
         def ordinal(self, value: FieldOrdinalBuilder | FieldOrdinalReader | dict[str, Any]) -> None: ...
-        @override
-        def which(self) -> Literal["slot", "group"]: ...
-        @override
-        @overload
-        def init(self, field: Literal["slot"], size: int | None = None) -> FieldSlotBuilder: ...
         @overload
         def init(self, field: Literal["group"], size: int | None = None) -> FieldGroupBuilder: ...
         @overload
@@ -2118,32 +2076,39 @@ class _FieldStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[FieldReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[FieldReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[FieldBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[FieldBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -2169,18 +2134,16 @@ class _FieldList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> FieldReader: ...
-        @override
+        def __getitem__(self, index: int) -> FieldReader: ...
         def __iter__(self) -> Iterator[FieldReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> FieldBuilder: ...
+        def __getitem__(self, index: int) -> FieldBuilder: ...
         @override
-        def __setitem__(self, key: int, value: FieldReader | FieldBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: FieldReader | FieldBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[FieldBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> FieldBuilder: ...
@@ -2214,7 +2177,10 @@ class _EnumerantStructModule(_StructModule):
         @annotations.setter
         def annotations(self, value: AnnotationListBuilder | AnnotationListReader | dict[str, Any]) -> None: ...
         @override
+        @overload
         def init(self, field: Literal["annotations"], size: int | None = None) -> AnnotationListBuilder: ...
+        @overload
+        def init(self, field: str, size: int | None = None) -> Any: ...
         @override
         def as_reader(self) -> EnumerantReader: ...
 
@@ -2232,32 +2198,39 @@ class _EnumerantStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[EnumerantReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[EnumerantReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[EnumerantBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[EnumerantBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -2283,18 +2256,16 @@ class _EnumerantList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> EnumerantReader: ...
-        @override
+        def __getitem__(self, index: int) -> EnumerantReader: ...
         def __iter__(self) -> Iterator[EnumerantReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> EnumerantBuilder: ...
+        def __getitem__(self, index: int) -> EnumerantBuilder: ...
         @override
-        def __setitem__(self, key: int, value: EnumerantReader | EnumerantBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: EnumerantReader | EnumerantBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[EnumerantBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> EnumerantBuilder: ...
@@ -2304,18 +2275,16 @@ class _ParameterList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> ParameterReader: ...
-        @override
+        def __getitem__(self, index: int) -> ParameterReader: ...
         def __iter__(self) -> Iterator[ParameterReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> ParameterBuilder: ...
+        def __getitem__(self, index: int) -> ParameterBuilder: ...
         @override
-        def __setitem__(self, key: int, value: ParameterReader | ParameterBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: ParameterReader | ParameterBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[ParameterBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> ParameterBuilder: ...
@@ -2411,32 +2380,39 @@ class _MethodStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[MethodReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[MethodReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[MethodBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[MethodBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -2462,18 +2438,16 @@ class _MethodList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> MethodReader: ...
-        @override
+        def __getitem__(self, index: int) -> MethodReader: ...
         def __iter__(self) -> Iterator[MethodReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> MethodBuilder: ...
+        def __getitem__(self, index: int) -> MethodBuilder: ...
         @override
-        def __setitem__(self, key: int, value: MethodReader | MethodBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: MethodReader | MethodBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[MethodBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> MethodBuilder: ...
@@ -2501,7 +2475,10 @@ class _SuperclassStructModule(_StructModule):
         @brand.setter
         def brand(self, value: BrandBuilder | BrandReader | dict[str, Any]) -> None: ...
         @override
+        @overload
         def init(self, field: Literal["brand"], size: int | None = None) -> BrandBuilder: ...
+        @overload
+        def init(self, field: str, size: int | None = None) -> Any: ...
         @override
         def as_reader(self) -> SuperclassReader: ...
 
@@ -2518,32 +2495,39 @@ class _SuperclassStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[SuperclassReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[SuperclassReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[SuperclassBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[SuperclassBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -2569,18 +2553,16 @@ class _SuperclassList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> SuperclassReader: ...
-        @override
+        def __getitem__(self, index: int) -> SuperclassReader: ...
         def __iter__(self) -> Iterator[SuperclassReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> SuperclassBuilder: ...
+        def __getitem__(self, index: int) -> SuperclassBuilder: ...
         @override
-        def __setitem__(self, key: int, value: SuperclassReader | SuperclassBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: SuperclassReader | SuperclassBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[SuperclassBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> SuperclassBuilder: ...
@@ -2617,32 +2599,39 @@ class _NodeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[ParameterReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[ParameterReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[ParameterBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[ParameterBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -2702,32 +2691,39 @@ class _NodeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[NestedNodeReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[NestedNodeReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[NestedNodeBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[NestedNodeBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -2795,32 +2791,39 @@ class _NodeStructModule(_StructModule):
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> AbstractContextManager[MemberReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-                *,
-                builder: Literal[False],
+                builder: Literal[False] = False,
             ) -> AbstractContextManager[MemberReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
             ) -> AbstractContextManager[MemberBuilder]: ...
+            @overload
+            def from_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None,
+                nesting_limit: int | None,
+                builder: Literal[True],
+            ) -> AbstractContextManager[MemberBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> _DynamicStructReader: ...
@@ -2882,7 +2885,10 @@ class _NodeStructModule(_StructModule):
             @endByte.setter
             def endByte(self, value: int) -> None: ...
             @override
+            @overload
             def init(self, field: Literal["members"], size: int | None = None) -> MemberListBuilder: ...
+            @overload
+            def init(self, field: str, size: int | None = None) -> Any: ...
             @override
             def as_reader(self) -> SourceInfoReader: ...
 
@@ -2902,32 +2908,39 @@ class _NodeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[SourceInfoReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[SourceInfoReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[SourceInfoBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[SourceInfoBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -3002,7 +3015,10 @@ class _NodeStructModule(_StructModule):
             @fields.setter
             def fields(self, value: FieldListBuilder | FieldListReader | dict[str, Any]) -> None: ...
             @override
+            @overload
             def init(self, field: Literal["fields"], size: int | None = None) -> FieldListBuilder: ...
+            @overload
+            def init(self, field: str, size: int | None = None) -> Any: ...
             @override
             def as_reader(self) -> NodeStructReader: ...
 
@@ -3024,32 +3040,39 @@ class _NodeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[NodeStructReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[NodeStructReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[NodeStructBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[NodeStructBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -3088,7 +3111,10 @@ class _NodeStructModule(_StructModule):
             @enumerants.setter
             def enumerants(self, value: EnumerantListBuilder | EnumerantListReader | dict[str, Any]) -> None: ...
             @override
+            @overload
             def init(self, field: Literal["enumerants"], size: int | None = None) -> EnumerantListBuilder: ...
+            @overload
+            def init(self, field: str, size: int | None = None) -> Any: ...
             @override
             def as_reader(self) -> NodeEnumReader: ...
 
@@ -3104,32 +3130,39 @@ class _NodeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[NodeEnumReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[NodeEnumReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[NodeEnumBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[NodeEnumBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -3196,32 +3229,39 @@ class _NodeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[NodeInterfaceReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[NodeInterfaceReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[NodeInterfaceBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[NodeInterfaceBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -3288,32 +3328,39 @@ class _NodeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[NodeConstReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[NodeConstReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[NodeConstBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[NodeConstBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -3424,7 +3471,10 @@ class _NodeStructModule(_StructModule):
             @targetsAnnotation.setter
             def targetsAnnotation(self, value: bool) -> None: ...
             @override
+            @overload
             def init(self, field: Literal["type"], size: int | None = None) -> TypeBuilder: ...
+            @overload
+            def init(self, field: str, size: int | None = None) -> Any: ...
             @override
             def as_reader(self) -> NodeAnnotationReader: ...
 
@@ -3452,32 +3502,39 @@ class _NodeStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[NodeAnnotationReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[NodeAnnotationReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[NodeAnnotationBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[NodeAnnotationBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -3532,14 +3589,6 @@ class _NodeStructModule(_StructModule):
         def startByte(self) -> int: ...
         @property
         def endByte(self) -> int: ...
-        @override
-        def which(self) -> Literal["file", "struct", "enum", "interface", "const", "annotation"]: ...
-        @override
-        def as_builder(
-            self,
-            num_first_segment_words: int | None = None,
-            allocate_seg_callable: Callable[[int], bytearray] | None = None,
-        ) -> NodeBuilder: ...
 
     class Builder(_DynamicStructBuilder):
         @property
@@ -3606,11 +3655,6 @@ class _NodeStructModule(_StructModule):
         def endByte(self) -> int: ...
         @endByte.setter
         def endByte(self, value: int) -> None: ...
-        @override
-        def which(self) -> Literal["file", "struct", "enum", "interface", "const", "annotation"]: ...
-        @override
-        @overload
-        def init(self, field: Literal["struct"], size: int | None = None) -> NodeStructBuilder: ...
         @overload
         def init(self, field: Literal["enum"], size: int | None = None) -> NodeEnumBuilder: ...
         @overload
@@ -3657,32 +3701,39 @@ class _NodeStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[NodeReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[NodeReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[NodeBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[NodeBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -3748,32 +3799,39 @@ class _CapnpVersionStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[CapnpVersionReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[CapnpVersionReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[CapnpVersionBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[CapnpVersionBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
@@ -3799,18 +3857,16 @@ class _IdentifierList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> IdentifierReader: ...
-        @override
+        def __getitem__(self, index: int) -> IdentifierReader: ...
         def __iter__(self) -> Iterator[IdentifierReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> IdentifierBuilder: ...
+        def __getitem__(self, index: int) -> IdentifierBuilder: ...
         @override
-        def __setitem__(self, key: int, value: IdentifierReader | IdentifierBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: IdentifierReader | IdentifierBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[IdentifierBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> IdentifierBuilder: ...
@@ -3820,18 +3876,16 @@ class _ImportList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> ImportReader: ...
-        @override
+        def __getitem__(self, index: int) -> ImportReader: ...
         def __iter__(self) -> Iterator[ImportReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> ImportBuilder: ...
+        def __getitem__(self, index: int) -> ImportBuilder: ...
         @override
-        def __setitem__(self, key: int, value: ImportReader | ImportBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: ImportReader | ImportBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[ImportBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> ImportBuilder: ...
@@ -3841,18 +3895,16 @@ class _NodeList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> NodeReader: ...
-        @override
+        def __getitem__(self, index: int) -> NodeReader: ...
         def __iter__(self) -> Iterator[NodeReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> NodeBuilder: ...
+        def __getitem__(self, index: int) -> NodeBuilder: ...
         @override
-        def __setitem__(self, key: int, value: NodeReader | NodeBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: NodeReader | NodeBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[NodeBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> NodeBuilder: ...
@@ -3862,18 +3914,20 @@ class _RequestedFileList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> RequestedFileReader: ...
-        @override
+        def __getitem__(self, index: int) -> RequestedFileReader: ...
         def __iter__(self) -> Iterator[RequestedFileReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> RequestedFileBuilder: ...
+        def __getitem__(self, index: int) -> RequestedFileBuilder: ...
         @override
-        def __setitem__(self, key: int, value: RequestedFileReader | RequestedFileBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(
+            self,
+            index: int,
+            value: RequestedFileReader | RequestedFileBuilder | dict[str, Any],
+        ) -> None: ...
         def __iter__(self) -> Iterator[RequestedFileBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> RequestedFileBuilder: ...
@@ -3883,18 +3937,16 @@ class _SourceInfoList:
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> SourceInfoReader: ...
-        @override
+        def __getitem__(self, index: int) -> SourceInfoReader: ...
         def __iter__(self) -> Iterator[SourceInfoReader]: ...
 
     class Builder(_DynamicListBuilder):
         @override
         def __len__(self) -> int: ...
         @override
-        def __getitem__(self, key: int) -> SourceInfoBuilder: ...
+        def __getitem__(self, index: int) -> SourceInfoBuilder: ...
         @override
-        def __setitem__(self, key: int, value: SourceInfoReader | SourceInfoBuilder | dict[str, Any]) -> None: ...
-        @override
+        def __setitem__(self, index: int, value: SourceInfoReader | SourceInfoBuilder | dict[str, Any]) -> None: ...
         def __iter__(self) -> Iterator[SourceInfoBuilder]: ...
         @override
         def init(self, index: int, size: int | None = None) -> SourceInfoBuilder: ...
@@ -3939,32 +3991,39 @@ class _CodeGeneratorRequestStructModule(_StructModule):
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> AbstractContextManager[ImportReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-                *,
-                builder: Literal[False],
+                builder: Literal[False] = False,
             ) -> AbstractContextManager[ImportReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
             ) -> AbstractContextManager[ImportBuilder]: ...
+            @overload
+            def from_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None,
+                nesting_limit: int | None,
+                builder: Literal[True],
+            ) -> AbstractContextManager[ImportBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> _DynamicStructReader: ...
@@ -4026,32 +4085,39 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                     @overload
                     def from_bytes(
                         self,
-                        buf: bytes,
+                        buf: Any,
                         traversal_limit_in_words: int | None = None,
                         nesting_limit: int | None = None,
                     ) -> AbstractContextManager[IdentifierMemberReader]: ...
                     @overload
                     def from_bytes(
                         self,
-                        buf: bytes,
+                        buf: Any,
                         traversal_limit_in_words: int | None = None,
                         nesting_limit: int | None = None,
-                        *,
-                        builder: Literal[False],
+                        builder: Literal[False] = False,
                     ) -> AbstractContextManager[IdentifierMemberReader]: ...
                     @overload
                     def from_bytes(
                         self,
-                        buf: bytes,
+                        buf: Any,
                         traversal_limit_in_words: int | None = None,
                         nesting_limit: int | None = None,
                         *,
                         builder: Literal[True],
                     ) -> AbstractContextManager[IdentifierMemberBuilder]: ...
+                    @overload
+                    def from_bytes(
+                        self,
+                        buf: Any,
+                        traversal_limit_in_words: int | None,
+                        nesting_limit: int | None,
+                        builder: Literal[True],
+                    ) -> AbstractContextManager[IdentifierMemberBuilder]: ...
                     @override
                     def from_bytes_packed(
                         self,
-                        buf: bytes,
+                        buf: Any,
                         traversal_limit_in_words: int | None = None,
                         nesting_limit: int | None = None,
                     ) -> _DynamicStructReader: ...
@@ -4082,14 +4148,6 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                     def typeId(self) -> int: ...
                     @property
                     def member(self) -> IdentifierMemberReader: ...
-                    @override
-                    def which(self) -> Literal["typeId", "member"]: ...
-                    @override
-                    def as_builder(
-                        self,
-                        num_first_segment_words: int | None = None,
-                        allocate_seg_callable: Callable[[int], bytearray] | None = None,
-                    ) -> IdentifierBuilder: ...
 
                 class Builder(_DynamicStructBuilder):
                     @property
@@ -4112,10 +4170,6 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                         value: IdentifierMemberBuilder | IdentifierMemberReader | dict[str, Any],
                     ) -> None: ...
                     @override
-                    def which(self) -> Literal["typeId", "member"]: ...
-                    @override
-                    def init(self, field: Literal["member"], size: int | None = None) -> IdentifierMemberBuilder: ...
-                    @override
                     def as_reader(self) -> IdentifierReader: ...
 
                 @override
@@ -4133,32 +4187,39 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                 @overload
                 def from_bytes(
                     self,
-                    buf: bytes,
+                    buf: Any,
                     traversal_limit_in_words: int | None = None,
                     nesting_limit: int | None = None,
                 ) -> AbstractContextManager[IdentifierReader]: ...
                 @overload
                 def from_bytes(
                     self,
-                    buf: bytes,
+                    buf: Any,
                     traversal_limit_in_words: int | None = None,
                     nesting_limit: int | None = None,
-                    *,
-                    builder: Literal[False],
+                    builder: Literal[False] = False,
                 ) -> AbstractContextManager[IdentifierReader]: ...
                 @overload
                 def from_bytes(
                     self,
-                    buf: bytes,
+                    buf: Any,
                     traversal_limit_in_words: int | None = None,
                     nesting_limit: int | None = None,
                     *,
                     builder: Literal[True],
                 ) -> AbstractContextManager[IdentifierBuilder]: ...
+                @overload
+                def from_bytes(
+                    self,
+                    buf: Any,
+                    traversal_limit_in_words: int | None,
+                    nesting_limit: int | None,
+                    builder: Literal[True],
+                ) -> AbstractContextManager[IdentifierBuilder]: ...
                 @override
                 def from_bytes_packed(
                     self,
-                    buf: bytes,
+                    buf: Any,
                     traversal_limit_in_words: int | None = None,
                     nesting_limit: int | None = None,
                 ) -> _DynamicStructReader: ...
@@ -4196,7 +4257,10 @@ class _CodeGeneratorRequestStructModule(_StructModule):
                 @identifiers.setter
                 def identifiers(self, value: IdentifierListBuilder | IdentifierListReader | dict[str, Any]) -> None: ...
                 @override
+                @overload
                 def init(self, field: Literal["identifiers"], size: int | None = None) -> IdentifierListBuilder: ...
+                @overload
+                def init(self, field: str, size: int | None = None) -> Any: ...
                 @override
                 def as_reader(self) -> FileSourceInfoReader: ...
 
@@ -4212,32 +4276,39 @@ class _CodeGeneratorRequestStructModule(_StructModule):
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> AbstractContextManager[FileSourceInfoReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-                *,
-                builder: Literal[False],
+                builder: Literal[False] = False,
             ) -> AbstractContextManager[FileSourceInfoReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
             ) -> AbstractContextManager[FileSourceInfoBuilder]: ...
+            @overload
+            def from_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None,
+                nesting_limit: int | None,
+                builder: Literal[True],
+            ) -> AbstractContextManager[FileSourceInfoBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> _DynamicStructReader: ...
@@ -4317,32 +4388,39 @@ class _CodeGeneratorRequestStructModule(_StructModule):
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[RequestedFileReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[RequestedFileReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[RequestedFileBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[RequestedFileBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> _DynamicStructReader: ...
@@ -4429,32 +4507,39 @@ class _CodeGeneratorRequestStructModule(_StructModule):
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[CodeGeneratorRequestReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[CodeGeneratorRequestReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[CodeGeneratorRequestBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[CodeGeneratorRequestBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> _DynamicStructReader: ...
