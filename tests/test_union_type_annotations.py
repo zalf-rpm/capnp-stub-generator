@@ -48,7 +48,10 @@ assert result == "none"
 
 
 def test_union_type_annotation_without_future_import_fails(tmp_path: Path) -> None:
-    """Test that union types fail without __future__ annotations (documents current limitation)."""
+    """Test that union types fail without __future__ annotations (documents current limitation).
+
+    Python 3.14 defers annotation evaluation, so the script evaluates them explicitly there.
+    """
     stub_dir = generate_stub_from_schema("primitives.capnp", tmp_path)
 
     # Create a test file that does NOT import __future__ annotations
@@ -67,6 +70,12 @@ import primitives_capnp
 def process_data(data: primitives_capnp.SimplePrimitives | str | None) -> str:
     '''Function that accepts SimplePrimitives or str or None.'''
     return "test"
+
+# Python 3.14 evaluates annotations lazily (PEP 649), so the `def` above no longer fails by itself.
+if sys.version_info >= (3, 14):
+    import annotationlib
+
+    annotationlib.get_annotations(process_data, format=annotationlib.Format.VALUE)
 """,
     )
 
