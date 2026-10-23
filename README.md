@@ -73,10 +73,8 @@ This structure allows proper Python module imports and type checking.
 ## Requirements
 
 - Python 3.12-3.13 (or older with up-to-date type checker)
-- pycapnp >= 2.2.1, < 3.0.0
-- pyright >= 1.1.407 (for validation)
-
-**Note:** Generated stubs are only compatible with pycapnp >= 2.0.0
+- pycapnp >= 2.2.4, < 3.0.0
+- basedpyright >= 1.39.9 (installed automatically for validation)
 
 ## Examples
 
