@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import re
 
-
-def test_union_which_methods_and_literal_import(dummy_stub_lines: list[str]) -> None:
-    """Test union which methods and literal import."""
+def test_union_refines_runtime_which_descriptor(dummy_stub_lines: list[str]) -> None:
+    """Union types narrow the real callable ``which`` descriptor."""
     lines = dummy_stub_lines
-    # which() for TestUnion should be present with Literal return
-    assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
-    # Literal import appears (for which and maybe discriminants)
-    assert any(line.startswith("from typing import") and "Literal" in line for line in lines)
+    assert any("class _TestStructUnionUnWhich(_DynamicEnumField):" in line for line in lines)
+    assert any('def __call__(self) -> Literal["struct", "object"]:' in line for line in lines)
+    which_lines = [index for index, line in enumerate(lines) if "def which(" in line]
+    assert which_lines
+    assert any(
+        any("@property" in prior_line for prior_line in lines[max(0, index - 2) : index]) for index in which_lines
+    )
 
 
 def test_unnamed_union_fields_present(dummy_stub_lines: list[str]) -> None:
@@ -28,13 +29,10 @@ def test_unnamed_union_fields_present(dummy_stub_lines: list[str]) -> None:
 
 
 def test_interleaved_union_discriminants_sorted(dummy_stub_lines: list[str]) -> None:
-    """Test interleaved union discriminants sorted."""
+    """Interleaved union discriminants retain their runtime field order."""
     lines = dummy_stub_lines
-    # Discriminant enums are not generated separately
-    # Instead, which() methods use Literal types
-    # Check that which() methods exist for union types
-    which_methods = [line for line in lines if "def which" in line and "Literal" in line]
-    assert which_methods  # there should be which() methods for unions
+    assert any("class _TestInterleavedGroupsGroup1Which(_DynamicEnumField):" in line for line in lines)
+    assert any('def __call__(self) -> Literal["qux", "corge", "fred"]:' in line for line in lines)
 
 
 def test_union_defaults_struct_initializers_present(dummy_stub_lines: list[str]) -> None:

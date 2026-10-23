@@ -1,10 +1,11 @@
 """Module helper types for `single_value.capnp`."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractContextManager
 from typing import IO, Any, Literal, overload, override
 
 from capnp.lib.capnp import (
+    _AsyncIoStream,
     _DynamicCapabilityServer,
     _DynamicStructBuilder,
     _DynamicStructReader,
@@ -498,9 +499,6 @@ class _SingleValueInterfaceModule(_InterfaceModule):
         @override
         def methods(self) -> _SingleValueInterfaceModule._SingleValueSchema._Methods: ...
 
-    @property
-    @override
-    def schema(self) -> schemas._SingleValueSchema: ...
     @override
     def _new_client(self, server: _DynamicCapabilityServer) -> clients.SingleValueClient: ...
     class Server(_DynamicCapabilityServer):
@@ -603,50 +601,63 @@ class _MyStructStructModule(_StructModule):
         @override
         def fields(self) -> _MyStructStructModule._MyStructSchema._Fields: ...
 
-    @property
-    @override
-    def schema(self) -> schemas._MyStructSchema: ...
     @override
     def new_message(
         self,
         num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[[int], bytearray] | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
         id: int | None = None,
         **kwargs: object,
     ) -> builders.MyStructBuilder: ...
     @override
+    def __call__(self, num_first_segment_words: int | None = None, **kwargs: object) -> builders.MyStructBuilder: ...
+    @override
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> AbstractContextManager[readers.MyStructReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-        *,
-        builder: Literal[False],
+        builder: Literal[False] = False,
     ) -> AbstractContextManager[readers.MyStructReader]: ...
     @overload
     def from_bytes(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
         *,
         builder: Literal[True],
     ) -> AbstractContextManager[builders.MyStructBuilder]: ...
+    @overload
+    def from_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None,
+        nesting_limit: int | None,
+        builder: Literal[True],
+    ) -> AbstractContextManager[builders.MyStructBuilder]: ...
     @override
     def from_bytes_packed(
         self,
-        buf: bytes,
+        buf: Any,
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
-    ) -> _DynamicStructReader: ...
+    ) -> readers.MyStructReader: ...
+    @override
+    def from_segments(
+        self,
+        segments: Sequence[Any],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> readers.MyStructReader: ...
     @override
     def read(
         self,
@@ -661,3 +672,40 @@ class _MyStructStructModule(_StructModule):
         traversal_limit_in_words: int | None = None,
         nesting_limit: int | None = None,
     ) -> readers.MyStructReader: ...
+    @override
+    async def read_async(
+        self,
+        stream: _AsyncIoStream,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> readers.MyStructReader | None: ...
+    @override
+    def read_multiple(
+        self,
+        file: IO[str] | IO[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+        skip_copy: bool = False,
+    ) -> Iterator[readers.MyStructReader]: ...
+    @override
+    def read_multiple_packed(
+        self,
+        file: IO[str] | IO[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+        skip_copy: bool = False,
+    ) -> Iterator[readers.MyStructReader]: ...
+    @override
+    def read_multiple_bytes(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> Iterator[readers.MyStructReader]: ...
+    @override
+    def read_multiple_bytes_packed(
+        self,
+        buf: Any,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> Iterator[readers.MyStructReader]: ...

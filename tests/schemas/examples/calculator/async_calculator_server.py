@@ -133,7 +133,7 @@ class CalculatorImpl(calculator_capnp.Calculator.Server):
         return OperatorImpl(op)
 
 
-async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
+async def new_connection(stream: capnp.AsyncIoStream) -> None:
     await capnp.TwoPartyServer(stream, bootstrap=CalculatorImpl()).on_disconnect()
 
 

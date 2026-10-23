@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import base64
+from typing import TYPE_CHECKING
 
 import capnp
 
 import schema_capnp
+
+if TYPE_CHECKING:
+    from capnp.lib.capnp import _DynamicStructReader, _Schema
 
 capnp.remove_import_hook()
 
@@ -334,7 +338,7 @@ _loaded_bundle = False
 _loaded_schema_ids: set[int] = set()
 
 
-def _load_schema_node(schema_id: int, node_reader: object) -> object:
+def _load_schema_node(schema_id: int, node_reader: _DynamicStructReader) -> _Schema:
     if schema_id in _loaded_schema_ids:
         return _loader.get(schema_id)
     loaded_schema = _loader.load_dynamic(node_reader)
@@ -342,7 +346,7 @@ def _load_schema_node(schema_id: int, node_reader: object) -> object:
     return loaded_schema
 
 
-def _load_schema(schema: object) -> object:
+def _load_schema(schema: _Schema) -> _Schema:
     schema_id = int(schema.node.id)
     if schema_id in _loaded_schema_ids:
         return _loader.get(schema_id)
@@ -369,7 +373,7 @@ def get_schema_loader() -> capnp.SchemaLoader:
     return _ensure_loaded()
 
 
-def get_schema_by_id(schema_id: int) -> object:
+def get_schema_by_id(schema_id: int) -> _Schema:
     return _ensure_loaded().get(schema_id)
 
 

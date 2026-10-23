@@ -1,13 +1,14 @@
 """Reader helper types for `addressbook.capnp`."""
 
 from collections.abc import Callable
-from typing import Literal, override
+from typing import Any, override
 
 from capnp.lib.capnp import (
     _DynamicStructReader,
 )
 
 from . import builders as builders
+from . import common as common
 from . import enums as enums
 from . import lists as lists
 
@@ -15,12 +16,12 @@ class PhoneNumberReader(_DynamicStructReader):
     @property
     def number(self) -> str: ...
     @property
-    def type(self) -> enums.PersonPhoneNumberTypeEnum: ...
+    def type(self) -> enums.PersonPhoneNumberTypeValue: ...
     @override
     def as_builder(
         self,
         num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[[int], bytearray] | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
     ) -> builders.PhoneNumberBuilder: ...
 
 class PersonEmploymentReader(_DynamicStructReader):
@@ -32,13 +33,14 @@ class PersonEmploymentReader(_DynamicStructReader):
     def school(self) -> str: ...
     @property
     def selfEmployed(self) -> None: ...
+    @property
     @override
-    def which(self) -> Literal["unemployed", "employer", "school", "selfEmployed"]: ...
+    def which(self) -> common._PersonEmploymentWhich: ...
     @override
     def as_builder(
         self,
         num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[[int], bytearray] | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
     ) -> builders.PersonEmploymentBuilder: ...
 
 class PersonTestGroupReader(_DynamicStructReader):
@@ -52,7 +54,7 @@ class PersonTestGroupReader(_DynamicStructReader):
     def as_builder(
         self,
         num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[[int], bytearray] | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
     ) -> builders.PersonTestGroupBuilder: ...
 
 class PersonReader(_DynamicStructReader):
@@ -74,7 +76,7 @@ class PersonReader(_DynamicStructReader):
     def as_builder(
         self,
         num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[[int], bytearray] | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
     ) -> builders.PersonBuilder: ...
 
 class AddressBookReader(_DynamicStructReader):
@@ -84,7 +86,7 @@ class AddressBookReader(_DynamicStructReader):
     def as_builder(
         self,
         num_first_segment_words: int | None = None,
-        allocate_seg_callable: Callable[[int], bytearray] | None = None,
+        allocate_seg_callable: Callable[[int], Any] | None = None,
     ) -> builders.AddressBookBuilder: ...
 
 type PersonListReader = lists._PersonList.Reader

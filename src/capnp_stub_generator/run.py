@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import json
 import logging
 import os.path
 import shutil
@@ -24,6 +25,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from capnp.lib.capnp import _Schema
+
+    from schema_capnp import TypeReader
 
 if hasattr(capnp, "remove_import_hook"):
     capnp.remove_import_hook()
@@ -312,15 +315,19 @@ def _write_stub_lines(capnp_pyi_path: Path, lines: list[str]) -> None:
 
 def _find_typing_import_idx(lines: list[str]) -> int | None:
     """Return the index of the `from typing import ...` line if present."""
-    return next((idx for idx, line in enumerate(lines) if line.startswith("from typing import")), None)
+    typing_imports = [idx for idx, line in enumerate(lines) if line.startswith("from typing import")]
+    return next(
+        (idx for idx in typing_imports if "overload" in lines[idx]), typing_imports[0] if typing_imports else None
+    )
 
 
 def _ensure_overload_import(lines: list[str], typing_import_idx: int) -> None:
-    """Ensure the typing import line includes `overload`."""
-    if "overload" in lines[typing_import_idx]:
+    """Ensure the typing imports provide the standard overload decorator."""
+    imported_names = lines[typing_import_idx].partition(" import ")[2].split(",")
+    if any(name.strip() == "overload" for name in imported_names):
         return
 
-    lines[typing_import_idx] = lines[typing_import_idx].replace("from typing import ", "from typing import overload, ")
+    lines.insert(typing_import_idx + 1, "from typing import overload")
 
 
 def _find_import_end_idx(lines: list[str], typing_import_idx: int) -> int:
@@ -445,7 +452,7 @@ def _find_method_insert_idx(lines: list[str], class_name: str, method_name: str)
     class_start_idx, class_end_idx = class_bounds
     for method_idx in range(class_start_idx + 1, class_end_idx):
         line = lines[method_idx]
-        if line.strip().startswith("@overload"):
+        if line.strip() in {"@overload", "@_overload"}:
             continue
         if f"def {method_name}" in line and "schema:" in line:
             return class_start_idx, _adjust_insert_idx(lines, method_idx, class_start_idx)
@@ -891,13 +898,13 @@ def format_all_outputs(output_directories: set[str], *, ruff_config_path: str | 
 
 
 def validate_with_pyright(output_directories: set[str]) -> None:
-    """Validate generated stub files using pyright.
+    """Validate generated stub files using basedpyright.
 
     Args:
         output_directories: Set of directories containing generated stubs.
 
     Raises:
-        PyrightValidationError: If pyright finds any type errors.
+        PyrightValidationError: If basedpyright finds any type errors.
 
     """
     # Collect all .pyi files from output directories
@@ -910,31 +917,46 @@ def validate_with_pyright(output_directories: set[str]) -> None:
         logger.warning("No stub files found to validate")
         return
 
-    logger.info("Validating %s generated stub file(s) with pyright...", len(stub_files))
+    logger.info("Validating %s generated stub file(s) with basedpyright...", len(stub_files))
 
     try:
-        pyright = _resolve_executable("pyright")
+        basedpyright = _resolve_executable("basedpyright")
 
-        # Run pyright on all stub files
-        result = _run_command([pyright, *stub_files], check=False)
+        # Use an isolated configuration so a caller's project-level exclusion
+        # cannot silently skip explicitly requested generated files.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "pyrightconfig.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "exclude": [],
+                        "extraPaths": sorted(output_directories),
+                        "reportMissingTypeStubs": "warning",
+                        "reportPrivateUsage": "none",
+                        "typeCheckingMode": "strict",
+                    },
+                ),
+                encoding="utf8",
+            )
+            result = _run_command([basedpyright, "--project", str(config_path), *stub_files], check=False)
 
         # Check for errors in output
         error_count = result.stdout.count(" error:")
 
         if error_count > 0 or result.returncode != 0:
-            error_msg = f"Pyright validation failed with {error_count} error(s):\n\n{result.stdout}"
+            error_msg = f"basedpyright validation failed with {error_count} error(s):\n\n{result.stdout}"
             logger.error(error_msg)
             raise PyrightValidationError(error_msg)
 
-        logger.info("✓ Pyright validation passed - no type errors found")
+        logger.info("✓ basedpyright validation passed - no type errors found")
 
     except FileNotFoundError as error:
-        logger.exception("pyright not found. Please install pyright: npm install -g pyright")
-        msg = "pyright command not found. Please install pyright."
+        logger.exception("basedpyright not found. Please install basedpyright")
+        msg = "basedpyright command not found. Please install basedpyright."
         raise PyrightValidationError(msg) from error
     except subprocess.SubprocessError as error:
-        logger.exception("Error running pyright")
-        error_msg = f"Error running pyright: {error}"
+        logger.exception("Error running basedpyright")
+        error_msg = f"Error running basedpyright: {error}"
         raise PyrightValidationError(error_msg) from error
 
 
@@ -1295,13 +1317,17 @@ def _iter_loaded_schemas(
             logger.warning("Could not load schema %s from %s: %s", hex(schema_id), path, error)
 
 
-def _collect_referenced_type_ids(type_obj: object) -> list[int]:
+def _collect_referenced_type_ids(type_obj: TypeReader) -> list[int]:
     """Extract schema IDs referenced by a schema.capnp Type reader."""
     type_which = type_obj.which()
     if type_which == "list":
         return _collect_referenced_type_ids(type_obj.list.elementType)
-    if type_which in {"struct", "interface", "enum"}:
-        return [int(getattr(type_obj, type_which).typeId)]
+    if type_which == "struct":
+        return [int(type_obj.struct.typeId)]
+    if type_which == "interface":
+        return [int(type_obj.interface.typeId)]
+    if type_which == "enum":
+        return [int(type_obj.enum.typeId)]
     return []
 
 
@@ -1400,9 +1426,13 @@ def _render_schema_bundle_py(bundle_nodes: list[tuple[int, str, str]]) -> str:
         "from __future__ import annotations",
         "",
         "import base64",
+        "from typing import TYPE_CHECKING",
         "",
         "import capnp",
         "import schema_capnp",
+        "",
+        "if TYPE_CHECKING:",
+        "    from capnp.lib.capnp import _DynamicStructReader, _Schema",
         "",
         "capnp.remove_import_hook()",
         "",
@@ -1420,7 +1450,7 @@ def _render_schema_bundle_py(bundle_nodes: list[tuple[int, str, str]]) -> str:
             "_loaded_schema_ids: set[int] = set()",
             "",
             "",
-            "def _load_schema_node(schema_id: int, node_reader: object) -> object:",
+            "def _load_schema_node(schema_id: int, node_reader: _DynamicStructReader) -> _Schema:",
             "    if schema_id in _loaded_schema_ids:",
             "        return _loader.get(schema_id)",
             "    loaded_schema = _loader.load_dynamic(node_reader)",
@@ -1428,7 +1458,7 @@ def _render_schema_bundle_py(bundle_nodes: list[tuple[int, str, str]]) -> str:
             "    return loaded_schema",
             "",
             "",
-            "def _load_schema(schema: object) -> object:",
+            "def _load_schema(schema: _Schema) -> _Schema:",
             "    schema_id = int(schema.node.id)",
             "    if schema_id in _loaded_schema_ids:",
             "        return _loader.get(schema_id)",
@@ -1455,7 +1485,7 @@ def _render_schema_bundle_py(bundle_nodes: list[tuple[int, str, str]]) -> str:
             "    return _ensure_loaded()",
             "",
             "",
-            "def get_schema_by_id(schema_id: int) -> object:",
+            "def get_schema_by_id(schema_id: int) -> _Schema:",
             "    return _ensure_loaded().get(schema_id)",
             "",
             "",

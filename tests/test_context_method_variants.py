@@ -19,13 +19,13 @@ def test_both_method_variants_exist(calculator_stubs: Path) -> None:
 
     # Regular method with individual parameters (may be multi-line signature)
     assert "def evaluate(" in content
-    assert "expression: ExpressionReader" in content
-    assert "_context: EvaluateCallContext" in content
+    assert "expression: readers.ExpressionReader" in content
+    assert "_context: contexts.EvaluateCallContext" in content
     assert "**kwargs: object" in content
 
     # _context variant with only context parameter
     assert "def evaluate_context(" in content
-    assert "context: EvaluateCallContext" in content
+    assert "context: contexts.EvaluateCallContext" in content
     assert "-> Awaitable[None]" in content
 
 
@@ -58,7 +58,7 @@ def test_callcontext_has_params_and_results(calculator_stubs: Path) -> None:
     assert "params: EvaluateParams" in content
     # Results now point to the flattened ServerResult helper
     assert "@property" in content
-    assert "def results(self) -> EvaluateServerResult: ..." in content
+    assert "def results(self) -> results_server.EvaluateServerResult: ..." in content
 
 
 def test_callcontext_void_method(basic_stubs: Path) -> None:
@@ -86,7 +86,7 @@ def test_nested_interface_context_methods(calculator_stubs: Path) -> None:
 
     # Calculator.Value is a nested interface (now _ValueInterfaceModule inside _CalculatorInterfaceModule)
     assert "def read_context(" in content
-    assert "context: ReadCallContext" in content
+    assert "context: contexts.ReadCallContext" in content
 
     # Calculator.Function is a nested interface (now _FunctionInterfaceModule inside _CalculatorInterfaceModule)
     assert "def call_context(" in content  # Verify method exists
@@ -104,14 +104,14 @@ def test_context_method_documentation(calculator_stubs: Path) -> None:
 
     # Example from docs: defFunction_context(self, context)
     assert "def defFunction_context(" in content
-    assert "context: DeffunctionCallContext" in content
+    assert "context: contexts.DeffunctionCallContext" in content
 
     # The CallContext should provide access to both params and results
     assert "class DeffunctionCallContext(Protocol):" in content
     assert "params: DeffunctionParams" in content
     # Results now point to the flattened ServerResult helper
     assert "@property" in content
-    assert "def results(self) -> DeffunctionServerResult: ..." in content
+    assert "def results(self) -> results_server.DeffunctionServerResult: ..." in content
 
 
 def test_context_methods_count(calculator_stubs: Path) -> None:

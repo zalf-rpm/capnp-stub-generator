@@ -18,49 +18,51 @@ TESTS_DIR = Path(__file__).parent
 class TestRPCResultTypes:
     """Test that RPC result types have field attributes."""
 
-    def test_evaluate_returns_result_with_value_field(self, generate_calculator_stubs: Path) -> None:
+    def test_evaluate_returns_result_with_value_field(self, calculator_stubs: Path) -> None:
         """Test that evaluate() returns a result with .value attribute."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should have top-level EvaluateResult class
         assert "class EvaluateResult" in stub_content
 
         # Should have value field (using nested Protocol naming)
-        assert "value: ValueClient" in stub_content
+        assert "value: clients.ValueClient" in stub_content
 
         # evaluate should return the flattened top-level EvaluateResult
         assert "def evaluate(" in stub_content
-        assert "-> EvaluateResult:" in stub_content
+        assert "-> results_client.EvaluateResult:" in stub_content
 
-    def test_deffunction_returns_result_with_func_field(self, generate_calculator_stubs: Path) -> None:
+    def test_deffunction_returns_result_with_func_field(self, calculator_stubs: Path) -> None:
         """Test that defFunction() returns a result with .func attribute."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should have top-level DeffunctionResult class
         assert "class DeffunctionResult" in stub_content
 
         # Should have func field (using nested Protocol naming)
-        assert "func: FunctionClient" in stub_content
+        assert "func: clients.FunctionClient" in stub_content
 
         # defFunction should return the flattened top-level DeffunctionResult
         assert "def defFunction(" in stub_content
         assert "paramCount: int | None = None" in stub_content
-        assert "body: ExpressionBuilder | ExpressionReader | dict[str, Any] | None = None" in stub_content
-        assert "-> DeffunctionResult:" in stub_content
+        assert (
+            "body: builders.ExpressionBuilder | readers.ExpressionReader | dict[str, Any] | None = None" in stub_content
+        )
+        assert "-> results_client.DeffunctionResult:" in stub_content
 
-    def test_getoperator_returns_result_with_func_field(self, generate_calculator_stubs: Path) -> None:
+    def test_getoperator_returns_result_with_func_field(self, calculator_stubs: Path) -> None:
         """Test that getOperator() returns a result with .func attribute."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should have GetoperatorResult class
         assert "class GetoperatorResult" in stub_content
 
         # Should have func field (using nested Protocol naming)
-        assert "func: FunctionClient" in stub_content
+        assert "func: clients.FunctionClient" in stub_content
 
-    def test_nested_interface_read_returns_result(self, generate_calculator_stubs: Path) -> None:
+    def test_nested_interface_read_returns_result(self, calculator_stubs: Path) -> None:
         """Test that nested interface Value.read() returns result with .value."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should have ReadResult class
         assert "class ReadResult" in stub_content
@@ -81,9 +83,9 @@ class TestRPCResultTypes:
 
         assert found_value_float, "ReadResult should have value: float field"
 
-    def test_nested_interface_call_returns_result(self, generate_calculator_stubs: Path) -> None:
+    def test_nested_interface_call_returns_result(self, calculator_stubs: Path) -> None:
         """Test that nested interface Function.call() returns result with .value."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should have CallResult class
         assert "class CallResult" in stub_content
@@ -91,16 +93,16 @@ class TestRPCResultTypes:
         # call should return the flattened top-level CallResult
         # Note: method signature may span multiple lines
         assert "def call(" in stub_content
-        assert "params: Float64ListBuilder | Float64ListReader | Sequence[float]" in stub_content
-        assert "-> CallResult:" in stub_content
+        assert "params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[float]" in stub_content
+        assert "-> results_client.CallResult:" in stub_content
 
 
 class TestRPCResultsAreAwaitable:
     """Test that RPC result types are awaitable."""
 
-    def test_result_types_are_protocols(self, generate_calculator_stubs: Path) -> None:
+    def test_result_types_are_protocols(self, calculator_stubs: Path) -> None:
         """Test that result types are Protocol classes that inherit from Awaitable."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # All result types should inherit from Awaitable[Result] for promise pipelining
         assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in stub_content
@@ -110,12 +112,12 @@ class TestRPCResultsAreAwaitable:
         assert "class CallResult(Awaitable[CallResult], Protocol):" in stub_content
 
         # Methods should return the flattened top-level Result helpers
-        assert "-> EvaluateResult:" in stub_content
-        assert "-> ReadResult:" in stub_content
+        assert "-> results_client.EvaluateResult:" in stub_content
+        assert "-> results_client.ReadResult:" in stub_content
 
-    def test_awaitable_imported(self, generate_calculator_stubs: Path) -> None:
+    def test_awaitable_imported(self, calculator_stubs: Path) -> None:
         """Test that Awaitable is imported from typing."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should import Awaitable
         assert "from typing import" in stub_content
@@ -125,24 +127,24 @@ class TestRPCResultsAreAwaitable:
 class TestEnumParametersAcceptLiterals:
     """Test that enum parameters accept string literals."""
 
-    def test_getoperator_accepts_string_literals(self, generate_calculator_stubs: Path) -> None:
+    def test_getoperator_accepts_string_literals(self, calculator_stubs: Path) -> None:
         """Test that getOperator op parameter accepts string literals."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # getOperator should accept int | Literal[...] | None (optional) -> now uses CalculatorOperatorEnum alias
         assert "def getOperator(" in stub_content
-        assert "op: CalculatorOperatorEnum | None = None" in stub_content
+        assert "op: enums.CalculatorOperatorEnum | None = None" in stub_content
 
-    def test_enum_literals_match_enum_values(self, generate_calculator_stubs: Path) -> None:
+    def test_enum_literals_match_enum_values(self, calculator_stubs: Path) -> None:
         """Test that the enum literal values match the actual enum."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Just check that the literal types are present somewhere (client method)
         assert 'Literal["add", "subtract", "multiply", "divide"]' in stub_content
 
-    def test_literal_imported(self, generate_calculator_stubs: Path) -> None:
+    def test_literal_imported(self, calculator_stubs: Path) -> None:
         """Test that Literal is imported."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should import Literal
         assert "from typing import" in stub_content
@@ -152,18 +154,18 @@ class TestEnumParametersAcceptLiterals:
 class TestRPCResultFieldTypes:
     """Test that result field types are correctly resolved."""
 
-    def test_interface_result_fields(self, generate_calculator_stubs: Path) -> None:
+    def test_interface_result_fields(self, calculator_stubs: Path) -> None:
         """Test that interface-typed result fields are correct."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # EvaluateResult.value should include _ValueInterfaceModule types
         # The type may be Server | ValueClient union
         assert "_CalculatorInterfaceModule._ValueInterfaceModule" in stub_content
         assert "class EvaluateResult" in stub_content
 
-    def test_primitive_result_fields(self, generate_calculator_stubs: Path) -> None:
+    def test_primitive_result_fields(self, calculator_stubs: Path) -> None:
         """Test that primitive-typed result fields are correct."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # ReadResult.value should be float (primitive type)
         lines = stub_content.split("\n")

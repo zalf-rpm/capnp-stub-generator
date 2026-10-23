@@ -49,16 +49,19 @@ def test_nested_enum_and_literal_and_overload() -> None:
     assert any("overload" in line for line in lines if line.startswith("from typing import"))
 
 
-def test_unions_literal_and_overload_and_which() -> None:
-    """Test unions literal and overload and which."""
+def test_unions_refine_runtime_which_descriptor() -> None:
+    """Narrow pycapnp's callable ``which`` property without changing its shape."""
     stub_path = _get_stub_path("unions.capnp")
     lines = read_generated_types_lines(stub_path)
-    # Expect Literal import (union which methods)
-    assert any(line.startswith("from typing import") and "Literal" in line for line in lines)
-    # Overload is only imported when there are multiple init methods (2+)
-    # unions.capnp doesn't have multiple init methods, so no overload import
-    # 'which' function should appear for discriminantCount > 0
-    assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
+    assert any("class _WithUnnamedUnionWhich(_DynamicEnumField):" in line for line in lines)
+    assert any('def __call__(self) -> Literal["small", "big"]:' in line for line in lines)
+    which_lines = [index for index, line in enumerate(lines) if "def which(" in line]
+    assert which_lines
+    assert any(
+        any("@property" in prior_line for prior_line in lines[max(0, index - 2) : index]) for index in which_lines
+    )
+    # Even one narrowed init signature needs a runtime-compatible str catchall.
+    assert any(line.startswith("from typing import") and "overload" in line for line in lines)
 
 
 def test_interfaces_protocol_and_any_and_iterator() -> None:

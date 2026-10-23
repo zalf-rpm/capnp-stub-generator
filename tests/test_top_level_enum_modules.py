@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tests.test_helpers import run_command, run_pyright
+from tests.test_helpers import run_pyright
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -30,7 +30,6 @@ def test_top_level_enum_helpers_live_in_types_modules(zalfmas_stubs: Path) -> No
         assert f"{enum_name}: types.modules.{enum_helper_name}" in runtime_stub
         assert f"class {enum_helper_name}:" not in runtime_stub
         assert f"class {enum_helper_name}(_EnumModule):" in modules_stub
-        assert f"def schema(self) -> schemas._{enum_name}EnumSchema: ..." in modules_stub
         assert f"type _{enum_name}EnumSchema = modules.{enum_helper_name}._{enum_name}Schema" in schemas_stub
         assert enum_helper_name not in modules_runtime
 
@@ -96,26 +95,22 @@ def test_climate_schema_helpers_keep_precise_nested_element_types(zalfmas_stubs:
     assert "def elementType(self) -> _mas_schema_common_common_capnp_schemas._PairSchema: ..." in modules_stub
 
 
-def test_climate_schema_helper_chains_type_check_precisely(zalfmas_stubs: Path) -> None:
-    """Deep schema helper chains should preserve their concrete schema targets."""
+def test_runtime_module_schema_attributes_keep_runtime_types(zalfmas_stubs: Path) -> None:
+    """Module ``schema`` attributes retain their real pycapnp classes."""
     test_file = zalfmas_stubs / "test_climate_precise_schema_helpers.py"
     test_file.write_text(
         """
 from mas.schema.climate import climate_capnp
-from mas.schema.climate.climate_capnp.types import schemas as climate_schemas
-from mas.schema.common.common_capnp.types import schemas as common_schemas
+from capnp.lib.capnp import _EnumSchema, _StructSchema
 
-header_schema: climate_schemas._ElementEnumSchema = climate_capnp.TimeSeriesData.schema.fields["header"].schema.elementType
-categories_schema: common_schemas._IdInformationSchema = climate_capnp.Metadata.Supported.schema.methods["categories"].result_type.fields["types"].schema.elementType
-values_schema: common_schemas._IdInformationSchema = climate_capnp.Metadata.Supported.schema.methods["supportedValues"].result_type.fields["values"].schema.elementType
-for_all_schema: common_schemas._PairSchema = climate_capnp.Metadata.Information.schema.methods["forAll"].result_type.fields["all"].schema.elementType
-header_map_schema: common_schemas._PairSchema = climate_capnp.CSVTimeSeriesFactory.CSVConfig.schema.fields["headerMap"].schema.elementType
-_ = (header_schema, categories_schema, values_schema, for_all_schema, header_map_schema)
+gcm_schema: _EnumSchema = climate_capnp.GCM.schema
+data_schema: _StructSchema = climate_capnp.TimeSeriesData.schema
+_ = (gcm_schema, data_schema)
 """.lstrip(),
     )
 
     try:
-        result = run_command(["basedpyright", str(test_file)], cwd=zalfmas_stubs)
+        result = run_pyright(test_file, cwd=zalfmas_stubs)
     finally:
         test_file.unlink(missing_ok=True)
 

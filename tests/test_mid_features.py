@@ -39,8 +39,10 @@ def test_list_and_sequence_annotations(mid_features_stub_lines: list[str]) -> No
     assert "Sequence" in content or "List" in content
 
 
-def test_union_which_and_literal_import(mid_features_stub_lines: list[str]) -> None:
-    """Test union which and literal import."""
+def test_union_refines_runtime_which_descriptor(mid_features_stub_lines: list[str]) -> None:
+    """Union readers narrow pycapnp's callable ``which`` descriptor."""
     lines = mid_features_stub_lines
     content = "".join(lines)
-    assert "which" in content.lower()
+    assert "class _MidFeatureContainerChoiceWhich(_DynamicEnumField):" in content
+    assert 'def __call__(self) -> Literal["none", "text", "nums"]:' in content
+    assert "def which(" in content

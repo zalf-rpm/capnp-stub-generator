@@ -21,7 +21,7 @@ def test_name_annotations(basic_stubs: Path) -> None:
     # The Python API uses the original names from the schema, not the C++ annotations
     # With _StructModule structure, check for the module and annotation
     assert "class _BadNameStructModule(_StructModule):" in content, "BadName _StructModule should use original name"
-    assert "BadName: _BadNameStructModule" in content, "BadName annotation should exist"
+    assert "BadName: types.modules._BadNameStructModule" in content, "BadName annotation should exist"
 
     # Check that the struct has the expected fields (using original names)
     assert "union {" in content or "def badField(self)" in content or "def alt(self)" in content, (

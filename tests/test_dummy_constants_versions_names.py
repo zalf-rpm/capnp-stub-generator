@@ -6,20 +6,20 @@ from __future__ import annotations
 def test_global_constants_and_derived_constant_present(dummy_stub_lines: list[str]) -> None:
     """Test global constants and derived constant present."""
     lines = dummy_stub_lines
-    # Global constants - only primitive types are currently generated
+    # Global constants include primitive and reader-backed runtime values.
     assert any("globalInt:" in line for line in lines)
     assert any("globalText:" in line for line in lines)
-    # Struct constants are not currently generated in stubs
+    assert any("globalStruct: types.readers.TestAllTypesReader" in line for line in lines)
+    assert any("derivedConstant: types.readers.TestAllTypesReader" in line for line in lines)
 
 
 def test_struct_constants_section(dummy_stub_lines: list[str]) -> None:
     """Test struct constants section."""
     lines = dummy_stub_lines
     assert any("class _TestConstantsStructModule(_StructModule):" in line for line in lines)
-    # Struct-level constants are not currently generated in stub files
-    # This is acceptable as stubs are for type checking, not runtime values
-    # for name in [
-    # ]:
+    assert any("structConst: readers.TestAllTypesReader" in line for line in lines)
+    assert any("enumConst: enums.TestEnumValue" in line for line in lines)
+    assert any("structListConst: readers.TestAllTypesListReader" in line for line in lines)
 
 
 def test_versioned_structs_fields_and_defaults(dummy_stub_lines: list[str]) -> None:

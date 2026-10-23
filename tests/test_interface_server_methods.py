@@ -5,9 +5,9 @@ import re
 EXPECTED_SERVER_CLASS_COUNT = 3
 
 
-def test_server_class_exists_for_interfaces(calculator_stub_lines: list[str]) -> None:
+def test_server_class_exists_for_interfaces(calculator_types_lines: list[str]) -> None:
     """Server classes should be generated for all interfaces."""
-    lines = calculator_stub_lines
+    lines = calculator_types_lines
 
     # Check that interface modules exist (now inherit from _InterfaceModule)
     assert any("class _ValueInterfaceModule(_InterfaceModule):" in line for line in lines)
@@ -22,30 +22,30 @@ def test_server_class_exists_for_interfaces(calculator_stub_lines: list[str]) ->
     assert server_count == EXPECTED_SERVER_CLASS_COUNT, f"Expected 3 Server classes, found {server_count}"
 
 
-def test_server_methods_have_signatures(calculator_stub_lines: list[str]) -> None:
+def test_server_methods_have_signatures(calculator_types_lines: list[str]) -> None:
     """Server class methods should have proper type signatures."""
-    lines = calculator_stub_lines
+    lines = calculator_types_lines
     content = "".join(lines)
 
     # Function.Server should have call method
     assert "class Server(_DynamicCapabilityServer):" in content
     # Note: method signatures may span multiple lines
     assert "def call(" in content
-    assert "params: Float64ListReader" in content
+    assert "params: readers.Float64ListReader" in content
     assert "Awaitable[" in content  # Server.call returns Awaitable
 
     # Value.Server should have read method with _context parameter
     assert "def read(" in content
-    assert "_context: ReadCallContext" in content
+    assert "_context: contexts.ReadCallContext" in content
 
     # Calculator.Server should have evaluate method with Reader type
     assert "def evaluate(" in content
-    assert "expression: ExpressionReader" in content
+    assert "expression: readers.ExpressionReader" in content
 
 
-def test_server_methods_accept_context(calculator_stub_lines: list[str]) -> None:
+def test_server_methods_accept_context(calculator_types_lines: list[str]) -> None:
     """Server methods should accept _context parameter and **kwargs."""
-    lines = calculator_stub_lines
+    lines = calculator_types_lines
     content = "".join(lines)
 
     # All server methods should have **kwargs
@@ -78,9 +78,9 @@ def test_server_methods_accept_context(calculator_stub_lines: list[str]) -> None
             assert "CallContext" in method, f"Server method _context should be typed with CallContext: {method}"
 
 
-def test_server_methods_return_interface_or_implementation(calculator_stub_lines: list[str]) -> None:
+def test_server_methods_return_interface_or_implementation(calculator_types_lines: list[str]) -> None:
     """Server methods returning interfaces return Server types."""
-    lines = calculator_stub_lines
+    lines = calculator_types_lines
     content = "".join(lines)
 
     # Server methods returning interfaces return Interface.Server types
@@ -90,9 +90,9 @@ def test_server_methods_return_interface_or_implementation(calculator_stub_lines
     assert "_CalculatorInterfaceModule._FunctionInterfaceModule.Server" in content
 
 
-def test_server_method_parameters_match_protocol(calculator_stub_lines: list[str]) -> None:
+def test_server_method_parameters_match_protocol(calculator_types_lines: list[str]) -> None:
     """Server method parameters should match the Protocol interface plus _context."""
-    lines = calculator_stub_lines
+    lines = calculator_types_lines
     content = "".join(lines)
 
     # Find Function Protocol's call method (now optional parameters)
@@ -107,6 +107,6 @@ def test_server_method_parameters_match_protocol(calculator_stub_lines: list[str
 
     # Find Function.Server's call method - should have params, _context, and **kwargs
     # Note: method signatures may span multiple lines
-    assert "params: Float64ListReader" in content
-    assert "_context: CallCallContext" in content
+    assert "params: readers.Float64ListReader" in content
+    assert "_context: contexts.CallCallContext" in content
     assert "**kwargs: object" in content

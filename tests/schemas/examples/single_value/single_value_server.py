@@ -38,7 +38,7 @@ class SingleValueImpl(single_value_capnp.SingleValue.Server):
         return [s1, s2]
 
 
-async def new_connection(stream: capnp.lib.capnp.AsyncIoStream):
+async def new_connection(stream: capnp.AsyncIoStream):
     await capnp.TwoPartyServer(stream, bootstrap=SingleValueImpl()).on_disconnect()
 
 

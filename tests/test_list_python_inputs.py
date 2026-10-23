@@ -286,24 +286,19 @@ def test_generated_struct_list_inputs_advertise_sequences(addressbook_stubs: Pat
     builders_content = read_generated_types_file(package_dir, "builders.pyi")
 
     assert re.search(
-        r"people:\s+builders\.PersonListBuilder\s*\|\s*readers\.PersonListReader\s*\|\s*"
-        r"Sequence\[readers\.PersonReader\s*\|\s*builders\.PersonBuilder\s*\|\s*dict\[str, Any\]\]\s*\|\s*None = None",
+        r"people:\s+builders\.PersonListBuilder\s*\|\s*readers\.PersonListReader\s*\|\s*Sequence\[readers\.PersonReader\s*\|\s*builders\.PersonBuilder\s*\|\s*dict\[str, Any\]\]\s*\|\s*None = None",
         modules_content,
     )
     assert re.search(
-        r"value:\s+PersonListBuilder\s*\|\s*readers\.PersonListReader\s*\|\s*"
-        r"Sequence\[readers\.PersonReader\s*\|\s*PersonBuilder\s*\|\s*dict\[str, Any\]\]",
+        r"value:\s+PersonListBuilder\s*\|\s*readers\.PersonListReader\s*\|\s*Sequence\[readers\.PersonReader\s*\|\s*PersonBuilder\s*\|\s*dict\[str, Any\]\]",
         builders_content,
     )
     assert re.search(
-        r"phones:\s+builders\.PhoneNumberListBuilder\s*\|\s*readers\.PhoneNumberListReader\s*\|\s*"
-        r"Sequence\[readers\.PhoneNumberReader\s*\|\s*builders\.PhoneNumberBuilder\s*\|\s*dict\[str, Any\]\]"
-        r"\s*\|\s*None = None",
+        r"phones:\s+builders\.PhoneNumberListBuilder\s*\|\s*readers\.PhoneNumberListReader\s*\|\s*Sequence\[readers\.PhoneNumberReader\s*\|\s*builders\.PhoneNumberBuilder\s*\|\s*dict\[str, Any\]\]\s*\|\s*None = None",
         modules_content,
     )
     assert re.search(
-        r"value:\s+PhoneNumberListBuilder\s*\|\s*readers\.PhoneNumberListReader\s*\|\s*"
-        r"Sequence\[readers\.PhoneNumberReader\s*\|\s*PhoneNumberBuilder\s*\|\s*dict\[str, Any\]\]",
+        r"value:\s+PhoneNumberListBuilder\s*\|\s*readers\.PhoneNumberListReader\s*\|\s*Sequence\[readers\.PhoneNumberReader\s*\|\s*PhoneNumberBuilder\s*\|\s*dict\[str, Any\]\]",
         builders_content,
     )
 
@@ -321,8 +316,7 @@ def test_generated_rpc_list_inputs_use_precise_sequences(calculator_stubs: Path,
     )
     assert "params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[float]" in calculator_requests
     assert re.search(
-        r"items:\s*\(\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*"
-        r"Sequence\[readers\.ItemReader\s*\|\s*builders\.ItemBuilder\s*\|\s*dict\[str, Any\]\]\s*\)",
+        r"items:\s*\(\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*Sequence\[readers\.ItemReader\s*\|\s*builders\.ItemBuilder\s*\|\s*dict\[str, Any\]\]\s*\)",
         list_result_tuples,
         re.DOTALL,
     )

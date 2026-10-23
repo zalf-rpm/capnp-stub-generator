@@ -61,7 +61,7 @@ def test_generics_anypointer_interface(basic_stubs: Path) -> None:
         "GenericBox.value should be typed as _DynamicObjectReader (from AnyPointer)"
     )
     # Check for module annotation (not TypeAlias)
-    assert "GenericBox: _GenericBoxStructModule" in content, "GenericBox annotation should exist"
+    assert "GenericBox: types.modules._GenericBoxStructModule" in content, "GenericBox annotation should exist"
 
     # Check for generic instantiations in AdvancedContainer
     assert "def enumBox(self)" in content, "enumBox field should exist"
@@ -79,7 +79,7 @@ def test_generics_anypointer_interface(basic_stubs: Path) -> None:
 
     # Check for interface (now uses _InterfaceModule pattern)
     assert "class _TestIfaceInterfaceModule(_InterfaceModule):" in content, "TestIface _InterfaceModule should exist"
-    assert "TestIface: _TestIfaceInterfaceModule" in content, "TestIface annotation should exist"
+    assert "TestIface: types.modules._TestIfaceInterfaceModule" in content, "TestIface annotation should exist"
     assert "class TestIfaceClient(_DynamicCapabilityClient):" in content, (
         "TestIfaceClient should inherit from _DynamicCapabilityClient"
     )

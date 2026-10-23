@@ -27,5 +27,5 @@ def test_generated_read_result_helper_does_not_advertise_wait(basic_stubs: Path)
 
     match = re.search(r"class ReadResult\(Awaitable\[ReadResult\], Protocol\):.*?(?=\nclass |\Z)", content, re.DOTALL)
     assert match is not None
-    assert "def read(self) -> ReadResult:" in content
+    assert "def read(self) -> results_client.ReadResult:" in content
     assert "def wait(" not in match.group(0)

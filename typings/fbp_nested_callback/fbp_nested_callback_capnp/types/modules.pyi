@@ -1,10 +1,11 @@
 """Module helper types for `fbp_nested_callback.capnp`."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractContextManager
-from typing import IO, Literal, overload, override
+from typing import IO, Any, Literal, overload, override
 
 from capnp.lib.capnp import (
+    _AsyncIoStream,
     _DynamicCapabilityServer,
     _DynamicStructBuilder,
     _DynamicStructReader,
@@ -53,14 +54,11 @@ class _ChannelInterfaceModule(_InterfaceModule):
                     self,
                 ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsStructModule._StatsSchema._Fields: ...
 
-            @property
-            @override
-            def schema(self) -> schemas._ChannelStatsCallbackStatsSchema: ...
             @override
             def new_message(
                 self,
                 num_first_segment_words: int | None = None,
-                allocate_seg_callable: Callable[[int], bytearray] | None = None,
+                allocate_seg_callable: Callable[[int], Any] | None = None,
                 noOfWaitingWriters: int | None = None,
                 noOfWaitingReaders: int | None = None,
                 noOfIpsInQueue: int | None = None,
@@ -70,38 +68,58 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 **kwargs: object,
             ) -> builders.StatsBuilder: ...
             @override
+            def __call__(
+                self,
+                num_first_segment_words: int | None = None,
+                **kwargs: object,
+            ) -> builders.StatsBuilder: ...
+            @override
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> AbstractContextManager[readers.StatsReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-                *,
-                builder: Literal[False],
+                builder: Literal[False] = False,
             ) -> AbstractContextManager[readers.StatsReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
             ) -> AbstractContextManager[builders.StatsBuilder]: ...
+            @overload
+            def from_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None,
+                nesting_limit: int | None,
+                builder: Literal[True],
+            ) -> AbstractContextManager[builders.StatsBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-            ) -> _DynamicStructReader: ...
+            ) -> readers.StatsReader: ...
+            @override
+            def from_segments(
+                self,
+                segments: Sequence[Any],
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+            ) -> readers.StatsReader: ...
             @override
             def read(
                 self,
@@ -116,6 +134,43 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> readers.StatsReader: ...
+            @override
+            async def read_async(
+                self,
+                stream: _AsyncIoStream,
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+            ) -> readers.StatsReader | None: ...
+            @override
+            def read_multiple(
+                self,
+                file: IO[str] | IO[bytes],
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+                skip_copy: bool = False,
+            ) -> Iterator[readers.StatsReader]: ...
+            @override
+            def read_multiple_packed(
+                self,
+                file: IO[str] | IO[bytes],
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+                skip_copy: bool = False,
+            ) -> Iterator[readers.StatsReader]: ...
+            @override
+            def read_multiple_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+            ) -> Iterator[readers.StatsReader]: ...
+            @override
+            def read_multiple_bytes_packed(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+            ) -> Iterator[readers.StatsReader]: ...
 
         Stats: _StatsStructModule
         class _UnregisterInterfaceModule(_InterfaceModule):
@@ -169,9 +224,6 @@ class _ChannelInterfaceModule(_InterfaceModule):
                     self,
                 ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule._UnregisterSchema._Methods: ...
 
-            @property
-            @override
-            def schema(self) -> schemas._ChannelStatsCallbackUnregisterSchema: ...
             @override
             def _new_client(self, server: _DynamicCapabilityServer) -> clients.UnregisterClient: ...
             class Server(_DynamicCapabilityServer):
@@ -243,9 +295,6 @@ class _ChannelInterfaceModule(_InterfaceModule):
                 self,
             ) -> _ChannelInterfaceModule._StatsCallbackInterfaceModule._StatsCallbackSchema._Methods: ...
 
-        @property
-        @override
-        def schema(self) -> schemas._ChannelStatsCallbackSchema: ...
         @override
         def _new_client(self, server: _DynamicCapabilityServer) -> clients.StatsCallbackClient: ...
         class Server(_DynamicCapabilityServer):
@@ -334,9 +383,6 @@ class _ChannelInterfaceModule(_InterfaceModule):
         @override
         def methods(self) -> _ChannelInterfaceModule._ChannelSchema._Methods: ...
 
-    @property
-    @override
-    def schema(self) -> schemas._ChannelSchema: ...
     @override
     def _new_client(self, server: _DynamicCapabilityServer) -> clients.ChannelClient: ...
     class Server(_DynamicCapabilityServer):

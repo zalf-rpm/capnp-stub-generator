@@ -11,20 +11,25 @@ from typing import TYPE_CHECKING, Any, cast
 import capnp
 import pytest
 
-# Ensure we can import from tests directory
-sys.path.append(str(Path(__file__).parent.parent))
+from tests.schemas.examples.restorer.restorer_server import RestorerImpl
+
+GENERATED_EXAMPLES_DIR = Path(__file__).parent / "_generated" / "examples"
 
 if TYPE_CHECKING:
     from restorer import restorer_capnp
 else:
-    from tests._generated.examples.restorer import restorer_capnp
-
-from tests.schemas.examples.restorer.restorer_server import RestorerImpl
+    if str(GENERATED_EXAMPLES_DIR) not in sys.path:
+        sys.path.insert(0, str(GENERATED_EXAMPLES_DIR))
+    restorer_capnp = importlib.import_module(
+        "restorer.restorer_capnp"
+        if GENERATED_EXAMPLES_DIR.exists()
+        else "tests._generated.examples.restorer.restorer_capnp",
+    )
 
 
 async def _test_anypointer_runtime_behavior() -> None:
     # Start server on random port
-    async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
+    async def new_connection(stream: capnp.AsyncIoStream) -> None:
         await capnp.TwoPartyServer(stream, bootstrap=RestorerImpl()).on_disconnect()
 
     server = await capnp.AsyncIoStream.create_server(new_connection, "localhost", 0)
@@ -71,7 +76,8 @@ def test_anypointer_runtime_wrapper() -> None:
 
 
 async def _test_anypointer_result_none_behavior() -> None:
-    tuples_module = importlib.import_module("tests._generated.examples.restorer.restorer_capnp.types.results.tuples")
+    tuples_module = importlib.import_module("restorer.restorer_capnp.types.results.tuples")
+    invalid_none: Any = None
 
     class AnyTesterImpl(restorer_capnp.AnyTester.Server):
         async def getAnyStruct(
@@ -79,14 +85,14 @@ async def _test_anypointer_result_none_behavior() -> None:
             _context: object,
             **_kwargs: object,
         ) -> restorer_capnp.types.common.AnyStruct | restorer_capnp.types.results.tuples.GetanystructResultTuple | None:
-            return tuples_module.GetanystructResultTuple(s=None)
+            return tuples_module.GetanystructResultTuple(s=invalid_none)
 
         async def getAnyList(
             self,
             _context: object,
             **_kwargs: object,
         ) -> restorer_capnp.types.common.AnyList | restorer_capnp.types.results.tuples.GetanylistResultTuple | None:
-            return tuples_module.GetanylistResultTuple(l=None)
+            return tuples_module.GetanylistResultTuple(l=invalid_none)
 
         async def getAnyPointer(
             self,
@@ -95,9 +101,9 @@ async def _test_anypointer_result_none_behavior() -> None:
         ) -> (
             restorer_capnp.types.common.AnyPointer | restorer_capnp.types.results.tuples.GetanypointerResultTuple | None
         ):
-            return tuples_module.GetanypointerResultTuple(p=None)
+            return tuples_module.GetanypointerResultTuple(p=invalid_none)
 
-    async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
+    async def new_connection(stream: capnp.AsyncIoStream) -> None:
         await capnp.TwoPartyServer(stream, bootstrap=AnyTesterImpl()).on_disconnect()
 
     server = await capnp.AsyncIoStream.create_server(new_connection, "localhost", 0)

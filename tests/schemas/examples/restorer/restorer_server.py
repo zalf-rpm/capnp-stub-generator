@@ -82,7 +82,7 @@ class AnyTesterImpl(AnyTesterServer):
 
 class RestorerImpl(RestorerServer):
     def __init__(self) -> None:
-        self.bags: dict[str, capnp.lib.capnp.Capability] = {}
+        self.bags: dict[str, BagServer] = {}
 
     async def getAnyTester_context(self, context: Any) -> None:
         context.results.tester = AnyTesterImpl()
@@ -101,7 +101,7 @@ class RestorerImpl(RestorerServer):
         context.results.cap = self.bags[local_ref]
 
 
-async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
+async def new_connection(stream: capnp.AsyncIoStream) -> None:
     await capnp.TwoPartyServer(stream, bootstrap=RestorerImpl()).on_disconnect()
 
 

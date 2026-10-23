@@ -39,11 +39,11 @@ def test_result_helpers_are_used_directly(calculator_stubs: Path) -> None:
     all_content = _calculator_types_all(calculator_stubs)
 
     assert "def evaluate(" in all_content
-    assert "-> EvaluateResult:" in all_content
-    assert "def read(self) -> ReadResult:" in all_content
+    assert "-> results_client.EvaluateResult:" in all_content
+    assert "def read(self) -> results_client.ReadResult:" in all_content
     assert "def call(" in all_content
-    assert "-> CallResult:" in all_content
-    assert "def send(self) -> EvaluateResult:" in all_content
+    assert "-> results_client.CallResult:" in all_content
+    assert "def send(self) -> results_client.EvaluateResult:" in all_content
     assert "EvaluateResult = " not in runtime_content
     assert "class EvaluateResult(" not in runtime_content
 
@@ -90,9 +90,9 @@ def test_nested_interface_result_helpers(calculator_stubs: Path) -> None:
 
     assert "class ReadResult(Awaitable[ReadResult], Protocol):" in public_content
     assert "class CallResult(Awaitable[CallResult], Protocol):" in public_content
-    assert "def read(self) -> ReadResult:" in all_content
+    assert "def read(self) -> results_client.ReadResult:" in all_content
     assert "def call(" in all_content
-    assert "-> CallResult:" in all_content
+    assert "-> results_client.CallResult:" in all_content
 
 
 def test_result_helper_usage_in_type_hints(calculator_stubs: Path) -> None:
@@ -102,7 +102,7 @@ def test_result_helper_usage_in_type_hints(calculator_stubs: Path) -> None:
     all_content = _calculator_types_all(calculator_stubs)
 
     assert "def evaluate(" in all_content
-    assert "-> EvaluateResult:" in all_content
+    assert "-> results_client.EvaluateResult:" in all_content
     assert "builders.ExpressionBuilder" in clients_content
     assert "results_client.EvaluateResult" in clients_content
     assert "CalculatorClient = types.clients.CalculatorClient" not in runtime_content

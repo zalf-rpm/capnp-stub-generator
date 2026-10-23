@@ -28,28 +28,28 @@ class TestNestedResultStructure:
         assert "class CalculatorClient(_DynamicCapabilityClient):" in content
         assert "class EvaluateResult(Awaitable[EvaluateResult], Protocol):" in content
         assert "def evaluate(" in content
-        assert "-> EvaluateResult:" in content
+        assert "-> results_client.EvaluateResult:" in content
 
     def test_server_result_nested_in_server(self, calculator_stubs: Path) -> None:
         """Test that Server Result helpers are top-level."""
         content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class EvaluateServerResult(_DynamicStructBuilder):" in content
-        assert "def results(self) -> EvaluateServerResult: ..." in content
+        assert "def results(self) -> results_server.EvaluateServerResult: ..." in content
 
     def test_client_method_returns_client_result(self, calculator_stubs: Path) -> None:
         """Test that client methods return top-level Result helpers."""
         content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "def evaluate(" in content
-        assert "-> EvaluateResult:" in content
+        assert "-> results_client.EvaluateResult:" in content
 
     def test_request_send_returns_client_result(self, calculator_stubs: Path) -> None:
         """Test that Request.send() returns a top-level Result helper."""
         content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class EvaluateRequest(Protocol):" in content
-        assert "def send(self) -> EvaluateResult:" in content
+        assert "def send(self) -> results_client.EvaluateResult:" in content
 
     def test_callcontext_results_points_to_server_result(self, calculator_stubs: Path) -> None:
         """Test that CallContext.results points to a top-level ServerResult helper."""
@@ -57,7 +57,7 @@ class TestNestedResultStructure:
 
         assert "class EvaluateCallContext(Protocol):" in content
         assert "@property" in content
-        assert "def results(self) -> EvaluateServerResult: ..." in content
+        assert "def results(self) -> results_server.EvaluateServerResult: ..." in content
 
     def test_result_tuple_stays_under_server(self, calculator_stubs: Path) -> None:
         """Test that ResultTuple helpers are flattened to module top level."""
@@ -73,21 +73,21 @@ class TestNestedResultsAtDeeperLevels:
         """Test nested interface (Calculator.Value) has top-level Result helpers."""
         content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
-        assert "def read(self) -> ReadResult:" in content
+        assert "def read(self) -> results_client.ReadResult:" in content
 
     def test_nested_interface_server_result(self, calculator_stubs: Path) -> None:
         """Test nested interface Server uses top-level ServerResult helpers."""
         content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class ReadServerResult(_DynamicStructBuilder):" in content
-        assert "def results(self) -> ReadServerResult: ..." in content
+        assert "def results(self) -> results_server.ReadServerResult: ..." in content
 
     def test_nested_interface_request_send(self, calculator_stubs: Path) -> None:
         """Test nested interface Request.send() returns a top-level Result helper."""
         content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "class ReadRequest(Protocol):" in content
-        assert "def send(self) -> ReadResult:" in content
+        assert "def send(self) -> results_client.ReadResult:" in content
 
     def test_nested_interface_callcontext(self, calculator_stubs: Path) -> None:
         """Test nested interface CallContext.results points to a top-level ServerResult helper."""
@@ -95,7 +95,7 @@ class TestNestedResultsAtDeeperLevels:
 
         assert "class ReadCallContext(Protocol):" in content
         assert "@property" in content
-        assert "def results(self) -> ReadServerResult: ..." in content
+        assert "def results(self) -> results_server.ReadServerResult: ..." in content
 
 
 class TestAnyPointerTypeDifferences:

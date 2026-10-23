@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 from tests.test_helpers import read_generated_types_lines
@@ -11,11 +10,16 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_top_level_union_which_literal(basic_stubs: Path) -> None:
-    """Test top level union which literal."""
+def test_top_level_union_refines_runtime_which_descriptor(basic_stubs: Path) -> None:
+    """Refine the runtime callable property without replacing it with a method."""
     lines = read_generated_types_lines(basic_stubs / "advanced_features_capnp")
-    # Expect which() function for discriminant unions.
-    assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
+    assert any("class _AdvancedContainerFirstUnionWhich(_DynamicEnumField):" in line for line in lines)
+    assert any('def __call__(self) -> Literal["a", "b", "c"]:' in line for line in lines)
+    which_lines = [index for index, line in enumerate(lines) if "def which(" in line]
+    assert which_lines
+    assert any(
+        any("@property" in prior_line for prior_line in lines[max(0, index - 2) : index]) for index in which_lines
+    )
 
 
 def test_union_field_names_present(basic_stubs: Path) -> None:

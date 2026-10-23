@@ -6,7 +6,7 @@ import asyncio
 import importlib
 import re
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import capnp
 
@@ -21,7 +21,7 @@ async def _invoke_none_result_method(
     interface_module: capnp.lib.capnp._InterfaceModule,
     method_name: str,
 ) -> capnp.KjException:
-    async def new_connection(stream: capnp.lib.capnp.AsyncIoStream) -> None:
+    async def new_connection(stream: capnp.AsyncIoStream) -> None:
         await capnp.TwoPartyServer(stream, bootstrap=server_impl).on_disconnect()
 
     server = await capnp.AsyncIoStream.create_server(new_connection, "localhost", 0)
@@ -66,15 +66,12 @@ def test_list_result_tuple_accepts_sequence_assignment_shapes(basic_stubs: Path)
 
     assert "class GetitemsResultTuple(NamedTuple):" in content
     assert re.search(
-        r"items:\s*\(?\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*"
-        r"Sequence\[readers\.ItemReader\s*\|\s*builders\.ItemBuilder\s*\|\s*dict\[str, Any\]\]\s*\)?",
+        r"items:\s*\(?\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*Sequence\[readers\.ItemReader\s*\|\s*builders\.ItemBuilder\s*\|\s*dict\[str, Any\]\]\s*\)?",
         content,
         re.DOTALL,
     )
     assert re.search(
-        r"def getItems\(.*?Awaitable\[\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*"
-        r"Sequence\[readers\.ItemReader\s*\|\s*builders\.ItemBuilder\s*\|\s*dict\[str, Any\]\]\s*\|\s*"
-        r"results_tuples\.GetitemsResultTuple\s*\|\s*None\s*\]",
+        r"def getItems\(.*?Awaitable\[\s*builders\.ItemListBuilder\s*\|\s*readers\.ItemListReader\s*\|\s*Sequence\[readers\.ItemReader\s*\|\s*builders\.ItemBuilder\s*\|\s*dict\[str, Any\]\]\s*\|\s*results_tuples\.GetitemsResultTuple\s*\|\s*None\s*\]",
         content,
         re.DOTALL,
     )
@@ -85,7 +82,10 @@ def test_interface_result_tuple_accepts_forwarded_clients(basic_stubs: Path) -> 
     content = read_generated_types_combined(basic_stubs / "runtime_test_capnp")
 
     assert "class GetinterfaceResultTuple(NamedTuple):" in content
-    assert "service: _TestServiceInterfaceModule._SubServiceInterfaceModule.Server | SubServiceClient" in content
+    assert (
+        "service: modules._TestServiceInterfaceModule._SubServiceInterfaceModule.Server | clients.SubServiceClient"
+        in content
+    )
 
     match = re.search(r"def getInterface\(.*?-> Awaitable\[(.*?)\]", content, re.DOTALL)
     assert match, "getInterface server signature not found"
@@ -186,19 +186,21 @@ def test_result_tuple_none_values_are_rejected_at_runtime(basic_stubs: Path) -> 
             return await _invoke_none_result_method(server_impl, interface_module, method_name)
 
         async def run_checks() -> dict[str, capnp.KjException]:
+            invalid_none: Any = None
+
             class TestServiceImpl(runtime_test_capnp.TestService.Server):
-                async def getPrimitive(self, _context: object, **_kwargs: object) -> object:
-                    return runtime_tuple_module.GetprimitiveResultTuple(result=None)
+                async def getPrimitive(self, _context: object, **_kwargs: object) -> Any:
+                    return runtime_tuple_module.GetprimitiveResultTuple(result=invalid_none)
 
-                async def getStruct(self, _context: object, **_kwargs: object) -> object:
-                    return runtime_tuple_module.GetstructResultTuple(info=None)
+                async def getStruct(self, _context: object, **_kwargs: object) -> Any:
+                    return runtime_tuple_module.GetstructResultTuple(info=invalid_none)
 
-                async def getInterface(self, _context: object, **_kwargs: object) -> object:
-                    return runtime_tuple_module.GetinterfaceResultTuple(service=None)
+                async def getInterface(self, _context: object, **_kwargs: object) -> Any:
+                    return runtime_tuple_module.GetinterfaceResultTuple(service=invalid_none)
 
             class ItemServiceImpl(list_result_capnp.ItemService.Server):
-                async def getItems(self, _context: object, **_kwargs: object) -> object:
-                    return list_tuple_module.GetitemsResultTuple(items=None)
+                async def getItems(self, _context: object, **_kwargs: object) -> Any:
+                    return list_tuple_module.GetitemsResultTuple(items=invalid_none)
 
             return {
                 "getPrimitive": await invoke_method(TestServiceImpl(), runtime_test_capnp.TestService, "getPrimitive"),

@@ -1,17 +1,24 @@
 """Test enum type alias generation and usage."""
 
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from tests.test_helpers import CommandResult, read_generated_types_combined, run_pyright
 
 
 def _run_pyright_sample(calculator_stubs: Path, filename: str, test_code: str) -> CommandResult:
-    test_file = calculator_stubs / filename
-    test_file.write_text(test_code)
-    try:
-        return run_pyright(test_file)
-    finally:
-        test_file.unlink(missing_ok=True)
+    env = os.environ.copy()
+    python_path = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = os.pathsep.join(path for path in (str(calculator_stubs), python_path) if path)
+
+    # Generated output is excluded from the project-wide basedpyright scan. Put
+    # usage samples outside that tree so explicitly requested samples are still
+    # analyzed rather than silently skipped by the exclusion.
+    with TemporaryDirectory() as temp_dir:
+        test_file = Path(temp_dir) / filename
+        test_file.write_text(test_code)
+        return run_pyright(test_file, env=env)
 
 
 def test_enum_type_alias_exists(calculator_stubs: Path) -> None:
@@ -25,7 +32,6 @@ def test_enum_type_alias_exists(calculator_stubs: Path) -> None:
 def test_enum_type_alias_accepts_literals(calculator_stubs: Path) -> None:
     """Test that the Operator type accepts string literals."""
     test_code = '''
-import calculator_capnp
 from calculator_capnp.types.enums import CalculatorOperatorEnum
 
 def use_operator_literal(op: CalculatorOperatorEnum):
@@ -48,7 +54,6 @@ use_operator_literal("divide")
 def test_enum_type_alias_accepts_int(calculator_stubs: Path) -> None:
     """Test that the Operator accepts integer values."""
     test_code = '''
-import calculator_capnp
 from calculator_capnp.types.enums import CalculatorOperatorEnum
 
 def use_operator_int(op: CalculatorOperatorEnum):
@@ -66,6 +71,33 @@ use_operator_int(3)
 
     error_count = result.stdout.count("error:")
     assert error_count == 0, f"Type checking failed: {result.stdout}"
+
+
+def test_enum_getters_use_runtime_dynamic_values(basic_stubs: Path) -> None:
+    """Getters return pycapnp enum objects while setters retain ergonomic input aliases."""
+    sample = basic_stubs / "test_enum_runtime_value_typing.py"
+    sample.write_text(
+        """from typing import Literal, assert_type
+
+import dummy_capnp
+from dummy_capnp.types.enums import TestEnumValue
+
+message = dummy_capnp.TestAllTypes.new_message(enumField="foo")
+assert_type(message.enumField, TestEnumValue)
+assert_type(message.as_reader().enumField, TestEnumValue)
+assert_type(
+    message.enumField.__str__(),
+    Literal["foo", "bar", "baz", "qux", "quux", "corge", "grault", "garply"],
+)
+assert_type(str(message.enumField), str)
+message.enumField = "bar"
+message.enumField = dummy_capnp.TestEnum.baz
+""",
+        encoding="utf8",
+    )
+
+    result = run_pyright(sample)
+    assert result.returncode == 0, result.stdout
 
 
 def test_enum_type_alias_accepts_enum_attribute(calculator_stubs: Path) -> None:
@@ -94,7 +126,6 @@ use_operator_enum(calculator_capnp.Calculator.Operator.divide)
 def test_enum_type_alias_rejects_invalid_literals(calculator_stubs: Path) -> None:
     """Test that the Operator rejects invalid string literals."""
     test_code = '''
-import calculator_capnp
 from calculator_capnp.types.enums import CalculatorOperatorEnum
 
 def use_operator(op: CalculatorOperatorEnum):
@@ -113,6 +144,7 @@ use_operator("invalid")
 def test_enum_type_alias_in_class_init(calculator_stubs: Path) -> None:
     """Test using Operator in a class __init__ method (real-world example)."""
     test_code = '''
+from typing import Any
 import calculator_capnp
 from calculator_capnp.types.enums import CalculatorOperatorEnum
 
@@ -122,7 +154,7 @@ class OperatorImpl(calculator_capnp.Calculator.Function.Server):
     def __init__(self, op: CalculatorOperatorEnum):
         self.op = op
 
-    async def call(self, params, _context, **kwargs):
+    async def call(self, params: Any, _context: Any, **kwargs: Any) -> float:
         assert len(params) == 2
 
         op = self.op

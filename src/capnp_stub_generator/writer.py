@@ -1,6 +1,6 @@
 """Generate type hints for *.capnp schemas.
 
-Note: This generator requires pycapnp >= 2.0.0.
+Note: This generator requires pycapnp >= 2.2.4.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Literal
 
 import capnp
 from capnp.lib.capnp import (
+    _DynamicStructReader,
     _EnumSchema,
     _InterfaceSchema,
     _Schema,
@@ -38,7 +39,7 @@ from capnp_stub_generator.writer_dto import (
 if TYPE_CHECKING:
     from capnp.lib.capnp import _StructSchemaField
 
-    from schema_capnp import FieldReader, NestedNodeReader, NodeReader, TypeReader
+    from schema_capnp import FieldReader, NestedNodeReader, TypeReader
 
 capnp.remove_import_hook()
 
@@ -53,6 +54,7 @@ DISCRIMINANT_NONE = 65535  # Value indicating no discriminant (not part of a uni
 MIN_ALIAS_DATA_PARTS = 2
 MODULE_PATH_PARTS = 2
 ENUM_ALIAS_DATA_PARTS = 3
+SHADOWABLE_PRIMITIVE_TYPE_NAMES = frozenset({"bool", "float", "str", "bytes"})
 
 # Type alias for AnyPointer fields - accepts all pointer types
 ANYPOINTER_TYPE = "str | bytes | _DynamicStructBuilder | _DynamicStructReader | _DynamicCapabilityClient | _DynamicCapabilityServer | _DynamicListBuilder | _DynamicListReader | _DynamicObjectReader | _DynamicObjectBuilder"
@@ -187,6 +189,11 @@ class Writer:
         self._generated_list_types: set[str] = set()
         self._generated_client_classes: set[str] = set()
         self._generated_interface_helper_types: set[str] = set()
+        self._union_which_type_names_by_schema_id: dict[int, str] = {}
+        self._union_which_literals_by_type_name: dict[str, tuple[str, ...]] = {}
+        self._struct_module_which_members_by_type_name: dict[str, tuple[str, ...]] = {}
+        self._enum_value_type_names_by_schema_id: dict[int, str] = {}
+        self._generated_enum_value_types: set[str] = set()
 
         self.docstring: str = f'"""This is an automatically generated stub for `{self._module_path.name}`."""'
 
@@ -362,7 +369,6 @@ class Writer:
         - _{Name}StructModule -> {Name}
         - _{Name}InterfaceModule -> {Name}
         - _{Name}EnumModule -> {Name}
-        - _{Name}Module -> {Name} (legacy/base)
         """
         if not protocol_name.startswith("_"):
             return protocol_name
@@ -373,9 +379,6 @@ class Writer:
             return protocol_name[1:-15]
         if protocol_name.endswith("EnumModule"):
             return protocol_name[1:-10]
-        if protocol_name.endswith("Module"):
-            return protocol_name[1:-6]
-
         return protocol_name
 
     def _build_nested_builder_type(self, base_type: str) -> str:
@@ -537,8 +540,8 @@ class Writer:
         if import_line not in self._imports:
             self._imports.append(import_line)
 
-    def _add_enum_import(self) -> None:
-        """Retain the deprecated `Enum` import helper for compatibility."""
+    def _add_enum_module_import(self) -> None:
+        """Import pycapnp's runtime enum-module base."""
         self._add_import("from capnp.lib.capnp import _EnumModule")
 
     @property
@@ -662,7 +665,8 @@ class Writer:
         self._add_typing_import("overload")
         self._add_typing_import("override")
 
-        buf_param = helper.TypeHintedVariable("buf", [helper.TypeHint("bytes", primary=True)])
+        buf_param = helper.TypeHintedVariable("buf", [helper.TypeHint("Any", primary=True)])
+        self._add_typing_import("Any")
 
         # from_bytes overload 1: no builder parameter (returns Reader)
         self.scope.add("@override")
@@ -676,12 +680,16 @@ class Writer:
         )
 
         # from_bytes overload 2: builder=False (returns Reader)
-        builder_kwarg = helper.TypeHintedVariable("builder", [helper.TypeHint("Literal[False]", primary=True)])
+        builder_kwarg = helper.TypeHintedVariable(
+            "builder",
+            [helper.TypeHint("Literal[False]", primary=True)],
+            default="False",
+        )
         self.scope.add(helper.new_decorator("overload"))
         self.scope.add(
             helper.new_function(
                 "from_bytes",
-                parameters=["self", buf_param, *self._create_capnp_limit_params(), "*", builder_kwarg],
+                parameters=["self", buf_param, *self._create_capnp_limit_params(), builder_kwarg],
                 return_type=helper.new_type_group("AbstractContextManager", [scoped_reader_type]),
             ),
         )
@@ -697,18 +705,54 @@ class Writer:
             ),
         )
 
-        # from_bytes_packed method - returns bare _DynamicStructReader, not override
+        # The Cython method also accepts builder as its fourth positional argument.
+        self.scope.add(helper.new_decorator("overload"))
+        self.scope.add(
+            helper.new_function(
+                "from_bytes",
+                parameters=[
+                    "self",
+                    buf_param,
+                    helper.TypeHintedVariable(
+                        "traversal_limit_in_words",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                    ),
+                    helper.TypeHintedVariable(
+                        "nesting_limit",
+                        [helper.TypeHint("int", primary=True), helper.TypeHint("None")],
+                    ),
+                    builder_kwarg_true,
+                ],
+                return_type=helper.new_type_group("AbstractContextManager", [scoped_builder_type]),
+            ),
+        )
+
+        # from_bytes_packed returns the same schema-specific Reader.
         self.scope.add("@override")
         self.scope.add(
             helper.new_function(
                 "from_bytes_packed",
                 parameters=["self", buf_param, *self._create_capnp_limit_params()],
-                return_type="_DynamicStructReader",
+                return_type=scoped_reader_type,
             ),
         )
 
+        self.scope.add("@override")
+        self.scope.add(
+            helper.new_function(
+                "from_segments",
+                parameters=[
+                    "self",
+                    helper.TypeHintedVariable("segments", [helper.TypeHint("Sequence[Any]", primary=True)]),
+                    *self._create_capnp_limit_params(),
+                ],
+                return_type=scoped_reader_type,
+            ),
+        )
+        self._add_typing_import("Sequence")
+
     def _add_read_methods(self, scoped_reader_type: str) -> None:
-        """Add read and read_packed instance methods to current scope.
+        """Add schema-specific read method overrides to the current scope.
 
         These are instance methods on the module that override base class methods.
 
@@ -717,6 +761,9 @@ class Writer:
 
         """
         self._add_typing_import("IO")
+        self._add_typing_import("Iterator")
+        self._add_typing_import("Any")
+        self._add_import("from capnp.lib.capnp import _AsyncIoStream")
 
         file_param = helper.TypeHintedVariable("file", [helper.TypeHint("IO[str] | IO[bytes]", primary=True)])
 
@@ -739,6 +786,35 @@ class Writer:
                 return_type=scoped_reader_type,
             ),
         )
+
+        self.scope.add(helper.new_decorator("override"))
+        async_params = helper.join_parameters(["self", "stream: _AsyncIoStream", *self._create_capnp_limit_params()])
+        self.scope.add(f"async def read_async({async_params}) -> {scoped_reader_type} | None: ...")
+
+        for method_name in ("read_multiple", "read_multiple_packed"):
+            self.scope.add(helper.new_decorator("override"))
+            self.scope.add(
+                helper.new_function(
+                    method_name,
+                    parameters=[
+                        "self",
+                        file_param,
+                        *self._create_capnp_limit_params(),
+                        "skip_copy: bool = False",
+                    ],
+                    return_type=f"Iterator[{scoped_reader_type}]",
+                ),
+            )
+
+        for method_name in ("read_multiple_bytes", "read_multiple_bytes_packed"):
+            self.scope.add(helper.new_decorator("override"))
+            self.scope.add(
+                helper.new_function(
+                    method_name,
+                    parameters=["self", "buf: Any", *self._create_capnp_limit_params()],
+                    return_type=f"Iterator[{scoped_reader_type}]",
+                ),
+            )
 
     def _get_reader_property_type(self, field: helper.TypeHintedVariable) -> str:
         """Determine the property type for Reader class fields.
@@ -834,6 +910,20 @@ class Writer:
         setter_type = field.full_type_nested if field.full_type_nested != getter_type else None
         return getter_type, setter_type
 
+    def _qualify_shadowed_builtin_type(self, field_name: str, type_annotation: str) -> str:
+        """Qualify builtin types when a property name shadows them in class scope."""
+        if field_name not in SHADOWABLE_PRIMITIVE_TYPE_NAMES:
+            return type_annotation
+
+        qualified = re.sub(
+            rf"(?<![\w.]){re.escape(field_name)}(?!\w)",
+            f"builtins.{field_name}",
+            type_annotation,
+        )
+        if qualified != type_annotation:
+            self._add_import("import builtins")
+        return qualified
+
     def _add_properties(
         self, slot_fields: list[helper.TypeHintedVariable], mode: Literal["base", "reader", "builder"]
     ) -> None:
@@ -854,12 +944,16 @@ class Writer:
 
             if mode == "reader":
                 field_type = self._get_reader_property_type(field_copy)
+                field_type = self._qualify_shadowed_builtin_type(slot_field.name, field_type)
                 should_override = slot_field.name == "schema"
                 for line in helper.new_property(slot_field.name, field_type, add_override=should_override):
                     self.scope.add(line)
 
             elif mode == "builder":
                 getter_type, setter_type = self._get_builder_property_types(field_copy)
+                getter_type = self._qualify_shadowed_builtin_type(slot_field.name, getter_type)
+                if setter_type is not None:
+                    setter_type = self._qualify_shadowed_builtin_type(slot_field.name, setter_type)
                 should_override = slot_field.name == "schema"
                 for line in helper.new_property(
                     slot_field.name,
@@ -905,15 +999,12 @@ class Writer:
             for field_name, field_type in init_choices
         ]
         total_init_overloads = len(resolved_init_choices) + len(list_init_choices)
-        use_overload = total_init_overloads > 1
+        use_overload = total_init_overloads > 0
 
         if use_overload:
             self._add_typing_import("overload")
         if resolved_init_choices or list_init_choices:
             self._add_typing_import("Literal")
-
-        # Note: The init() method parameter is now LiteralString in pycapnp stubs
-        # This allows our Literal["fieldname"] overloads to be compatible
 
         if resolved_init_choices or list_init_choices:
             self.scope.add("@override")
@@ -957,26 +1048,9 @@ class Writer:
                 ),
             )
 
-    def _add_which_method(self, schema: _StructSchema) -> None:
-        """Add which() method override for unions with specific Literal return type.
-
-        Args:
-            schema: The struct schema containing potential union fields.
-
-        """
-        if schema.node.struct.discriminantCount:
-            self._add_typing_import("Literal")
-            self._add_typing_import("override")
-            field_names = [
-                f'"{field.name}"' for field in schema.node.struct.fields if field.discriminantValue != DISCRIMINANT_NONE
-            ]
-            return_type = helper.new_type_group("Literal", field_names)
-            self.scope.add("@override")
-            self.scope.add(helper.new_function("which", parameters=["self"], return_type=return_type))
-
     # ===== Struct Generation Helper Methods =====
 
-    def _add_new_message_method(
+    def _add_new_message_method(  # noqa: PLR0915
         self,
         slot_fields: list[helper.TypeHintedVariable],
         builder_type_name: str,
@@ -989,6 +1063,7 @@ class Writer:
 
         """
         self._add_typing_import("Callable")
+        self._add_typing_import("Any")
         new_message_params: list[helper.TypeHintedVariable | str] = [
             "self",
             helper.TypeHintedVariable(
@@ -998,7 +1073,7 @@ class Writer:
             ),
             helper.TypeHintedVariable(
                 "allocate_seg_callable",
-                [helper.TypeHint("Callable[[int], bytearray]", primary=True), helper.TypeHint("None")],
+                [helper.TypeHint("Callable[[int], Any]", primary=True), helper.TypeHint("None")],
                 default="None",
             ),
         ]
@@ -1082,6 +1157,19 @@ class Writer:
         # Add as instance method with @override decorator
         self.scope.add("@override")
         self.scope.add(helper.new_function("new_message", new_message_params, builder_type_name))
+
+        self.scope.add("@override")
+        self.scope.add(
+            helper.new_function(
+                "__call__",
+                parameters=[
+                    "self",
+                    "num_first_segment_words: int | None = None",
+                    "**kwargs: object",
+                ],
+                return_type=builder_type_name,
+            ),
+        )
 
     def _gen_struct_base_class(
         self,
@@ -1518,33 +1606,87 @@ class Writer:
             msg = f"Schema export name collision for {schema_export_name}: {recorded_target} != {helper_path}"
             raise ValueError(msg)
 
-        for line in helper.new_property("schema", f'"{schema_export_name}"', add_override=True):
+        # Module objects expose ``schema`` as a mutable runtime attribute.
+        # Keep the exact base declaration rather than replacing it with a
+        # typing-only property whose specialized class does not exist.
+
+    def _register_union_which_type(self, context: StructGenerationContext) -> str | None:
+        """Register a callable discriminant subtype for one union-bearing struct."""
+        union_fields = tuple(context.schema.union_fields)
+        if not union_fields:
+            return None
+
+        schema_id = context.schema.node.id
+        existing_name = self._union_which_type_names_by_schema_id.get(schema_id)
+        if existing_name is not None:
+            return existing_name
+
+        reader_base_name = context.reader_type_name.removesuffix("Reader")
+        which_type_name = f"_{reader_base_name}Which"
+        existing_literals = self._union_which_literals_by_type_name.get(which_type_name)
+        if existing_literals is not None and existing_literals != union_fields:
+            msg = f"Union discriminant type collision for {which_type_name}: {existing_literals} != {union_fields}"
+            raise ValueError(msg)
+
+        self._union_which_type_names_by_schema_id[schema_id] = which_type_name
+        self._union_which_literals_by_type_name[which_type_name] = union_fields
+        self._add_import("from capnp.lib.capnp import _DynamicEnumField")
+        self._add_typing_import("Literal")
+        self._add_typing_import("override")
+        return which_type_name
+
+    def _add_which_property_override(self, which_type_name: str | None) -> None:
+        """Refine the runtime callable ``which`` property for a generated union type."""
+        if which_type_name is None:
+            return
+
+        for line in helper.new_property("which", which_type_name, add_override=True):
             self.scope.add(line)
+
+    def _register_struct_module_which_type(
+        self,
+        context: StructGenerationContext,
+        members: tuple[str, ...],
+    ) -> str:
+        """Register the runtime enum class exposed by a struct module."""
+        base_name = context.reader_type_name.removesuffix("Reader")
+        marker_type_name = f"_{base_name}ModuleWhich"
+        existing_members = self._struct_module_which_members_by_type_name.get(marker_type_name)
+        if existing_members is not None and existing_members != members:
+            msg = f"Struct-module discriminant collision for {marker_type_name}: {existing_members} != {members}"
+            raise ValueError(msg)
+
+        self._struct_module_which_members_by_type_name[marker_type_name] = members
+        self._add_import("from capnp.lib.capnp import _StructModuleWhich")
+        return marker_type_name
+
+    @staticmethod
+    def _group_runtime_attribute_name(schema: _StructSchema) -> str:
+        """Return the attribute name installed by ``_StructModule`` for a group."""
+        group_name = schema.node.displayName.rsplit(".", maxsplit=1)[-1]
+        return f"{group_name[:1].upper()}{group_name[1:]}"
 
     def _gen_struct_reader_class(
         self,
         slot_fields: list[helper.TypeHintedVariable],
         builder_type_name: str,
-        schema: _StructSchema,
+        which_type_name: str | None,
     ) -> None:
         """Generate the Reader class for a struct.
 
         Now inherits from _DynamicStructReader, so we only need to add:
         - Field properties (read-only getters)
         - as_builder method override (with proper signature)
-        - which() method override for unions (with specific Literal return type)
 
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
             builder_type_name (str): Builder type name (flat alias).
-            schema (_StructSchema): The struct schema.
+            which_type_name: Schema-specific callable discriminant type, if this struct has a union.
 
         """
         # Add the reader slot fields as properties
         self._add_reader_properties(slot_fields)
-
-        # Add which() method override for unions with specific Literal return type
-        self._add_which_method(schema)
+        self._add_which_property_override(which_type_name)
 
         # Add as_builder method with override decorator and proper signature
         self._add_typing_import("override")
@@ -1563,7 +1705,7 @@ class Writer:
                     ),
                     helper.TypeHintedVariable(
                         "allocate_seg_callable",
-                        [helper.TypeHint("Callable[[int], bytearray]", primary=True), helper.TypeHint("None")],
+                        [helper.TypeHint("Callable[[int], Any]", primary=True), helper.TypeHint("None")],
                         default="None",
                     ),
                 ],
@@ -1577,14 +1719,13 @@ class Writer:
         init_choices: list[InitChoice],
         list_init_choices: list[tuple[str, str]],
         reader_type_name: str,
-        schema: _StructSchema,
+        which_type_name: str | None,
     ) -> None:
         """Generate the Builder class for a struct.
 
         Now inherits from _DynamicStructBuilder, so we only need to add:
         - Field properties (getters and setters)
         - as_reader method override
-        - which() method override for unions (with specific Literal return type)
 
         Args:
             slot_fields (list[TypeHintedVariable]): The struct fields.
@@ -1592,14 +1733,12 @@ class Writer:
             list_init_choices (list[tuple[str, str]]): Init method overload choices for lists.
             builder_type_name (str): Builder type name (flat alias).
             reader_type_name (str): Reader type name (flat alias).
-            schema (_StructSchema): The struct schema.
+            which_type_name: Schema-specific callable discriminant type, if this struct has a union.
 
         """
         # Add all builder slot fields with setters
         self._add_builder_properties(slot_fields)
-
-        # Add which() method override for unions with specific Literal return type
-        self._add_which_method(schema)
+        self._add_which_property_override(which_type_name)
 
         # Add init method overloads for struct and list fields
         # These are needed to properly initialize list fields with the right size
@@ -1764,6 +1903,15 @@ class Writer:
 
         return capnp_types.CAPNP_TYPE_TO_PYTHON[element_which]
 
+    def _enum_value_type_name(self, schema_id: int, input_type_name: str) -> str:
+        """Return the runtime enum-value type paired with an enum input alias."""
+        value_type_name = self._enum_value_type_names_by_schema_id.get(schema_id)
+        if value_type_name is not None:
+            return value_type_name
+
+        # Imported enum stubs use the same flattened prefix as their input alias.
+        return f"{input_type_name.removesuffix('Enum')}Value"
+
     def _build_struct_list_class_info(self, element_type: TypeReader) -> tuple[str, str, str, str, bool, list[str]]:
         """Build list-class typing info for struct elements."""
         struct_name = self.get_type_name(element_type)
@@ -1814,8 +1962,17 @@ class Writer:
         if element_which == capnp_types.CapnpElementType.LIST:
             return self._build_nested_list_class_info(element_type)
         if element_which == capnp_types.CapnpElementType.ENUM:
-            enum_name = self.get_type_name(element_type)
-            return enum_name, enum_name, enum_name, enum_name.replace(".", "_"), False, []
+            enum_input_type = self.get_type_name(element_type)
+            enum_value_type = self._enum_value_type_name(element_type.enum.typeId, enum_input_type)
+            setter_type = f"{enum_value_type} | {enum_input_type}"
+            return (
+                enum_value_type,
+                enum_value_type,
+                setter_type,
+                enum_input_type.replace(".", "_").removesuffix("Enum") + "Enum",
+                False,
+                [],
+            )
         if element_which == capnp_types.CapnpElementType.INTERFACE:
             return self._build_interface_list_class_info(self.get_type_name(element_type))
         if element_which == capnp_types.CapnpElementType.ANY_POINTER:
@@ -1848,18 +2005,16 @@ class Writer:
         root_scope.add("        @override")
         root_scope.add("        def __len__(self) -> int: ...")
         root_scope.add("        @override")
-        root_scope.add(f"        def __getitem__(self, key: int) -> {reader_type}: ...")
-        root_scope.add("        @override")
+        root_scope.add(f"        def __getitem__(self, index: int) -> {reader_type}: ...")
         root_scope.add(f"        def __iter__(self) -> Iterator[{reader_type}]: ...")
 
         root_scope.add("    class Builder(_DynamicListBuilder):")
         root_scope.add("        @override")
         root_scope.add("        def __len__(self) -> int: ...")
         root_scope.add("        @override")
-        root_scope.add(f"        def __getitem__(self, key: int) -> {builder_type}: ...")
+        root_scope.add(f"        def __getitem__(self, index: int) -> {builder_type}: ...")
         root_scope.add("        @override")
-        root_scope.add(f"        def __setitem__(self, key: int, value: {setter_type}) -> None: ...")
-        root_scope.add("        @override")
+        root_scope.add(f"        def __setitem__(self, index: int, value: {setter_type}) -> None: ...")
         root_scope.add(f"        def __iter__(self) -> Iterator[{builder_type}]: ...")
 
         if has_init:
@@ -1934,10 +2089,8 @@ class Writer:
         schema = raw_field.schema
         if isinstance(schema, _StructSchema):
             return schema
-        if isinstance(schema, _Schema):
-            return schema.as_struct()
-        msg = f"Expected struct schema, got {type(schema).__name__}"
-        raise TypeError(msg)
+        assert isinstance(schema, _Schema)
+        return schema.as_struct()
 
     @staticmethod
     def _require_enum_schema(raw_field: _StructSchemaField) -> _EnumSchema:
@@ -1945,10 +2098,8 @@ class Writer:
         schema = raw_field.schema
         if isinstance(schema, _EnumSchema):
             return schema
-        if isinstance(schema, _Schema):
-            return schema.as_enum()
-        msg = f"Expected enum schema, got {type(schema).__name__}"
-        raise TypeError(msg)
+        assert isinstance(schema, _Schema)
+        return schema.as_enum()
 
     @staticmethod
     def _require_interface_schema(raw_field: _StructSchemaField) -> _InterfaceSchema:
@@ -1956,10 +2107,8 @@ class Writer:
         schema = raw_field.schema
         if isinstance(schema, _InterfaceSchema):
             return schema
-        if isinstance(schema, _Schema):
-            return schema.as_interface()
-        msg = f"Expected interface schema, got {type(schema).__name__}"
-        raise TypeError(msg)
+        assert isinstance(schema, _Schema)
+        return schema.as_interface()
 
     def _generate_interface_slot(
         self,
@@ -2105,11 +2254,13 @@ class Writer:
             with contextlib.suppress(NoParentError):
                 self.generate_nested(schema)
 
-        # Enum values are integers at runtime, but also accept string literals
-        type_name = self.get_type_name(field.slot.type)
+        # Reads return _DynamicEnum objects. Setters additionally accept integer
+        # ordinals and string enumerant names.
+        input_type = self.get_type_name(field.slot.type)
+        value_type = self._enum_value_type_name(field.slot.type.enum.typeId, input_type)
         return helper.TypeHintedVariable(
             helper.sanitize_name(field.name),
-            [helper.TypeHint(type_name, primary=True)],
+            [helper.TypeHint(value_type, primary=True), helper.TypeHint(input_type)],
         )
 
     def gen_struct_slot(
@@ -2234,15 +2385,33 @@ class Writer:
         """
         assert schema.node.which() == capnp_types.CapnpElementType.CONST
 
-        const_type = schema.node.const.type.which()
+        type_reader = schema.node.const.type
+        const_type = type_reader.which()
         name = helper.get_display_name(schema)
 
         if const_type in capnp_types.CAPNP_TYPE_TO_PYTHON:
-            python_type = capnp_types.CAPNP_TYPE_TO_PYTHON[schema.node.const.type.which()]
-            self.scope.add(helper.TypeHintedVariable(name, [helper.TypeHint(python_type, primary=True)]))
+            type_annotation = capnp_types.CAPNP_TYPE_TO_PYTHON[const_type]
+        elif const_type == capnp_types.CapnpElementType.STRUCT:
+            struct_type = self.get_type_name(type_reader)
+            type_annotation = self._get_flat_reader_alias(struct_type) or self._build_nested_reader_type(struct_type)
+        elif const_type == capnp_types.CapnpElementType.ENUM:
+            input_type = self.get_type_name(type_reader)
+            type_annotation = self._enum_value_type_name(type_reader.enum.typeId, input_type)
+        elif const_type == capnp_types.CapnpElementType.LIST:
+            _, type_annotation, _ = self._generate_list_class(type_reader)
+        elif const_type == capnp_types.CapnpElementType.INTERFACE:
+            interface_type = self.get_type_name(type_reader)
+            type_annotation = self._get_flat_client_alias(
+                interface_type
+            ) or self._get_client_type_name_from_interface_path(interface_type)
+        elif const_type == capnp_types.CapnpElementType.ANY_POINTER:
+            self._add_import("from capnp.lib.capnp import _DynamicObjectReader")
+            type_annotation = "_DynamicObjectReader"
+        else:
+            msg = f"Unsupported constant type {const_type!r} for {schema.node.displayName}"
+            raise TypeError(msg)
 
-        elif const_type == "struct":
-            pass
+        self.scope.add(helper.TypeHintedVariable(name, [helper.TypeHint(type_annotation, primary=True)]))
 
     def gen_enum(self, schema: _EnumSchema) -> CapnpType | None:
         """Generate an `enum` object as a class with int attributes.
@@ -2269,7 +2438,7 @@ class Writer:
         enum_class_name = f"_{name}EnumModule"
 
         # Import the enum runtime base for the generated helper class.
-        self._add_enum_import()
+        self._add_enum_module_import()
 
         # Generate a runtime-accurate helper class declaration.
         enum_declaration = helper.new_class_declaration(enum_class_name, ["_EnumModule"])
@@ -2325,6 +2494,17 @@ class Writer:
 
         # Ensure Literal is imported for type alias generation
         self._add_typing_import("Literal")
+
+        value_type_name = f"{flat_name}Value"
+        self._enum_value_type_names_by_schema_id[schema.node.id] = value_type_name
+        self._generated_enum_value_types.add(value_type_name)
+        self._add_import("from capnp.lib.capnp import _DynamicEnum")
+        self._add_typing_import("override")
+        literal_type = helper.new_type_group("Literal", [repr(value) for value in enum_values])
+        self.scope.root.add(helper.new_class_declaration(value_type_name, ["_DynamicEnum"]))
+        self.scope.root.add("    @override")
+        self.scope.root.add(f"    def __str__(self) -> {literal_type}: ...")
+        self.scope.root.add("")
 
         # Add an instance annotation so enum.value works at runtime.
         # For top-level enums this becomes `Element: types.modules._ElementEnumModule` in `__init__.pyi`.
@@ -2599,38 +2779,55 @@ class Writer:
         self,
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
+        which_type_name: str | None,
     ) -> None:
         """Generate the runtime Reader marker nested inside the struct module.
 
         Args:
             context: The generation context
             fields_collection: The processed fields collection
+            which_type_name: Schema-specific callable discriminant type, if this struct has a union.
 
         """
-        _ = context
         _ = fields_collection
-        self.scope.add("class Reader(_DynamicStructReader): ...")
+        if which_type_name is None:
+            self.scope.add("class Reader(_DynamicStructReader): ...")
+            return
+
+        self.scope.add("class Reader(_DynamicStructReader):")
+        _ = self.new_scope("Reader", context.schema.node, register=False, parent_scope=self.scope)
+        self._add_which_property_override(which_type_name)
+        self.return_from_scope()
 
     def _generate_nested_builder_class(
         self,
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
+        which_type_name: str | None,
     ) -> None:
         """Generate the runtime Builder marker nested inside the struct module.
 
         Args:
             context: The generation context
             fields_collection: The processed fields collection
+            which_type_name: Schema-specific callable discriminant type, if this struct has a union.
 
         """
-        _ = context
         _ = fields_collection
-        self.scope.add("class Builder(_DynamicStructBuilder): ...")
+        if which_type_name is None:
+            self.scope.add("class Builder(_DynamicStructBuilder): ...")
+            return
+
+        self.scope.add("class Builder(_DynamicStructBuilder):")
+        _ = self.new_scope("Builder", context.schema.node, register=False, parent_scope=self.scope)
+        self._add_which_property_override(which_type_name)
+        self.return_from_scope()
 
     def _generate_flat_reader_class(
         self,
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
+        which_type_name: str | None,
     ) -> None:
         """Generate the precise flattened top-level Reader typing class.
 
@@ -2647,7 +2844,7 @@ class Writer:
         self._gen_struct_reader_class(
             fields_collection.slot_fields,
             context.builder_type_name,
-            context.schema,
+            which_type_name,
         )
         self.return_from_scope()
 
@@ -2655,6 +2852,7 @@ class Writer:
         self,
         context: StructGenerationContext,
         fields_collection: StructFieldsCollection,
+        which_type_name: str | None,
     ) -> None:
         """Generate the precise flattened top-level Builder typing class.
 
@@ -2673,7 +2871,7 @@ class Writer:
             fields_collection.init_choices,
             fields_collection.list_init_choices,
             context.reader_type_name,
-            context.schema,
+            which_type_name,
         )
         self.return_from_scope()
 
@@ -2704,9 +2902,17 @@ class Writer:
                 self._root_module_class_names.add(protocol_class_name)
             self.scope.parent.add(protocol_declaration)
 
+        which_type_name = self._register_union_which_type(context)
+        is_group = context.schema.node.struct.isGroup
+
+        if not is_group and context.schema.union_fields and not context.schema.non_union_fields:
+            union_members = tuple(f"{name[:1].upper()}{name[1:]}" for name in context.schema.union_fields)
+            module_which_type = self._register_struct_module_which_type(context, union_members)
+            self.scope.add(f"Union: type[{module_which_type}]")
+
         # Generate the runtime Reader/Builder markers nested inside the struct module.
-        self._generate_nested_reader_class(context, fields_collection)
-        self._generate_nested_builder_class(context, fields_collection)
+        self._generate_nested_reader_class(context, fields_collection, which_type_name)
+        self._generate_nested_builder_class(context, fields_collection, which_type_name)
         self._add_module_schema_helpers(context.schema)
 
         # Generate struct-module methods that return the precise flattened Builder/Reader types.
@@ -2717,8 +2923,8 @@ class Writer:
         )
 
         # Emit the precise typing-only Builder/Reader classes at module top level.
-        self._generate_flat_reader_class(context, fields_collection)
-        self._generate_flat_builder_class(context, fields_collection)
+        self._generate_flat_reader_class(context, fields_collection, which_type_name)
+        self._generate_flat_builder_class(context, fields_collection, which_type_name)
 
         self.return_from_scope()
 
@@ -2730,7 +2936,18 @@ class Writer:
         # Use the registered type's scope to ensure it goes to the right place
         # For top-level types, this is root scope; for nested types, this is the parent's scope
         target_scope = context.new_type.scope or self.scope
-        target_scope.add(f"{context.type_name}: {protocol_class_name}")
+        if is_group:
+            runtime_attribute_name = self._group_runtime_attribute_name(context.schema)
+            if context.schema.union_fields:
+                module_which_type = self._register_struct_module_which_type(
+                    context,
+                    tuple(context.schema.union_fields),
+                )
+                target_scope.add(f"{runtime_attribute_name}: type[{module_which_type}]")
+            else:
+                target_scope.add(f"{runtime_attribute_name}: {protocol_class_name}")
+        else:
+            target_scope.add(f"{context.type_name}: {protocol_class_name}")
 
     def gen_struct(self, schema: _StructSchema | _EnumSchema | _InterfaceSchema, type_name: str = "") -> CapnpType:
         """Generate a `struct` object.
@@ -4299,9 +4516,7 @@ class Writer:
 
     def _generate_const_nested_schema(self, schema: capnp_types.SchemaType) -> None:
         """Generate a nested const schema from a generic runtime schema."""
-        if not isinstance(schema, _Schema):
-            msg = f"Expected _Schema for const node, got {type(schema).__name__}"
-            raise TypeError(msg)
+        assert isinstance(schema, _Schema)
         self.gen_const(schema)
 
     def _generate_struct_nested_schema(self, schema: capnp_types.SchemaType) -> None:
@@ -4309,33 +4524,24 @@ class Writer:
         if isinstance(schema, _StructSchema):
             _ = self.gen_struct(schema)
             return
-        if isinstance(schema, _Schema):
-            _ = self.gen_struct(schema.as_struct())
-            return
-        msg = f"Expected struct schema for struct node, got {type(schema).__name__}"
-        raise TypeError(msg)
+        assert isinstance(schema, _Schema)
+        _ = self.gen_struct(schema.as_struct())
 
     def _generate_enum_nested_schema(self, schema: capnp_types.SchemaType) -> None:
         """Generate a nested enum schema from either a concrete or generic schema."""
         if isinstance(schema, _EnumSchema):
             _ = self.gen_enum(schema)
             return
-        if isinstance(schema, _Schema):
-            _ = self.gen_enum(schema.as_enum())
-            return
-        msg = f"Expected enum schema for enum node, got {type(schema).__name__}"
-        raise TypeError(msg)
+        assert isinstance(schema, _Schema)
+        _ = self.gen_enum(schema.as_enum())
 
     def _generate_interface_nested_schema(self, schema: capnp_types.SchemaType) -> None:
         """Generate a nested interface schema from either a concrete or generic schema."""
         if isinstance(schema, _InterfaceSchema):
             _ = self.gen_interface(schema)
             return
-        if isinstance(schema, _Schema):
-            _ = self.gen_interface(schema.as_interface())
-            return
-        msg = f"Expected interface schema for interface node, got {type(schema).__name__}"
-        raise TypeError(msg)
+        assert isinstance(schema, _Schema)
+        _ = self.gen_interface(schema.as_interface())
 
     def _generate_nested_by_node_kind(self, schema: capnp_types.SchemaType) -> None:
         """Generate a schema based on its node kind."""
@@ -4465,6 +4671,15 @@ class Writer:
             parts[-1] = f"_{parts[-1]}InterfaceModule"
             return ".".join(parts)
 
+        if schema.node.which() == capnp_types.CapnpElementType.ENUM:
+            flat_name = definition_name.replace(".", "")
+            input_type_name = f"{flat_name}Enum"
+            value_type_name = f"{flat_name}Value"
+            self._add_import(f"from {python_import_path}.types.enums import {input_type_name}, {value_type_name}")
+            self._enum_value_type_names_by_schema_id[schema.node.id] = value_type_name
+            self._imported_aliases.update({input_type_name, value_type_name})
+            return input_type_name
+
         self._add_import(f"from {python_import_path} import {root_name}")
         return definition_name
 
@@ -4486,7 +4701,10 @@ class Writer:
 
         if schema.node.which() == capnp_types.CapnpElementType.ENUM:
             alias_name = f"{definition_name}Enum"
-            self._add_import(f"from {python_import_path}.types.enums import {alias_name}")
+            value_type_name = f"{definition_name}Value"
+            self._add_import(f"from {python_import_path}.types.enums import {alias_name}, {value_type_name}")
+            self._enum_value_type_names_by_schema_id[schema.node.id] = value_type_name
+            self._imported_aliases.update({alias_name, value_type_name})
             return alias_name
 
         protocol_name = f"_{definition_name}StructModule"
@@ -4650,7 +4868,7 @@ class Writer:
     def new_scope(
         self,
         name: str,
-        node: NodeReader,
+        node: _DynamicStructReader,
         scope_heading: str = "",
         *,
         register: bool = True,
@@ -4737,8 +4955,8 @@ class Writer:
                 # Empty class body - add a pass statement to avoid syntax error
                 self.scope.parent.lines.insert(heading_index + 1, "    pass")
         else:
-            # No class heading found - fallback: append to the end (old behavior)
-            self.scope.parent.lines += self.scope.lines
+            msg = f"Could not find class heading {scope_heading_pattern!r} in parent scope {self.scope.parent.name!r}"
+            raise RuntimeError(msg)
 
         self.scope = self.scope.return_scope
 
@@ -4764,7 +4982,11 @@ class Writer:
     def _get_registered_type_name(self, type_reader: TypeReader, type_kind: str) -> str:
         """Return the registered type name for a struct, enum, or interface reader."""
         type_id = getattr(type_reader, type_kind).typeId
-        if type_kind in {capnp_types.CapnpElementType.STRUCT, capnp_types.CapnpElementType.INTERFACE}:
+        if type_kind in {
+            capnp_types.CapnpElementType.STRUCT,
+            capnp_types.CapnpElementType.ENUM,
+            capnp_types.CapnpElementType.INTERFACE,
+        }:
             self._ensure_registered_type_generated(type_id, type_kind)
         return self._qualified_type_name(self.get_type_by_id(type_id))
 
@@ -5049,6 +5271,8 @@ class Writer:
         for helper_name in self._generated_interface_helper_types:
             self._record_interface_helper_export(exports, helper_name)
 
+        exports["enums"].update(self._generated_enum_value_types)
+
         if self._needs_anypointer_alias:
             exports["common"].add("AnyPointer")
         if self._needs_capability_alias:
@@ -5057,6 +5281,8 @@ class Writer:
             exports["common"].add("AnyStruct")
         if self._needs_anylist_alias:
             exports["common"].add("AnyList")
+        exports["common"].update(self._union_which_literals_by_type_name)
+        exports["common"].update(self._struct_module_which_members_by_type_name)
         if self._generated_list_types:
             exports["lists"].update(self._generated_list_types)
         if self._root_module_class_names:
@@ -5071,6 +5297,7 @@ class Writer:
         helper_class_names = (
             set(self._generated_list_types)
             | set(self._generated_interface_helper_types)
+            | set(self._generated_enum_value_types)
             | set(self._root_module_class_names)
         )
 
@@ -5189,7 +5416,7 @@ class Writer:
         return self._collapse_blank_lines(extracted_lines)
 
     def _build_common_alias_lines(self, export_names: list[str]) -> list[str]:
-        """Build the common pointer alias definitions for the requested names."""
+        """Build common pointer aliases and schema-specific discriminant types."""
         alias_definitions = {
             "AnyPointer": (
                 "# Type alias for AnyPointer parameters (accepts all Cap'n Proto pointer types)",
@@ -5211,12 +5438,25 @@ class Writer:
         lines: list[str] = []
         for export_name in export_names:
             alias_definition = alias_definitions.get(export_name)
-            if alias_definition is None:
-                continue
-            comment, alias_line = alias_definition
-            if lines:
-                lines.append("")
-            lines.extend([comment, alias_line])
+            block: list[str] | None = None
+            if alias_definition is not None:
+                comment, alias_line = alias_definition
+                block = [comment, alias_line]
+            elif (literal_values := self._union_which_literals_by_type_name.get(export_name)) is not None:
+                literal_type = helper.new_type_group("Literal", [repr(value) for value in literal_values])
+                block = [
+                    helper.new_class_declaration(export_name, ["_DynamicEnumField"]),
+                    "    @override",
+                    f"    def __call__(self) -> {literal_type}: ...",
+                ]
+            elif (members := self._struct_module_which_members_by_type_name.get(export_name)) is not None:
+                block = [helper.new_class_declaration(export_name, ["_StructModuleWhich"])]
+                block.extend(f"    {member}: {export_name}" for member in members)
+
+            if block is not None:
+                if lines:
+                    lines.append("")
+                lines.extend(block)
         return lines
 
     def _build_schema_alias_lines(self, export_names: list[str]) -> list[str]:
@@ -5882,6 +6122,7 @@ class Writer:
         out.extend(runtime_imports)
         out.append("from collections.abc import Sequence")
         out.append("from capnp.lib.capnp import _Schema")
+        out.append("from types import ModuleType as _ModuleType")
 
         if self._needs_dynamic_object_reader_augmentation:
             out.append("from capnp.lib.capnp import _DynamicObjectReader")
@@ -5894,7 +6135,7 @@ class Writer:
             [
                 "",
                 "def get_schema_by_id(schema_id: int) -> _Schema: ...",
-                "def load_capnp_file(path: str, imports: Sequence[str] = ...) -> object: ...",
+                "def load_capnp_file(path: str, imports: Sequence[str] = ...) -> _ModuleType: ...",
                 "",
             ],
         )
@@ -6181,21 +6422,21 @@ class Writer:
         out.extend(
             [
                 "# Load schemas and build module structure",
-                "from importlib import import_module",
-                "from typing import cast",
+                "from importlib import import_module as _import_module",
+                "from typing import cast as _cast",
                 "",
                 "",
                 "def _import_schema_bundle() -> object:",
                 f"    bundle_module_name = {self._schema_bundle_module_name!r}",
                 "    try:",
-                "        return import_module(bundle_module_name)",
+                "        return _import_module(bundle_module_name)",
                 "    except ModuleNotFoundError as error:",
                 "        original_error = error",
                 "        package_name = __package__",
                 "",
                 "    while package_name:",
                 "        try:",
-                '            return import_module(f"{package_name}.{bundle_module_name}")',
+                '            return _import_module(f"{package_name}.{bundle_module_name}")',
                 "        except ModuleNotFoundError:",
                 '            package_name = package_name.rpartition(".")[0]',
                 "",
@@ -6206,13 +6447,13 @@ class Writer:
                 "",
                 "",
                 "def get_schema_by_id(schema_id: int) -> object:",
-                "    return cast(object, _schema_bundle.get_schema_by_id(schema_id))",
+                "    return _cast(object, _schema_bundle.get_schema_by_id(schema_id))",
                 "",
                 "",
                 "def load_capnp_file(path: str, imports: list[str] | tuple[str, ...] = ()) -> object:",
-                "    return cast(object, _schema_bundle.load_capnp_file(path, imports))",
+                "    return _cast(object, _schema_bundle.load_capnp_file(path, imports))",
                 "",
-                "_loader: SchemaLoader = cast(SchemaLoader, _schema_bundle.get_schema_loader())",
+                "_loader: _SchemaLoader = _cast(_SchemaLoader, _schema_bundle.get_schema_loader())",
                 "",
             ],
         )
@@ -6220,7 +6461,7 @@ class Writer:
     def _extend_runtime_module_construction(
         self,
         out: list[str],
-        schema_node: NodeReader,
+        schema_node: _DynamicStructReader,
         ancestor_schemas: list[tuple[str, object]],
         parent_path: str = "",
     ) -> None:
@@ -6279,7 +6520,7 @@ class Writer:
         runtime_import_names = [
             name for name in ("_EnumModule", "_InterfaceModule", "_StructModule") if f"{name}(" in construction_source
         ]
-        runtime_import_names.append("SchemaLoader")
+        runtime_import_names.append("SchemaLoader as _SchemaLoader")
 
         out: list[str] = []
         out.append(
@@ -6287,13 +6528,16 @@ class Writer:
         )
         out.append(self.docstring)
         out.append("")
-        out.append("from __future__ import annotations")
-        out.append("")
         if runtime_import_names:
             out.append(f"from capnp.lib.capnp import {', '.join(runtime_import_names)}")
             out.append("")
+        out.append("from . import types as types")
+        out.append("")
 
         self._append_runtime_loader_setup(out)
         out.extend(["# Build module structure inline", ""])
         out.extend(construction_lines)
+        public_exports = self._build_public_runtime_exports(construction_lines)
+        public_exports.extend(["get_schema_by_id", "load_capnp_file"])
+        out.extend(["", self._render_string_list_assignment("__all__", sorted(set(public_exports)))])
         return "\n".join(out)

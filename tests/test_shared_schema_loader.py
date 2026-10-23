@@ -5,12 +5,9 @@ from __future__ import annotations
 import importlib
 import re
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import capnp
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 INITIAL_INT32_VALUE = 42
 REIMPORTED_INT32_VALUE = 123
@@ -140,6 +137,58 @@ struct External {
             assert external_schema.node.displayName.endswith("external.capnp")
         finally:
             _remove_generated_modules("dummy_capnp")
+            sys.path.remove(str(basic_stubs))
+
+    def test_load_capnp_file_deduplicates_imported_bundle_schema(
+        self,
+        basic_stubs: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Runtime-loaded imports should reuse bundled schema IDs already in the loader."""
+        schema_file = tmp_path / "external.capnp"
+        schema_file.write_text(
+            """
+@0xcafebabecafed123;
+
+using Basic = import "/basic_low.capnp";
+
+struct UsesBasic {
+  value @0 :Basic.BasicLow;
+}
+""".lstrip(),
+            encoding="utf8",
+        )
+        sys.path.insert(0, str(basic_stubs))
+
+        try:
+            basic_low_capnp = importlib.import_module("basic_low_capnp")
+
+            basic_schema_id = basic_low_capnp.BasicLow.schema.node.id
+            before = basic_low_capnp.get_schema_by_id(basic_schema_id)
+            first_external = basic_low_capnp.load_capnp_file(
+                str(schema_file),
+                imports=[str((Path("tests/schemas/basic")).resolve())],
+            )
+            after_first = basic_low_capnp.get_schema_by_id(basic_schema_id)
+            second_external = basic_low_capnp.load_capnp_file(
+                str(schema_file),
+                imports=[str((Path("tests/schemas/basic")).resolve())],
+            )
+            after_second = basic_low_capnp.get_schema_by_id(basic_schema_id)
+
+            uses_basic = first_external.schema.get_nested("UsesBasic")
+            value_schema_id = uses_basic.as_struct().fields["value"].schema.as_struct().node.id
+
+            assert before.node.displayName == "basic_low.capnp:BasicLow"
+            assert after_first.node.displayName == before.node.displayName
+            assert after_second.node.displayName == before.node.displayName
+            assert value_schema_id == basic_schema_id
+            assert first_external.schema.node.id == second_external.schema.node.id
+            assert basic_low_capnp.get_schema_by_id(first_external.schema.node.id).node.displayName.endswith(
+                "external.capnp",
+            )
+        finally:
+            _remove_generated_modules("basic_low_capnp")
             sys.path.remove(str(basic_stubs))
 
 

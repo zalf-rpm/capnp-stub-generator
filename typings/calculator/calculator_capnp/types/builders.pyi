@@ -1,13 +1,14 @@
 """Builder helper types for `calculator.capnp`."""
 
 from collections.abc import Sequence
-from typing import Any, Literal, override
+from typing import Any, Literal, overload, override
 
 from capnp.lib.capnp import (
     _DynamicStructBuilder,
 )
 
 from . import clients as clients
+from . import common as common
 from . import lists as lists
 from . import modules as modules
 from . import readers as readers
@@ -30,7 +31,10 @@ class ExpressionCallBuilder(_DynamicStructBuilder):
         | Sequence[readers.ExpressionReader | ExpressionBuilder | dict[str, Any]],
     ) -> None: ...
     @override
+    @overload
     def init(self, field: Literal["params"], size: int | None = None) -> ExpressionListBuilder: ...
+    @overload
+    def init(self, field: str, size: int | None = None) -> Any: ...
     @override
     def as_reader(self) -> readers.ExpressionCallReader: ...
 
@@ -54,10 +58,14 @@ class ExpressionBuilder(_DynamicStructBuilder):
     def call(self) -> ExpressionCallBuilder: ...
     @call.setter
     def call(self, value: ExpressionCallBuilder | readers.ExpressionCallReader | dict[str, Any]) -> None: ...
+    @property
     @override
-    def which(self) -> Literal["literal", "previousResult", "parameter", "call"]: ...
+    def which(self) -> common._ExpressionWhich: ...
     @override
+    @overload
     def init(self, field: Literal["call"], size: int | None = None) -> ExpressionCallBuilder: ...
+    @overload
+    def init(self, field: str, size: int | None = None) -> Any: ...
     @override
     def as_reader(self) -> readers.ExpressionReader: ...
 

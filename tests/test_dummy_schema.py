@@ -131,9 +131,11 @@ class TestDummyGroupsAndNested:
         assert any("NestedEnum1: _NestedEnum1EnumModule" in line for line in lines)
         assert any("NestedEnum2: _NestedEnum2EnumModule" in line for line in lines)
         assert any("class _TestUsingStructModule(_StructModule):" in line for line in lines)
-        # Enum fields now return the Enum type alias
-        assert any("def outerNestedEnum(self) -> TestNestedTypesNestedEnum1Enum" in line for line in lines)
-        assert any("def innerNestedEnum(self) -> TestNestedTypesNestedStructNestedEnum2Enum" in line for line in lines)
+        # Runtime getters return dynamic enum values; the Literal aliases remain setter inputs.
+        assert any("def outerNestedEnum(self) -> enums.TestNestedTypesNestedEnum1Value" in line for line in lines)
+        assert any(
+            "def innerNestedEnum(self) -> enums.TestNestedTypesNestedStructNestedEnum2Value" in line for line in lines
+        )
 
     def test_using_type_aliases_resolved(self, dummy_stub_lines: list[str]) -> None:
         """Test using type aliases resolved."""
@@ -145,11 +147,12 @@ class TestDummyGroupsAndNested:
 class TestDummyUnions:
     """Tests for union-related features."""
 
-    def test_union_which_methods_and_literal_import(self, dummy_stub_lines: list[str]) -> None:
-        """Test union which methods and literal import."""
+    def test_union_refines_runtime_which_descriptor(self, dummy_stub_lines: list[str]) -> None:
+        """Union types narrow the real callable ``which`` descriptor."""
         lines = dummy_stub_lines
-        assert any(re.match(r"^\s*def which\(self\) -> Literal\[", line) for line in lines)
-        assert any(line.startswith("from typing import") and "Literal" in line for line in lines)
+        assert any("class _TestStructUnionUnWhich(_DynamicEnumField):" in line for line in lines)
+        assert any('def __call__(self) -> Literal["struct", "object"]:' in line for line in lines)
+        assert any("def which(" in line for line in lines)
 
     def test_unnamed_union_fields_present(self, dummy_stub_lines: list[str]) -> None:
         """Test unnamed union fields present."""
@@ -164,10 +167,9 @@ class TestDummyUnions:
         )
 
     def test_interleaved_union_discriminants_sorted(self, dummy_stub_lines: list[str]) -> None:
-        """Test interleaved union discriminants sorted."""
+        """Interleaved union discriminants retain their runtime field order."""
         lines = dummy_stub_lines
-        which_methods = [line for line in lines if "def which" in line and "Literal" in line]
-        assert which_methods
+        assert any('def __call__(self) -> Literal["qux", "corge", "fred"]:' in line for line in lines)
 
     def test_union_defaults_struct_initializers_present(self, dummy_stub_lines: list[str]) -> None:
         """Test union defaults struct initializers present."""
@@ -189,11 +191,16 @@ class TestDummyConstantsAndVersioning:
         # Constants remain as simple annotations (not properties)
         assert any("globalInt:" in line for line in lines)
         assert any("globalText:" in line for line in lines)
+        assert any("globalStruct: types.readers.TestAllTypesReader" in line for line in lines)
+        assert any("derivedConstant: types.readers.TestAllTypesReader" in line for line in lines)
 
     def test_struct_constants_section(self, dummy_stub_lines: list[str]) -> None:
         """Test struct constants section."""
         lines = dummy_stub_lines
         assert any("class _TestConstantsStructModule(_StructModule):" in line for line in lines)
+        assert any("structConst: readers.TestAllTypesReader" in line for line in lines)
+        assert any("enumConst: enums.TestEnumValue" in line for line in lines)
+        assert any("structListConst: readers.TestAllTypesListReader" in line for line in lines)
 
     def test_versioned_structs_fields_and_defaults(self, dummy_stub_lines: list[str]) -> None:
         """Test versioned structs fields and defaults."""

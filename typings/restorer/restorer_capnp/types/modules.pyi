@@ -1,10 +1,11 @@
 """Module helper types for `restorer.capnp`."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractContextManager
-from typing import IO, Literal, overload, override
+from typing import IO, Any, Literal, overload, override
 
 from capnp.lib.capnp import (
+    _AsyncIoStream,
     _DynamicCapabilityServer,
     _DynamicObjectReader,
     _DynamicStructBuilder,
@@ -97,9 +98,6 @@ class _BagInterfaceModule(_InterfaceModule):
         @override
         def methods(self) -> _BagInterfaceModule._BagSchema._Methods: ...
 
-    @property
-    @override
-    def schema(self) -> schemas._BagSchema: ...
     @override
     def _new_client(self, server: _DynamicCapabilityServer) -> clients.BagClient: ...
     class Server(_DynamicCapabilityServer):
@@ -128,50 +126,67 @@ class _RestorerInterfaceModule(_InterfaceModule):
             @override
             def fields(self) -> _RestorerInterfaceModule._RestoreParamsStructModule._RestoreParamsSchema._Fields: ...
 
-        @property
-        @override
-        def schema(self) -> schemas._RestorerRestoreParamsSchema: ...
         @override
         def new_message(
             self,
             num_first_segment_words: int | None = None,
-            allocate_seg_callable: Callable[[int], bytearray] | None = None,
+            allocate_seg_callable: Callable[[int], Any] | None = None,
             localRef: str | None = None,
+            **kwargs: object,
+        ) -> builders.RestoreParamsBuilder: ...
+        @override
+        def __call__(
+            self,
+            num_first_segment_words: int | None = None,
             **kwargs: object,
         ) -> builders.RestoreParamsBuilder: ...
         @override
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[readers.RestoreParamsReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[readers.RestoreParamsReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[builders.RestoreParamsBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[builders.RestoreParamsBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _DynamicStructReader: ...
+        ) -> readers.RestoreParamsReader: ...
+        @override
+        def from_segments(
+            self,
+            segments: Sequence[Any],
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+        ) -> readers.RestoreParamsReader: ...
         @override
         def read(
             self,
@@ -186,6 +201,43 @@ class _RestorerInterfaceModule(_InterfaceModule):
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> readers.RestoreParamsReader: ...
+        @override
+        async def read_async(
+            self,
+            stream: _AsyncIoStream,
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+        ) -> readers.RestoreParamsReader | None: ...
+        @override
+        def read_multiple(
+            self,
+            file: IO[str] | IO[bytes],
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+            skip_copy: bool = False,
+        ) -> Iterator[readers.RestoreParamsReader]: ...
+        @override
+        def read_multiple_packed(
+            self,
+            file: IO[str] | IO[bytes],
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+            skip_copy: bool = False,
+        ) -> Iterator[readers.RestoreParamsReader]: ...
+        @override
+        def read_multiple_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+        ) -> Iterator[readers.RestoreParamsReader]: ...
+        @override
+        def read_multiple_bytes_packed(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+        ) -> Iterator[readers.RestoreParamsReader]: ...
 
     RestoreParams: _RestoreParamsStructModule
 
@@ -288,9 +340,6 @@ class _RestorerInterfaceModule(_InterfaceModule):
         @override
         def methods(self) -> _RestorerInterfaceModule._RestorerSchema._Methods: ...
 
-    @property
-    @override
-    def schema(self) -> schemas._RestorerSchema: ...
     @override
     def _new_client(self, server: _DynamicCapabilityServer) -> clients.RestorerClient: ...
     class Server(_DynamicCapabilityServer):
@@ -488,9 +537,6 @@ class _AnyTesterInterfaceModule(_InterfaceModule):
         @override
         def methods(self) -> _AnyTesterInterfaceModule._AnyTesterSchema._Methods: ...
 
-    @property
-    @override
-    def schema(self) -> schemas._AnyTesterSchema: ...
     @override
     def _new_client(self, server: _DynamicCapabilityServer) -> clients.AnyTesterClient: ...
     class Server(_DynamicCapabilityServer):

@@ -341,6 +341,12 @@ def calculator_stubs(generated_stubs: dict[str, Path]) -> Path:
     return generated_stubs["examples"] / "calculator"
 
 
+@pytest.fixture
+def calculator_types_lines(calculator_stubs: Path) -> list[str]:
+    """Read calculator typing helper lines from the generated helper modules."""
+    return read_generated_types_lines(calculator_stubs / "calculator_capnp")
+
+
 @pytest.fixture(scope="session")
 def addressbook_stubs(generated_stubs: dict[str, Path]) -> Path:
     """Provide path to generated addressbook stubs."""
@@ -369,23 +375,6 @@ def zalfmas_no_annotations_stubs(generated_stubs: dict[str, Path]) -> Path:
 def capnp_stubs(generated_stubs: dict[str, Path]) -> Path:
     """Provide path to generated capnp stubs (schema.capnp, c++.capnp)."""
     return generated_stubs["capnp"]
-
-
-# Legacy fixtures for backward compatibility (deprecated)
-@pytest.fixture
-def generate_calculator_stubs(calculator_stubs: Path) -> Path:
-    """Use the calculator_stubs fixture instead."""
-    return calculator_stubs
-
-
-@pytest.fixture
-def calculator_stub_lines(calculator_stubs: Path) -> list[str]:
-    """Read calculator typing helper lines from the generated helper modules."""
-    return read_generated_types_lines(calculator_stubs / "calculator_capnp")
-
-
-# Constants for backward compatibility
-SCHEMAS_DIR_OLD = BASIC_SCHEMAS_DIR  # For tests that reference SCHEMAS_DIR
 
 
 # Helper functions for tests

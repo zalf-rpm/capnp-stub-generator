@@ -12,9 +12,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_new_client_uses_module_aliases_for_current_interface(generate_calculator_stubs: Path) -> None:
+def test_new_client_uses_module_aliases_for_current_interface(calculator_stubs: Path) -> None:
     """Test that _new_client uses module alias for the current interface's Server type."""
-    stub_file = generate_calculator_stubs / "calculator_capnp" / "types" / "modules.pyi"
+    stub_file = calculator_stubs / "calculator_capnp" / "types" / "modules.pyi"
     content = stub_file.read_text()
 
     # Value._new_client should accept _DynamicCapabilityServer

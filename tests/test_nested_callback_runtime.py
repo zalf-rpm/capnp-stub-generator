@@ -11,7 +11,7 @@ from typing import Any
 
 import capnp
 
-from tests.test_helpers import run_command
+from tests.test_helpers import run_pyright
 
 TESTS_DIR = Path(__file__).parent
 REPO_ROOT = TESTS_DIR.parent
@@ -78,14 +78,14 @@ def test_generated_runtime_uses_typed_schema_paths() -> None:
     )
     assert "_require_" not in content
     assert "import schema_capnp" not in content
-    assert "from importlib import import_module" in content
+    assert "from importlib import import_module as _import_module" in content
     assert "def _import_schema_bundle() -> object:" in content
     assert "_schema_bundle = _import_schema_bundle()" in content
     assert "capnp.schema_capnp" not in content
     assert "sys.modules.get" not in content
     assert "capnp.add_import_hook()" not in content
     assert "from typing import TYPE_CHECKING" not in content
-    assert 'cast("SchemaLoader", _schema_bundle.get_schema_loader())' in content
+    assert '_cast("_SchemaLoader", _schema_bundle.get_schema_loader())' in content
     assert "# pyright: ignore[reportUnknownArgumentType]" in content
     assert "def _as_struct_schema" not in content
     assert "def _struct_field" not in content
@@ -93,7 +93,8 @@ def test_generated_runtime_uses_typed_schema_paths() -> None:
     assert "_field_schema(" not in content
     assert "_method_param_type(" not in content
     assert "_method_result_type(" not in content
-    assert "from capnp.lib.capnp import SchemaLoader, _InterfaceModule" in content
+    assert "from capnp.lib.capnp import SchemaLoader as _SchemaLoader" in content
+    assert "from capnp.lib.capnp import _InterfaceModule" in content
     assert "from .types.modules import" not in content
     assert re.search(
         r'Channel\.schema\.methods\["registerStatsCallback"\]\.param_type\.fields\["callback"\]\.schema', content
@@ -107,15 +108,14 @@ def test_generated_runtime_uses_typed_schema_paths() -> None:
     )
 
 
-def test_schema_helpers_are_separated_into_types_schemas() -> None:
-    """Public schema helper aliases should live in `types.schemas` while modules keep the canonical nested classes."""
+def test_schema_helpers_do_not_replace_runtime_module_schema_attributes() -> None:
+    """Helper aliases remain available without inventing narrowed module properties."""
     types_dir = TESTS_DIR / "_generated" / "examples" / "fbp_nested_callback" / "fbp_nested_callback_capnp" / "types"
     modules_content = (types_dir / "modules.pyi").read_text()
     schemas_content = (types_dir / "schemas.pyi").read_text()
 
     assert "from . import schemas as schemas" in modules_content
-    assert "def schema(self) -> schemas._ChannelSchema" in modules_content
-    assert "def schema(self) -> schemas._ChannelStatsCallbackSchema" in modules_content
+    assert "def schema(self) -> schemas._ChannelSchema" not in modules_content
     assert "class _ChannelSchema(" in modules_content
     assert "class _StatsCallbackSchema(" in modules_content
 
@@ -127,20 +127,18 @@ def test_schema_helpers_are_separated_into_types_schemas() -> None:
     )
 
 
-def test_generated_schema_chain_type_checks_without_casts(tmp_path: Path) -> None:
-    """Generated schema helper types should make raw nested schema chains strict-clean."""
+def test_generated_module_schema_keeps_runtime_interface_type(tmp_path: Path) -> None:
+    """Generated interface modules expose pycapnp's real schema type."""
     sample = tmp_path / "typed_schema_chain.py"
     sample.write_text(
         """
+from capnp.lib.capnp import _InterfaceSchema
 from fbp_nested_callback import fbp_nested_callback_capnp
 
-callback_schema = fbp_nested_callback_capnp.Channel.schema.methods["registerStatsCallback"].param_type.fields["callback"].schema
-status_method = callback_schema.methods["status"]
-stats_schema = callback_schema.methods["status"].param_type.fields["stats"].schema
-timestamp_field = stats_schema.fields["timestamp"]
-_ = (status_method, timestamp_field)
+channel_schema: _InterfaceSchema = fbp_nested_callback_capnp.Channel.schema
+_ = channel_schema
 """.strip(),
     )
 
-    result = run_command(["basedpyright", str(sample)], cwd=REPO_ROOT)
+    result = run_pyright(sample, cwd=REPO_ROOT)
     assert result.returncode == 0, result.stdout or result.stderr

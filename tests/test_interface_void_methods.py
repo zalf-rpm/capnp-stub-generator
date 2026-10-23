@@ -15,9 +15,10 @@ def test_void_methods_return_result_protocol(basic_stubs: Path) -> None:
     content = read_generated_types_combined(basic_stubs / "fbp_simple_capnp")
 
     # close() should return a flattened top-level helper Result (which is Awaitable[None])
-    assert "def close(self) -> ReaderCloseResult:" in content or "def close(self) -> WriterCloseResult:" in content, (
-        "Void methods should return flattened top-level Result helpers for promise pipelining"
-    )
+    assert (
+        "def close(self) -> results_client.ReaderCloseResult:" in content
+        or "def close(self) -> results_client.WriterCloseResult:" in content
+    ), "Void methods should return flattened top-level Result helpers for promise pipelining"
 
     # CloseRequest helpers should exist at module level
     assert "class ReaderCloseRequest(Protocol):" in content
@@ -29,9 +30,9 @@ def test_void_method_send_returns_result(basic_stubs: Path) -> None:
     content = read_generated_types_combined(basic_stubs / "fbp_simple_capnp")
 
     assert "class ReaderCloseRequest(Protocol):" in content
-    assert "def send(self) -> ReaderCloseResult: ..." in content
+    assert "def send(self) -> results_client.ReaderCloseResult: ..." in content
     assert "class WriterCloseRequest(Protocol):" in content
-    assert "def send(self) -> WriterCloseResult: ..." in content
+    assert "def send(self) -> results_client.WriterCloseResult: ..." in content
 
 
 def test_void_result_protocol_is_awaitable(basic_stubs: Path) -> None:
@@ -60,7 +61,10 @@ def test_comparison_with_non_void_methods(basic_stubs: Path) -> None:
     assert "ReadResult" in content
 
     # close() also returns flattened top-level Result helpers
-    assert "def close(self) -> ReaderCloseResult:" in content or "def close(self) -> WriterCloseResult:" in content
+    assert (
+        "def close(self) -> results_client.ReaderCloseResult:" in content
+        or "def close(self) -> results_client.WriterCloseResult:" in content
+    )
 
     log_summary(
         "VOID METHOD RESULT SUMMARY",

@@ -1,10 +1,11 @@
 """Module helper types for `calculator.capnp`."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractContextManager
 from typing import IO, Any, Literal, overload, override
 
 from capnp.lib.capnp import (
+    _AsyncIoStream,
     _DynamicCapabilityServer,
     _DynamicStructBuilder,
     _DynamicStructReader,
@@ -21,6 +22,7 @@ from capnp.lib.capnp import (
 
 from . import builders as builders
 from . import clients as clients
+from . import common as common
 from . import contexts as contexts
 from . import enums as enums
 from . import readers as readers
@@ -82,9 +84,6 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             @override
             def methods(self) -> _CalculatorInterfaceModule._ValueInterfaceModule._ValueSchema._Methods: ...
 
-        @property
-        @override
-        def schema(self) -> schemas._CalculatorValueSchema: ...
         @override
         def _new_client(self, server: _DynamicCapabilityServer) -> clients.ValueClient: ...
         class Server(_DynamicCapabilityServer):
@@ -158,9 +157,6 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             @override
             def methods(self) -> _CalculatorInterfaceModule._FunctionInterfaceModule._FunctionSchema._Methods: ...
 
-        @property
-        @override
-        def schema(self) -> schemas._CalculatorFunctionSchema: ...
         @override
         def _new_client(self, server: _DynamicCapabilityServer) -> clients.FunctionClient: ...
         class Server(_DynamicCapabilityServer):
@@ -217,14 +213,11 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                     self,
                 ) -> _CalculatorInterfaceModule._ExpressionStructModule._ExpressionCallStructModule._ExpressionCallSchema._Fields: ...
 
-            @property
-            @override
-            def schema(self) -> schemas._CalculatorExpressionExpressionCallSchema: ...
             @override
             def new_message(
                 self,
                 num_first_segment_words: int | None = None,
-                allocate_seg_callable: Callable[[int], bytearray] | None = None,
+                allocate_seg_callable: Callable[[int], Any] | None = None,
                 function: clients.FunctionClient
                 | _CalculatorInterfaceModule._FunctionInterfaceModule.Server
                 | None = None,
@@ -235,38 +228,58 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 **kwargs: object,
             ) -> builders.ExpressionCallBuilder: ...
             @override
+            def __call__(
+                self,
+                num_first_segment_words: int | None = None,
+                **kwargs: object,
+            ) -> builders.ExpressionCallBuilder: ...
+            @override
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> AbstractContextManager[readers.ExpressionCallReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-                *,
-                builder: Literal[False],
+                builder: Literal[False] = False,
             ) -> AbstractContextManager[readers.ExpressionCallReader]: ...
             @overload
             def from_bytes(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
                 *,
                 builder: Literal[True],
             ) -> AbstractContextManager[builders.ExpressionCallBuilder]: ...
+            @overload
+            def from_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None,
+                nesting_limit: int | None,
+                builder: Literal[True],
+            ) -> AbstractContextManager[builders.ExpressionCallBuilder]: ...
             @override
             def from_bytes_packed(
                 self,
-                buf: bytes,
+                buf: Any,
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
-            ) -> _DynamicStructReader: ...
+            ) -> readers.ExpressionCallReader: ...
+            @override
+            def from_segments(
+                self,
+                segments: Sequence[Any],
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+            ) -> readers.ExpressionCallReader: ...
             @override
             def read(
                 self,
@@ -281,10 +294,55 @@ class _CalculatorInterfaceModule(_InterfaceModule):
                 traversal_limit_in_words: int | None = None,
                 nesting_limit: int | None = None,
             ) -> readers.ExpressionCallReader: ...
+            @override
+            async def read_async(
+                self,
+                stream: _AsyncIoStream,
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+            ) -> readers.ExpressionCallReader | None: ...
+            @override
+            def read_multiple(
+                self,
+                file: IO[str] | IO[bytes],
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+                skip_copy: bool = False,
+            ) -> Iterator[readers.ExpressionCallReader]: ...
+            @override
+            def read_multiple_packed(
+                self,
+                file: IO[str] | IO[bytes],
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+                skip_copy: bool = False,
+            ) -> Iterator[readers.ExpressionCallReader]: ...
+            @override
+            def read_multiple_bytes(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+            ) -> Iterator[readers.ExpressionCallReader]: ...
+            @override
+            def read_multiple_bytes_packed(
+                self,
+                buf: Any,
+                traversal_limit_in_words: int | None = None,
+                nesting_limit: int | None = None,
+            ) -> Iterator[readers.ExpressionCallReader]: ...
 
-        ExpressionCall: _ExpressionCallStructModule
-        class Reader(_DynamicStructReader): ...
-        class Builder(_DynamicStructBuilder): ...
+        Call: _ExpressionCallStructModule
+        Union: type[common._ExpressionModuleWhich]
+        class Reader(_DynamicStructReader):
+            @property
+            @override
+            def which(self) -> common._ExpressionWhich: ...
+
+        class Builder(_DynamicStructBuilder):
+            @property
+            @override
+            def which(self) -> common._ExpressionWhich: ...
 
         class _ExpressionSchema(_StructSchema):
             class _PreviousResultField(_StructSchemaField):
@@ -319,14 +377,11 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             @override
             def fields(self) -> _CalculatorInterfaceModule._ExpressionStructModule._ExpressionSchema._Fields: ...
 
-        @property
-        @override
-        def schema(self) -> schemas._CalculatorExpressionSchema: ...
         @override
         def new_message(
             self,
             num_first_segment_words: int | None = None,
-            allocate_seg_callable: Callable[[int], bytearray] | None = None,
+            allocate_seg_callable: Callable[[int], Any] | None = None,
             literal: float | None = None,
             previousResult: clients.ValueClient | _CalculatorInterfaceModule._ValueInterfaceModule.Server | None = None,
             parameter: int | None = None,
@@ -334,38 +389,58 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             **kwargs: object,
         ) -> builders.ExpressionBuilder: ...
         @override
+        def __call__(
+            self,
+            num_first_segment_words: int | None = None,
+            **kwargs: object,
+        ) -> builders.ExpressionBuilder: ...
+        @override
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> AbstractContextManager[readers.ExpressionReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-            *,
-            builder: Literal[False],
+            builder: Literal[False] = False,
         ) -> AbstractContextManager[readers.ExpressionReader]: ...
         @overload
         def from_bytes(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
             *,
             builder: Literal[True],
         ) -> AbstractContextManager[builders.ExpressionBuilder]: ...
+        @overload
+        def from_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None,
+            nesting_limit: int | None,
+            builder: Literal[True],
+        ) -> AbstractContextManager[builders.ExpressionBuilder]: ...
         @override
         def from_bytes_packed(
             self,
-            buf: bytes,
+            buf: Any,
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
-        ) -> _DynamicStructReader: ...
+        ) -> readers.ExpressionReader: ...
+        @override
+        def from_segments(
+            self,
+            segments: Sequence[Any],
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+        ) -> readers.ExpressionReader: ...
         @override
         def read(
             self,
@@ -380,6 +455,43 @@ class _CalculatorInterfaceModule(_InterfaceModule):
             traversal_limit_in_words: int | None = None,
             nesting_limit: int | None = None,
         ) -> readers.ExpressionReader: ...
+        @override
+        async def read_async(
+            self,
+            stream: _AsyncIoStream,
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+        ) -> readers.ExpressionReader | None: ...
+        @override
+        def read_multiple(
+            self,
+            file: IO[str] | IO[bytes],
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+            skip_copy: bool = False,
+        ) -> Iterator[readers.ExpressionReader]: ...
+        @override
+        def read_multiple_packed(
+            self,
+            file: IO[str] | IO[bytes],
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+            skip_copy: bool = False,
+        ) -> Iterator[readers.ExpressionReader]: ...
+        @override
+        def read_multiple_bytes(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+        ) -> Iterator[readers.ExpressionReader]: ...
+        @override
+        def read_multiple_bytes_packed(
+            self,
+            buf: Any,
+            traversal_limit_in_words: int | None = None,
+            nesting_limit: int | None = None,
+        ) -> Iterator[readers.ExpressionReader]: ...
 
     Expression: _ExpressionStructModule
     class _OperatorEnumModule(_EnumModule):
@@ -389,10 +501,6 @@ class _CalculatorInterfaceModule(_InterfaceModule):
         divide: int
 
         class _OperatorSchema(_EnumSchema): ...
-
-        @property
-        @override
-        def schema(self) -> schemas._CalculatorOperatorEnumSchema: ...
 
     Operator: _OperatorEnumModule
 
@@ -594,9 +702,6 @@ class _CalculatorInterfaceModule(_InterfaceModule):
         @override
         def methods(self) -> _CalculatorInterfaceModule._CalculatorSchema._Methods: ...
 
-    @property
-    @override
-    def schema(self) -> schemas._CalculatorSchema: ...
     @override
     def _new_client(self, server: _DynamicCapabilityServer) -> clients.CalculatorClient: ...
     class Server(_DynamicCapabilityServer):

@@ -17,9 +17,9 @@ TESTS_DIR = Path(__file__).parent
 class TestRequestBuilderStructure:
     """Test that request builders have proper structure."""
 
-    def test_evaluate_request_has_expression_field(self, generate_calculator_stubs: Path) -> None:
+    def test_evaluate_request_has_expression_field(self, calculator_stubs: Path) -> None:
         """Test that EvaluateRequest has expression field with Builder type."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should have EvaluateRequest class
         assert "class EvaluateRequest(Protocol):" in stub_content
@@ -41,9 +41,9 @@ class TestRequestBuilderStructure:
 
         assert found_expression_field, "EvaluateRequest should have expression field"
 
-    def test_deffunction_request_has_fields(self, generate_calculator_stubs: Path) -> None:
+    def test_deffunction_request_has_fields(self, calculator_stubs: Path) -> None:
         """Test that DeffunctionRequest has paramCount and body fields."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should have DeffunctionRequest class
         assert "class DeffunctionRequest(Protocol):" in stub_content
@@ -70,23 +70,23 @@ class TestRequestBuilderStructure:
         assert found_param_count, "DeffunctionRequest should have paramCount field"
         assert found_body, "DeffunctionRequest should have body field"
 
-    def test_call_request_has_params_field(self, generate_calculator_stubs: Path) -> None:
+    def test_call_request_has_params_field(self, calculator_stubs: Path) -> None:
         """Test that CallRequest has params field."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Should have CallRequest class
         assert "class CallRequest(Protocol):" in stub_content
 
         # Should have params field
-        assert "params: Float64ListBuilder | Float64ListReader | Sequence[float]" in stub_content
+        assert "params: builders.Float64ListBuilder | readers.Float64ListReader | Sequence[float]" in stub_content
 
 
 class TestRequestBuilderSendMethod:
     """Test that request builders have proper send() methods."""
 
-    def test_evaluate_request_send_returns_evaluate_result(self, generate_calculator_stubs: Path) -> None:
+    def test_evaluate_request_send_returns_evaluate_result(self, calculator_stubs: Path) -> None:
         """Test that EvaluateRequest.send() returns EvaluateResult."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Find EvaluateRequest and check its send method
         lines = stub_content.split("\n")
@@ -106,9 +106,9 @@ class TestRequestBuilderSendMethod:
 
         assert found_send, "EvaluateRequest should have send() method"
 
-    def test_deffunction_request_send_returns_deffunction_result(self, generate_calculator_stubs: Path) -> None:
+    def test_deffunction_request_send_returns_deffunction_result(self, calculator_stubs: Path) -> None:
         """Test that DeffunctionRequest.send() returns DeffunctionResult."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Find DeffunctionRequest and check its send method
         lines = stub_content.split("\n")
@@ -127,9 +127,9 @@ class TestRequestBuilderSendMethod:
 
         assert found_send, "DeffunctionRequest should have send() method"
 
-    def test_read_request_send_returns_read_result(self, generate_calculator_stubs: Path) -> None:
+    def test_read_request_send_returns_read_result(self, calculator_stubs: Path) -> None:
         """Test that ReadRequest.send() returns ReadResult."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Find ReadRequest and check its send method
         lines = stub_content.split("\n")
@@ -148,9 +148,9 @@ class TestRequestBuilderSendMethod:
 
         assert found_send, "ReadRequest should have send() method"
 
-    def test_call_request_send_returns_call_result(self, generate_calculator_stubs: Path) -> None:
+    def test_call_request_send_returns_call_result(self, calculator_stubs: Path) -> None:
         """Test that CallRequest.send() returns CallResult."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Find CallRequest and check its send method
         lines = stub_content.split("\n")
@@ -173,9 +173,9 @@ class TestRequestBuilderSendMethod:
 class TestRequestBuilderFieldAccess:
     """Test that request builder fields can be accessed and typed correctly."""
 
-    def test_request_expression_field_has_init(self, generate_calculator_stubs: Path) -> None:
+    def test_request_expression_field_has_init(self, calculator_stubs: Path) -> None:
         """Test that request.expression field has init() method."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # The precise struct typing class is flattened to module top level.
         assert "class ExpressionBuilder(_DynamicStructBuilder):" in stub_content
@@ -188,27 +188,27 @@ class TestRequestBuilderFieldAccess:
 class TestRequestMethodReturnsRequest:
     """Test that *_request() methods return proper request types."""
 
-    def test_evaluate_request_method_returns_evaluate_request(self, generate_calculator_stubs: Path) -> None:
+    def test_evaluate_request_method_returns_evaluate_request(self, calculator_stubs: Path) -> None:
         """Test that evaluate_request() returns the flattened top-level EvaluateRequest."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         # Check for method name and return type (allowing for kwargs parameters)
         assert "def evaluate_request(" in stub_content
-        assert ") -> EvaluateRequest:" in stub_content
+        assert ") -> requests.EvaluateRequest:" in stub_content
 
-    def test_deffunction_request_method_returns_deffunction_request(self, generate_calculator_stubs: Path) -> None:
+    def test_deffunction_request_method_returns_deffunction_request(self, calculator_stubs: Path) -> None:
         """Test that defFunction_request() returns the flattened top-level DeffunctionRequest."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "def defFunction_request(" in stub_content
-        assert ") -> DeffunctionRequest:" in stub_content
+        assert ") -> requests.DeffunctionRequest:" in stub_content
 
-    def test_getoperator_request_method_returns_getoperator_request(self, generate_calculator_stubs: Path) -> None:
+    def test_getoperator_request_method_returns_getoperator_request(self, calculator_stubs: Path) -> None:
         """Test that getOperator_request() returns the flattened top-level GetoperatorRequest."""
-        stub_content = read_generated_types_combined(generate_calculator_stubs / "calculator_capnp")
+        stub_content = read_generated_types_combined(calculator_stubs / "calculator_capnp")
 
         assert "def getOperator_request(" in stub_content
-        assert ") -> GetoperatorRequest:" in stub_content
+        assert ") -> requests.GetoperatorRequest:" in stub_content
 
 
 def test_request_builder_types_summary() -> None:

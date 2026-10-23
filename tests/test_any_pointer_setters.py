@@ -19,18 +19,18 @@ def test_any_pointer_setters(basic_stubs: Path) -> None:
 
     # Check AnyHolder Builder setters
     # any setter should accept AnyPointer
-    assert "def any(self, value: AnyPointer) -> None: ..." in content
+    assert "def any(self, value: common.AnyPointer) -> None: ..." in content
 
     # s setter should accept struct builder/reader/dict
-    assert "def s(self, value: AnyStruct | dict[str, Any]) -> None: ..." in content
+    assert "def s(self, value: common.AnyStruct | dict[str, Any]) -> None: ..." in content
 
     # l setter should accept list builder/reader/Sequence
-    assert "def l(self, value: AnyList | Sequence[Any]) -> None: ..." in content
+    assert "def l(self, value: common.AnyList | Sequence[Any]) -> None: ..." in content
 
     # Check new_message
-    assert "any: AnyPointer | None = None" in content
-    assert "s: AnyStruct | dict[str, Any] | None = None" in content
-    assert "l: AnyList | Sequence[Any] | None = None" in content
+    assert "any: common.AnyPointer | None = None" in content
+    assert "s: common.AnyStruct | dict[str, Any] | None = None" in content
+    assert "l: common.AnyList | Sequence[Any] | None = None" in content
 
 
 def test_any_pointer_type_checking(basic_stubs: Path) -> None:

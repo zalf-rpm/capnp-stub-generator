@@ -106,7 +106,7 @@ def test_runtime_result_field_access(calculator_stubs: Path) -> None:
     assert "def _import_schema_bundle() -> object:" in runtime_content
     assert "_schema_bundle = _import_schema_bundle()" in runtime_content
     assert "_capnp_schema_bundle_" in runtime_content
-    assert '_loader: SchemaLoader = cast("SchemaLoader", _schema_bundle.get_schema_loader())' in runtime_content
+    assert '_loader: _SchemaLoader = _cast("_SchemaLoader", _schema_bundle.get_schema_loader())' in runtime_content
     assert "get_schema_by_id" in runtime_content
 
     # Result tuples should be created in the runtime helper module, not on the top-level runtime module.
