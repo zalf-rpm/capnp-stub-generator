@@ -1143,6 +1143,58 @@ class _DynamicCapabilityClient:
     def _request(self, name: str, *args: Any, word_count: int | None = None, **kwargs: Any) -> _Request: ...
     def _send(self, name: str, *args: Any, word_count: int | None = None, **kwargs: Any) -> _RemotePromise: ...
     def upcast(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule,
+    ) -> calculator_capnp.types.clients.CalculatorClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._FunctionInterfaceModule,
+    ) -> calculator_capnp.types.clients.FunctionClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: calculator_capnp.types.modules._CalculatorInterfaceModule._ValueInterfaceModule,
+    ) -> calculator_capnp.types.clients.ValueClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.ChannelClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.StatsCallbackClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_nested_callback_capnp.types.modules._ChannelInterfaceModule._StatsCallbackInterfaceModule._UnregisterInterfaceModule,
+    ) -> fbp_nested_callback_capnp.types.clients.UnregisterClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: restorer_capnp.types.modules._AnyTesterInterfaceModule,
+    ) -> restorer_capnp.types.clients.AnyTesterClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: restorer_capnp.types.modules._BagInterfaceModule,
+    ) -> restorer_capnp.types.clients.BagClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: restorer_capnp.types.modules._RestorerInterfaceModule,
+    ) -> restorer_capnp.types.clients.RestorerClient: ...
+    @overload
+    def cast_as(
+        self,
+        schema: single_value_capnp.types.modules._SingleValueInterfaceModule,
+    ) -> single_value_capnp.types.clients.SingleValueClient: ...
+    @overload
+    def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
     def cast_as(self, schema: _InterfaceSchema | _InterfaceModule) -> _DynamicCapabilityClient: ...
 
 class _DynamicCapabilityServer: ...

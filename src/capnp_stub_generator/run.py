@@ -690,7 +690,9 @@ def _augment_capnp_pyi(
     interfaces: dict[str, tuple[str, list[str]]],
     module_imports: dict[str, str],
 ) -> None:
-    """Augment _CapabilityClient.cast_as method with interface-specific overloads.
+    """Augment `cast_as` on _CapabilityClient and _DynamicCapabilityClient with interface-specific overloads.
+
+    Generated clients and `try_connect()` results are `_DynamicCapabilityClient`s, so both classes need the overloads.
 
     Args:
         capnp_pyi_path: Path to the lib/capnp.pyi file.
@@ -700,12 +702,16 @@ def _augment_capnp_pyi(
     """
     capnp_pyi_path = Path(capnp_pyi_path)
     lines = _read_stub_lines(capnp_pyi_path)
-    _, cast_as_line_idx = _find_method_insert_idx(lines, "_CapabilityClient", "cast_as")
-    if cast_as_line_idx is None:
-        logger.warning("Could not find cast_as method in _CapabilityClient class, skipping augmentation.")
-        return
+    overload_lines = _build_cast_as_overloads(interfaces, module_imports)
 
-    lines[cast_as_line_idx:cast_as_line_idx] = _build_cast_as_overloads(interfaces, module_imports)
+    for class_name in ("_CapabilityClient", "_DynamicCapabilityClient"):
+        _, cast_as_line_idx = _find_method_insert_idx(lines, class_name, "cast_as")
+        if cast_as_line_idx is None:
+            logger.warning("Could not find cast_as method in %s class, skipping augmentation.", class_name)
+            continue
+
+        lines[cast_as_line_idx:cast_as_line_idx] = overload_lines
+
     _write_stub_lines(capnp_pyi_path, lines)
     logger.info("Augmented %s with %s cast_as overload(s).", capnp_pyi_path, len(interfaces))
 

@@ -47,11 +47,15 @@ from single_value import single_value_capnp
 
 def check(
     capability: capnp.lib.capnp._CapabilityClient,
+    dynamic_capability: capnp.lib.capnp._DynamicCapabilityClient,
     any_pointer: capnp.lib.capnp._DynamicObjectReader,
     any_builder: capnp.lib.capnp._DynamicObjectBuilder,
     request: restorer_capnp.types.requests.SetanypointerRequest,
 ) -> None:
     calculator_client = capability.cast_as(calculator_capnp.Calculator)
+    typed_dynamic_client: calculator_capnp.types.clients.CalculatorClient = dynamic_capability.cast_as(
+        calculator_capnp.Calculator
+    )
     tester_client = any_pointer.as_interface(restorer_capnp.AnyTester)
     expression_reader = any_pointer.as_struct(calculator_capnp.Calculator.Expression)
     expression_builder: calculator_capnp.types.builders.ExpressionBuilder = any_builder.as_struct(
@@ -63,7 +67,15 @@ def check(
     int_list_builder: single_value_capnp.types.builders.Int32ListBuilder = any_builder.as_list(
         single_value_capnp.types.lists._Int32List
     )
-    _ = (calculator_client, tester_client, expression_reader, expression_builder, restore_params_builder, int_list_builder)
+    _ = (
+        calculator_client,
+        typed_dynamic_client,
+        tester_client,
+        expression_reader,
+        expression_builder,
+        restore_params_builder,
+        int_list_builder,
+    )
 """.strip(),
         encoding="utf8",
     )

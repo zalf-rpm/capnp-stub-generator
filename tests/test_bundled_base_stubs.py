@@ -20,6 +20,7 @@ _AUGMENTED_OVERLOAD_METHODS = {
     "_DynamicObjectBuilder": {"as_interface", "as_list", "as_struct"},
     "_DynamicObjectReader": {"as_interface", "as_list", "as_struct"},
     "_CapabilityClient": {"cast_as"},
+    "_DynamicCapabilityClient": {"cast_as"},
 }
 
 
